@@ -1,0 +1,10 @@
+export { authService } from "./authService";
+export { userService } from "./userService";
+export { serviceService } from "./serviceService";
+export { rechargeService } from "./rechargeService";
+export { walletService } from "./walletService";
+export { couponService } from "./couponService";
+export { notificationService } from "./notificationService";
+export { advertisementService } from "./advertisementService";
+export { transactionService } from "./transactionService";
+export { customerStorage } from "./storageService";
