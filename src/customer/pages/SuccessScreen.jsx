@@ -31,7 +31,7 @@ const SuccessScreen = () => {
         <div className="cm-card">
           <div className="cm-section-head"><h2>Next actions</h2></div>
           <div className="cm-stack">
-            <button className="cm-button" type="button" onClick={() => navigate("/customer/app/home")}>Back to home</button>
+            <button className="cm-button" type="button" onClick={() => navigate("/customer/app/services")}>Back to Services</button>
             <button className="cm-button-secondary" type="button" onClick={() => navigate("/customer/app/wallet")}>Open wallet history</button>
             <button className="cm-button-ghost" type="button" onClick={() => navigate("/customer/app/services")}>Start another payment</button>
           </div>

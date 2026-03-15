@@ -69,7 +69,7 @@ const OtpScreen = () => {
       userData: response.data,
       tempToken: null,
     });
-    navigate("/customer/app/home", { replace: true });
+    navigate("/customer/app/services", { replace: true });
   };
 
   const resendOtp = async () => {

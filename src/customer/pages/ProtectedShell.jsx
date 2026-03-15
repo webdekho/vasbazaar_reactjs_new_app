@@ -1,11 +1,10 @@
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
-import { FaChevronRight, FaGift, FaHome, FaRegBell, FaSignOutAlt, FaUserCircle, FaWallet } from "react-icons/fa";
+import { FaChevronRight, FaGift, FaRegBell, FaSignOutAlt, FaUserCircle, FaWallet } from "react-icons/fa";
 import { HiMiniSquares2X2 } from "react-icons/hi2";
 import { useCustomerModern } from "../context/CustomerModernContext";
 import AppBrand from "../components/AppBrand";
 
 const menuItems = [
-  { to: "/customer/app/home", label: "Home", icon: <FaHome /> },
   { to: "/customer/app/services", label: "Services", icon: <HiMiniSquares2X2 /> },
   { to: "/customer/app/wallet", label: "Wallet", icon: <FaWallet /> },
   { to: "/customer/app/coupons", label: "Coupons", icon: <FaGift /> },

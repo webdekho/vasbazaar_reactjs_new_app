@@ -20,7 +20,7 @@ const PaymentScreen = () => {
     load();
   }, []);
 
-  if (!paymentState.amount) return <Navigate to="/customer/app/home" replace />;
+  if (!paymentState.amount) return <Navigate to="/customer/app/services" replace />;
 
   const proceed = async (payType) => {
     setLoading(true); setStatus("");

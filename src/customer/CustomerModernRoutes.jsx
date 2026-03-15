@@ -5,7 +5,6 @@ import AuthGuard from "./components/AuthGuard";
 import LoginScreen from "./pages/LoginScreen";
 import OtpScreen from "./pages/OtpScreen";
 import ProtectedShell from "./pages/ProtectedShell";
-import HomeScreen from "./pages/HomeScreen";
 import ServicesScreen from "./pages/ServicesScreen";
 import ServiceFlowScreen from "./pages/ServiceFlowScreen";
 import PaymentScreen from "./pages/PaymentScreen";
@@ -31,7 +30,7 @@ const CustomerModernRoutes = () => {
               </AuthGuard>
             }
           >
-            <Route path="home" element={<HomeScreen />} />
+            <Route index element={<ServicesScreen />} />
             <Route path="services" element={<ServicesScreen />} />
             <Route path="services/:serviceSlug" element={<ServiceFlowScreen />} />
             <Route path="payment" element={<PaymentScreen />} />
@@ -40,7 +39,7 @@ const CustomerModernRoutes = () => {
             <Route path="coupons" element={<CouponsScreen />} />
             <Route path="notifications" element={<NotificationsScreen />} />
             <Route path="profile" element={<ProfileScreen />} />
-            <Route path="*" element={<Navigate to="/customer/app/home" replace />} />
+            <Route path="*" element={<Navigate to="/customer/app/services" replace />} />
           </Route>
           <Route path="*" element={<Navigate to="/customer/login" replace />} />
         </Routes>
