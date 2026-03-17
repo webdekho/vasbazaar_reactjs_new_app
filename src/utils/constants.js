@@ -9,6 +9,7 @@ export const server_api = () => {
        return storedUrl;
      }
 
-     // Otherwise, return the default URL
-   return `${window.location.protocol}//${window.location.hostname}:8086`;
+     // Use relative proxy path to avoid CORS issues in browser
+     // Apache proxies /vb-api/ -> https://apis.uat.vasbazaar.com:8081/
+     return '/vb-api';
    };

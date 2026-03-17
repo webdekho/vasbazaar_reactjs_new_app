@@ -1,34 +1,150 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { FaArrowLeft, FaBell, FaUser, FaInfoCircle, FaTimes, FaTrashAlt } from "react-icons/fa";
+import { FiGift, FiRefreshCw, FiSettings, FiBell } from "react-icons/fi";
 import { notificationService } from "../services/notificationService";
-import DataState from "../components/DataState";
+
+const iconMap = { push_notification: <FaBell />, customer: <FaUser />, general: <FaInfoCircle /> };
+
+const typeColorMap = {
+  push_notification: { border: "#40E0D0", bg: "rgba(64, 224, 208, 0.06)", iconBg: "linear-gradient(135deg, rgba(64, 224, 208, 0.12), rgba(0, 123, 255, 0.12))", color: "#40E0D0" },
+  customer:          { border: "#00C853", bg: "rgba(0, 200, 83, 0.06)", iconBg: "linear-gradient(135deg, rgba(0, 200, 83, 0.12), rgba(0, 200, 83, 0.06))", color: "#00C853" },
+  general:           { border: "#FF9800", bg: "rgba(255, 152, 0, 0.06)", iconBg: "linear-gradient(135deg, rgba(255, 152, 0, 0.12), rgba(255, 152, 0, 0.06))", color: "#FF9800" },
+};
+
+const defaultTypeColor = { border: "#40E0D0", bg: "rgba(64, 224, 208, 0.04)", iconBg: "linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03))", color: "#40E0D0" };
+
+const filterChips = [
+  { key: "all",     label: "All",     icon: null },
+  { key: "offers",  label: "Offers",  icon: <FiGift size={13} /> },
+  { key: "updates", label: "Updates", icon: <FiRefreshCw size={13} /> },
+  { key: "system",  label: "System",  icon: <FiSettings size={13} /> },
+];
+
+const chipCategoryMatch = (item, chipKey) => {
+  if (chipKey === "all") return true;
+  const text = ((item.title || "") + " " + (item.message || item.body || "") + " " + (item.type || "")).toLowerCase();
+  if (chipKey === "offers") return text.includes("offer") || text.includes("deal") || text.includes("discount") || text.includes("cashback") || text.includes("promo");
+  if (chipKey === "updates") return text.includes("update") || text.includes("order") || text.includes("deliver") || text.includes("status") || item.type === "customer";
+  if (chipKey === "system") return text.includes("system") || text.includes("maintenance") || text.includes("security") || item.type === "general";
+  return true;
+};
+
+const timeAgo = (timestamp) => {
+  if (!timestamp) return "";
+  const diff = (Date.now() - new Date(timestamp).getTime()) / 1000;
+  if (diff < 60) return "Just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 172800) return "Yesterday";
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  return new Date(timestamp).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+};
+
+const SkeletonCard = ({ delay = 0 }) => (
+  <div className="nt-skeleton-card" style={{ animationDelay: `${delay}s` }}>
+    <div className="nt-skeleton-icon cm-skeleton-pulse" />
+    <div className="nt-skeleton-body">
+      <div className="cm-skeleton-pulse" style={{ width: "55%", height: 14, borderRadius: 7 }} />
+      <div className="cm-skeleton-pulse" style={{ width: "90%", height: 10, borderRadius: 5, marginTop: 8 }} />
+      <div className="cm-skeleton-pulse" style={{ width: "30%", height: 10, borderRadius: 5, marginTop: 6 }} />
+    </div>
+  </div>
+);
 
 const NotificationsScreen = () => {
-  const [notifications, setNotifications] = useState({ loading: true, error: "", records: [] });
+  const navigate = useNavigate();
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeChip, setActiveChip] = useState("all");
+  const [dismissing, setDismissing] = useState(null);
 
   useEffect(() => {
-    const load = async () => {
-      const response = await notificationService.getNotifications(0);
-      setNotifications({ loading: false, error: response.success ? "" : response.message, records: response.data?.records || response.data || [] });
-    };
-    load();
+    (async () => {
+      const res = await notificationService.getNotifications(0);
+      setLoading(false);
+      setRecords(res.data?.records || (Array.isArray(res.data) ? res.data : []));
+    })();
   }, []);
 
+  const handleDelete = (index) => {
+    setDismissing(index);
+    setTimeout(() => {
+      setRecords((prev) => prev.filter((_, i) => i !== index));
+      setDismissing(null);
+    }, 300);
+  };
+
+  const handleClearAll = () => { if (window.confirm("Clear all notifications?")) setRecords([]); };
+
+  const filtered = records.filter((item) => chipCategoryMatch(item, activeChip));
+
   return (
-    <DataState loading={notifications.loading} error={notifications.error} empty={notifications.records.length === 0 ? "No announcements available." : null}>
-      <div className="cm-stack">
-        <div className="cm-card"><h1>Notifications</h1><p className="cm-page-subtitle">Announcements and live customer communications from the existing API.</p></div>
-        <div className="cm-list-card">
-          <div className="cm-list">
-            {notifications.records.map((item, index) => (
-              <div className="cm-list-item" key={item.id || index}>
-                <div><div className="cm-list-title">{item.title || "Announcement"}</div><div className="cm-muted">{item.message || item.date || "New notification"}</div></div>
-                <span className="cm-chip">{item.status || "Live"}</span>
-              </div>
-            ))}
-          </div>
+    <div className="cm-page-animate nt-page">
+      {/* Header */}
+      <div className="nt-header">
+        <div className="nt-header-bar" />
+        <div className="cm-flow-title-row" style={{ background: "none", borderBottom: "none", position: "static" }}>
+          <button className="cm-back-icon" type="button" onClick={() => navigate(-1)}><FaArrowLeft /></button>
+          <h1>
+            Notifications
+            {records.length > 0 && <span className="nt-count-badge">{records.length}</span>}
+          </h1>
+          {records.length > 0 && (
+            <button type="button" className="nt-clear-btn" onClick={handleClearAll}>
+              <FaTrashAlt size={12} /> Clear
+            </button>
+          )}
         </div>
       </div>
-    </DataState>
+
+      {/* Filter Chips */}
+      <div className="nt-chips">
+        {filterChips.map((chip) => (
+          <button key={chip.key} type="button" className={`cm-filter-chip${activeChip === chip.key ? " is-active" : ""}`} onClick={() => setActiveChip(chip.key)}>
+            {chip.icon} {chip.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      <div className="nt-content">
+        {loading ? (
+          <div><SkeletonCard delay={0} /><SkeletonCard delay={0.15} /><SkeletonCard delay={0.3} /></div>
+        ) : filtered.length === 0 ? (
+          <div className="nt-empty">
+            <div className="nt-empty-icon"><FiBell size={40} /></div>
+            <p className="nt-empty-title">{activeChip !== "all" ? "No matching notifications" : "No notifications"}</p>
+            <p className="nt-empty-desc">{activeChip !== "all" ? "Try selecting a different category above." : "You'll see your notifications here when they arrive."}</p>
+          </div>
+        ) : (
+          <div className="nt-list">
+            {filtered.map((item, i) => {
+              const tc = typeColorMap[item.type] || defaultTypeColor;
+              const isDismissing = dismissing === i;
+              return (
+                <div key={item.id || i} className={`nt-card${isDismissing ? " nt-card--dismiss" : ""}`} style={{ borderLeftColor: tc.border, animationDelay: `${i * 0.04}s` }}>
+                  <div className="nt-card-icon" style={{ background: tc.iconBg, color: tc.color }}>
+                    {iconMap[item.type] || <FaBell />}
+                  </div>
+                  <div className="nt-card-body">
+                    <div className="nt-card-top">
+                      <div className="nt-card-title">{item.title || "Notification"}</div>
+                      <span className="nt-card-time">{timeAgo(item.timestamp || item.time || item.date)}</span>
+                    </div>
+                    <div className="nt-card-msg">{item.message || item.body || "New update"}</div>
+                    {item.cnf?.name && <div className="nt-card-from"><FaUser size={9} /> {item.cnf.name}</div>}
+                  </div>
+                  <button type="button" className="nt-card-delete" onClick={() => handleDelete(i)}>
+                    <FaTimes size={14} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 

@@ -8,3 +8,5 @@ export { notificationService } from "./notificationService";
 export { advertisementService } from "./advertisementService";
 export { transactionService } from "./transactionService";
 export { customerStorage } from "./storageService";
+export { complaintService } from "./complaintService";
+export { offerService } from "./offerService";

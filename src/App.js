@@ -3,7 +3,7 @@ import CustomerModernRoutes from "./customer/CustomerModernRoutes";
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/vasbazaar">
       <Routes>
         <Route path="/customer/*" element={<CustomerModernRoutes />} />
         <Route path="*" element={<Navigate to="/customer" replace />} />

@@ -1,12 +1,15 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { userService } from "../services/userService";
 import { customerStorage } from "../services/storageService";
 
 const CustomerModernContext = createContext(null);
 
+const AUTH_PAGES = ["/customer/login", "/customer/verify-otp"];
+
 export const CustomerModernProvider = ({ children }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [sessionToken, setSessionToken] = useState(customerStorage.getSessionToken());
   const [userData, setUserData] = useState(customerStorage.getUserData());
 
@@ -16,16 +19,31 @@ export const CustomerModernProvider = ({ children }) => {
       return;
     }
 
+    // Skip authenticated API calls on login/OTP pages to avoid 401s with stale tokens
+    if (AUTH_PAGES.includes(location.pathname)) return;
+
     const hydrate = async () => {
       const profile = await userService.getUserProfile();
       if (profile.success) {
-        setUserData(profile.data);
-        customerStorage.setAuthSession({ sessionToken, userData: profile.data });
+        const existing = customerStorage.getUserData();
+        const profileData = profile.data || {};
+        const rawData = profile.raw?.data || profile.raw || {};
+        // Preserve mobile and name from existing userData if profile doesn't have them
+        const mobile = profileData.mobile || profileData.mobileNumber || profileData.phone
+          || rawData.mobile || rawData.mobileNumber
+          || existing?.mobile || existing?.mobileNumber || "";
+        const name = profileData.name || profileData.firstName || profileData.userName
+          || profileData.user_name || profileData.customerName
+          || rawData.name || rawData.firstName || rawData.userName
+          || existing?.name || existing?.firstName || "";
+        const merged = { ...profileData, mobile, name };
+        setUserData(merged);
+        customerStorage.setAuthSession({ sessionToken, userData: merged });
       }
     };
 
     hydrate();
-  }, [sessionToken]);
+  }, [sessionToken, location.pathname]);
 
   const value = useMemo(
     () => ({

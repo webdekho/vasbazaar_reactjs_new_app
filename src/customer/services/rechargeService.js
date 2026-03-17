@@ -1,110 +1,98 @@
-import { guestGet, authPost, apiClient, parseApiResponse, getErrorMessage } from "./apiClient";
+import { guestGet, authPost, getErrorMessage } from "./apiClient";
+import forge from "node-forge";
 
+/* ── Helpers (Web Crypto - HTTPS only) ── */
 const base64ToArrayBuffer = (base64) => {
-  const binaryString = window.atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i += 1) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
+  const bin = window.atob(base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return bytes.buffer;
 };
 
 const bytesToBase64 = (bytes) => {
-  let binary = "";
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte);
-  });
-  return window.btoa(binary);
+  let bin = "";
+  bytes.forEach((b) => { bin += String.fromCharCode(b); });
+  return window.btoa(bin);
 };
 
-const randomHex = (length) => {
-  const array = new Uint8Array(length);
-  window.crypto.getRandomValues(array);
-  return Array.from(array, (byte) => byte.toString(16).padStart(2, "0")).join("");
-};
+const isSecureContext = () =>
+  typeof window !== "undefined" && window.crypto && window.crypto.subtle;
 
-const hexToBytes = (hex) => {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = Number.parseInt(hex.slice(i, i + 2), 16);
-  }
-  return bytes;
-};
-
-const importPublicKey = async (publicKeyPem) => {
+/* ── Encrypt with Web Crypto (HTTPS) ── */
+const encryptWithWebCrypto = async (payload, publicKeyPem) => {
   const pemContent = publicKeyPem
     .replace("-----BEGIN PUBLIC KEY-----", "")
     .replace("-----END PUBLIC KEY-----", "")
     .replace(/\s/g, "");
 
-  const publicKeyDer = base64ToArrayBuffer(pemContent);
-  return window.crypto.subtle.importKey(
-    "spki",
-    publicKeyDer,
-    { name: "RSA-OAEP", hash: "SHA-256" },
-    false,
-    ["encrypt"]
-  );
+  const aesKeyBytes = new Uint8Array(32);
+  const ivBytes = new Uint8Array(16);
+  window.crypto.getRandomValues(aesKeyBytes);
+  window.crypto.getRandomValues(ivBytes);
+
+  const encoded = new TextEncoder().encode(JSON.stringify(payload));
+
+  const aesCryptoKey = await window.crypto.subtle.importKey("raw", aesKeyBytes, { name: "AES-CBC" }, false, ["encrypt"]);
+  const encryptedPayload = await window.crypto.subtle.encrypt({ name: "AES-CBC", iv: ivBytes }, aesCryptoKey, encoded);
+
+  const rsaKey = await window.crypto.subtle.importKey("spki", base64ToArrayBuffer(pemContent), { name: "RSA-OAEP", hash: "SHA-256" }, false, ["encrypt"]);
+  const encryptedAesKey = await window.crypto.subtle.encrypt({ name: "RSA-OAEP" }, rsaKey, aesKeyBytes);
+
+  return `${bytesToBase64(new Uint8Array(encryptedAesKey))}:${bytesToBase64(ivBytes)}:${bytesToBase64(new Uint8Array(encryptedPayload))}`;
 };
 
+/* ── Encrypt with node-forge (HTTP fallback) ── */
+const encryptWithForge = (payload, publicKeyPem) => {
+  const pem = publicKeyPem.includes("BEGIN PUBLIC KEY")
+    ? publicKeyPem
+    : `-----BEGIN PUBLIC KEY-----\n${publicKeyPem}\n-----END PUBLIC KEY-----`;
+
+  // Generate random AES key (32 bytes) and IV (16 bytes)
+  const aesKey = forge.random.getBytesSync(32);
+  const iv = forge.random.getBytesSync(16);
+
+  // AES-CBC encrypt the payload
+  const cipher = forge.cipher.createCipher("AES-CBC", aesKey);
+  cipher.start({ iv });
+  cipher.update(forge.util.createBuffer(JSON.stringify(payload), "utf8"));
+  cipher.finish();
+  const encryptedPayload = cipher.output.getBytes();
+
+  // RSA-OAEP encrypt the AES key
+  const publicKey = forge.pki.publicKeyFromPem(pem);
+  const encryptedAesKey = publicKey.encrypt(aesKey, "RSA-OAEP", { md: forge.md.sha256.create(), mgf1: { md: forge.md.sha256.create() } });
+
+  // Return three-part base64 format
+  return `${forge.util.encode64(encryptedAesKey)}:${forge.util.encode64(iv)}:${forge.util.encode64(encryptedPayload)}`;
+};
+
+/* ── Main encryption function ── */
 const encryptRechargePayload = async (payload) => {
   const keyResponse = await guestGet("/login/getPublicKey");
   if (!keyResponse.success || !keyResponse.data?.publicKey) {
     throw new Error(keyResponse.message || "Unable to fetch public key");
   }
 
-  const publicKeyPem = keyResponse.data.publicKey.includes("BEGIN PUBLIC KEY")
-    ? keyResponse.data.publicKey
-    : `-----BEGIN PUBLIC KEY-----\n${keyResponse.data.publicKey.match(/.{1,64}/g).join("\n")}\n-----END PUBLIC KEY-----`;
+  const rawKey = keyResponse.data.publicKey;
+  const publicKeyPem = rawKey.includes("BEGIN PUBLIC KEY")
+    ? rawKey
+    : `-----BEGIN PUBLIC KEY-----\n${rawKey.match(/.{1,64}/g).join("\n")}\n-----END PUBLIC KEY-----`;
 
-  const aesKeyHex = randomHex(32);
-  const ivHex = randomHex(16);
-  const aesKeyBytes = hexToBytes(aesKeyHex);
-  const ivBytes = hexToBytes(ivHex);
-  const serialized = JSON.stringify(payload);
-  const encoded = new TextEncoder().encode(serialized);
+  if (isSecureContext()) {
+    return encryptWithWebCrypto(payload, publicKeyPem);
+  }
 
-  const aesCryptoKey = await window.crypto.subtle.importKey(
-    "raw",
-    aesKeyBytes,
-    { name: "AES-CBC" },
-    false,
-    ["encrypt"]
-  );
-
-  const encryptedPayload = await window.crypto.subtle.encrypt(
-    { name: "AES-CBC", iv: ivBytes },
-    aesCryptoKey,
-    encoded
-  );
-
-  const rsaPublicKey = await importPublicKey(publicKeyPem);
-  const encryptedAesKey = await window.crypto.subtle.encrypt(
-    { name: "RSA-OAEP" },
-    rsaPublicKey,
-    aesKeyBytes
-  );
-
-  return `${bytesToBase64(new Uint8Array(encryptedAesKey))}:${bytesToBase64(ivBytes)}:${bytesToBase64(
-    new Uint8Array(encryptedPayload)
-  )}`;
+  // HTTP fallback using node-forge (pure JS, no Web Crypto needed)
+  return encryptWithForge(payload, publicKeyPem);
 };
 
+/* ── Service ── */
 export const rechargeService = {
   fetchOperatorCircle: (mobile) => authPost("/api/customer/operator/fetchOperatorCircle", { mobile }),
 
-  fetchPlansByCode: async ({ opCode, circleCode }) => {
-    try {
-      const response = await apiClient.post("/api/customer/plan_recharge/fetchPlansByCode", {
-        opCode,
-        circleCode,
-      });
-      return parseApiResponse(response);
-    } catch (error) {
-      return { success: false, message: getErrorMessage(error), data: null, raw: null };
-    }
-  },
+  fetchPlansByCode: ({ opCode, circleCode }) => authPost("/api/customer/plan_recharge/fetchPlansByCode", { opCode, circleCode }),
+
+  fetchDTHPlans: ({ opCode }) => authPost("/api/customer/plan_recharge/fetch_DTHPlans", { opCode }),
 
   viewBill: (payload) => authPost("/api/customer/plan_recharge/viewBill", payload),
 

@@ -97,7 +97,7 @@ const HomeScreen = () => {
             {state.services.slice(0, 8).map((service) => (
               <button key={service.id} className="cm-service-card" type="button"
                 onClick={() => navigate(`/customer/app/services/${service.slug}`, { state: { service: toSerializableService(service) } })}>
-                <ServiceIcon icon={service.icon} accentColor={service.accentColor} highlightColor={service.highlightColor} />
+                <ServiceIcon icon={service.icon} iconUrl={service.iconUrl} accentColor={service.accentColor} highlightColor={service.highlightColor} />
                 <div className="cm-service-name">{service.name}</div>
               </button>
             ))}

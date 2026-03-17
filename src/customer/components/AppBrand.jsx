@@ -1,7 +1,7 @@
 const AppBrand = ({ subtitle }) => (
   <div className="cm-brand">
-    <img src="/assets/images/Brand_logo.png" alt="vasbazaar" style={{ height: 36 }} />
-    {subtitle ? <div className="cm-muted">{subtitle}</div> : null}
+    <img src="https://webdekho.in/images/vasbazaar.png" alt="VasBazaar" className="cm-brand-logo" />
+    {subtitle ? <div style={{ color: '#B0B0B0', fontSize: '0.75rem' }}>{subtitle}</div> : null}
   </div>
 );
 

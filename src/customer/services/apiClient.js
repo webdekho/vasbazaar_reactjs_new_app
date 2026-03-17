@@ -12,20 +12,10 @@ const CUSTOMER_STORAGE_KEYS = {
 
 const trimTrailingSlash = (value) => value.replace(/\/+$/, "");
 
-const deriveSameHostApiBase = () => {
-  if (typeof window === "undefined") return null;
-  const { protocol, hostname } = window.location;
-  if (!hostname) return null;
-  return `${protocol}//${hostname}:8086`;
-};
-
 const resolveApiBase = () => {
   const customerBase =
     typeof window !== "undefined" ? localStorage.getItem(CUSTOMER_STORAGE_KEYS.apiBaseUrl) : null;
   if (customerBase) return trimTrailingSlash(customerBase);
-
-  const derivedBase = deriveSameHostApiBase();
-  if (derivedBase) return trimTrailingSlash(derivedBase);
 
   const sharedHost = typeof window !== "undefined" ? localStorage.getItem("host") : null;
   if (sharedHost) return trimTrailingSlash(sharedHost);
@@ -103,6 +93,20 @@ export const authGet = async (endpoint, params = {}) => {
 export const authPost = async (endpoint, payload) => {
   try {
     const response = await apiClient.post(endpoint, payload, {
+      headers: {
+        "Content-Type": "application/json",
+        access_token: getCustomerToken(),
+      },
+    });
+    return parseApiResponse(response);
+  } catch (error) {
+    return { success: false, message: getErrorMessage(error), data: null, raw: null };
+  }
+};
+
+export const authPut = async (endpoint, payload) => {
+  try {
+    const response = await apiClient.put(endpoint, payload, {
       headers: {
         "Content-Type": "application/json",
         access_token: getCustomerToken(),

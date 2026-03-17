@@ -1,6 +1,64 @@
-import { authGet } from "./apiClient";
+import { authGet, authPost, authPut } from "./apiClient";
 
 export const walletService = {
   getWalletTransactions: (pageNumber = 0, pageSize = 10) =>
     authGet("/api/customer/wallet_transaction/getAll", { pageNumber, pageSize }),
+
+  getWalletHistory: (type, pageNumber = 0, pageSize = 10) =>
+    authGet("/api/customer/wallet_transaction/getHistory", { type, pageNumber, pageSize }),
+
+  getTransactionHistory: (pageNumber = 0) =>
+    authGet("/api/customer/transaction/getByUserId", { pageNumber }),
+
+  getReferredUsers: (pageNumber = 0, pageSize = 10) =>
+    authGet("/api/customer/user/getReffered_user", { pageNumber, pageSize, isactive: 1 }),
+
+  getUpcomingDues: () =>
+    authGet("/api/customer/schedular/getAllRecharges"),
+
+  getCoupons: (pageNumber = 0, pageSize = 10) =>
+    authGet("/api/customer/transaction/couponDetails", { pageNumber, pageSize }),
+
+  getMandateList: (page = 1, pageSize = 10, status = "") =>
+    authGet("/api/customer/mandate_customer/cust-mandateList", { page, pageSize, status: status || undefined }),
+
+  revokeMandate: (mandateId) =>
+    authGet("/api/customer/mandate_customer/revokeMandate", { mandateId }),
+
+  stopMandateExecution: (mandateId, orderId) =>
+    authPost("/api/customer/mandate_customer/stopMandateExecution", { mandateId, orderId }),
+
+  // Bank Details
+  getBankDetails: (pageNumber = 0, pageSize = 10, status = "active") =>
+    authGet("/api/customer/bank_details/myBankDetails", { pageNumber, pageSize, status }),
+
+  addBankDetails: (payload) =>
+    authPost("/api/customer/bank_details/add", payload),
+
+  updateBankDetails: (payload) =>
+    authPut("/api/customer/bank_details/update", payload),
+
+  fundTransfer: (payload) =>
+    authPost("/api/customer/wallet_transaction/fund-transfer", payload),
+
+  getWalletBalance: async () => {
+    const result = await authGet("/api/customer/user/getByUserId");
+    if (result.success && result.data) {
+      return { ...result, data: { balance: result.data.balance } };
+    }
+    return result;
+  },
+
+  getWalletTransactionDetails: (txnId) =>
+    authGet("/api/customer/wallet_transaction/getById", { txnId }),
+
+  addMoneyToWallet: (amount, paymentMethod) =>
+    authPost("/api/customer/wallet/addMoney", { amount, paymentMethod }),
+
+  // Note: createMandate payload needs encryption before sending (see rechargeService for encryption utils)
+  createMandate: (payload) =>
+    authPost("/api/customer/mandate_customer/create", payload),
+
+  getMandateOrderStatus: (orderId) =>
+    authGet("/api/customer/mandate_customer/orderStatus", { orderId }),
 };

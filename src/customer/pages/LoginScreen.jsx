@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaChevronRight, FaGift, FaWallet } from "react-icons/fa";
-import { FiPhoneCall } from "react-icons/fi";
+import { FaChevronRight, FaGift } from "react-icons/fa";
+import { FiPhoneCall, FiCreditCard, FiGift } from "react-icons/fi";
 import { authService } from "../services/authService";
 import { customerStorage } from "../services/storageService";
 import { extractSessionToken } from "../components/serviceUtils";
@@ -12,6 +12,7 @@ const LoginScreen = () => {
   const [referralCode, setReferralCode] = useState(customerStorage.getReferralCode() || "");
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [focused, setFocused] = useState("");
 
   const submit = async (event) => {
     event.preventDefault();
@@ -19,20 +20,12 @@ const LoginScreen = () => {
       setStatus({ type: "error", message: "Enter a valid 10-digit mobile number." });
       return;
     }
-
     setLoading(true);
     const response = await authService.sendOtp({ mobileNumber, referralCode });
     setLoading(false);
-
-    if (!response.success) {
-      setStatus({ type: "error", message: response.message });
-      return;
-    }
-
+    if (!response.success) { setStatus({ type: "error", message: response.message }); return; }
     const tempToken = extractSessionToken(response.data) || response.raw?.token || response.raw?.data?.token;
-    if (tempToken) {
-      customerStorage.setTempToken(tempToken);
-    }
+    if (tempToken) customerStorage.setTempToken(tempToken);
     customerStorage.setDevOtp(response.raw?.devOtp || null);
     customerStorage.setReferralCode(referralCode);
     setStatus({ type: "success", message: response.message || "OTP sent successfully." });
@@ -45,25 +38,23 @@ const LoginScreen = () => {
         <div className="cm-auth-orb cm-auth-orb--1" />
         <div className="cm-auth-orb cm-auth-orb--2" />
         <div className="cm-auth-orb cm-auth-orb--3" />
-        <div className="cm-auth-grid-overlay" />
+        <div className="cm-auth-mesh" />
       </div>
 
       <div className="cm-auth-container">
         <div className="cm-auth-glass-card">
+          <div className="cm-auth-particles">
+            <span /><span /><span /><span /><span />
+          </div>
+
           <div className="cm-auth-header">
             <div className="cm-auth-logo">
-              <div className="cm-auth-logo-icon">
-                <FaWallet />
-              </div>
-              <span className="cm-auth-logo-text">
-                <span className="cm-auth-logo-vas">vas</span>bazaar
-              </span>
+              <img src="https://webdekho.in/images/vasbazaar.png" alt="VasBazaar" className="cm-auth-logo-img" />
             </div>
             <div className="cm-auth-badge-row">
-              <span className="cm-auth-chip">Recharge</span>
-              <span className="cm-auth-chip">Bills</span>
-              <span className="cm-auth-chip">Wallet</span>
-              <span className="cm-auth-chip cm-auth-chip--accent">Rewards</span>
+              <span className="cm-auth-chip"><FiCreditCard /> Bills</span>
+              <span className="cm-auth-chip"><FiPhoneCall /> Recharge</span>
+              <span className="cm-auth-chip cm-auth-chip--accent"><FiGift /> Rewards</span>
             </div>
           </div>
 
@@ -73,7 +64,7 @@ const LoginScreen = () => {
           </div>
 
           <form className="cm-auth-form" onSubmit={submit}>
-            <div className="cm-auth-field">
+            <div className={`cm-auth-field${focused === "mobile" ? " is-focused" : ""}`}>
               <label htmlFor="mobile">
                 <FiPhoneCall className="cm-auth-field-icon" />
                 Mobile Number
@@ -87,13 +78,15 @@ const LoginScreen = () => {
                   maxLength={10}
                   placeholder="Enter 10-digit number"
                   value={mobileNumber}
-                  onChange={(event) => setMobileNumber(event.target.value.replace(/\D/g, ""))}
+                  onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, ""))}
+                  onFocus={() => setFocused("mobile")}
+                  onBlur={() => setFocused("")}
                   autoFocus
                 />
               </div>
             </div>
 
-            <div className="cm-auth-field">
+            <div className={`cm-auth-field${focused === "referral" ? " is-focused" : ""}`}>
               <label htmlFor="referral">
                 <FaGift className="cm-auth-field-icon" />
                 Referral Code
@@ -103,23 +96,22 @@ const LoginScreen = () => {
                 className="cm-auth-input cm-auth-input--full"
                 placeholder="Optional referral code"
                 value={referralCode}
-                onChange={(event) => setReferralCode(event.target.value)}
+                onChange={(e) => setReferralCode(e.target.value)}
+                onFocus={() => setFocused("referral")}
+                onBlur={() => setFocused("")}
               />
             </div>
 
-            {status ? (
+            {status && (
               <div className={`cm-auth-alert cm-auth-alert--${status.type}`}>
                 <span className="cm-auth-alert-dot" />
                 {status.message}
               </div>
-            ) : null}
+            )}
 
             <button className="cm-auth-btn" type="submit" disabled={loading}>
               {loading ? (
-                <span className="cm-auth-btn-loading">
-                  <span className="cm-auth-spinner" />
-                  Sending OTP...
-                </span>
+                <span className="cm-auth-btn-loading"><span className="cm-auth-spinner" />Sending OTP...</span>
               ) : (
                 <>Get OTP <FaChevronRight className="cm-auth-btn-arrow" /></>
               )}
