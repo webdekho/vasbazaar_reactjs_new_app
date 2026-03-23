@@ -11,6 +11,7 @@ import {
 import { FiCreditCard, FiArrowRight } from "react-icons/fi";
 import { serviceService } from "../services/serviceService";
 import { rechargeService } from "../services/rechargeService";
+import juspayService from "../services/juspayService";
 import { advertisementService } from "../services/advertisementService";
 import { offerService } from "../services/offerService";
 import { userService } from "../services/userService";
@@ -114,7 +115,7 @@ const BillerList = ({ operators, isLoading: listLoading, onSelect, onBack, servi
       </div>
 
       {/* Banner */}
-      {!search && <BannerSlider banners={banners} />}
+      {!search && <BannerSlider banners={banners} showCustomerCard={false} />}
 
       {/* Search */}
       <div className="bf-search-section">
@@ -1197,13 +1198,44 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
       viewBillResponse: billData || {},
     };
 
-    const response = await rechargeService.recharge(payload);
+    // For UPI, use Juspay redirect flow
+    const rechargeCall = payType === "upi"
+      ? juspayService.rechargeWithJuspay(payload)
+      : rechargeService.recharge(payload);
+
+    const response = await rechargeCall;
     if (!response.success) {
       setLoading(false);
       alert(response.message || "Payment could not be processed.");
       return;
     }
 
+    // Check if Juspay returned a payment URL (UPI redirect flow)
+    if (payType === "upi") {
+      const paymentUrl = juspayService.extractPaymentUrl(response);
+      if (paymentUrl) {
+        const orderId = juspayService.extractOrderId(response);
+        juspayService.savePaymentContext({
+          orderId,
+          amount,
+          type: "bill",
+          label: serviceData.name,
+          mobile,
+          operatorName: selectedBiller.operatorName || selectedBiller.name,
+          operatorId: selectedBiller.id,
+          logo: selectedBiller.logo,
+          couponCode: couponData?.code || null,
+          couponName: couponData?.name || null,
+          discountValue: couponData?.discountValue || 0,
+          cashbackValue: couponData?.cashbackValue || 0,
+          offerType: couponData?.offerType || null,
+        });
+        window.location.href = paymentUrl;
+        return;
+      }
+    }
+
+    // Direct flow (wallet or UPI without redirect)
     const txnId =
       response.data?.txnId ||
       response.data?.txnid ||

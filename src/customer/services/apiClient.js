@@ -12,13 +12,26 @@ const CUSTOMER_STORAGE_KEYS = {
 
 const trimTrailingSlash = (value) => value.replace(/\/+$/, "");
 
-const resolveApiBase = () => {
-  const customerBase =
-    typeof window !== "undefined" ? localStorage.getItem(CUSTOMER_STORAGE_KEYS.apiBaseUrl) : null;
-  if (customerBase) return trimTrailingSlash(customerBase);
+// Allowed API hosts — prevents localStorage tampering
+const ALLOWED_HOSTS = [
+  "https://apis.vasbazaar.com",
+  "https://apis.uat.vasbazaar.com",
+  "https://api.prod.webdekho.in",
+];
 
-  const sharedHost = typeof window !== "undefined" ? localStorage.getItem("host") : null;
-  if (sharedHost) return trimTrailingSlash(sharedHost);
+const isAllowedHost = (url) =>
+  url && ALLOWED_HOSTS.some((host) => url.startsWith(host));
+
+const resolveApiBase = () => {
+  if (typeof window !== "undefined") {
+    const customerBase = localStorage.getItem(CUSTOMER_STORAGE_KEYS.apiBaseUrl);
+    if (customerBase && isAllowedHost(trimTrailingSlash(customerBase)))
+      return trimTrailingSlash(customerBase);
+
+    const sharedHost = localStorage.getItem("host");
+    if (sharedHost && isAllowedHost(trimTrailingSlash(sharedHost)))
+      return trimTrailingSlash(sharedHost);
+  }
 
   return trimTrailingSlash(server_api());
 };
@@ -117,5 +130,36 @@ export const authPut = async (endpoint, payload) => {
     return { success: false, message: getErrorMessage(error), data: null, raw: null };
   }
 };
+
+// ── Global 401 Interceptor ──
+// Detects session invalidation (e.g. logged_in_from_another_device) and forces re-login
+let isRedirecting = false;
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401 && !isRedirecting) {
+      isRedirecting = true;
+      const msg = error?.response?.data?.message || "Session expired";
+
+      // Clear all auth data
+      Object.values(CUSTOMER_STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
+      localStorage.removeItem("vb_pin_set");
+      localStorage.removeItem("vb_last_active");
+
+      // Redirect to login with message
+      const basePath = window.location.pathname.includes("/vasbazaar/")
+        ? "/vasbazaar/customer/login"
+        : "/customer/login";
+
+      const reason = msg.includes("another_device") || msg.includes("another device")
+        ? "You were logged out because your account was accessed from another device."
+        : "Your session has expired. Please log in again.";
+
+      sessionStorage.setItem("vb_logout_reason", reason);
+      window.location.href = basePath;
+    }
+    return Promise.reject(error);
+  }
+);
 
 export { apiClient, parseApiResponse, getErrorMessage, CUSTOMER_STORAGE_KEYS, trimTrailingSlash, resolveApiBase };

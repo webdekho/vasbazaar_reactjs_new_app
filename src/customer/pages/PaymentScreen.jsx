@@ -4,6 +4,7 @@ import { FaArrowLeft, FaWallet, FaShieldAlt, FaLock, FaCheckCircle } from "react
 import { FiZap, FiCreditCard } from "react-icons/fi";
 import { userService } from "../services/userService";
 import { rechargeService } from "../services/rechargeService";
+import juspayService from "../services/juspayService";
 
 const FALLBACK_LOGO = "/assets/images/Brand_favicon.png";
 const handleLogoError = (e) => { e.target.onerror = null; e.target.src = FALLBACK_LOGO; };
@@ -53,9 +54,9 @@ const PaymentScreen = () => {
 
   if (!paymentState.amount) return <Navigate to="/customer/app/services" replace />;
 
-  const amount = Number(paymentState.amount);
-  const discount = Number(paymentState.discountValue || 0);
-  const finalAmount = Math.max(0, amount - discount);
+  const amount = Math.round(Number(paymentState.amount) * 100) / 100;
+  const discount = Math.round(Number(paymentState.discountValue || 0) * 100) / 100;
+  const finalAmount = Math.round(Math.max(0, amount - discount) * 100) / 100;
   const canPayWallet = walletBalance >= finalAmount;
 
   const proceed = async (payType) => {
@@ -67,8 +68,40 @@ const PaymentScreen = () => {
     if (paymentState.couponId) payload.couponId = paymentState.couponId;
     if (paymentState.couponCode) payload.couponCode = paymentState.couponCode;
 
-    const response = await rechargeService.recharge(payload);
+    // For UPI, use Juspay redirect flow
+    const rechargeCall = payType === "upi"
+      ? juspayService.rechargeWithJuspay(payload)
+      : rechargeService.recharge(payload);
+
+    const response = await rechargeCall;
     if (!response.success) { setLoading(false); setStatus(response.message || "Payment could not be processed."); return; }
+
+    // Check if Juspay returned a payment URL (UPI redirect flow)
+    if (payType === "upi") {
+      const paymentUrl = juspayService.extractPaymentUrl(response);
+      if (paymentUrl) {
+        const orderId = juspayService.extractOrderId(response);
+        juspayService.savePaymentContext({
+          orderId,
+          amount: paymentState.amount,
+          type: paymentState.type,
+          label: paymentState.label,
+          mobile: paymentState.mobile || paymentState.field1,
+          operatorName: paymentState.operatorName,
+          operatorId: paymentState.operatorId,
+          logo: paymentState.logo,
+          couponCode: paymentState.couponCode || null,
+          couponName: paymentState.couponName || null,
+          discountValue: paymentState.discountValue || 0,
+          cashbackValue: paymentState.cashbackValue || 0,
+          offerType: paymentState.offerType || null,
+        });
+        window.location.href = paymentUrl;
+        return;
+      }
+    }
+
+    // Direct flow (wallet or UPI without redirect)
     const txnId = response.data?.txnId || response.data?.txnid || response.data?.transactionId || response.raw?.data?.txnId || `VB${Date.now()}`;
     const statusResponse = await rechargeService.checkRechargeStatus({ txnId, field1: payload.field1, field2: payload.field2, validity: payload.validity, recharge: true, viewBillResponse: payload.viewBillResponse });
     setLoading(false);
@@ -111,7 +144,6 @@ const PaymentScreen = () => {
         {discount > 0 && (
           <div className="xpay-hero-discount">
             <span className="xpay-hero-original">₹{amount}</span>
-            <span className="xpay-hero-save">You save ₹{discount.toFixed(0)}</span>
           </div>
         )}
       </div>

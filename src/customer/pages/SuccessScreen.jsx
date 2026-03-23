@@ -1,14 +1,18 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { FaCheck, FaShareAlt, FaHome, FaCopy, FaReceipt, FaWallet, FaGift, FaPercent, FaTag } from "react-icons/fa";
+import { FaCheck, FaShareAlt, FaHome, FaCopy, FaReceipt, FaWallet, FaGift, FaPercent, FaTag, FaUsers } from "react-icons/fa";
 import { FiArrowRight } from "react-icons/fi";
+import { useCustomerModern } from "../context/CustomerModernContext";
 import { useState, useEffect } from "react";
+import { addRecentService } from "./ServicesScreen";
 
 const SuccessScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const data = location.state || {};
+  const { userData } = useCustomerModern();
   const [copied, setCopied] = useState("");
   const [showContent, setShowContent] = useState(false);
+  const userMobile = userData?.mobile || userData?.mobileNumber || "";
 
   const txnId = data.txnId || data.statusPayload?.txnId || "--";
   const refId = data.statusPayload?.refId || data.statusPayload?.ref_id || data.statusPayload?.referenceId || "--";
@@ -21,9 +25,19 @@ const SuccessScreen = () => {
   const couponCode = data.couponCode || null;
   const couponName = data.couponName || null;
 
-  // Show content after celebration animation
+  // Show content after celebration animation + save recent service
   useEffect(() => {
     const t = setTimeout(() => setShowContent(true), 800);
+    // Save the service to recent quick access
+    if (data.label || data.operatorName) {
+      const slug = (data.label || data.operatorName || "").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      addRecentService({
+        slug,
+        name: data.label || data.operatorName || "Service",
+        iconUrl: data.logo || null,
+        accentColor: "#40E0D0",
+      });
+    }
     return () => clearTimeout(t);
   }, []);
 
@@ -162,15 +176,24 @@ const SuccessScreen = () => {
       {/* ── Actions ── */}
       <div className={`sx-actions${showContent ? " sx-in sx-d2" : ""}`}>
         <button type="button" className="sx-btn sx-btn--share" onClick={handleShare}>
-          <FaShareAlt /> Share Receipt
+          <FaShareAlt /> Share
         </button>
         <button type="button" className="sx-btn sx-btn--home" onClick={() => navigate("/customer/app/services")}>
-          Go to Home <FiArrowRight />
+          Home <FiArrowRight />
         </button>
       </div>
 
+      {/* ── Refer Button ── */}
+      <button type="button" className={`sx-refer-btn${showContent ? " sx-in sx-d3" : ""}`} onClick={() => {
+        const msg = `Earn cashback on every recharge & bill payment! Join VasBazaar using my referral code: ${userMobile}\n\nhttps://vasbazaar.web.webdekho.in?code=${userMobile}`;
+        if (navigator.share) { navigator.share({ title: "Join VasBazaar", text: msg }); }
+        else { navigator.clipboard?.writeText(msg); setCopied("refer"); setTimeout(() => setCopied(""), 1500); }
+      }}>
+        <FaUsers /> Refer & Earn Cashback
+      </button>
+
       {/* Copied toast */}
-      {copied && <div className="sx-toast">Copied!</div>}
+      {copied && <div className="sx-toast">{copied === "refer" ? "Referral link copied!" : "Copied!"}</div>}
     </div>
   );
 };

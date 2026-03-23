@@ -5,12 +5,18 @@ import { FiPhoneCall, FiCreditCard, FiGift } from "react-icons/fi";
 import { authService } from "../services/authService";
 import { customerStorage } from "../services/storageService";
 import { extractSessionToken } from "../components/serviceUtils";
+import { useTheme } from "../context/ThemeContext";
 
 const LoginScreen = () => {
   const navigate = useNavigate();
+  const { theme } = useTheme();
   const [mobileNumber, setMobileNumber] = useState("");
   const [referralCode, setReferralCode] = useState(customerStorage.getReferralCode() || "");
-  const [status, setStatus] = useState(null);
+  const [status, setStatus] = useState(() => {
+    const reason = sessionStorage.getItem("vb_logout_reason");
+    if (reason) { sessionStorage.removeItem("vb_logout_reason"); return { type: "error", message: reason }; }
+    return null;
+  });
   const [loading, setLoading] = useState(false);
   const [focused, setFocused] = useState("");
 
@@ -49,7 +55,7 @@ const LoginScreen = () => {
 
           <div className="cm-auth-header">
             <div className="cm-auth-logo">
-              <img src="https://webdekho.in/images/vasbazaar.png" alt="VasBazaar" className="cm-auth-logo-img" />
+              <img src={theme === "light" ? "https://webdekho.in/images/vasbazaar1.png" : "https://webdekho.in/images/vasbazaar.png"} alt="VasBazaar" className="cm-auth-logo-img" />
             </div>
             <div className="cm-auth-badge-row">
               <span className="cm-auth-chip"><FiCreditCard /> Bills</span>

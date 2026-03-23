@@ -4,6 +4,7 @@ import {
   FaArrowLeft, FaPhone, FaWhatsapp, FaEnvelope, FaComments,
   FaChevronDown, FaChevronRight, FaExclamationCircle, FaHeadset, FaHeart
 } from "react-icons/fa";
+import { useTheme } from "../context/ThemeContext";
 
 const TAWK_TO_ID = "68d37d4a56af9719235895be/1j5t22r24";
 
@@ -51,6 +52,7 @@ const faqs = [
 
 const HelpScreen = () => {
   const navigate = useNavigate();
+  const { theme } = useTheme();
   const [expanded, setExpanded] = useState(null);
 
   return (
@@ -132,7 +134,7 @@ const HelpScreen = () => {
 
       {/* Footer */}
       <div className="hp-footer">
-        <img src="https://webdekho.in/images/vasbazaar.png" alt="VasBazaar" className="hp-footer-logo" />
+        <img src={theme === "light" ? "https://webdekho.in/images/vasbazaar1.png" : "https://webdekho.in/images/vasbazaar.png"} alt="VasBazaar" className="hp-footer-logo" />
         <span>VasBazaar v1.0.0</span>
         <span className="hp-footer-heart">Made with <FaHeart /> in India</span>
       </div>

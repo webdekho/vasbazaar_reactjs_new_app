@@ -64,12 +64,12 @@ const OperatorChangeSheet = ({ open, operators, currentOpCode, onSelect, onClose
   if (!open) return null;
 
   const filtered = operators.filter((op) =>
-    `${op.operatorName || ""} ${op.name || ""} ${op.opCode || ""}`.toLowerCase().includes(search.toLowerCase())
+    `${op.operatorName || ""} ${op.name || ""} ${op.opCode || ""} ${op.operatorCode || ""}`.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
-    <div className="cm-sheet-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="cm-sheet" ref={sheetRef}>
+    <div className="cm-sheet-overlay is-open" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="cm-sheet is-open" ref={sheetRef}>
         <div className="cm-sheet-header">
           <h2>Select Operator</h2>
           <button type="button" className="cm-sheet-close" onClick={onClose}><FaTimes /></button>
@@ -95,7 +95,6 @@ const OperatorChangeSheet = ({ open, operators, currentOpCode, onSelect, onClose
                   )}
                   <div className="cm-contact-info">
                     <div className="cm-contact-name">{op.operatorName || op.name}</div>
-                    <div className="cm-contact-number">{op.opCode || op.operatorCode || ""}</div>
                   </div>
                   {isActive && <FaCheck className="cm-sheet-check" />}
                 </button>
@@ -208,7 +207,7 @@ const RechargePlansView = ({ contactName, mobile, operatorData: initialOperatorD
       <div className="cm-flow-title-row">
         <button className="cm-back-icon" type="button" onClick={onBack}><FaArrowLeft /></button>
         <h1>Mobile Recharge Plans</h1>
-        <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo" />
+        <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
       </div>
 
       {/* Operator info card */}
@@ -216,7 +215,7 @@ const RechargePlansView = ({ contactName, mobile, operatorData: initialOperatorD
         <div className="cm-operator-info">
           {opLogo ? <img src={opLogo} alt="" className="cm-operator-logo" onError={handleLogoError} /> : <div className="cm-contact-avatar cm-contact-avatar--my">{(opName[0] || "O").toUpperCase()}</div>}
           <div>
-            <div className="cm-contact-name">{contactName || "My Number"} &middot; {mobile}</div>
+            <div className="cm-contact-name">{contactName && !/^\+?\d[\d\s-]{6,}$/.test(contactName.trim()) ? `${contactName} · ${mobile}` : `+91 ${mobile.replace(/(\d{5})(\d{5})/, "$1 $2")}`}</div>
             <div className="cm-contact-number">{opName} - {circleName}</div>
           </div>
         </div>
@@ -588,9 +587,6 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
         <h1>Contact List</h1>
       </div>
 
-      {/* Banner */}
-      <BannerSlider banners={banners} showCustomerCard={false} />
-
       {/* Search bar */}
       <div className="cm-contact-search cm-contact-search--bar">
         <FaSearch className="cm-contact-search-icon" />
@@ -790,7 +786,7 @@ const PostpaidFlow = ({ serviceData, operators, navigate }) => {
           else navigate("/customer/app/services");
         }}><FaArrowLeft /></button>
         <h1>{step === "mobile" ? "Postpaid Bill Payment" : step === "operator" ? "Select Operator" : "Bill Details"}</h1>
-        <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo" style={{ height: 36 }} />
+        <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
       </div>
 
       {/* Step indicator */}
@@ -817,7 +813,7 @@ const PostpaidFlow = ({ serviceData, operators, navigate }) => {
                   <div className="cm-contact-name">My Number</div>
                   <div className="cm-contact-number">+91 {normalizeMobile(userData.mobile)}</div>
                 </div>
-                <FaChevronRight style={{ color: "#6B6B6B", fontSize: 12 }} />
+                <FaChevronRight style={{ color: "var(--cm-disabled, #6B6B6B)", fontSize: 12 }} />
               </button>
             )}
 
@@ -871,7 +867,7 @@ const PostpaidFlow = ({ serviceData, operators, navigate }) => {
                     <div className="cm-contact-name">{name}</div>
                     <div className="cm-contact-number">Bharat BillPay</div>
                   </div>
-                  {loading && selectedOp?.id === op.id ? <span className="cm-contact-loading" /> : <FaChevronRight style={{ color: "#6B6B6B", fontSize: 12 }} />}
+                  {loading && selectedOp?.id === op.id ? <span className="cm-contact-loading" /> : <FaChevronRight style={{ color: "var(--cm-disabled, #6B6B6B)", fontSize: 12 }} />}
                 </button>
               );
             })}
@@ -967,7 +963,7 @@ const BillerFlow = ({ serviceData, operators, navigate }) => {
   return (
     <div className="cm-stack">
       <div className="cm-card">
-        <div className="cm-flow-header"><div className="cm-flow-title-row"><button className="cm-back-icon" type="button" onClick={() => navigate("/customer/app/services")}><FaArrowLeft /></button><h1>{serviceData.name}</h1><img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo" /></div><p className="cm-page-subtitle">Select a biller and fill in your details.</p></div>
+        <div className="cm-flow-header"><div className="cm-flow-title-row"><button className="cm-back-icon" type="button" onClick={() => navigate("/customer/app/services")}><FaArrowLeft /></button><h1>{serviceData.name}</h1><img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" /></div><p className="cm-page-subtitle">Select a biller and fill in your details.</p></div>
         <div className="cm-summary-strip"><div className="cm-search-wrap"><FaSearch /><input className="cm-input" placeholder="Search billers" value={search} onChange={(e) => setSearch(e.target.value)} /></div></div>
       </div>
       {error && <div className="cm-status cm-status-error">{error}</div>}

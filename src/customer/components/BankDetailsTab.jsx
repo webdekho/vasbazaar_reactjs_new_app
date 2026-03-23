@@ -60,7 +60,7 @@ export default function BankDetailsTab() {
     if (!form.accountNumber.trim()) errs.accountNumber = "Account number is required";
     else if (form.accountNumber.length < 8) errs.accountNumber = "Invalid account number";
     if (!form.ifscCode.trim()) errs.ifscCode = "IFSC code is required";
-    else if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(form.ifscCode)) errs.ifscCode = "Invalid IFSC code format";
+    else if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(form.ifscCode)) errs.ifscCode = "Format: AAAA0NNNNNN (4 letters + 0 + 6 alphanumeric)";
     if (!form.bankName.trim()) errs.bankName = "Bank name is required";
     setFormErrors(errs);
     return Object.keys(errs).length === 0;
@@ -224,9 +224,10 @@ export default function BankDetailsTab() {
               </div>
               <div className="cm-form-group">
                 <label>IFSC Code *</label>
-                <input type="text" placeholder="e.g., SBIN0001234" value={form.ifscCode}
-                  onChange={(e) => setForm({ ...form, ifscCode: e.target.value.toUpperCase() })} disabled={submitting}
+                <input type="text" placeholder="E.G., SBIN0001234" value={form.ifscCode} maxLength={11}
+                  onChange={(e) => setForm({ ...form, ifscCode: e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 11) })} disabled={submitting}
                   style={{ textTransform: "uppercase" }} className={formErrors.ifscCode ? "cm-input-error" : ""} />
+                <span className="cm-form-hint">Format: AAAA0NNNNNN (e.g., SBIN0001234)</span>
                 {formErrors.ifscCode && <span className="cm-form-error">{formErrors.ifscCode}</span>}
               </div>
               {formErrors.submit && <p className="cm-form-error" style={{ marginTop: 8 }}>{formErrors.submit}</p>}
@@ -250,9 +251,9 @@ export default function BankDetailsTab() {
               <div style={{ padding: 24, textAlign: "center" }}>
                 <FaCheck style={{ fontSize: 48, color: "#4CAF50", marginBottom: 12 }} />
                 <h4 style={{ margin: "0 0 4px", fontSize: 18 }}>Transfer Successful!</h4>
-                <p style={{ color: "#666", fontSize: 13, margin: "0 0 16px" }}>Your transfer has been processed</p>
+                <p style={{ color: "var(--cm-muted, #666)", fontSize: 13, margin: "0 0 16px" }}>Your transfer has been processed</p>
                 {(transferResult.reqId || transferResult.apiRefId) && (
-                  <div style={{ background: "#f9f9f9", borderRadius: 12, padding: 12, marginBottom: 16, textAlign: "left" }}>
+                  <div style={{ background: "var(--cm-bg-secondary, #f9f9f9)", borderRadius: 12, padding: 12, marginBottom: 16, textAlign: "left" }}>
                     {transferResult.reqId && <div className="cm-bank-detail-row"><span>Request ID:</span><strong>{transferResult.reqId}</strong></div>}
                     {transferResult.apiRefId && <div className="cm-bank-detail-row"><span>Reference ID:</span><strong>{transferResult.apiRefId}</strong></div>}
                   </div>
@@ -263,7 +264,7 @@ export default function BankDetailsTab() {
               <div style={{ padding: 24, textAlign: "center" }}>
                 <FaExclamationCircle style={{ fontSize: 48, color: "#F44336", marginBottom: 12 }} />
                 <h4 style={{ margin: "0 0 4px", fontSize: 18, color: "#F44336" }}>Transfer Failed</h4>
-                <p style={{ color: "#666", fontSize: 13, margin: "0 0 16px" }}>{transferResult.message}</p>
+                <p style={{ color: "var(--cm-muted, #666)", fontSize: 13, margin: "0 0 16px" }}>{transferResult.message}</p>
                 <button type="button" className="cm-button" onClick={() => setTransferResult(null)}>Retry</button>
                 <button type="button" className="cm-button-ghost" onClick={() => setShowTransferModal(false)} style={{ marginTop: 8 }}>Cancel</button>
               </div>
@@ -277,7 +278,7 @@ export default function BankDetailsTab() {
                   <div className="cm-bank-select-card">
                     <FaCreditCard style={{ color: "#1976D2", fontSize: 20, flexShrink: 0 }} />
                     <div>
-                      <div style={{ fontSize: 10, color: "#999", textTransform: "uppercase", fontWeight: 600 }}>To Bank Account</div>
+                      <div style={{ fontSize: 10, color: "var(--cm-muted, #999)", textTransform: "uppercase", fontWeight: 600 }}>To Bank Account</div>
                       <div style={{ fontSize: 14, fontWeight: 600 }}>{selectedBank?.bankName}</div>
                       <div style={{ fontSize: 12, color: "#1976D2" }}>{maskAccount(selectedBank?.accountNumber)}</div>
                     </div>

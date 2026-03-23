@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaSearch, FaDownload, FaWallet, FaUserCircle, FaSyncAlt, FaClock } from "react-icons/fa";
+import { FaSearch, FaDownload, FaWallet, FaUserCircle, FaSyncAlt, FaClock, FaThLarge, FaPlaneDeparture } from "react-icons/fa";
 import { FiShare, FiPlusSquare, FiFileText, FiAlertTriangle, FiClock } from "react-icons/fi";
-import { HiOutlineCurrencyRupee } from "react-icons/hi";
+import { HiOutlineCurrencyRupee, HiMiniSquares2X2 } from "react-icons/hi2";
 import { FaCalendarAlt, FaChevronRight, FaReceipt } from "react-icons/fa";
 import { serviceService } from "../services/serviceService";
 import { advertisementService } from "../services/advertisementService";
@@ -13,7 +13,7 @@ import { usePWAInstall } from "../hooks/usePWAInstall";
 import DataState from "../components/DataState";
 import ServiceIcon from "../components/ServiceIcon";
 import BannerSlider from "../components/BannerSlider";
-import { normalizeService, toSerializableService } from "../components/serviceUtils";
+import { normalizeService, toSerializableService, getServiceVisual } from "../components/serviceUtils";
 
 const skeletonStyle = {
   background: "linear-gradient(90deg, var(--cm-bg-secondary, #121212) 25%, var(--cm-line, #2A2A2A) 50%, var(--cm-bg-secondary, #121212) 75%)",
@@ -159,32 +159,99 @@ const UpcomingDuesSection = ({ dues }) => {
 };
 
 const quickAccessItems = [
-  { label: "Complaint", icon: FiAlertTriangle, to: "/customer/app/file-complaint", color: "#FF9800" },
-  { label: "History", icon: FiClock, to: "/customer/app/history", color: "#007BFF" },
+  { label: "Services", icon: HiMiniSquares2X2, to: "#services", color: "#40E0D0", isScroll: true, iconUrl: "https://webdekho.in/images/b.png" },
+  { label: "Travel", icon: FaPlaneDeparture, to: "/customer/app/travel", color: "#007BFF" },
   { label: "My Dues", icon: FaClock, to: "/customer/app/my-dues", color: "#FF3B30" },
-  { label: "Wallet", icon: FaWallet, to: "/customer/app/wallet", color: "#00C853" },
-  { label: "Profile", icon: FaUserCircle, to: "/customer/app/profile", color: "#9C27B0" },
-  { label: "Autopay", icon: FaSyncAlt, to: "/customer/app/autopay", color: "#007BFF" },
   { label: "Cashback", icon: HiOutlineCurrencyRupee, to: "/customer/app/commission?tab=cashback", color: "#FF9800" },
+  { label: "History", icon: FiClock, to: "/customer/app/history", color: "#007BFF" },
+  { label: "Autopay", icon: FaSyncAlt, to: "/customer/app/autopay", color: "#007BFF" },
+  { label: "Complaint", icon: FiAlertTriangle, to: "/customer/app/file-complaint", color: "#FF9800" },
 ];
 
-const QuickAccessCard = () => {
+const RECENT_SERVICES_KEY = "vb_recent_services";
+
+const getRecentServices = () => {
+  try {
+    return JSON.parse(localStorage.getItem(RECENT_SERVICES_KEY) || "[]");
+  } catch { return []; }
+};
+
+const removeRecentService = (slug) => {
+  const list = getRecentServices().filter((s) => s.slug !== slug);
+  localStorage.setItem(RECENT_SERVICES_KEY, JSON.stringify(list));
+  return list;
+};
+
+// Call this from SuccessScreen after a successful transaction
+// addRecentService({ slug, name, iconUrl, accentColor })
+export const addRecentService = (service) => {
+  if (!service?.slug) return;
+  let list = getRecentServices().filter((s) => s.slug !== service.slug);
+  list.unshift({ slug: service.slug, name: service.name, iconUrl: service.iconUrl || null, accentColor: service.accentColor || "#40E0D0", addedAt: Date.now() });
+  if (list.length > 6) list = list.slice(0, 6);
+  localStorage.setItem(RECENT_SERVICES_KEY, JSON.stringify(list));
+};
+
+const QuickAccessCard = ({ services = [] }) => {
   const navigate = useNavigate();
+  const [recentServices, setRecentServices] = useState(() => getRecentServices());
+
+  const handleRemoveRecent = (e, slug) => {
+    e.stopPropagation();
+    setRecentServices(removeRecentService(slug));
+  };
+
+  // Match recent service slug to actual loaded service for exact same icon
+  const getServiceMatch = (svc) => {
+    const match = services.find((s) => s.slug === svc.slug || s.name?.toLowerCase() === svc.name?.toLowerCase());
+    if (match) return { icon: match.icon, iconUrl: match.iconUrl, accentColor: match.accentColor, highlightColor: match.highlightColor };
+    const visual = getServiceVisual(svc.name || svc.slug || "");
+    return { icon: visual.icon, iconUrl: null, accentColor: visual.accentColor, highlightColor: visual.highlightColor };
+  };
 
   return (
-    <div>
-      <div className="cm-qa-title">Quick Access</div>
-      <div className="cm-services-grid-4" style={{ padding: "8px 8px 16px" }}>
+    <div className="cm-quick-access">
+      <div className="cm-quick-access-title">Quick Access</div>
+      <div className="cm-services-grid-4" style={{ padding: "0 4px 8px", border: "none", boxShadow: "none", background: "transparent" }}>
+        {/* Recent services first */}
+        {recentServices.map((svc, i) => {
+          const matched = getServiceMatch(svc);
+          return (
+          <button
+            key={`recent-${svc.slug}`}
+            className="cm-svc-item"
+            type="button"
+            style={{ animationDelay: `${i * 40}ms`, alignItems: "flex-start", position: "relative" }}
+            onClick={() => navigate(`/customer/app/services/${svc.slug}`)}
+          >
+            <div style={{ width: 52, height: 52, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6, position: "relative" }}>
+              <ServiceIcon icon={matched.icon} iconUrl={matched.iconUrl} accentColor={matched.accentColor} highlightColor={matched.highlightColor} />
+              <button className="cm-quick-access-remove" type="button" onClick={(e) => handleRemoveRecent(e, svc.slug)} aria-label="Remove">
+                &times;
+              </button>
+            </div>
+            <span className="cm-svc-label">{svc.name}</span>
+          </button>
+          );
+        })}
+
+        {/* Fixed quick access items */}
         {quickAccessItems.map((item, i) => (
           <button
             key={item.label}
             className="cm-svc-item"
             type="button"
-            style={{ animationDelay: `${i * 40}ms`, alignItems: "flex-start" }}
-            onClick={() => navigate(item.to)}
+            style={{ animationDelay: `${(recentServices.length + i) * 40}ms`, alignItems: "flex-start" }}
+            onClick={() => {
+              if (item.isScroll) {
+                document.getElementById("services-grid-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+              } else {
+                navigate(item.to);
+              }
+            }}
           >
-            <div className="cm-service-icon" style={{ "--cm-service-accent": item.color, "--cm-service-highlight": item.color }}>
-              <item.icon />
+            <div style={{ width: 52, height: 52, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
+              <ServiceIcon icon={item.icon} iconUrl={item.iconUrl} accentColor={item.color} highlightColor={item.color} />
             </div>
             <span className="cm-svc-label">{item.label}</span>
           </button>
@@ -199,7 +266,7 @@ const ServicesScreen = () => {
   const { userData } = useCustomerModern();
   const [services, setServices] = useState([]);
   const [banners, setBanners] = useState([]);
-  const [balances, setBalances] = useState({ cashback: "0.00", incentive: "0.00" });
+  const [balances, setBalances] = useState({ cashback: "0.00", incentive: "0.00", wallet: "0.00" });
   const [upcomingDues, setUpcomingDues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -223,6 +290,7 @@ const ServicesScreen = () => {
         setBalances({
           cashback: balRes.data.cashback || "0.00",
           incentive: balRes.data.incentive || "0.00",
+          wallet: balRes.data.balance || balRes.data.walletBalance || "0.00",
         });
       }
       if (duesRes.success) {
@@ -241,8 +309,8 @@ const ServicesScreen = () => {
         <div className="cm-search-between">
           <div className="cm-search-with-bc">
             <div className="cm-search-bar-row" style={{ opacity: 0.5 }}>
-              <FaSearch style={{ color: "#6B6B6B", fontSize: 14, flexShrink: 0 }} />
-              <span style={{ color: "#6B6B6B", fontSize: 14 }}>Search services...</span>
+              <FaSearch style={{ color: "var(--cm-disabled, #6B6B6B)", fontSize: 14, flexShrink: 0 }} />
+              <span style={{ color: "var(--cm-disabled, #6B6B6B)", fontSize: 14 }}>Search services...</span>
             </div>
             <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-logo" />
           </div>
@@ -265,7 +333,7 @@ const ServicesScreen = () => {
         <div className="cm-search-between">
           <div className="cm-search-with-bc">
             <div className={`cm-search-bar-row${searchFocused ? " is-focused" : ""}`}>
-              <FaSearch style={{ color: searchFocused ? "#40E0D0" : "#6B6B6B", fontSize: 14, transition: "color 0.2s", flexShrink: 0 }} />
+              <FaSearch style={{ color: searchFocused ? "var(--cm-accent, #40E0D0)" : "var(--cm-disabled, #6B6B6B)", fontSize: 14, transition: "color 0.2s", flexShrink: 0 }} />
               <input
                 className="cm-search-field-input"
                 placeholder="Search services..."
@@ -280,15 +348,17 @@ const ServicesScreen = () => {
         </div>
 
         {/* Quick Access */}
-        {!query && <QuickAccessCard />}
+        {!query && <QuickAccessCard services={services} />}
 
         {/* Upcoming Dues */}
         {!query && <UpcomingDuesSection dues={upcomingDues} />}
 
         {/* Service icons grid - 4 per row */}
-        <div className="cm-services-grid-4" style={{ padding: "8px 8px 20px" }}>
+        <div id="services-grid-section" className="cm-quick-access" style={query ? { marginTop: 0 } : {}}>
+          {!query && <div className="cm-quick-access-title">Services</div>}
+        <div className="cm-services-grid-4" style={{ padding: "0 4px 8px", border: "none", boxShadow: "none", background: "transparent" }}>
           {filtered.length === 0 ? (
-            <div className="cm-empty" style={{ gridColumn: "1 / -1", textAlign: "center", padding: 32, color: "#6B6B6B" }}>No services matched your search.</div>
+            <div className="cm-empty" style={{ gridColumn: "1 / -1", textAlign: "center", padding: 32 }}>No services matched your search.</div>
           ) : (
             filtered.map((service, i) => (
               <button
@@ -307,6 +377,7 @@ const ServicesScreen = () => {
               </button>
             ))
           )}
+        </div>
         </div>
       </div>
     </DataState>

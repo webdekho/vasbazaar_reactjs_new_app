@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FaTimes, FaChevronLeft, FaChevronRight } from "react-icons/fa";
+import { FaTimes, FaChevronLeft, FaChevronRight, FaUserCircle } from "react-icons/fa";
 
 // Extract dominant color from image edges using canvas
 const getDominantColor = (imgEl) => {
@@ -136,6 +136,9 @@ const BannerSlider = ({ banners = [], userData, balances, showCustomerCard = tru
     document.addEventListener("mouseup", onMouseUp);
   };
 
+  const pauseAuto = () => clearInterval(autoTimer.current);
+  const resumeAuto = () => resetAuto();
+
   const goPrev = () => { goTo(current - 1); resetAuto(); };
   const goNext = () => { goTo(current + 1); resetAuto(); };
 
@@ -154,10 +157,11 @@ const BannerSlider = ({ banners = [], userData, balances, showCustomerCard = tru
 
   const name = userData?.name || userData?.firstName || "Customer";
   const mobile = userData?.mobile || userData?.mobileNumber || "";
+  const profilePhoto = userData?.profile || userData?.profilePhoto || localStorage.getItem("profile_photo") || "";
 
   return (
     <>
-      <div className="cm-slider" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onMouseDown={onMouseDown}>
+      <div className="cm-slider" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onMouseDown={onMouseDown} onMouseEnter={pauseAuto} onMouseLeave={resumeAuto}>
         <div className="cm-slider-track" ref={trackRef} style={{ transform: `translateX(-${current * 100}%)` }}>
           {slides.map((slide) => {
             if (slide.type === "customer") {
@@ -170,25 +174,39 @@ const BannerSlider = ({ banners = [], userData, balances, showCustomerCard = tru
                   <div className="cmc-bg-line" />
 
                   <div className="cmc-content">
-                    {/* Top row: greeting + avatar */}
+                    {/* Top row: greeting + photo */}
                     <div className="cmc-header">
                       <div>
                         <div className="cmc-greeting">Welcome back</div>
                         <div className="cmc-name">{name}</div>
+                        <div className="cmc-mobile-badge">
+                          <span className="cmc-mobile-dot" />
+                          {maskMobile(mobile)}
+                        </div>
                       </div>
-                      <div className="cmc-avatar">
-                        {(name[0] || "C").toUpperCase()}
-                      </div>
+                      {profilePhoto && profilePhoto.startsWith("http") ? (
+                        <img src={profilePhoto} alt="" className="cmc-photo" />
+                      ) : (
+                        <div className="cmc-avatar">
+                          <FaUserCircle />
+                        </div>
+                      )}
                     </div>
 
-                    {/* Mobile number badge */}
-                    <div className="cmc-mobile-badge">
-                      <span className="cmc-mobile-dot" />
-                      {maskMobile(mobile)}
+                    {/* Logo */}
+                    <div style={{ display: "flex", justifyContent: "center", margin: "12px 0 4px" }}>
+                      <img src="https://webdekho.in/images/vb_logo.png" alt="VasBazaar" style={{ height: 36, objectFit: "contain", opacity: 0.85 }} />
                     </div>
 
                     {/* Stats row */}
                     <div className="cmc-stats-row">
+                      <div className="cmc-stat-pill">
+                        <div className="cmc-stat-label">Balance</div>
+                        <div className="cmc-stat-value">
+                          <span className="cmc-rupee">&#8377;</span>{balances?.wallet || "0.00"}
+                        </div>
+                      </div>
+                      <div className="cmc-stat-divider" />
                       <div className="cmc-stat-pill">
                         <div className="cmc-stat-label">Cashback</div>
                         <div className="cmc-stat-value">
@@ -212,7 +230,7 @@ const BannerSlider = ({ banners = [], userData, balances, showCustomerCard = tru
               <div
                 key={slide.id}
                 className={`cm-slider-slide${slide.imageUrl ? " cm-slider-slide--banner" : " cm-slider-slide--text"}`}
-                style={{ background: slide.imageUrl ? (slideBgColors[slide.id] || "#0B0B0B") : (slide.gradient || "linear-gradient(135deg, #0B0B0B, #1A1A1A 48%, rgba(64, 224, 208, 0.08) 100%)"), cursor: (slide.title || slide.description) ? "pointer" : "default" }}
+                style={{ background: slide.imageUrl ? (slideBgColors[slide.id] || "var(--cm-bg, #0B0B0B)") : (slide.gradient || "linear-gradient(135deg, var(--cm-bg, #0B0B0B), var(--cm-card, #1A1A1A) 48%, rgba(64, 224, 208, 0.08) 100%)"), cursor: (slide.title || slide.description) ? "pointer" : "default" }}
                 onClick={() => handleSlideClick(slide)}
               >
                 {slide.imageUrl ? (

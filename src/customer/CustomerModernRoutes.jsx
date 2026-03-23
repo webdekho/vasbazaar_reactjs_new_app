@@ -3,6 +3,8 @@ import "./customerModern.css";
 import { CustomerModernProvider } from "./context/CustomerModernContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import AuthGuard from "./components/AuthGuard";
+import AppLockGuard from "./components/AppLockGuard";
+import { ChatbotProvider } from "./context/ChatbotContext";
 import LoginScreen from "./pages/LoginScreen";
 import OtpScreen from "./pages/OtpScreen";
 import ProtectedShell from "./pages/ProtectedShell";
@@ -24,8 +26,10 @@ import MyDuesScreen from "./pages/MyDuesScreen";
 import CouponListScreen from "./pages/CouponListScreen";
 import AutoPayScreen from "./pages/AutoPayScreen";
 import HelpScreen from "./pages/HelpScreen";
+import TravelScreen from "./pages/TravelScreen";
 import ComplaintListScreen from "./pages/ComplaintListScreen";
 import TrackComplaintScreen from "./pages/TrackComplaintScreen";
+import JuspayCallbackScreen from "./pages/JuspayCallbackScreen";
 
 const ThemedApp = ({ children }) => {
   const { theme } = useTheme();
@@ -45,7 +49,11 @@ const CustomerModernRoutes = () => {
             path="/app"
             element={
               <AuthGuard>
-                <ProtectedShell />
+                <AppLockGuard>
+                  <ChatbotProvider>
+                    <ProtectedShell />
+                  </ChatbotProvider>
+                </AppLockGuard>
               </AuthGuard>
             }
           >
@@ -54,6 +62,7 @@ const CustomerModernRoutes = () => {
             <Route path="services/:serviceSlug" element={<ServiceFlowScreen />} />
             <Route path="offers" element={<OfferScreen />} />
             <Route path="payment" element={<PaymentScreen />} />
+            <Route path="payment-callback" element={<JuspayCallbackScreen />} />
             <Route path="success" element={<SuccessScreen />} />
             <Route path="wallet" element={<WalletScreen />} />
             <Route path="coupons" element={<CouponListScreen />} />
@@ -71,6 +80,7 @@ const CustomerModernRoutes = () => {
             <Route path="my-coupons" element={<CouponListScreen />} />
             <Route path="autopay" element={<AutoPayScreen />} />
             <Route path="help" element={<HelpScreen />} />
+            <Route path="travel" element={<TravelScreen />} />
             <Route path="*" element={<Navigate to="/customer/app/services" replace />} />
           </Route>
           <Route path="*" element={<Navigate to="/customer/login" replace />} />

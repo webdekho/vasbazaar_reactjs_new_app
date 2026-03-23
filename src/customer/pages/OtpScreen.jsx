@@ -7,9 +7,11 @@ import { authService } from "../services/authService";
 import { customerStorage } from "../services/storageService";
 import { extractSessionToken } from "../components/serviceUtils";
 import { triggerPWAInstall } from "../hooks/usePWAInstall";
+import { useTheme } from "../context/ThemeContext";
 
 const OtpScreen = () => {
   const navigate = useNavigate();
+  const { theme } = useTheme();
   const [searchParams] = useSearchParams();
   const { setAuthSession } = useCustomerModern();
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
@@ -147,11 +149,13 @@ const OtpScreen = () => {
             </button>
           </div>
 
-          <div className="cm-auth-hero-text">
-            <div className="cm-auth-otp-icon-row">
-              <div className="cm-auth-otp-icon"><FiShield /></div>
-              <img src="https://webdekho.in/images/vasbazaar.png" alt="VasBazaar" className="cm-auth-logo-img" style={{ height: 22 }} />
+          <div className="cm-auth-header">
+            <div className="cm-auth-logo">
+              <img src={theme === "light" ? "https://webdekho.in/images/vasbazaar1.png" : "https://webdekho.in/images/vasbazaar.png"} alt="VasBazaar" className="cm-auth-logo-img" />
             </div>
+          </div>
+
+          <div className="cm-auth-hero-text">
             <h1>Verify OTP</h1>
             <p>We sent a 6-digit code to <strong>+91 {mobile || "your number"}</strong></p>
           </div>

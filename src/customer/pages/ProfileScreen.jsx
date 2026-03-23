@@ -1,11 +1,12 @@
 import {
   FaPhone, FaEnvelope, FaIdBadge, FaCopy,
   FaShareAlt, FaWallet, FaCamera, FaSignOutAlt, FaUserCircle,
-  FaCheck, FaTimes, FaCrop,
+  FaCheck, FaTimes, FaCrop, FaQrcode,
 } from "react-icons/fa";
 import { FiEdit2, FiChevronRight, FiShield, FiGift, FiHelpCircle } from "react-icons/fi";
 import { useCustomerModern } from "../context/CustomerModernContext";
 import { userService } from "../services/userService";
+import { ChangePinScreen } from "../components/AppLockGuard";
 import { useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -13,6 +14,8 @@ const ProfileScreen = () => {
   const { userData, logout, setAuthSession } = useCustomerModern();
   const navigate = useNavigate();
   const [copied, setCopied] = useState(false);
+  const [showChangePin, setShowChangePin] = useState(false);
+  const [pinMsg, setPinMsg] = useState("");
   const fileInputRef = useRef(null);
 
   const [uploading, setUploading] = useState(false);
@@ -117,7 +120,7 @@ const ProfileScreen = () => {
 
   const actions = [
     { icon: <FaWallet />, label: "Wallet", onClick: () => navigate("/customer/app/wallet") },
-    { icon: <FiShield />, label: "Change PIN", onClick: () => {} },
+    { icon: <FiShield />, label: "Change PIN", onClick: () => setShowChangePin(true) },
     { icon: <FiHelpCircle />, label: "Help & Support", onClick: () => navigate("/customer/app/help") },
     { icon: <FaSignOutAlt />, label: "Logout", onClick: logout, danger: true },
   ];
@@ -130,7 +133,7 @@ const ProfileScreen = () => {
       <div className="pf-header">
         <div className="pf-avatar-wrap">
           {profilePhoto ? (
-            <img src={profilePhoto} alt={name} className="pf-avatar-img" />
+            <img src={profilePhoto} alt={name} className="pf-avatar-img" onError={() => { setLocalPhoto(null); localStorage.removeItem("profile_photo"); }} />
           ) : (
             <div className="pf-avatar-fallback">
               <FaUserCircle size={48} color="rgba(64, 224, 208, 0.6)" />
@@ -166,7 +169,6 @@ const ProfileScreen = () => {
               <div className="pf-field-label">{f.label}</div>
               <div className="pf-field-value">{f.value}</div>
             </div>
-            <FiEdit2 size={14} color="#6B6B6B" style={{ cursor: "pointer" }} />
           </div>
         ))}
       </div>
@@ -185,6 +187,25 @@ const ProfileScreen = () => {
             </button>
             <button type="button" className="pf-referral-btn pf-referral-btn--share" onClick={shareReferral}>
               <FaShareAlt size={11} /> Share
+            </button>
+            <button type="button" className="pf-referral-btn pf-referral-btn--qr" onClick={() => {
+              const qrWin = window.open("", "_blank", "width=420,height=600");
+              const qrImg = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(`https://vasbazaar.web.webdekho.in?code=${mobile}`)}`;
+              qrWin.document.write(`<html><head><title>VasBazaar QR</title><style>body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f5f7fa;font-family:-apple-system,sans-serif}
+              .card{background:#fff;border-radius:24px;padding:32px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.1);max-width:360px;width:100%}
+              .accent{height:6px;background:linear-gradient(90deg,#40E0D0,#007BFF);border-radius:3px;margin-bottom:20px}
+              .brand{font-size:24px;font-weight:900;color:#1a1a2e}
+              .sub{font-size:12px;color:#9ca3af;margin-top:4px}
+              .qr{margin:20px auto;border:2px solid #e5e7eb;border-radius:16px;padding:16px;display:inline-block}
+              .name{font-size:16px;font-weight:800;color:#1a1a2e;margin-top:12px}
+              .mobile{font-size:13px;color:#6b7280}
+              .ref-label{font-size:10px;font-weight:700;color:#40E0D0;text-transform:uppercase;letter-spacing:.06em;margin-top:14px}
+              .ref-code{font-size:18px;font-weight:900;color:#1a1a2e;letter-spacing:1px}
+              .footer{font-size:10px;color:#9ca3af;margin-top:16px}
+              </style></head><body><div class="card"><div class="accent"></div><div class="brand">VasBazaar</div><div class="sub">Scan & Pay with any UPI App</div><div class="qr"><img src="${qrImg}" width="240" height="240"/></div><div class="name">${name}</div><div class="mobile">+91 ${mobile}</div><div class="ref-label">REFERRAL CODE</div><div class="ref-code">${referral}</div><div class="footer">Powered by VasBazaar</div></div></body></html>`);
+              qrWin.document.close();
+            }}>
+              <FaQrcode size={11} /> QR
             </button>
           </div>
         </div>
@@ -224,6 +245,19 @@ const ProfileScreen = () => {
               <button type="button" className="pf-crop-confirm" onClick={handleCropConfirm}><FaCheck /> Upload Photo</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {showChangePin && (
+        <ChangePinScreen onClose={(msg) => {
+          setShowChangePin(false);
+          if (msg) { setPinMsg(msg); setTimeout(() => setPinMsg(""), 3000); }
+        }} />
+      )}
+
+      {pinMsg && (
+        <div style={{ position: "fixed", bottom: 100, left: "50%", transform: "translateX(-50%)", background: "#00C853", color: "#fff", padding: "10px 24px", borderRadius: 12, fontSize: 13, fontWeight: 700, zIndex: 99999, boxShadow: "0 4px 16px rgba(0,200,83,0.3)" }}>
+          {pinMsg}
         </div>
       )}
     </div>

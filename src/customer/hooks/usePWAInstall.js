@@ -67,12 +67,16 @@ export function usePWAInstall() {
       }
     };
 
+    // Check once on mount for any trigger set before this hook mounted
     checkTrigger();
-    const interval = setInterval(checkTrigger, 2000);
+
+    // Listen for the event instead of polling
+    const onTrigger = () => checkTrigger();
+    window.addEventListener("pwaInstallTrigger", onTrigger);
 
     return () => {
       window.removeEventListener("pwaPromptReady", onReady);
-      clearInterval(interval);
+      window.removeEventListener("pwaInstallTrigger", onTrigger);
     };
   }, []);
 
@@ -130,6 +134,7 @@ export function triggerPWAInstall() {
   );
   if (standalone || isNativeApp) return;
   localStorage.setItem(STORAGE_KEYS.PWA_TRIGGER, "true");
+  window.dispatchEvent(new CustomEvent("pwaInstallTrigger"));
 }
 
 export default usePWAInstall;

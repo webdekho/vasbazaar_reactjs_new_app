@@ -34,47 +34,69 @@ const catMeta = (cat) => {
   return { icon: <FaTag />, gradient: "linear-gradient(135deg, #7c3aed, #a78bfa)", type: "coupon" };
 };
 
-/* ── Celebration Overlay ── */
+/* ── Celebration Overlay (Full-screen high celebration) ── */
 const CelebrationOverlay = ({ show, message, amount }) => {
   if (!show) return null;
-  const colors = ["#40E0D0", "#007BFF", "#00C853", "#FFD700", "#FF6B6B", "#A78BFA", "#FF9800", "#06B6D4"];
+  const colors = ["#40E0D0", "#007BFF", "#00C853", "#FFD700", "#FF6B6B", "#A78BFA", "#FF9800", "#06B6D4", "#E040FB", "#00E5FF", "#76FF03", "#FF4081"];
   return (
     <div className="celeb-overlay">
-      {/* Confetti burst */}
+      {/* Full-screen confetti rain from top */}
       <div className="celeb-confetti">
-        {Array.from({ length: 80 }).map((_, i) => (
+        {Array.from({ length: 150 }).map((_, i) => (
           <div key={i} className="celeb-piece" style={{
             left: `${Math.random() * 100}%`,
-            animationDelay: `${Math.random() * 0.6}s`,
-            animationDuration: `${1.5 + Math.random() * 1.5}s`,
-            width: `${4 + Math.random() * 10}px`,
-            height: `${4 + Math.random() * 10}px`,
-            borderRadius: i % 4 === 0 ? "50%" : i % 4 === 1 ? "2px" : "0",
+            top: `${-10 - Math.random() * 20}%`,
+            animationDelay: `${Math.random() * 1.2}s`,
+            animationDuration: `${2 + Math.random() * 2}s`,
+            width: `${5 + Math.random() * 12}px`,
+            height: `${5 + Math.random() * 12}px`,
+            borderRadius: i % 5 === 0 ? "50%" : i % 5 === 1 ? "2px" : i % 5 === 2 ? "0" : "50% 0",
             background: colors[i % colors.length],
             transform: `rotate(${Math.random() * 360}deg)`,
           }} />
         ))}
       </div>
-      {/* Radial burst rings */}
+      {/* Multiple radial burst rings */}
       <div className="celeb-rings">
         <div className="celeb-ring celeb-ring--1" />
         <div className="celeb-ring celeb-ring--2" />
         <div className="celeb-ring celeb-ring--3" />
+        <div className="celeb-ring celeb-ring--4" />
+        <div className="celeb-ring celeb-ring--5" />
       </div>
+      {/* Firework bursts at different positions */}
+      {[{ t: "15%", l: "20%" }, { t: "25%", l: "75%" }, { t: "70%", l: "15%" }, { t: "65%", l: "80%" }].map((pos, fi) => (
+        <div key={`fw${fi}`} className="celeb-firework" style={{ top: pos.t, left: pos.l, animationDelay: `${0.3 + fi * 0.4}s` }}>
+          {Array.from({ length: 8 }).map((_, si) => (
+            <div key={si} className="celeb-firework-spark" style={{
+              background: colors[(fi * 3 + si) % colors.length],
+              transform: `rotate(${si * 45}deg) translateY(-30px)`,
+            }} />
+          ))}
+        </div>
+      ))}
       {/* Center message */}
       <div className="celeb-center">
-        <div className="celeb-emoji">🎉</div>
-        <div className="celeb-amount">{amount}</div>
+        <div className="celeb-emoji">{amount}</div>
         <div className="celeb-msg">{message}</div>
       </div>
-      {/* Sparkle stars */}
-      {Array.from({ length: 12 }).map((_, i) => (
+      {/* Sparkle stars spread across full screen */}
+      {Array.from({ length: 24 }).map((_, i) => (
         <div key={`s${i}`} className="celeb-star" style={{
-          top: `${15 + Math.random() * 70}%`,
+          top: `${5 + Math.random() * 90}%`,
           left: `${5 + Math.random() * 90}%`,
-          animationDelay: `${Math.random() * 0.8}s`,
-          fontSize: `${12 + Math.random() * 16}px`,
+          animationDelay: `${Math.random() * 1.5}s`,
+          fontSize: `${14 + Math.random() * 22}px`,
         }}>✦</div>
+      ))}
+      {/* Floating emoji shower */}
+      {["🎊", "🥳", "✨", "💥", "🌟", "🎊", "✨", "🥳", "💥", "🌟"].map((emoji, i) => (
+        <div key={`e${i}`} className="celeb-float-emoji" style={{
+          left: `${8 + i * 9}%`,
+          animationDelay: `${Math.random() * 1.5}s`,
+          animationDuration: `${2.5 + Math.random() * 1.5}s`,
+          fontSize: `${22 + Math.random() * 18}px`,
+        }}>{emoji}</div>
       ))}
     </div>
   );
@@ -148,8 +170,47 @@ const OfferScreen = () => {
   const [appliedOffer, setAppliedOffer] = useState(null);
   const [showCouponModal, setShowCouponModal] = useState(false);
   const [celebration, setCelebration] = useState(null);
+  const [rateLimited, setRateLimited] = useState(false);
+  const [rateLimitMsg, setRateLimitMsg] = useState("");
   // Store random discount values per offer so they don't change on re-render
   const randomValues = useRef({});
+
+  // Rate limiting: max 5 apply/toggle actions per hour
+  const RATE_LIMIT_KEY = "vb_offer_attempts";
+  const RATE_LIMIT_MAX = 5;
+  const RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour
+
+  const getAttempts = () => {
+    try {
+      const data = JSON.parse(localStorage.getItem(RATE_LIMIT_KEY) || "{}");
+      const now = Date.now();
+      // Filter out expired attempts
+      const valid = (data.timestamps || []).filter((t) => now - t < RATE_LIMIT_WINDOW);
+      return valid;
+    } catch { return []; }
+  };
+
+  const checkRateLimit = () => {
+    const attempts = getAttempts();
+    if (attempts.length >= RATE_LIMIT_MAX) {
+      const oldestAttempt = Math.min(...attempts);
+      const unlockTime = oldestAttempt + RATE_LIMIT_WINDOW;
+      const minsLeft = Math.ceil((unlockTime - Date.now()) / 60000);
+      setRateLimited(true);
+      setRateLimitMsg(`You have exceeded the maximum number of attempts. Please try again after ${minsLeft} minute${minsLeft !== 1 ? "s" : ""}.`);
+      return false;
+    }
+    return true;
+  };
+
+  const recordAttempt = () => {
+    const attempts = getAttempts();
+    attempts.push(Date.now());
+    localStorage.setItem(RATE_LIMIT_KEY, JSON.stringify({ timestamps: attempts }));
+  };
+
+  // Check on mount
+  useEffect(() => { checkRateLimit(); }, []);
 
   const amount = Number(paymentState.amount || 0);
   const mobile = paymentState.mobile || paymentState.field1 || "";
@@ -194,15 +255,18 @@ const OfferScreen = () => {
         }
       }
 
+      // Round to nearest 0.5 for clean display
+      const displayMax = Math.round(maxDiscount * 2) / 2;
+      const displayStr = displayMax % 1 === 0 ? displayMax.toFixed(0) : displayMax.toFixed(1);
       const desc = (offer.description || "")
-        .replace(/\{#discount#\}/g, `₹${maxDiscount.toFixed(1)}`)
-        .replace(/\{#cashback#\}/g, `₹${maxDiscount.toFixed(1)}`);
+        .replace(/\{#discount#\}/g, `₹${displayStr}`)
+        .replace(/\{#cashback#\}/g, `₹${displayStr}`);
 
       return {
         ...offer,
         maxDiscount,
         randomDiscount,
-        formattedDesc: desc || `Upto ₹${maxDiscount.toFixed(1)}`,
+        formattedDesc: desc || `Upto ₹${displayStr}`,
         catName,
         offerType: meta.type, // "cashback" | "discount" | "coupon"
       };
@@ -217,12 +281,17 @@ const OfferScreen = () => {
   };
 
   const handleApply = (offer) => {
+    // Check rate limit
+    if (!checkRateLimit()) return;
+
     const wasApplied = appliedOffer?.id === offer.id;
     if (wasApplied) {
+      recordAttempt();
       setAppliedOffer(null);
       return;
     }
 
+    recordAttempt();
     const applied = {
       ...offer,
       discountValue: offer.randomDiscount || offer.maxDiscount || offer.amount || 0,
@@ -230,13 +299,16 @@ const OfferScreen = () => {
     };
     setAppliedOffer(applied);
 
-    // Trigger celebration
+    // Trigger celebration — show upto amount rounded to nearest 0.5
+    const uptoRaw = offer.maxDiscount || offer.amount || 0;
+    const uptoAmount = Math.round(uptoRaw * 2) / 2; // round to nearest 0.5
+    const uptoStr = uptoAmount % 1 === 0 ? uptoAmount.toFixed(0) : uptoAmount.toFixed(1);
     if (offer.offerType === "cashback") {
-      triggerCelebration("Cashback will be credited after payment!", `₹${applied.discountValue.toFixed(2)} Cashback`);
+      triggerCelebration(`You will get cashback upto ₹${uptoStr}`, "🎉");
     } else if (offer.offerType === "discount") {
-      triggerCelebration("Instant discount applied!", `₹${applied.discountValue.toFixed(2)} OFF`);
+      triggerCelebration(`You will get discount upto ₹${uptoStr}`, "🎉");
     } else {
-      triggerCelebration("Coupon applied successfully!", `₹${applied.discountValue.toFixed(2)} Saved`);
+      triggerCelebration(`You will get savings upto ₹${uptoStr}`, "🎉");
     }
   };
 
@@ -269,8 +341,8 @@ const OfferScreen = () => {
         discountValue: discountAmount,
         cashbackValue: cashbackAmount,
         offerType: appliedOffer?.offerType || null,
-        // For cashback, collect full amount
-        amount: payableAmount > 0 ? payableAmount : amount,
+        // Always send original amount — discount/cashback applied by backend via couponId
+        amount: amount,
       },
     });
   };
@@ -307,6 +379,14 @@ const OfferScreen = () => {
             <FiZap className="off-offers-head-icon" />
             <h2>Offers for You</h2>
           </div>
+
+          {rateLimited && (
+            <div className="off-rate-limit-alert">
+              <strong>Too many attempts!</strong>
+              <p>{rateLimitMsg}</p>
+              <p>Please proceed to pay with your current selection.</p>
+            </div>
+          )}
 
           {loading ? (
             [1, 2, 3].map((i) => (
