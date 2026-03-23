@@ -13,19 +13,10 @@
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/favicon.png" />
     <!-- Security headers -->
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
-    <meta http-equiv="X-Frame-Options" content="DENY" />
+    <!-- X-Frame-Options must be set via HTTP header, not meta tag. Configure on server. -->
     <meta name="referrer" content="strict-origin-when-cross-origin" />
-    <meta http-equiv="Content-Security-Policy" content="
-      default-src 'self';
-      script-src 'self' 'unsafe-inline' 'unsafe-eval' https://embed.tawk.to;
-      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-      font-src 'self' https://fonts.gstatic.com data:;
-      img-src 'self' data: blob: https: http:;
-      connect-src 'self' https://apis.vasbazaar.com:* https://apis.uat.vasbazaar.com:* https://api.prod.webdekho.in:* wss://apis.vasbazaar.com;
-      frame-src 'none';
-      object-src 'none';
-      base-uri 'self';
-    " />
+    <!-- CSP should be set via HTTP response header on the server, not in meta tag.
+         Meta-tag CSP blocks dev-server WebSocket and causes reload loops. -->
     <!--
       manifest.json provides metadata used when your web app is installed on a
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/

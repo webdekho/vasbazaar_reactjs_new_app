@@ -51,7 +51,7 @@ const SuccessScreen = () => {
   const handleShare = () => {
     const shareText = `Payment of ₹${amount.toFixed(2)} completed successfully!\nTransaction ID: ${txnId}\nPowered by VasBazaar - Bharat Connect`;
     if (navigator.share) {
-      navigator.share({ title: "Payment Successful", text: shareText });
+      navigator.share({ title: "Payment Successful", text: shareText }).catch(() => {});
     } else {
       copyToClipboard(shareText, "share");
     }
@@ -186,7 +186,7 @@ const SuccessScreen = () => {
       {/* ── Refer Button ── */}
       <button type="button" className={`sx-refer-btn${showContent ? " sx-in sx-d3" : ""}`} onClick={() => {
         const msg = `Earn cashback on every recharge & bill payment! Join VasBazaar using my referral code: ${userMobile}\n\nhttps://vasbazaar.web.webdekho.in?code=${userMobile}`;
-        if (navigator.share) { navigator.share({ title: "Join VasBazaar", text: msg }); }
+        if (navigator.share) { navigator.share({ title: "Join VasBazaar", text: msg }).catch(() => {}); }
         else { navigator.clipboard?.writeText(msg); setCopied("refer"); setTimeout(() => setCopied(""), 1500); }
       }}>
         <FaUsers /> Refer & Earn Cashback

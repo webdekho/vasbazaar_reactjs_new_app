@@ -134,10 +134,15 @@ export const authPut = async (endpoint, payload) => {
 // ── Global 401 Interceptor ──
 // Detects session invalidation (e.g. logged_in_from_another_device) and forces re-login
 let isRedirecting = false;
+const LOGIN_PAGES = ["/customer/login", "/customer/verify-otp"];
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error?.response?.status === 401 && !isRedirecting) {
+    // Skip 401 handling on login/OTP pages and for guest requests (no access_token)
+    const isOnLoginPage = LOGIN_PAGES.some((p) => window.location.pathname.endsWith(p));
+    const hasAccessToken = error?.config?.headers?.access_token;
+
+    if (error?.response?.status === 401 && !isRedirecting && !isOnLoginPage && hasAccessToken) {
       isRedirecting = true;
       const msg = error?.response?.data?.message || "Session expired";
 
@@ -146,17 +151,12 @@ apiClient.interceptors.response.use(
       localStorage.removeItem("vb_pin_set");
       localStorage.removeItem("vb_last_active");
 
-      // Redirect to login with message
-      const basePath = window.location.pathname.includes("/vasbazaar/")
-        ? "/vasbazaar/customer/login"
-        : "/customer/login";
-
       const reason = msg.includes("another_device") || msg.includes("another device")
         ? "You were logged out because your account was accessed from another device."
         : "Your session has expired. Please log in again.";
 
       sessionStorage.setItem("vb_logout_reason", reason);
-      window.location.href = basePath;
+      window.location.href = "/customer/login";
     }
     return Promise.reject(error);
   }

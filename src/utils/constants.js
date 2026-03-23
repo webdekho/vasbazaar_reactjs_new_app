@@ -18,7 +18,8 @@ export const server_api = () => {
        if (isAllowed) return storedUrl;
      }
 
-     // Use relative proxy path to avoid CORS issues in browser
-     // Apache proxies /vb-api/ -> https://apis.uat.vasbazaar.com:8081/
+     // In development, CRA proxy (package.json "proxy") forwards to the API server
+     // so we use empty string (relative to origin). In production, Apache proxies /vb-api/.
+     if (process.env.NODE_ENV === 'development') return '';
      return '/vb-api';
    };

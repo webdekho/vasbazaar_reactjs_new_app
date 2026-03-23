@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import "./customerModern.css";
 import { CustomerModernProvider } from "./context/CustomerModernContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
@@ -36,13 +36,18 @@ const ThemedApp = ({ children }) => {
   return <div className={`customer-modern-app${theme === "light" ? " theme-light" : ""}`}>{children}</div>;
 };
 
+const LoginRedirect = () => {
+  const { search } = useLocation();
+  return <Navigate to={`/customer/login${search}`} replace />;
+};
+
 const CustomerModernRoutes = () => {
   return (
     <ThemeProvider>
       <ThemedApp>
       <CustomerModernProvider>
         <Routes>
-          <Route path="/" element={<Navigate to="/customer/login" replace />} />
+          <Route path="/" element={<LoginRedirect />} />
           <Route path="/login" element={<LoginScreen />} />
           <Route path="/verify-otp" element={<OtpScreen />} />
           <Route
@@ -83,7 +88,7 @@ const CustomerModernRoutes = () => {
             <Route path="travel" element={<TravelScreen />} />
             <Route path="*" element={<Navigate to="/customer/app/services" replace />} />
           </Route>
-          <Route path="*" element={<Navigate to="/customer/login" replace />} />
+          <Route path="*" element={<LoginRedirect />} />
         </Routes>
       </CustomerModernProvider>
       </ThemedApp>
