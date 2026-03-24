@@ -193,11 +193,6 @@ const BannerSlider = ({ banners = [], userData, balances, showCustomerCard = tru
                       )}
                     </div>
 
-                    {/* Logo */}
-                    <div style={{ display: "flex", justifyContent: "center", margin: "12px 0 4px" }}>
-                      <img src="https://webdekho.in/images/vb_logo.png" alt="VasBazaar" style={{ height: 36, objectFit: "contain", opacity: 0.85 }} />
-                    </div>
-
                     {/* Stats row */}
                     <div className="cmc-stats-row">
                       <div className="cmc-stat-pill">

@@ -13,6 +13,7 @@ import { userService } from "../services/userService";
 import { FaSun, FaMoon } from "react-icons/fa";
 import { useTheme } from "../context/ThemeContext";
 import AppBrand from "../components/AppBrand";
+import { APP_VERSION } from "../../shared/constants/app";
 import PWAInstallPrompt from "../components/PWAInstallPrompt";
 import ChatbotFAB from "../components/ChatbotFAB";
 
@@ -369,7 +370,7 @@ const ProtectedShell = () => {
 
         {/* Dark header with profile + QR */}
         <div className="cm-drawer-header-dark">
-          <div className="cm-drawer-version">App Version : v1.0.0</div>
+          <div className="cm-drawer-version">App Version : v{APP_VERSION}</div>
           <div className="cm-drawer-profile-row">
             <div className="cm-drawer-photo-wrap" onClick={() => fileInputRef.current?.click()}>
               {profilePhoto ? (
