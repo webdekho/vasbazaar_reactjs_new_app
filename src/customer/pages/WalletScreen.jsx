@@ -1,6 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import { FaWallet, FaSearch, FaTimes, FaSyncAlt, FaCheckCircle, FaClock, FaTimesCircle, FaChevronDown, FaPlus } from "react-icons/fa";
+import { FaWallet, FaSearch, FaTimes, FaSyncAlt, FaCheckCircle, FaClock, FaTimesCircle, FaChevronDown } from "react-icons/fa";
 import { FiArrowDownLeft, FiArrowUpRight, FiGift, FiDollarSign, FiInbox } from "react-icons/fi";
 import { userService } from "../services/userService";
 import { walletService } from "../services/walletService";
@@ -35,7 +34,6 @@ const SkeletonCard = ({ delay }) => (
 );
 
 const WalletScreen = () => {
-  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("wallet");
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -133,10 +131,6 @@ const WalletScreen = () => {
                   <FaSyncAlt className={refreshing ? "wl-spinning" : ""} />
                 </button>
               </div>
-
-              <button className="wl-add-money" type="button" onClick={() => navigate("/customer/add-money")}>
-                <FaPlus /> Add Money
-              </button>
 
               {lastUpdated && <div className="wl-last-updated">Last updated: {lastUpdated.toLocaleTimeString()}</div>}
             </div>

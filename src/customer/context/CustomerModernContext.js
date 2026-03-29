@@ -36,7 +36,10 @@ export const CustomerModernProvider = ({ children }) => {
           || profileData.user_name || profileData.customerName
           || rawData.name || rawData.firstName || rawData.userName
           || existing?.name || existing?.firstName || "";
-        const merged = { ...profileData, mobile, name };
+        // Preserve verified_status from existing userData or API response
+        const verified_status = profileData.verified_status ?? rawData.verified_status ?? existing?.verified_status;
+        const merged = { ...existing, ...profileData, mobile, name, verified_status };
+        console.log("Hydrate - verified_status:", verified_status, "merged:", merged);
         setUserData(merged);
         customerStorage.setAuthSession({ sessionToken, userData: merged });
       }
@@ -50,9 +53,18 @@ export const CustomerModernProvider = ({ children }) => {
       sessionToken,
       userData,
       setAuthSession: (payload) => {
-        customerStorage.setAuthSession(payload);
+        // Merge new userData with existing to preserve fields not in the payload
+        const mergedUserData = payload.userData
+          ? { ...userData, ...payload.userData }
+          : userData;
+
+        customerStorage.setAuthSession({
+          ...payload,
+          userData: mergedUserData,
+        });
+
         if (payload.sessionToken) setSessionToken(payload.sessionToken);
-        if (payload.userData) setUserData(payload.userData);
+        if (payload.userData) setUserData(mergedUserData);
       },
       logout: () => {
         customerStorage.clear();

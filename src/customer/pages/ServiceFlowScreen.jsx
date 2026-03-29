@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { FaArrowLeft, FaSearch, FaChevronRight, FaTimes, FaCheck } from "react-icons/fa";
 import { FiArrowRight } from "react-icons/fi";
+import { Capacitor } from "@capacitor/core";
+import { Contacts } from "@capacitor-community/contacts";
 import { serviceService } from "../services/serviceService";
 import { rechargeService } from "../services/rechargeService";
 import { advertisementService } from "../services/advertisementService";
@@ -452,7 +454,9 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
   const [search, setSearch] = useState("");
   const [loadingNumber, setLoadingNumber] = useState(null);
   const [planView, setPlanView] = useState(null);
+  const [contactsLoading, setContactsLoading] = useState(false);
   const fileInputRef = useRef(null);
+  const contactsLoadedRef = useRef(false);
 
   const userData = useMemo(() => {
     try {
@@ -462,6 +466,63 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
   }, []);
 
   useEffect(() => { advertisementService.getServiceAdvertisements().then((res) => { if (res.success && Array.isArray(res.data)) setBanners(res.data); }); }, []);
+
+  // Auto-load contacts on mount for native apps and PWA
+  useEffect(() => {
+    if (contactsLoadedRef.current) return;
+
+    const autoLoadContacts = async () => {
+      // For native apps (Android/iOS)
+      if (Capacitor.isNativePlatform()) {
+        contactsLoadedRef.current = true;
+        setContactsLoading(true);
+        try {
+          const checkStatus = await Contacts.checkPermissions();
+          let permGranted = checkStatus.contacts === "granted" || checkStatus.contacts === "limited";
+
+          if (!permGranted) {
+            const reqStatus = await Contacts.requestPermissions();
+            permGranted = reqStatus.contacts === "granted" || reqStatus.contacts === "limited";
+          }
+
+          if (permGranted) {
+            const result = await Contacts.getContacts({
+              projection: { name: true, phones: true }
+            });
+
+            if (result?.contacts?.length) {
+              const imported = result.contacts
+                .filter(c => c.phones?.length > 0)
+                .map((c, i) => ({
+                  id: `native-${c.contactId || i}`,
+                  name: c.name?.display || c.name?.given || c.name?.family || "Contact",
+                  number: normalizeMobile(c.phones[0]?.number || ""),
+                  phones: c.phones?.map(p => p.number).filter(Boolean) || []
+                }))
+                .filter(c => c.number && c.number.length >= 10);
+
+              if (imported.length) {
+                setContacts(imported);
+              }
+            }
+          }
+        } catch (e) {
+          console.log("Auto-load contacts error:", e);
+        }
+        setContactsLoading(false);
+        return;
+      }
+
+      // For PWA / Web with Contact Picker API support
+      if ("contacts" in navigator && "select" in navigator.contacts) {
+        // Don't auto-trigger on web as it requires user gesture
+        // Just mark as loaded so we don't try again
+        contactsLoadedRef.current = true;
+      }
+    };
+
+    autoLoadContacts();
+  }, []);
 
   /* ── Contact import helpers ── */
   const parseContactFile = (text, fileName) => {
@@ -489,7 +550,59 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
   };
 
   const handleImportContacts = async () => {
-    // Try native Contact Picker API first (Android Chrome)
+    // Use Capacitor plugin on native Android/iOS - fetch all contacts
+    if (Capacitor.isNativePlatform()) {
+      try {
+        // Check current permission status
+        const checkStatus = await Contacts.checkPermissions();
+        let permGranted = checkStatus.contacts === "granted" || checkStatus.contacts === "limited";
+
+        // Request permission if not granted
+        if (!permGranted) {
+          const reqStatus = await Contacts.requestPermissions();
+          permGranted = reqStatus.contacts === "granted" || reqStatus.contacts === "limited";
+        }
+
+        if (!permGranted) {
+          alert("Please allow contacts permission to import contacts from your device.");
+          return;
+        }
+
+        // Fetch all contacts from device
+        const result = await Contacts.getContacts({
+          projection: { name: true, phones: true }
+        });
+
+        console.log("Contacts result:", result?.contacts?.length || 0, "contacts found");
+
+        if (result?.contacts?.length) {
+          const imported = result.contacts
+            .filter(c => c.phones?.length > 0)
+            .map((c, i) => ({
+              id: `native-${c.contactId || i}`,
+              name: c.name?.display || c.name?.given || c.name?.family || "Contact",
+              number: normalizeMobile(c.phones[0]?.number || ""),
+              phones: c.phones?.map(p => p.number).filter(Boolean) || []
+            }))
+            .filter(c => c.number && c.number.length >= 10);
+
+          if (imported.length) {
+            setContacts(imported);
+          } else {
+            alert("No contacts with valid phone numbers found.");
+          }
+        } else {
+          alert("No contacts found on this device.");
+        }
+        return;
+      } catch (e) {
+        console.error("Native contacts error:", e);
+        alert("Error reading contacts: " + (e.message || "Unknown error"));
+        return;
+      }
+    }
+
+    // Web Contact Picker API fallback (Chrome Android)
     if ("contacts" in navigator && "select" in navigator.contacts) {
       try {
         const selected = await navigator.contacts.select(["name", "tel"], { multiple: true });
@@ -499,17 +612,8 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
         if (imported.length) { setContacts(imported); return; }
       } catch { /* fall through */ }
     }
-    // Fallback: prompt user to enter number or import file
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    if (isMobile) {
-      // On mobile without Contact Picker, focus the search bar so user can type a number
-      const searchInput = document.querySelector(".cm-contact-search-input");
-      if (searchInput) {
-        searchInput.focus();
-        searchInput.placeholder = "Type a 10-digit mobile number...";
-        return;
-      }
-    }
+
+    // Final fallback: file import (only for web browsers)
     fileInputRef.current?.click();
   };
 
@@ -655,6 +759,12 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
             })}
           </div>
         </>
+      ) : contactsLoading ? (
+        <div className="cm-cl-empty">
+          <div className="cm-cl-loading-spinner" />
+          <p className="cm-cl-empty-title">Loading contacts...</p>
+          <p className="cm-cl-empty-desc">Please wait while we fetch your contacts</p>
+        </div>
       ) : (
         <div className="cm-cl-empty">
           <div className="cm-cl-empty-icon-wrap" onClick={handleImportContacts} role="button" tabIndex={0}>

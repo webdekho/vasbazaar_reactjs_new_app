@@ -1,0 +1,8 @@
+password: webdekho@#@123
+    alias: vasbazaar
+    key password: webdekho@#@123
+    keystore password: webdekho@#@123
+    keystore path: /Users/shahidhusen/Documents/Webdekho_react_native/vasbazaar/keystore/vasbazaar.keystore
+
+
+    SHA1 Fingerprint : 99:E3:2F:A5:C2:F2:38:6F:5F:74:A1:F7:1E:2D:49:B4:DE:E5:C3:A0

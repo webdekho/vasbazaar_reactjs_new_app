@@ -4,6 +4,8 @@ import { FiArrowRight } from "react-icons/fi";
 import { useCustomerModern } from "../context/CustomerModernContext";
 import { useState, useEffect } from "react";
 import { addRecentService } from "./ServicesScreen";
+import { Capacitor } from "@capacitor/core";
+import { Share } from "@capacitor/share";
 
 const SuccessScreen = () => {
   const navigate = useNavigate();
@@ -48,13 +50,37 @@ const SuccessScreen = () => {
     });
   };
 
-  const handleShare = () => {
-    const shareText = `Payment of ₹${amount.toFixed(2)} completed successfully!\nTransaction ID: ${txnId}\nPowered by VasBazaar - Bharat Connect`;
-    if (navigator.share) {
-      navigator.share({ title: "Payment Successful", text: shareText }).catch(() => {});
-    } else {
-      copyToClipboard(shareText, "share");
+  const handleShare = async () => {
+    const shareText = `Payment of ₹${amount.toFixed(2)} completed successfully!\nTransaction ID: ${txnId}\nReference ID: ${refId}\nDate: ${dateTime}\n\nPowered by VasBazaar - Bharat Connect`;
+    const shareUrl = "https://web.vasbazaar.com";
+
+    // Use Capacitor Share for native apps
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await Share.share({
+          title: "Payment Successful",
+          text: shareText,
+          url: shareUrl,
+          dialogTitle: "Share Payment Receipt",
+        });
+        return;
+      } catch (e) {
+        console.log("Native share error:", e);
+      }
     }
+
+    // Web: use navigator.share or WhatsApp fallback
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "Payment Successful", text: shareText, url: shareUrl });
+        return;
+      } catch (e) {
+        console.log("Web share error:", e);
+      }
+    }
+
+    // Final fallback: open WhatsApp
+    window.open(`https://wa.me/?text=${encodeURIComponent(shareText + "\n" + shareUrl)}`, "_blank");
   };
 
   const COLORS = ["#40E0D0", "#007BFF", "#00C853", "#FFD700", "#FF6B6B", "#A78BFA", "#FF9800", "#06B6D4", "#F472B6", "#34D399"];
@@ -185,7 +211,7 @@ const SuccessScreen = () => {
 
       {/* ── Refer Button ── */}
       <button type="button" className={`sx-refer-btn${showContent ? " sx-in sx-d3" : ""}`} onClick={() => {
-        const msg = `Earn cashback on every recharge & bill payment! Join VasBazaar using my referral code: ${userMobile}\n\nhttps://vasbazaar.web.webdekho.in?code=${userMobile}`;
+        const msg = `Earn cashback on every recharge & bill payment! Join VasBazaar using my referral code: ${userMobile}\n\nhttps://web.vasbazaar.com?code=${userMobile}`;
         if (navigator.share) { navigator.share({ title: "Join VasBazaar", text: msg }).catch(() => {}); }
         else { navigator.clipboard?.writeText(msg); setCopied("refer"); setTimeout(() => setCopied(""), 1500); }
       }}>

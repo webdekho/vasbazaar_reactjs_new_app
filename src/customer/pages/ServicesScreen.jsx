@@ -287,10 +287,12 @@ const ServicesScreen = () => {
       setServices((Array.isArray(svcRes.data) ? svcRes.data : []).map(normalizeService));
       setBanners(Array.isArray(adRes.data) ? adRes.data : []);
       if (balRes.success && balRes.data) {
+        // Handle potential nested data structure from API
+        const d = balRes.data?.data || balRes.data;
         setBalances({
-          cashback: balRes.data.cashback || "0.00",
-          incentive: balRes.data.incentive || "0.00",
-          wallet: balRes.data.balance || balRes.data.walletBalance || "0.00",
+          cashback: d.cashback ?? d.Cashback ?? "0.00",
+          incentive: d.incentive ?? d.Incentive ?? "0.00",
+          wallet: d.balance ?? d.Balance ?? d.walletBalance ?? d.wallet ?? "0.00",
         });
       }
       if (duesRes.success) {

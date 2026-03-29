@@ -7403,7 +7403,10 @@
   .cm-drawer-overlay,
   .cm-drawer { display: none !important; }
 
-  .off-sticky-footer { padding-bottom: 12px; }
+  .off-sticky-footer {
+    bottom: 0;
+    padding-bottom: 12px;
+  }
 
   /* ─── Main Content Adjustments ─── */
   .cm-content {
@@ -7971,6 +7974,25 @@
   line-height: 1.5;
 }
 
+.cm-cl-loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 3px solid #2A2A2A;
+  border-top-color: #40E0D0;
+  border-radius: 50%;
+  animation: cm-cl-spin 0.8s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes cm-cl-spin {
+  to { transform: rotate(360deg); }
+}
+
+.theme-light .cm-cl-loading-spinner {
+  border-color: #E5E7EB;
+  border-top-color: #007BFF;
+}
+
 /* ── Sheet Header / Close / Items ── */
 .cm-sheet-header {
   display: flex;
@@ -8507,10 +8529,11 @@
 
 /* ── Slider Customer Card ── */
 .cm-slider-slide--customer {
-  min-height: 170px;
+  min-height: 220px;
+  aspect-ratio: unset !important;
   background: linear-gradient(135deg, #0B0B0B 0%, #121212 40%, rgba(64, 224, 208, 0.06) 100%);
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   padding: 0;
 }
 
@@ -8578,6 +8601,7 @@
   flex-direction: column;
   gap: 8px;
   width: 100%;
+  height: 100%;
   box-sizing: border-box;
 }
 
@@ -8647,12 +8671,13 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
   overflow: hidden;
+  margin-top: auto;
 }
 
 .cmc-stat-pill {
   flex: 1;
   text-align: center;
-  padding: 10px 8px;
+  padding: 8px 6px;
 }
 
 .cmc-stat-label {
@@ -9537,7 +9562,7 @@
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .cmc-name {
@@ -9915,8 +9940,8 @@
 }
 
 .cm-services-page .cm-slider-slide--customer {
-  aspect-ratio: auto;
-  min-height: 155px;
+  aspect-ratio: unset !important;
+  min-height: 220px;
 }
 
 /* Enhanced slide transition — smooth 3D feel */
@@ -10001,7 +10026,8 @@
   }
 
   .cm-services-page .cm-slider-slide--customer {
-    min-height: 140px;
+    min-height: 210px;
+    aspect-ratio: unset !important;
   }
 
   .cm-slider-arrow--prev { left: 6px !important; }
@@ -10012,6 +10038,7 @@
 @media (max-width: 360px) {
   .cm-services-page .cm-slider { border-radius: 14px !important; }
   .cm-services-page .cm-slider-slide { min-height: 125px; }
+  .cm-services-page .cm-slider-slide--customer { min-height: 200px; aspect-ratio: unset !important; }
 }
 
 /* Force images to fill — override everything */
@@ -10614,6 +10641,152 @@
   .xpay-pay-btn { padding: 14px 16px; font-size: 15px; border-radius: 14px; }
 }
 
+/* ── Payment Webview Overlay (native app in-app payment) ── */
+.xpay-webview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+}
+
+.xpay-webview-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #1A1A1A;
+  border-bottom: 1px solid #2A2A2A;
+  flex-shrink: 0;
+}
+
+.xpay-webview-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #2A2A2A;
+  border: none;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.xpay-webview-close:active { background: #3A3A3A; }
+.xpay-webview-close:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.xpay-webview-title {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.xpay-webview-amount {
+  font-size: 16px;
+  font-weight: 700;
+  color: #00C853;
+}
+
+.xpay-webview-iframe {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: #fff;
+}
+
+.xpay-webview-footer {
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: #1A1A1A;
+  border-top: 1px solid #2A2A2A;
+  flex-shrink: 0;
+}
+
+.xpay-webview-done {
+  width: 100%;
+  padding: 14px 20px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #007BFF 0%, #00D9FF 100%);
+  border: none;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.15s;
+}
+
+.xpay-webview-done:active { transform: scale(0.97); }
+.xpay-webview-done:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Native payment pending UI */
+.xpay-native-pending {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.xpay-native-pending-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #007BFF 0%, #00D9FF 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  color: #fff;
+  margin-bottom: 24px;
+  animation: xpay-pulse 2s ease-in-out infinite;
+}
+
+@keyframes xpay-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.9; }
+}
+
+.xpay-native-pending h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0 0 12px;
+}
+
+.xpay-native-pending p {
+  font-size: 14px;
+  color: #9CA3AF;
+  margin: 0;
+  max-width: 280px;
+  line-height: 1.5;
+}
+
+.xpay-native-pending-status {
+  margin-top: 16px;
+  padding: 10px 16px;
+  background: rgba(255, 193, 7, 0.15);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  border-radius: 8px;
+  color: #FFC107;
+  font-size: 13px;
+}
+
+/* Light mode webview */
+.theme-light .xpay-webview-overlay { background: #f5f5f5; }
+.theme-light .xpay-webview-header { background: #fff; border-bottom-color: #e5e5e5; }
+.theme-light .xpay-webview-close { background: #f0f0f0; color: #333; }
+.theme-light .xpay-webview-title { color: #1A1A2E; }
+.theme-light .xpay-webview-footer { background: #fff; border-top-color: #e5e5e5; }
+.theme-light .xpay-native-pending h3 { color: #1A1A2E; }
+.theme-light .xpay-native-pending p { color: #6B7280; }
+.theme-light .xpay-native-pending { background: #fff; }
+
 /* ── Light Mode — Payment Page ── */
 .theme-light .xpay-header {
   background: rgba(255, 255, 255, 0.95);
@@ -10716,10 +10889,12 @@
 
 /* ── Sticky Footer ── */
 .off-sticky-footer {
-  margin-top: auto;
-  position: sticky;
-  bottom: 0;
-  z-index: 10;
+  margin-top: 0;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+  z-index: 45;
   background: rgba(18, 18, 18, 0.97);
   border-top: 1px solid #2A2A2A;
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
@@ -10761,7 +10936,11 @@
 
 /* Adjust page body to account for sticky footer */
 .off-page .off-body {
-  padding-bottom: 0;
+  padding-bottom: 230px;
+}
+
+.off-page .off-offers {
+  padding-bottom: 14px;
 }
 
 .off-sticky-footer {
@@ -11547,6 +11726,12 @@
 .theme-light .sx-btn--share { background: #FFFFFF; border-color: #E5E7EB; color: #374151; }
 .theme-light .sx-btn--share:hover { border-color: #007BFF; color: #007BFF; }
 .theme-light .sx-toast { background: #FFFFFF; border-color: #E5E7EB; color: #007BFF; }
+.theme-light .sx-status-badge { background: rgba(5, 150, 105, 0.12); color: #059669; }
+.theme-light .sx-btn--home { color: #FFFFFF; }
+.theme-light .sx-refer-btn { color: #1A1A2E; }
+.theme-light .sx-offer-pill--cashback { background: rgba(5, 150, 105, 0.08); border-color: rgba(5, 150, 105, 0.22); color: #047857; }
+.theme-light .sx-offer-pill--discount { background: rgba(234, 88, 12, 0.08); border-color: rgba(234, 88, 12, 0.22); color: #C2410C; }
+.theme-light .sx-offer-pill--coupon { background: rgba(124, 58, 237, 0.08); border-color: rgba(124, 58, 237, 0.22); color: #6D28D9; }
 
 
 /* ═══════════════════════════════════════════════════════════════
@@ -13680,3 +13865,427 @@
 .theme-light .cb-header-btn { border-color: #E5E7EB; }
 .theme-light .cb-header-btn:hover { background: #F5F7FA; }
 .theme-light .cb-typing span { background: #007BFF; }
+
+/* ═══════════════════════════════════════════════════════════════
+   KYC VERIFICATION SCREENS
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── KYC Page ── */
+.kyc-page {
+  padding: 20px;
+  padding-bottom: 100px;
+  min-height: 100vh;
+}
+
+.kyc-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.kyc-header h1 {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--cm-ink, #fff);
+  margin: 0;
+}
+
+.kyc-back {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--cm-card, #1A1A1A);
+  border: 1px solid var(--cm-line, #2A2A2A);
+  color: var(--cm-ink, #fff);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.kyc-back:hover {
+  background: var(--cm-line, #2A2A2A);
+  border-color: #40E0D0;
+}
+
+/* ── KYC Intro ── */
+.kyc-intro {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.kyc-intro-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 16px;
+  background: linear-gradient(135deg, rgba(64, 224, 208, 0.15), rgba(0, 123, 255, 0.15));
+  border-radius: 24px;
+  display: grid;
+  place-items: center;
+  font-size: 32px;
+  color: #40E0D0;
+}
+
+.kyc-intro p {
+  font-size: 14px;
+  color: var(--cm-muted, #6B6B6B);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ── KYC Input ── */
+.kyc-input-group {
+  margin-bottom: 24px;
+}
+
+.kyc-input-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cm-muted, #6B6B6B);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+
+.kyc-input-wrap {
+  display: flex;
+  align-items: center;
+  background: var(--cm-card, #1A1A1A);
+  border: 2px solid var(--cm-line, #2A2A2A);
+  border-radius: 14px;
+  padding: 0 16px;
+  height: 56px;
+  transition: all 0.2s;
+}
+
+.kyc-input-wrap:focus-within {
+  border-color: #40E0D0;
+  box-shadow: 0 0 0 3px rgba(64, 224, 208, 0.1);
+}
+
+.kyc-input-wrap--error {
+  border-color: #FF3B30;
+}
+
+.kyc-input-wrap--error:focus-within {
+  box-shadow: 0 0 0 3px rgba(255, 59, 48, 0.1);
+}
+
+.kyc-input-icon {
+  font-size: 18px;
+  color: var(--cm-muted, #6B6B6B);
+  margin-right: 12px;
+}
+
+.kyc-input-wrap input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--cm-ink, #fff);
+  letter-spacing: 2px;
+  font-family: inherit;
+}
+
+.kyc-input-wrap input::placeholder {
+  color: var(--cm-muted, #6B6B6B);
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.kyc-error {
+  font-size: 12px;
+  color: #FF3B30;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── KYC Buttons ── */
+.kyc-btn {
+  width: 100%;
+  height: 56px;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  margin-bottom: 16px;
+}
+
+.kyc-btn--primary {
+  background: linear-gradient(135deg, #40E0D0, #007BFF);
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(64, 224, 208, 0.3);
+}
+
+.kyc-btn--primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(64, 224, 208, 0.4);
+}
+
+.kyc-btn--primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.kyc-btn--skip {
+  background: transparent;
+  border: 2px solid var(--cm-line, #2A2A2A);
+  color: var(--cm-muted, #6B6B6B);
+}
+
+.kyc-btn--skip:hover {
+  border-color: #40E0D0;
+  color: #40E0D0;
+}
+
+.kyc-btn--home {
+  background: var(--cm-card, #1A1A1A);
+  border: 1px solid var(--cm-line, #2A2A2A);
+  color: var(--cm-ink, #fff);
+}
+
+.kyc-btn--home:hover {
+  background: var(--cm-line, #2A2A2A);
+  border-color: #40E0D0;
+}
+
+/* ── KYC Warning Card ── */
+.kyc-warning-card {
+  display: flex;
+  gap: 14px;
+  background: rgba(255, 152, 0, 0.08);
+  border: 1px solid rgba(255, 152, 0, 0.2);
+  border-left: 4px solid #FF9800;
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.kyc-warning-icon {
+  font-size: 24px;
+  color: #FF9800;
+  flex-shrink: 0;
+}
+
+.kyc-warning-content h3 {
+  font-size: 14px;
+  font-weight: 800;
+  color: #FF9800;
+  margin: 0 0 6px;
+}
+
+.kyc-warning-content p {
+  font-size: 13px;
+  color: #FFB74D;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ── KYC Info ── */
+.kyc-info {
+  margin-top: 24px;
+  padding: 16px;
+  background: rgba(0, 200, 83, 0.06);
+  border: 1px solid rgba(0, 200, 83, 0.15);
+  border-radius: 14px;
+}
+
+.kyc-info p {
+  font-size: 13px;
+  color: #4CAF50;
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kyc-info p:last-child {
+  margin-bottom: 0;
+}
+
+/* ── KYC Verified Card ── */
+.kyc-verified-card {
+  background: var(--cm-card, #1A1A1A);
+  border: 1px solid var(--cm-line, #2A2A2A);
+  border-radius: 20px;
+  padding: 32px 24px;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.kyc-verified-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 20px;
+  background: linear-gradient(135deg, rgba(0, 200, 83, 0.15), rgba(0, 200, 83, 0.05));
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 36px;
+  color: #00C853;
+}
+
+.kyc-verified-card h2 {
+  font-size: 22px;
+  font-weight: 800;
+  color: #00C853;
+  margin: 0 0 8px;
+}
+
+.kyc-verified-card > p {
+  font-size: 14px;
+  color: var(--cm-muted, #6B6B6B);
+  margin: 0 0 24px;
+}
+
+.kyc-verified-benefits {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kyc-benefit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cm-ink, #fff);
+  background: rgba(64, 224, 208, 0.06);
+  padding: 12px 16px;
+  border-radius: 10px;
+}
+
+.kyc-benefit svg {
+  color: #40E0D0;
+}
+
+/* ── KYC Loading ── */
+.kyc-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 16px;
+}
+
+.kyc-loading p {
+  font-size: 14px;
+  color: var(--cm-muted, #6B6B6B);
+}
+
+/* ── KYC Callback Page ── */
+.kyc-callback-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.kyc-callback-card {
+  background: var(--cm-card, #1A1A1A);
+  border: 1px solid var(--cm-line, #2A2A2A);
+  border-radius: 24px;
+  padding: 48px 32px;
+  text-align: center;
+  max-width: 380px;
+  width: 100%;
+}
+
+.kyc-callback-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 36px;
+}
+
+.kyc-callback-icon--loading {
+  background: rgba(64, 224, 208, 0.1);
+  color: #40E0D0;
+}
+
+.kyc-callback-icon--success {
+  background: rgba(0, 200, 83, 0.1);
+  color: #00C853;
+}
+
+.kyc-callback-icon--error {
+  background: rgba(255, 59, 48, 0.1);
+  color: #FF3B30;
+}
+
+.kyc-callback-card h2 {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--cm-ink, #fff);
+  margin: 0 0 12px;
+}
+
+.kyc-callback-card > p {
+  font-size: 14px;
+  color: var(--cm-muted, #6B6B6B);
+  margin: 0;
+}
+
+.kyc-callback-redirect {
+  font-size: 12px;
+  color: #40E0D0;
+  margin-top: 16px !important;
+}
+
+.kyc-spin {
+  animation: kyc-spin 1s linear infinite;
+}
+
+@keyframes kyc-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ── Profile Action Badge ── */
+.pf-action-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-left: auto;
+  margin-right: 8px;
+}
+
+.pf-action-icon--warn {
+  color: #FF9800 !important;
+  background: rgba(255, 152, 0, 0.1) !important;
+}
+
+/* ── Light Theme KYC ── */
+.theme-light .kyc-back { background: #FFFFFF; border-color: #E5E7EB; }
+.theme-light .kyc-intro-icon { background: linear-gradient(135deg, rgba(0, 123, 255, 0.08), rgba(64, 224, 208, 0.08)); }
+.theme-light .kyc-input-wrap { background: #F9FAFB; border-color: #E5E7EB; }
+.theme-light .kyc-input-wrap input { color: #1A1A2E; }
+.theme-light .kyc-btn--skip { border-color: #E5E7EB; color: #6B7280; }
+.theme-light .kyc-btn--home { background: #FFFFFF; border-color: #E5E7EB; color: #1A1A2E; }
+.theme-light .kyc-verified-card { background: #FFFFFF; border-color: #E5E7EB; }
+.theme-light .kyc-benefit { background: rgba(0, 123, 255, 0.04); color: #1A1A2E; }
+.theme-light .kyc-callback-card { background: #FFFFFF; border-color: #E5E7EB; }
+.theme-light .kyc-callback-card h2 { color: #1A1A2E; }

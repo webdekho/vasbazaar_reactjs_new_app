@@ -106,7 +106,7 @@ const LockScreen = ({ onUnlock }) => {
   const [biometricAvail, setBiometricAvail] = useState(false);
   const [showPin, setShowPin] = useState(false);
   const { theme } = useTheme();
-  const { sessionToken } = useCustomerModern();
+  const { sessionToken, setAuthSession } = useCustomerModern();
   const attempted = useRef(false);
 
   useEffect(() => {
@@ -136,6 +136,18 @@ const LockScreen = ({ onUnlock }) => {
     setError("");
     const res = await authService.authenticateWithPin({ pin, permanentToken: sessionToken });
     if (res.success) {
+      // CRITICAL: Update session token with the new token from PIN login response
+      const newToken = res.data?.token || res.raw?.data?.token;
+      if (newToken) {
+        console.log("PIN Login: Updating session token");
+        setAuthSession({
+          sessionToken: newToken,
+          userData: {
+            name: res.data?.name || res.raw?.data?.name,
+            mobile: res.data?.mobile || res.raw?.data?.mobile,
+          },
+        });
+      }
       localStorage.setItem(LOCK_KEYS.lastActive, Date.now().toString());
       onUnlock();
     } else {
@@ -245,13 +257,24 @@ export const ChangePinScreen = ({ onClose }) => {
   const [step, setStep] = useState("old"); // old | new | confirm
   const [newPin, setNewPin] = useState("");
   const [error, setError] = useState("");
-  const { sessionToken } = useCustomerModern();
+  const { sessionToken, setAuthSession } = useCustomerModern();
   const { theme } = useTheme();
 
   const handleOldPin = async (pin) => {
     setError("");
     const res = await authService.authenticateWithPin({ pin, permanentToken: sessionToken });
     if (res.success) {
+      // Update session token with the new token from PIN verification
+      const newToken = res.data?.token || res.raw?.data?.token;
+      if (newToken) {
+        setAuthSession({
+          sessionToken: newToken,
+          userData: {
+            name: res.data?.name || res.raw?.data?.name,
+            mobile: res.data?.mobile || res.raw?.data?.mobile,
+          },
+        });
+      }
       setStep("new");
     } else {
       setError("Incorrect current PIN");

@@ -1,7 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaWallet, FaShieldAlt, FaLock, FaCheckCircle } from "react-icons/fa";
+import { FaArrowLeft, FaWallet, FaShieldAlt, FaLock, FaCheckCircle, FaTimes } from "react-icons/fa";
 import { FiZap, FiCreditCard } from "react-icons/fi";
+import { Capacitor } from "@capacitor/core";
+import { Browser } from "@capacitor/browser";
+import { App } from "@capacitor/app";
 import { userService } from "../services/userService";
 import { rechargeService } from "../services/rechargeService";
 import juspayService from "../services/juspayService";
@@ -38,6 +41,100 @@ const PaymentScreen = () => {
   const [walletBalance, setWalletBalance] = useState(0);
   const [selectedMethod, setSelectedMethod] = useState("upi");
   const [ready, setReady] = useState(false);
+  const [nativePaymentPending, setNativePaymentPending] = useState(false);
+  const paymentContextRef = useRef(null);
+
+  // Handle payment callback from deep link (native apps)
+  const handlePaymentCallback = useCallback(async (url) => {
+    console.log("Payment callback received:", url);
+
+    // Close the browser
+    try {
+      await Browser.close();
+    } catch (e) {
+      console.log("Browser close error (may already be closed):", e);
+    }
+
+    setNativePaymentPending(false);
+    setLoading(true);
+
+    // Get the payment context
+    const context = await juspayService.getPaymentContext();
+    if (!context) {
+      setLoading(false);
+      setStatus("Payment session expired. Please try again.");
+      return;
+    }
+
+    // Extract order_id from URL if present
+    let orderId = context.orderId;
+    try {
+      const urlObj = new URL(url.replace("vasbazaar://", "https://dummy.com/"));
+      orderId = urlObj.searchParams.get("order_id") || urlObj.searchParams.get("orderId") || orderId;
+    } catch (e) {
+      console.log("URL parse error:", e);
+    }
+
+    // Check payment status
+    try {
+      const statusResponse = await juspayService.checkOrderStatus(orderId);
+      setLoading(false);
+
+      const payStatus = (statusResponse.data?.status || "").toUpperCase();
+      if (statusResponse.success && (payStatus === "CHARGED" || payStatus === "SUCCESS" || payStatus === "COMPLETED")) {
+        // Payment successful
+        navigate("/customer/app/success", {
+          state: {
+            type: context.type,
+            amount: context.amount,
+            label: context.label,
+            txnId: orderId,
+            statusPayload: statusResponse.data,
+            paymentType: "upi",
+            couponCode: context.couponCode,
+            couponName: context.couponName,
+            discountValue: context.discountValue,
+            cashbackValue: context.cashbackValue,
+            offerType: context.offerType,
+          },
+        });
+      } else if (payStatus === "PENDING" || payStatus === "PENDING_VBG" || payStatus === "STARTED" || payStatus === "AUTHORIZING") {
+        // Navigate to failure page with pending status
+        navigate("/customer/app/failure", {
+          state: {
+            status: "pending",
+            message: "Your payment is being processed. Please check your transaction history for the latest status.",
+            orderId,
+            amount: context.amount,
+            type: context.type,
+          },
+        });
+      } else {
+        // Navigate to failure page
+        navigate("/customer/app/failure", {
+          state: {
+            status: "failed",
+            message: "Payment could not be completed. If money was deducted, it will be refunded within 24-48 hours.",
+            orderId,
+            amount: context.amount,
+            type: context.type,
+          },
+        });
+      }
+    } catch (e) {
+      setLoading(false);
+      // Navigate to failure page on error
+      navigate("/customer/app/failure", {
+        state: {
+          status: "failed",
+          message: "Unable to verify payment status. Please check your transaction history.",
+          orderId: context?.orderId,
+          amount: context?.amount,
+          type: context?.type,
+        },
+      });
+    }
+  }, [navigate]);
 
   useEffect(() => {
     const load = async () => {
@@ -50,7 +147,24 @@ const PaymentScreen = () => {
       setReady(true);
     };
     load();
-  }, []);
+
+    // Listen for deep link callback on native platforms
+    let appUrlListener = null;
+    if (Capacitor.isNativePlatform()) {
+      appUrlListener = App.addListener("appUrlOpen", (event) => {
+        console.log("App URL opened:", event.url);
+        if (event.url && event.url.startsWith("vasbazaar://payment-callback")) {
+          handlePaymentCallback(event.url);
+        }
+      });
+    }
+
+    return () => {
+      if (appUrlListener) {
+        appUrlListener.remove();
+      }
+    };
+  }, [handlePaymentCallback]);
 
   if (!paymentState.amount) return <Navigate to="/customer/app/services" replace />;
 
@@ -81,7 +195,7 @@ const PaymentScreen = () => {
       const paymentUrl = juspayService.extractPaymentUrl(response);
       if (paymentUrl) {
         const orderId = juspayService.extractOrderId(response);
-        juspayService.savePaymentContext({
+        const paymentContext = {
           orderId,
           amount: paymentState.amount,
           type: paymentState.type,
@@ -95,7 +209,37 @@ const PaymentScreen = () => {
           discountValue: paymentState.discountValue || 0,
           cashbackValue: paymentState.cashbackValue || 0,
           offerType: paymentState.offerType || null,
-        });
+        };
+        await juspayService.savePaymentContext(paymentContext);
+
+        // For native apps, open payment URL in in-app browser (Chrome Custom Tabs / Safari ViewController)
+        if (Capacitor.isNativePlatform()) {
+          if (!paymentUrl) {
+            setLoading(false);
+            setStatus("Payment URL not received. Please try again.");
+            return;
+          }
+
+          setLoading(false);
+          setNativePaymentPending(true);
+          paymentContextRef.current = paymentContext;
+
+          try {
+            // Open in Chrome Custom Tabs (Android) / Safari ViewController (iOS)
+            await Browser.open({
+              url: paymentUrl,
+              presentationStyle: "fullscreen",
+              toolbarColor: "#1A1A1A",
+            });
+          } catch (e) {
+            console.error("Browser open error:", e);
+            setNativePaymentPending(false);
+            setStatus("Could not open payment page. Please try again.");
+          }
+          return;
+        }
+
+        // Web: redirect to payment URL (don't touch web functionality)
         window.location.href = paymentUrl;
         return;
       }
@@ -114,6 +258,72 @@ const PaymentScreen = () => {
       cashbackValue: paymentState.cashbackValue || 0,
       offerType: paymentState.offerType || null,
     } });
+  };
+
+  // Handle manual check of payment status (for native apps when user returns)
+  const handleCheckPaymentStatus = async () => {
+    if (!paymentContextRef.current) {
+      setStatus("No pending payment found.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const context = paymentContextRef.current;
+      const statusResponse = await juspayService.checkOrderStatus(context.orderId);
+      setLoading(false);
+
+      const payStatus = (statusResponse.data?.status || "").toUpperCase();
+      if (statusResponse.success && (payStatus === "CHARGED" || payStatus === "SUCCESS" || payStatus === "COMPLETED")) {
+        setNativePaymentPending(false);
+        navigate("/customer/app/success", {
+          state: {
+            type: context.type,
+            amount: context.amount,
+            label: context.label,
+            txnId: context.orderId,
+            statusPayload: statusResponse.data,
+            paymentType: "upi",
+            couponCode: context.couponCode,
+            couponName: context.couponName,
+            discountValue: context.discountValue,
+            cashbackValue: context.cashbackValue,
+            offerType: context.offerType,
+          },
+        });
+      } else if (payStatus === "PENDING" || payStatus === "PENDING_VBG" || payStatus === "STARTED" || payStatus === "AUTHORIZING") {
+        setNativePaymentPending(false);
+        navigate("/customer/app/failure", {
+          state: {
+            status: "pending",
+            message: "Your payment is being processed. Please check your transaction history for the latest status.",
+            orderId: context.orderId,
+            amount: context.amount,
+            type: context.type,
+          },
+        });
+      } else {
+        setNativePaymentPending(false);
+        paymentContextRef.current = null;
+        navigate("/customer/app/failure", {
+          state: {
+            status: "failed",
+            message: "Payment could not be completed. If money was deducted, it will be refunded within 24-48 hours.",
+            orderId: context.orderId,
+            amount: context.amount,
+            type: context.type,
+          },
+        });
+      }
+    } catch (e) {
+      setLoading(false);
+      navigate("/customer/app/failure", {
+        state: {
+          status: "failed",
+          message: "Unable to verify payment status. Please check your transaction history.",
+        },
+      });
+    }
   };
 
   const mobile = paymentState.mobile || paymentState.field1 || "";
@@ -209,6 +419,32 @@ const PaymentScreen = () => {
           <FaShieldAlt /> Secured & encrypted by VasBazaar
         </div>
       </div>
+
+      {/* Native payment pending overlay */}
+      {nativePaymentPending && (
+        <div className="xpay-webview-overlay">
+          <div className="xpay-webview-header">
+            <button type="button" className="xpay-webview-close" onClick={() => { setNativePaymentPending(false); paymentContextRef.current = null; }} disabled={loading}>
+              <FaTimes />
+            </button>
+            <span className="xpay-webview-title">Payment In Progress</span>
+            <div className="xpay-webview-amount">₹{paymentContextRef.current?.amount || finalAmount}</div>
+          </div>
+          <div className="xpay-native-pending">
+            <div className="xpay-native-pending-icon">
+              <FiCreditCard />
+            </div>
+            <h3>Complete your payment</h3>
+            <p>A payment window has been opened. Complete your payment there and tap the button below to verify.</p>
+            {status && <div className="xpay-native-pending-status">{status}</div>}
+          </div>
+          <div className="xpay-webview-footer">
+            <button type="button" className="xpay-webview-done" onClick={handleCheckPaymentStatus} disabled={loading}>
+              {loading ? "Checking payment status..." : "I've completed the payment"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

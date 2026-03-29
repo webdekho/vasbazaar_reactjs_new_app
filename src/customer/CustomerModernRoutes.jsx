@@ -30,6 +30,9 @@ import TravelScreen from "./pages/TravelScreen";
 import ComplaintListScreen from "./pages/ComplaintListScreen";
 import TrackComplaintScreen from "./pages/TrackComplaintScreen";
 import JuspayCallbackScreen from "./pages/JuspayCallbackScreen";
+import FailureScreen from "./pages/FailureScreen";
+import KycScreen from "./pages/KycScreen";
+import KycCallbackScreen from "./pages/KycCallbackScreen";
 
 const ThemedApp = ({ children }) => {
   const { theme } = useTheme();
@@ -69,6 +72,7 @@ const CustomerModernRoutes = () => {
             <Route path="payment" element={<PaymentScreen />} />
             <Route path="payment-callback" element={<JuspayCallbackScreen />} />
             <Route path="success" element={<SuccessScreen />} />
+            <Route path="failure" element={<FailureScreen />} />
             <Route path="wallet" element={<WalletScreen />} />
             <Route path="coupons" element={<CouponListScreen />} />
             <Route path="notifications" element={<NotificationsScreen />} />
@@ -86,6 +90,8 @@ const CustomerModernRoutes = () => {
             <Route path="autopay" element={<AutoPayScreen />} />
             <Route path="help" element={<HelpScreen />} />
             <Route path="travel" element={<TravelScreen />} />
+            <Route path="kyc" element={<KycScreen />} />
+            <Route path="kyc-callback" element={<KycCallbackScreen />} />
             <Route path="*" element={<Navigate to="/customer/app/services" replace />} />
           </Route>
           <Route path="*" element={<LoginRedirect />} />

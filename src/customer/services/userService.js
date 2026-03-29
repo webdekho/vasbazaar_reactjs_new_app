@@ -21,14 +21,15 @@ export const userService = {
   getUserBalance: async () => {
     const result = await authGet("/api/customer/user/getByUserId");
     if (result.success && result.data) {
-      const d = result.data;
+      // Handle potential nested data structure from API
+      const d = result.data?.data || result.data;
       return {
         ...result,
         data: {
-          balance: parseFloat(d.balance || 0).toFixed(2),
-          cashback: parseFloat(d.cashback || 0).toFixed(2),
-          incentive: parseFloat(d.incentive || 0).toFixed(2),
-          referralBonus: parseFloat(d.referralBonus || 0).toFixed(2),
+          balance: parseFloat(d.balance ?? d.Balance ?? d.walletBalance ?? 0).toFixed(2),
+          cashback: parseFloat(d.cashback ?? d.Cashback ?? 0).toFixed(2),
+          incentive: parseFloat(d.incentive ?? d.Incentive ?? 0).toFixed(2),
+          referralBonus: parseFloat(d.referralBonus ?? d.referal_bonus ?? d.referral_bonus ?? 0).toFixed(2),
         },
       };
     }

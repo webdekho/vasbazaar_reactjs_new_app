@@ -27,7 +27,13 @@ export const customerStorage = {
 
   setAuthSession: ({ sessionToken, userData, tempToken }) => {
     if (sessionToken) localStorage.setItem(CUSTOMER_STORAGE_KEYS.sessionToken, sessionToken);
-    if (userData) localStorage.setItem(CUSTOMER_STORAGE_KEYS.userData, JSON.stringify(userData));
+    if (userData) {
+      // Merge with existing userData to preserve fields not in the payload
+      const existing = localStorage.getItem(CUSTOMER_STORAGE_KEYS.userData);
+      const existingData = existing ? JSON.parse(existing) : {};
+      const merged = { ...existingData, ...userData };
+      localStorage.setItem(CUSTOMER_STORAGE_KEYS.userData, JSON.stringify(merged));
+    }
     if (typeof tempToken === "string" && tempToken) {
       localStorage.setItem(CUSTOMER_STORAGE_KEYS.tempToken, tempToken);
     } else if (tempToken === null) {

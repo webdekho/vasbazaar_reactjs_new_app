@@ -93,9 +93,13 @@ export const guestGet = async (endpoint, params = {}) => {
 
 export const authGet = async (endpoint, params = {}) => {
   try {
+    const token = getCustomerToken();
+    if (!token) {
+      return { success: false, message: "Authentication required. Please login.", data: null, raw: null };
+    }
     const response = await apiClient.get(endpoint, {
       params,
-      headers: { access_token: getCustomerToken() },
+      headers: { access_token: token },
     });
     return parseApiResponse(response);
   } catch (error) {
@@ -105,10 +109,14 @@ export const authGet = async (endpoint, params = {}) => {
 
 export const authPost = async (endpoint, payload) => {
   try {
+    const token = getCustomerToken();
+    if (!token) {
+      return { success: false, message: "Authentication required. Please login.", data: null, raw: null };
+    }
     const response = await apiClient.post(endpoint, payload, {
       headers: {
         "Content-Type": "application/json",
-        access_token: getCustomerToken(),
+        access_token: token,
       },
     });
     return parseApiResponse(response);
@@ -151,11 +159,7 @@ apiClient.interceptors.response.use(
       localStorage.removeItem("vb_pin_set");
       localStorage.removeItem("vb_last_active");
 
-      const reason = msg.includes("another_device") || msg.includes("another device")
-        ? "You were logged out because your account was accessed from another device."
-        : "Your session has expired. Please log in again.";
-
-      sessionStorage.setItem("vb_logout_reason", reason);
+      // Silently redirect to login without showing logout reason to customer
       window.location.href = "/customer/login";
     }
     return Promise.reject(error);

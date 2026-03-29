@@ -1,4 +1,4 @@
-package com.vasbazaar.customer;
+package com.vasbazaar.app;
 
 import com.getcapacitor.BridgeActivity;
 

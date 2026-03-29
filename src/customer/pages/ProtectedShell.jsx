@@ -16,6 +16,8 @@ import AppBrand from "../components/AppBrand";
 import { APP_VERSION } from "../../shared/constants/app";
 import PWAInstallPrompt from "../components/PWAInstallPrompt";
 import ChatbotFAB from "../components/ChatbotFAB";
+import { Capacitor } from "@capacitor/core";
+import { App } from "@capacitor/app";
 
 const bottomNavItems = [
   { to: "/customer/app/history", label: "History", icon: <FaHistory /> },
@@ -69,8 +71,8 @@ const ProtectedShell = () => {
 
   const userName = userData?.name || userData?.firstName || userData?.userName || userData?.user_name || userData?.customerName || "Customer";
   const userMobile = userData?.mobile || userData?.mobileNumber || "";
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`https://vasbazaar.web.webdekho.in?code=${userMobile}`)}`;
-  const referralLink = `https://vasbazaar.web.webdekho.in?code=${userMobile}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`https://web.vasbazaar.com?code=${userMobile}`)}`;
+  const referralLink = `https://web.vasbazaar.com?code=${userMobile}`;
 
   // Load profile photo from localStorage on mount (only valid URLs)
   useEffect(() => {
@@ -109,6 +111,32 @@ const ProtectedShell = () => {
     return () => { document.body.style.overflow = ""; };
   }, [drawerOpen]);
 
+  // Global deep link listener for KYC callback (Android/iOS)
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    const handleAppUrl = (event) => {
+      console.log("Deep link received:", event.url);
+      if (event.url && event.url.startsWith("vasbazaar://kyc-callback")) {
+        // Parse URL parameters
+        const urlParams = new URL(event.url.replace("vasbazaar://", "https://"));
+        const gateway = urlParams.searchParams.get("gateway");
+        const type = urlParams.searchParams.get("type");
+        const client_id = urlParams.searchParams.get("client_id");
+        const status = urlParams.searchParams.get("status");
+
+        // Navigate to KYC callback screen with params
+        navigate(`/customer/app/kyc-callback?gateway=${gateway}&type=${type}&client_id=${client_id}&status=${status}`);
+      }
+    };
+
+    const listener = App.addListener("appUrlOpen", handleAppUrl);
+
+    return () => {
+      listener.remove();
+    };
+  }, [navigate]);
+
   const handleShareLink = () => {
     const message = `Turn your transactions into earnings! Join VasBazaar today & get cashback on every spend. Sign up here: ${referralLink}`;
     if (navigator.share) {
@@ -139,7 +167,7 @@ const ProtectedShell = () => {
     // Load logo and QR in parallel
     try {
       const logoUrl = "https://webdekho.in/images/vasbazaar1.png";
-      const qrBig = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(`https://vasbazaar.web.webdekho.in?code=${userMobile}`)}`;
+      const qrBig = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(`https://web.vasbazaar.com?code=${userMobile}`)}`;
 
       const loadImg = (src) => { const i = new Image(); i.crossOrigin = "anonymous"; return new Promise((res, rej) => { i.onload = () => res(i); i.onerror = rej; i.src = src; }); };
       const [logoImg, qrImg] = await Promise.all([loadImg(logoUrl).catch(() => null), loadImg(qrBig)]);
@@ -489,7 +517,7 @@ const ProtectedShell = () => {
             <img src="https://webdekho.in/images/vasbazaar1.png" alt="VasBazaar" className="qr-modal-logo" />
             <div className="qr-modal-subtitle">Scan & Pay with any UPI App</div>
             <div className="qr-modal-qr-wrap">
-              <img src={`https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(`https://vasbazaar.web.webdekho.in?code=${userMobile}`)}`} alt="QR Code" className="qr-modal-qr" />
+              <img src={`https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(`https://web.vasbazaar.com?code=${userMobile}`)}`} alt="QR Code" className="qr-modal-qr" />
             </div>
             <div className="qr-modal-name">{userName}</div>
             <div className="qr-modal-mobile">+91 {userMobile}</div>
