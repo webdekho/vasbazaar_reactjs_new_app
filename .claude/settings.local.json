@@ -7,21 +7,8 @@
       "Bash(git branch:*)",
       "Bash(git push:*)",
       "Bash(gh auth:*)",
-      "Bash(node:*)",
-      "Bash(java -version:*)",
-      "Bash(npx cap sync:*)",
-      "Bash(./gradlew assembleDebug:*)",
-      "Bash(/usr/libexec/java_home:*)",
-      "Bash(npm install:*)",
-      "Bash(npm search:*)",
-      "Bash(adb install:*)",
-      "Bash(./gradlew:*)",
-      "Bash(grep:*)",
-      "Bash(npx cap add ios)",
-      "Bash(ls:*)",
-      "Bash(adb devices:*)",
-      "Bash(adb kill-server:*)",
-      "Bash(adb start-server:*)"
+      "Bash(git pull:*)",
+      "Bash(git stash:*)"
     ]
   }
 }

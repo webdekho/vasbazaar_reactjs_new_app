@@ -2,6 +2,7 @@
   "name": "vasbazaar_reactjs_new_app",
   "version": "0.1.0",
   "private": true,
+  "homepage": "/customer",
   "dependencies": {
     "@capacitor-community/contacts": "^7.1.0",
     "@capacitor/android": "^8.2.0",

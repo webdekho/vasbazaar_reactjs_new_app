@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { FaFingerprint, FaLock, FaBackspace, FaShieldAlt } from "react-icons/fa";
 import { useCustomerModern } from "../context/CustomerModernContext";
 import { authService } from "../services/authService";
-import { customerStorage } from "../services/storageService";
+import { userService } from "../services/userService";
+import { setAppLocked } from "../services/apiClient";
 import { useTheme } from "../context/ThemeContext";
 
 const LOCK_KEYS = {
@@ -125,8 +126,17 @@ const LockScreen = ({ onUnlock }) => {
     setError("");
     const success = await authenticateWithBiometric();
     if (success) {
-      localStorage.setItem(LOCK_KEYS.lastActive, Date.now().toString());
-      onUnlock();
+      // Verify the session token is still valid after biometric unlock
+      const profileCheck = await userService.getUserProfile();
+      if (profileCheck.success) {
+        localStorage.setItem(LOCK_KEYS.lastActive, Date.now().toString());
+        onUnlock();
+      } else {
+        // Session expired — biometric verified identity but token is stale
+        // Fall back to PIN which returns a fresh token from the server
+        setError("Session expired. Please enter your PIN to continue.");
+        setShowPin(true);
+      }
     } else {
       setShowPin(true);
     }
@@ -385,6 +395,12 @@ const AppLockGuard = ({ children }) => {
       if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
     };
   }, [locked, needsPin, resetTimer]);
+
+  // Tell the 401 interceptor to skip redirect while lock screen is active
+  useEffect(() => {
+    setAppLocked(locked || needsPin);
+    return () => { setAppLocked(false); };
+  }, [locked, needsPin]);
 
   if (needsPin) {
     return <SetPinScreen onComplete={() => { setNeedsPin(false); setLocked(false); }} />;

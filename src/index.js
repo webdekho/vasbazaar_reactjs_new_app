@@ -14,7 +14,7 @@ root.render(
 // Register service worker for PWA support
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/vasbazaar/sw.js').catch(() => {});
+    navigator.serviceWorker.register('/customer/sw.js').catch(() => {});
   });
 }
 

@@ -124,7 +124,7 @@ const OtpScreen = () => {
       setDevOtp(nextDevOtp);
       setTimer(30);
       setOtp(["", "", "", "", "", ""]);
-      setStatus({ type: "success", message: response.message || "OTP resent." });
+      setStatus({ type: "success", message: "OTP resent successfully" });
     } else {
       setStatus({ type: "error", message: response.message });
     }

@@ -396,7 +396,20 @@ const PaymentScreen = () => {
       </div>
 
       {/* Error */}
-      {status && <div className="xpay-error xpay-in">{status}</div>}
+      {status && (
+        <div className="xpay-error xpay-in">
+          {status}
+          {status.toLowerCase().includes("kyc") && (
+            <button
+              type="button"
+              className="xpay-kyc-btn"
+              onClick={() => navigate("/customer/app/kyc")}
+            >
+              Complete KYC
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Pay button */}
       <div className={`xpay-footer${ready ? " xpay-in xpay-d3" : ""}`}>

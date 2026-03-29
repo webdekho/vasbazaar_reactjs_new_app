@@ -139,6 +139,11 @@ export const authPut = async (endpoint, payload) => {
   }
 };
 
+// ── App Lock flag ──
+// When the app is locked, skip 401 redirect — the lock screen handles re-auth via PIN
+let _appLocked = false;
+export const setAppLocked = (val) => { _appLocked = val; };
+
 // ── Global 401 Interceptor ──
 // Detects session invalidation (e.g. logged_in_from_another_device) and forces re-login
 let isRedirecting = false;
@@ -150,16 +155,14 @@ apiClient.interceptors.response.use(
     const isOnLoginPage = LOGIN_PAGES.some((p) => window.location.pathname.endsWith(p));
     const hasAccessToken = error?.config?.headers?.access_token;
 
-    if (error?.response?.status === 401 && !isRedirecting && !isOnLoginPage && hasAccessToken) {
+    if (error?.response?.status === 401 && !isRedirecting && !isOnLoginPage && hasAccessToken && !_appLocked) {
       isRedirecting = true;
-      const msg = error?.response?.data?.message || "Session expired";
 
-      // Clear all auth data
+      // Clear auth tokens but preserve vb_pin_set (PIN is per-device, not per-session)
       Object.values(CUSTOMER_STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
-      localStorage.removeItem("vb_pin_set");
       localStorage.removeItem("vb_last_active");
 
-      // Silently redirect to login without showing logout reason to customer
+      // Redirect to login
       window.location.href = "/customer/login";
     }
     return Promise.reject(error);

@@ -58,7 +58,7 @@ const SuccessScreen = () => {
     if (Capacitor.isNativePlatform()) {
       try {
         await Share.share({
-          title: "Payment Successful",
+          title: "Transaction Successful",
           text: shareText,
           url: shareUrl,
           dialogTitle: "Share Payment Receipt",
@@ -72,7 +72,7 @@ const SuccessScreen = () => {
     // Web: use navigator.share or WhatsApp fallback
     if (navigator.share) {
       try {
-        await navigator.share({ title: "Payment Successful", text: shareText, url: shareUrl });
+        await navigator.share({ title: "Transaction Successful", text: shareText, url: shareUrl });
         return;
       } catch (e) {
         console.log("Web share error:", e);
@@ -133,7 +133,7 @@ const SuccessScreen = () => {
       </div>
 
       {/* ── Title ── */}
-      <h1 className="sx-title">Payment Successful!</h1>
+      <h1 className="sx-title">Transaction Successful!</h1>
       <p className="sx-subtitle">Your transaction has been completed</p>
 
       {/* ── Amount ── */}
@@ -152,7 +152,7 @@ const SuccessScreen = () => {
             <FaPercent /> ₹{discount.toFixed(2)} Instant Discount Applied
           </div>
         )}
-        {couponCode && (
+        {couponCode && !offerType && !cashback && !discount && (
           <div className="sx-offer-pill sx-offer-pill--coupon">
             <FaTag /> Coupon: {couponCode}{couponName ? ` — ${couponName}` : ""}
           </div>

@@ -5,7 +5,8 @@ import {
   FaUserCircle, FaWallet, FaHistory, FaQuestionCircle, FaExclamationTriangle,
   FaHome, FaSearch, FaClock, FaUsers, FaSyncAlt, FaTrashAlt, FaDownload, FaShareAlt, FaTag,
   FaExclamationCircle, FaCamera, FaQrcode, FaPrint, FaPlaneDeparture,
-  FaMobileAlt, FaTv, FaPhoneAlt, FaBolt, FaFireAlt, FaTint, FaBroadcastTower
+  FaMobileAlt, FaTv, FaPhoneAlt, FaBolt, FaFireAlt, FaTint, FaBroadcastTower,
+  FaShieldAlt
 } from "react-icons/fa";
 import { HiMiniSquares2X2 } from "react-icons/hi2";
 import { useCustomerModern } from "../context/CustomerModernContext";
@@ -67,12 +68,23 @@ const ProtectedShell = () => {
   const [balances, setBalances] = useState({ balance: 0, cashback: 0, incentive: 0, referralBonus: 0, referralUsers: 0 });
   const [profilePhoto, setProfilePhoto] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [showKycPopup, setShowKycPopup] = useState(false);
   const fileInputRef = useRef(null);
 
   const userName = userData?.name || userData?.firstName || userData?.userName || userData?.user_name || userData?.customerName || "Customer";
   const userMobile = userData?.mobile || userData?.mobileNumber || "";
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`https://web.vasbazaar.com?code=${userMobile}`)}`;
   const referralLink = `https://web.vasbazaar.com?code=${userMobile}`;
+  const isKycDone = userData?.verified_status === 1 || userData?.verified_status === "1" || userData?.kyc_verified === true;
+
+  // Show KYC popup if not verified (on every app load / navigation)
+  useEffect(() => {
+    if (userData && !isKycDone) {
+      setShowKycPopup(true);
+    } else {
+      setShowKycPopup(false);
+    }
+  }, [userData, isKycDone, location.pathname]);
 
   // Load profile photo from localStorage on mount (only valid URLs)
   useEffect(() => {
@@ -529,6 +541,42 @@ const ProtectedShell = () => {
               <button type="button" className="qr-modal-action-btn" onClick={() => window.print()}><FaPrint /> Print</button>
             </div>
             <div className="qr-modal-footer">Powered by VasBazaar</div>
+          </div>
+        </div>
+      )}
+
+      {/* KYC Pending Popup */}
+      {showKycPopup && (
+        <div className="tc-modal-overlay" onClick={() => setShowKycPopup(false)}>
+          <div className="tc-modal kyc-popup-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="kyc-popup-icon-wrap">
+              <FaShieldAlt />
+            </div>
+            <h3 className="tc-modal-title">Complete Your KYC</h3>
+            <p className="kyc-popup-desc">
+              Your KYC verification is pending. Complete it now to unlock unlimited transactions and full access to all features.
+            </p>
+            <div className="kyc-popup-benefits">
+              <div className="kyc-popup-benefit"><FaShieldAlt /> Unlimited Transactions</div>
+              <div className="kyc-popup-benefit"><FaWallet /> Full Wallet Access</div>
+              <div className="kyc-popup-benefit"><FaGift /> Exclusive Offers & Rewards</div>
+            </div>
+            <div className="kyc-popup-actions">
+              <button
+                type="button"
+                className="kyc-popup-btn kyc-popup-btn--primary"
+                onClick={() => { setShowKycPopup(false); navigate("/customer/app/kyc", { state: { returnTo: location.pathname } }); }}
+              >
+                <FaShieldAlt /> Verify Now
+              </button>
+              <button
+                type="button"
+                className="kyc-popup-btn kyc-popup-btn--skip"
+                onClick={() => setShowKycPopup(false)}
+              >
+                Remind Me Later
+              </button>
+            </div>
           </div>
         </div>
       )}

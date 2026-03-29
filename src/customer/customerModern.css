@@ -4468,27 +4468,36 @@
 
 .cm-upcoming-dues {
   border-radius: 20px;
-  padding: 16px;
+  padding: 0;
   background: var(--cm-card);
   border: 1px solid var(--cm-line);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   animation: cm-slide-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
   animation-delay: 0.3s;
   transition: background 0.3s, border-color 0.3s;
+  overflow: hidden;
 }
 
 .cm-upcoming-dues-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  padding: 12px 14px 8px;
+  margin-bottom: 0;
 }
 
 .cm-upcoming-dues-title {
-  font-size: 0.85rem;
+  font-size: 0.72rem;
   font-weight: 800;
-  color: var(--cm-ink);
   margin: 0;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, #40E0D0, #007BFF, #40E0D0);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: cm-title-shine 3s linear infinite;
 }
 
 .cm-upcoming-dues-all {
@@ -4509,28 +4518,36 @@
 .cm-upcoming-dues-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
+  padding: 4px 6px 8px;
 }
 
 .cm-upcoming-due-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 8px;
-  border-radius: 12px;
+  padding: 12px 10px;
+  border-radius: 14px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, box-shadow 0.2s ease;
 }
 
 .cm-upcoming-due-item:hover {
   background: rgba(64, 224, 208, 0.04);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.cm-upcoming-due-item:active {
+  transform: scale(1.02);
+  background: rgba(64, 224, 208, 0.08);
 }
 
 .cm-upcoming-due-logo {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: #F0F2F5;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--cm-bg-secondary, #121212);
   border: 1px solid var(--cm-line);
   display: grid;
   place-items: center;
@@ -4538,6 +4555,7 @@
   overflow: hidden;
   font-size: 0.9rem;
   color: var(--cm-muted);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
 }
 
 .cm-upcoming-due-logo img {
@@ -4589,7 +4607,7 @@
 .theme-light .cm-upcoming-dues {
   background: #FFFFFF;
   border-color: #E5E7EB;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
 }
 
 .theme-light .cm-upcoming-due-logo {
@@ -6857,6 +6875,7 @@
 /* Upcoming dues in light mode */
 .theme-light .cm-upcoming-dues-title {
   color: #6B7280;
+  -webkit-text-fill-color: #6B7280;
 }
 
 .theme-light .cm-upcoming-dues-all {
@@ -6864,13 +6883,12 @@
 }
 
 .theme-light .cm-upcoming-due-item {
-  background: #FFFFFF;
-  border-color: #E5E7EB;
+  background: transparent;
 }
 
 .theme-light .cm-upcoming-due-item:hover {
-  border-color: #D1D5DB;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  background: rgba(0, 0, 0, 0.02);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
 }
 
 .theme-light .cm-upcoming-due-logo {
@@ -9282,45 +9300,9 @@
 .cm-quick-access-label { font-size: 10px; font-weight: 700; color: #B0B0B0; text-align: center; }
 
 /* Upcoming Dues */
-.cm-upcoming-dues { padding: 0 16px; }
-.cm-upcoming-dues-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.cm-upcoming-dues-title { font-size: 13px; font-weight: 800; color: #6B6B6B; text-transform: uppercase; letter-spacing: 0.06em; margin: 0; }
-.cm-upcoming-dues-all { display: flex; align-items: center; gap: 4px; border: none; background: none; color: #40E0D0; font-size: 12px; font-weight: 700; cursor: pointer; }
-.cm-upcoming-dues-list { display: flex; flex-direction: column; gap: 6px; }
-
-.cm-upcoming-due-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  background: #1A1A1A;
-  border: 1px solid #2A2A2A;
-  border-radius: 14px;
-  cursor: pointer;
-  transition: border-color 0.2s;
-}
-
-.cm-upcoming-due-item:hover { border-color: rgba(64, 224, 208, 0.2); }
-
-.cm-upcoming-due-logo {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  background: #121212;
-  border: 1px solid #2A2A2A;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: #6B6B6B;
-  overflow: hidden;
-}
-
-.cm-upcoming-due-logo img { width: 100%; height: 100%; object-fit: contain; padding: 4px; }
-.cm-upcoming-due-info { flex: 1; min-width: 0; }
-.cm-upcoming-due-name { font-size: 13px; font-weight: 700; color: #FFFFFF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cm-upcoming-dues-name { font-size: 13px; font-weight: 700; color: #FFFFFF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cm-upcoming-due-num { font-size: 11px; color: #6B6B6B; margin-top: 1px; }
-.cm-upcoming-due-date { font-size: 11px; color: #FF9800; margin-top: 3px; display: flex; align-items: center; gap: 4px; }
+.cm-upcoming-due-date svg { font-size: 0.55rem; }
 .cm-upcoming-due-amount { font-size: 16px; font-weight: 800; color: #FFFFFF; flex-shrink: 0; }
 
 
@@ -10532,6 +10514,24 @@
   font-weight: 600;
   position: relative;
   z-index: 1;
+}
+
+.xpay-kyc-btn {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 8px 20px;
+  background: linear-gradient(135deg, #0ea5e9, #6366f1);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.xpay-kyc-btn:hover {
+  opacity: 0.85;
 }
 
 /* ── Footer / Pay Button ── */
@@ -13587,7 +13587,7 @@
   cursor: pointer;
   z-index: 9990;
   box-shadow: 0 6px 24px rgba(64, 224, 208, 0.35);
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: transform 0.2s, box-shadow 0.2s, bottom 0.3s ease;
   animation: cb-fab-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 .cb-fab:hover { transform: scale(1.1); box-shadow: 0 8px 32px rgba(64, 224, 208, 0.5); }
@@ -13869,6 +13869,114 @@
 /* ═══════════════════════════════════════════════════════════════
    KYC VERIFICATION SCREENS
    ═══════════════════════════════════════════════════════════════ */
+
+/* ── KYC Pending Popup ── */
+.kyc-popup-modal {
+  max-width: 380px;
+}
+
+.kyc-popup-icon-wrap {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 2rem;
+  color: #FF9800;
+  background: rgba(255, 152, 0, 0.1);
+  border: 2px solid rgba(255, 152, 0, 0.2);
+  margin-bottom: 16px;
+  animation: kyc-popup-pulse 2s ease-in-out infinite;
+}
+
+@keyframes kyc-popup-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.2); }
+  50% { transform: scale(1.05); box-shadow: 0 0 20px 4px rgba(255, 152, 0, 0.15); }
+}
+
+.kyc-popup-desc {
+  color: var(--cm-muted, #9CA3AF);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 0 0 16px;
+  text-align: center;
+}
+
+.kyc-popup-benefits {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.kyc-popup-benefit {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--cm-text, #E0E0E0);
+  background: rgba(64, 224, 208, 0.06);
+  border: 1px solid rgba(64, 224, 208, 0.12);
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+
+.kyc-popup-benefit svg {
+  color: #40E0D0;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.kyc-popup-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.kyc-popup-btn {
+  width: 100%;
+  padding: 14px 20px;
+  border-radius: 14px;
+  font-size: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.kyc-popup-btn--primary {
+  background: linear-gradient(135deg, #40E0D0, #007BFF);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(64, 224, 208, 0.3);
+}
+
+.kyc-popup-btn--primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(64, 224, 208, 0.4);
+}
+
+.kyc-popup-btn--skip {
+  background: transparent;
+  color: var(--cm-muted, #9CA3AF);
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.kyc-popup-btn--skip:hover {
+  color: var(--cm-text, #E0E0E0);
+}
+
+.theme-light .kyc-popup-benefit {
+  background: rgba(64, 224, 208, 0.08);
+  border-color: rgba(64, 224, 208, 0.15);
+}
 
 /* ── KYC Page ── */
 .kyc-page {

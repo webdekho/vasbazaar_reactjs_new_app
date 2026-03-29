@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { FaCheckCircle, FaTimesCircle, FaClock, FaHome } from "react-icons/fa";
+import { FaCheckCircle, FaTimesCircle, FaClock, FaRedo } from "react-icons/fa";
 import { isSuccessStatus, isPendingStatus } from "../../shared/constants/juspay";
 import juspayService from "../services/juspayService";
 import { authPost } from "../services/apiClient";
@@ -13,6 +13,7 @@ const JuspayCallbackScreen = () => {
   const [state, setState] = useState("verifying"); // verifying | success | pending | failed
   const [message, setMessage] = useState("Verifying your payment...");
   const [txnId, setTxnId] = useState("");
+  const [paymentCtx, setPaymentCtx] = useState(null);
   const [refundLoading, setRefundLoading] = useState(false);
   const [refundMessage, setRefundMessage] = useState("");
   const [refundMessageType, setRefundMessageType] = useState("");
@@ -29,6 +30,8 @@ const JuspayCallbackScreen = () => {
       const urlOrderId = searchParams.get("order_id") || searchParams.get("orderId");
       const ctx = await juspayService.getPaymentContext();
       const orderId = urlOrderId || ctx?.orderId;
+
+      if (ctx) setPaymentCtx(ctx);
 
       if (!orderId) {
         setState("failed");
@@ -76,7 +79,16 @@ const JuspayCallbackScreen = () => {
           setMessage("Your payment is being processed. Please check your transaction history for the latest status.");
         } else {
           setState("failed");
-          setMessage(response?.message || "Payment could not be completed. If money was deducted, it will be refunded within 24-48 hours.");
+          const failReason =
+            response?.data?.failureReason ||
+            response?.data?.failure_reason ||
+            response?.data?.errorMessage ||
+            response?.data?.error_message ||
+            response?.data?.reason ||
+            response?.data?.message ||
+            response?.message ||
+            "Payment could not be completed.";
+          setMessage(failReason);
         }
       } catch (err) {
         setState("failed");
@@ -109,8 +121,8 @@ const JuspayCallbackScreen = () => {
         setRefundMessageType("success");
         setRefundMessage(
           refundType === "wallet"
-            ? "Your wallet refund request has been submitted. You will receive it shortly."
-            : "Your bank refund request has been submitted. It may take up to 3 working days."
+            ? "Refund has been credited to your wallet."
+            : "Bank refund request submitted. It may take up to 3 working days."
         );
       } else {
         setRefundMessageType("error");
@@ -134,6 +146,30 @@ const JuspayCallbackScreen = () => {
   };
 
   const cfg = statusConfig[state];
+
+  const handleRetry = () => {
+    if (paymentCtx) {
+      navigate("/customer/app/payment", {
+        replace: true,
+        state: {
+          type: paymentCtx.type || "recharge",
+          amount: paymentCtx.amount,
+          label: paymentCtx.label,
+          mobile: paymentCtx.mobile,
+          operatorName: paymentCtx.operatorName,
+          operatorId: paymentCtx.operatorId,
+          logo: paymentCtx.logo,
+          couponCode: paymentCtx.couponCode || null,
+          couponName: paymentCtx.couponName || null,
+          discountValue: paymentCtx.discountValue || 0,
+          cashbackValue: paymentCtx.cashbackValue || 0,
+          offerType: paymentCtx.offerType || null,
+        },
+      });
+    } else {
+      navigate("/customer/app/services", { replace: true });
+    }
+  };
 
   return (
     <div style={{
@@ -173,7 +209,7 @@ const JuspayCallbackScreen = () => {
          state === "pending" ? "Payment Pending" : "Payment Failed"}
       </h2>
 
-      {/* Message */}
+      {/* Failure reason message */}
       <p style={{
         fontSize: "0.9rem", color: isLight ? "#6B7280" : "#9CA3C0", textAlign: "center",
         maxWidth: 360, lineHeight: 1.6, marginBottom: 8,
@@ -181,35 +217,60 @@ const JuspayCallbackScreen = () => {
         {message}
       </p>
 
-      {/* Transaction ID */}
-      {txnId && (
-        <p style={{
-          fontSize: "0.78rem", color: isLight ? "#6B7280" : "#6B7394",
-          background: isLight ? "#FFFFFF" : "rgba(255,255,255,0.04)", padding: "6px 16px",
-          borderRadius: 8, marginBottom: 32,
-          border: isLight ? "1px solid #E5E7EB" : "none",
+      {/* Transaction details */}
+      {(txnId || paymentCtx) && (
+        <div style={{
+          width: "100%",
+          maxWidth: 360,
+          background: isLight ? "#FFFFFF" : "rgba(255,255,255,0.04)",
+          border: isLight ? "1px solid #E5E7EB" : "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 10,
+          padding: "12px 16px",
+          marginBottom: 24,
         }}>
-          Order ID: {txnId}
-        </p>
+          {paymentCtx?.mobile && (
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ fontSize: "0.82rem", color: isLight ? "#6B7280" : "#6B7394" }}>Mobile</span>
+              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: isLight ? "#1A1A2E" : "#F0F0FF" }}>{paymentCtx.mobile}</span>
+            </div>
+          )}
+          {paymentCtx?.operatorName && (
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ fontSize: "0.82rem", color: isLight ? "#6B7280" : "#6B7394" }}>Operator</span>
+              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: isLight ? "#1A1A2E" : "#F0F0FF" }}>{paymentCtx.operatorName}</span>
+            </div>
+          )}
+          {paymentCtx?.amount && (
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ fontSize: "0.82rem", color: isLight ? "#6B7280" : "#6B7394" }}>Amount</span>
+              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: isLight ? "#1A1A2E" : "#F0F0FF" }}>{"\u20B9"}{paymentCtx.amount}</span>
+            </div>
+          )}
+          {txnId && (
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontSize: "0.82rem", color: isLight ? "#6B7280" : "#6B7394" }}>Order ID</span>
+              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: isLight ? "#1A1A2E" : "#F0F0FF" }}>{txnId}</span>
+            </div>
+          )}
+        </div>
       )}
 
-      {/* Action buttons */}
-      {state !== "verifying" && state !== "success" && (
-        <div style={{ display: "flex", gap: 12 }}>
-          <button
-            onClick={() => navigate("/customer/app/services", { replace: true })}
-            style={{
-              padding: "12px 24px", borderRadius: 10,
-              background: isLight ? "#FFFFFF" : "rgba(255,255,255,0.06)",
-              border: isLight ? "1px solid #E5E7EB" : "1px solid rgba(255,255,255,0.1)",
-              color: isLight ? "#1A1A2E" : "#F0F0FF",
-              cursor: "pointer", display: "flex", alignItems: "center", gap: 8,
-              fontSize: "0.9rem", fontWeight: 600,
-            }}
-          >
-            <FaHome /> Go Home
-          </button>
-        </div>
+      {/* Retry button for failed transactions */}
+      {state === "failed" && (
+        <button
+          onClick={handleRetry}
+          style={{
+            padding: "12px 28px", borderRadius: 10,
+            background: "linear-gradient(135deg, #00F5D4, #00BBF9)",
+            border: "none",
+            color: "#061018",
+            cursor: "pointer", display: "flex", alignItems: "center", gap: 8,
+            fontSize: "0.9rem", fontWeight: 700,
+            marginBottom: 18,
+          }}
+        >
+          <FaRedo /> Retry Transaction
+        </button>
       )}
 
       {/* Refund options on failed callback status only */}
@@ -217,7 +278,6 @@ const JuspayCallbackScreen = () => {
         <div style={{
           width: "100%",
           maxWidth: 420,
-          marginTop: 18,
           background: isLight ? "#FFFFFF" : "rgba(255,255,255,0.04)",
           border: isLight ? "1px solid #E5E7EB" : "1px solid rgba(255,255,255,0.08)",
           borderRadius: 12,
@@ -230,8 +290,7 @@ const JuspayCallbackScreen = () => {
             fontSize: "0.88rem",
             lineHeight: 1.5,
           }}>
-            If your amount was deducted, choose your refund option. Wallet refund is faster.
-            Bank refund may take up to 3 working days.
+            If your amount was deducted, choose your refund option.
           </p>
 
           <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "nowrap" }}>
@@ -249,10 +308,10 @@ const JuspayCallbackScreen = () => {
                 cursor: refundLoading ? "not-allowed" : "pointer",
                 opacity: refundLoading ? 0.7 : 1,
                 fontWeight: 700,
-                fontSize: "0.88rem",
+                fontSize: "0.82rem",
               }}
             >
-              {refundLoading ? "Processing..." : "Refund to Wallet"}
+              {refundLoading ? "Processing..." : "Refund to Wallet (Immediate)"}
             </button>
             <button
               onClick={() => handleRefundRequest("bank")}
@@ -268,10 +327,10 @@ const JuspayCallbackScreen = () => {
                 cursor: refundLoading ? "not-allowed" : "pointer",
                 opacity: refundLoading ? 0.7 : 1,
                 fontWeight: 700,
-                fontSize: "0.88rem",
+                fontSize: "0.82rem",
               }}
             >
-              {refundLoading ? "Processing..." : "Refund to Bank"}
+              {refundLoading ? "Processing..." : "Refund to Bank (Upto 3 Days)"}
             </button>
           </div>
 
