@@ -3,8 +3,8 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-do
 import {
   FaBars, FaTimes, FaChevronRight, FaChevronDown, FaGift, FaRegBell, FaSignOutAlt,
   FaUserCircle, FaWallet, FaHistory, FaQuestionCircle, FaExclamationTriangle,
-  FaHome, FaSearch, FaClock, FaUsers, FaSyncAlt, FaTrashAlt, FaDownload, FaShareAlt, FaTag,
-  FaExclamationCircle, FaCamera, FaQrcode, FaPrint, FaPlaneDeparture,
+  FaHome, FaSearch, FaClock, FaUsers, FaSyncAlt, FaDownload, FaShareAlt, FaTag,
+  FaExclamationCircle, FaCamera, FaQrcode, FaPlaneDeparture,
   FaMobileAlt, FaTv, FaPhoneAlt, FaBolt, FaFireAlt, FaTint, FaBroadcastTower,
   FaShieldAlt
 } from "react-icons/fa";
@@ -19,6 +19,12 @@ import PWAInstallPrompt from "../components/PWAInstallPrompt";
 import ChatbotFAB from "../components/ChatbotFAB";
 import { Capacitor } from "@capacitor/core";
 import { App } from "@capacitor/app";
+import {
+  drawQrStickerCanvas,
+  getQrStickerLink,
+  getQrStickerUrl,
+  openQrStickerWindow,
+} from "../utils/qrSticker";
 
 const bottomNavItems = [
   { to: "/customer/app/history", label: "History", icon: <FaHistory /> },
@@ -39,7 +45,6 @@ const serviceSubItems = [
 ];
 
 const drawerMenuItems = [
-  { to: "/customer/app/file-complaint", label: "File Complaint", icon: <FaExclamationTriangle /> },
   { to: "/customer/app/services", label: "Home", icon: <FaHome /> },
   { to: "/customer/app/wallet", label: "Wallet", icon: <FaWallet /> },
   { to: "/customer/app/history", label: "Transaction History", icon: <FaHistory /> },
@@ -51,8 +56,9 @@ const drawerMenuItems = [
   { to: "/customer/app/autopay", label: "AutoPay Mandates", icon: <FaSyncAlt /> },
   { to: "/customer/app/travel", label: "Travel Booking", icon: <FaPlaneDeparture /> },
   { to: "/customer/app/notifications", label: "Notifications", icon: <FaRegBell /> },
-  { to: "/customer/app/complaints", label: "Complaints", icon: <FaExclamationCircle /> },
   { to: "/customer/app/help", label: "Help & Support", icon: <FaQuestionCircle /> },
+  { to: "/customer/app/file-complaint", label: "File Complaint", icon: <FaExclamationTriangle /> },
+  { to: "/customer/app/complaints", label: "Complaints", icon: <FaExclamationCircle /> },
 ];
 
 const ProtectedShell = () => {
@@ -64,7 +70,6 @@ const ProtectedShell = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [servicesOpen, setServicesOpen] = useState(false);
-  const [showQrModal, setShowQrModal] = useState(false);
   const [balances, setBalances] = useState({ balance: 0, cashback: 0, incentive: 0, referralBonus: 0, referralUsers: 0 });
   const [profilePhoto, setProfilePhoto] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -73,18 +78,21 @@ const ProtectedShell = () => {
 
   const userName = userData?.name || userData?.firstName || userData?.userName || userData?.user_name || userData?.customerName || "Customer";
   const userMobile = userData?.mobile || userData?.mobileNumber || "";
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`https://web.vasbazaar.com?code=${userMobile}`)}`;
-  const referralLink = `https://web.vasbazaar.com?code=${userMobile}`;
+  const qrUrl = getQrStickerUrl(userMobile, 220);
+  const referralLink = getQrStickerLink(userMobile);
   const isKycDone = userData?.verified_status === 1 || userData?.verified_status === "1" || userData?.kyc_verified === true;
 
-  // Show KYC popup if not verified (on every app load / navigation)
+  // Show KYC popup once per session after login/PIN verification
+  // The payment screen already shows a KYC error with a redirect button
   useEffect(() => {
-    if (userData && !isKycDone) {
-      setShowKycPopup(true);
-    } else {
-      setShowKycPopup(false);
+    if (userData && !isKycDone && !sessionStorage.getItem("kyc_popup_shown")) {
+      const isKycPage = location.pathname.startsWith("/customer/app/kyc");
+      if (!isKycPage) {
+        setShowKycPopup(true);
+        sessionStorage.setItem("kyc_popup_shown", "1");
+      }
     }
-  }, [userData, isKycDone, location.pathname]);
+  }, [userData, isKycDone]); // removed location.pathname — only run on mount/login
 
   // Load profile photo from localStorage on mount (only valid URLs)
   useEffect(() => {
@@ -116,6 +124,7 @@ const ProtectedShell = () => {
     }
   }, []);
 
+  useEffect(() => { fetchBalances(); }, [fetchBalances]);
   useEffect(() => { if (drawerOpen) fetchBalances(); }, [drawerOpen, fetchBalances]);
   useEffect(() => { setDrawerOpen(false); }, [location.pathname, location.search]);
   useEffect(() => {
@@ -160,100 +169,29 @@ const ProtectedShell = () => {
   };
 
   const handleDownloadQR = async () => {
-    // Generate printable QR standee with logo
     const canvas = document.createElement("canvas");
-    const w = 600, h = 950;
+    const w = 1200;
+    const h = 1800;
     canvas.width = w; canvas.height = h;
     const ctx = canvas.getContext("2d");
 
-    // White background
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, w, h);
-
-    // Top accent bar
-    const grad = ctx.createLinearGradient(0, 0, w, 0);
-    grad.addColorStop(0, "#40E0D0"); grad.addColorStop(1, "#007BFF");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, w, 8);
-
-    // Load logo and QR in parallel
     try {
       const logoUrl = "https://webdekho.in/images/vasbazaar1.png";
-      const qrBig = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(`https://web.vasbazaar.com?code=${userMobile}`)}`;
+      const qrBig = getQrStickerUrl(userMobile, 720);
 
       const loadImg = (src) => { const i = new Image(); i.crossOrigin = "anonymous"; return new Promise((res, rej) => { i.onload = () => res(i); i.onerror = rej; i.src = src; }); };
       const [logoImg, qrImg] = await Promise.all([loadImg(logoUrl).catch(() => null), loadImg(qrBig)]);
+      drawQrStickerCanvas({ ctx, width: w, height: h, logoImg, qrImg });
 
-      // Draw logo
-      let yOffset = 30;
-      if (logoImg) {
-        const logoH = 50;
-        const logoW = (logoImg.width / logoImg.height) * logoH;
-        ctx.drawImage(logoImg, (w - logoW) / 2, yOffset, logoW, logoH);
-        yOffset += logoH + 12;
-      }
-
-      // Brand name
-      ctx.fillStyle = "#1A1A2E";
-      ctx.font = "bold 32px -apple-system, BlinkMacSystemFont, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText("VasBazaar", w / 2, yOffset + 28);
-
-      // Subtitle
-      ctx.fillStyle = "#6B7280";
-      ctx.font = "500 16px -apple-system, BlinkMacSystemFont, sans-serif";
-      ctx.fillText("Scan & Pay with any UPI App", w / 2, yOffset + 56);
-
-      // QR container with border
-      const qrSize = 320, qrX = (w - qrSize) / 2, qrY = yOffset + 80;
-      ctx.strokeStyle = "#E5E7EB"; ctx.lineWidth = 2;
-      ctx.strokeRect(qrX - 20, qrY - 20, qrSize + 40, qrSize + 40);
-      ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-
-      // User name below QR
-      ctx.fillStyle = "#1A1A2E";
-      ctx.font = "bold 22px -apple-system, BlinkMacSystemFont, sans-serif";
-      ctx.fillText(userName, w / 2, qrY + qrSize + 55);
-
-      // Mobile number
-      ctx.fillStyle = "#6B7280";
-      ctx.font = "500 18px -apple-system, BlinkMacSystemFont, sans-serif";
-      ctx.fillText(`+91 ${userMobile}`, w / 2, qrY + qrSize + 85);
-
-      // Referral code label
-      ctx.fillStyle = "#40E0D0";
-      ctx.font = "bold 14px -apple-system, BlinkMacSystemFont, sans-serif";
-      ctx.fillText("REFERRAL CODE", w / 2, qrY + qrSize + 125);
-      ctx.fillStyle = "#1A1A2E";
-      ctx.font = "bold 24px -apple-system, BlinkMacSystemFont, sans-serif";
-      ctx.fillText(userMobile, w / 2, qrY + qrSize + 155);
-
-      // Footer
-      ctx.fillStyle = "#9CA3AF";
-      ctx.font = "400 13px -apple-system, BlinkMacSystemFont, sans-serif";
-      ctx.fillText("Powered by VasBazaar • vasbazaar.com", w / 2, h - 30);
-
-      // Bottom accent bar
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, h - 8, w, 8);
-
-      // Download
       canvas.toBlob((blob) => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = url; a.download = `vasbazaar-qr-${userMobile || "code"}.png`;
+        a.href = url; a.download = `vasbazaar-qr-sticker-${userMobile || "code"}.png`;
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(url);
       }, "image/png");
     } catch (_) {
       window.open(qrUrl, "_blank");
-    }
-  };
-
-  const handleClearCache = () => {
-    if (window.confirm("Clear all cached data?")) {
-      localStorage.clear();
-      window.location.reload();
     }
   };
 
@@ -320,7 +258,7 @@ const ProtectedShell = () => {
             <strong>{userName}</strong>
             <div className="cm-muted">{userMobile ? `+91 ${userMobile}` : "Active session"}</div>
           </div>
-          <button type="button" className="cm-sidebar-qr-btn" onClick={() => setShowQrModal(true)} title="Show QR Code"><FaQrcode /></button>
+          <button type="button" className="cm-sidebar-qr-btn" onClick={() => openQrStickerWindow(userMobile, 360)} title="Show QR Code"><FaQrcode /></button>
         </div>
 
         {/* Wallet cards */}
@@ -328,7 +266,7 @@ const ProtectedShell = () => {
           <h3 className="cm-drawer-section-title">My Wallet</h3>
           <div className="cm-drawer-wallets">
             <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/wallet")}><div className="cm-dwc-icon"><FaWallet /></div><strong>₹{balances.balance.toFixed(2)}</strong><span>Wallet Balance</span></div>
-            <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/wallet")}><div className="cm-dwc-icon"><FaUsers /></div><strong>₹{balances.referralBonus.toFixed(2)}</strong><span>Referral Bonus</span></div>
+            <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/commission?tab=bonus")}><div className="cm-dwc-icon"><FaUsers /></div><strong>₹{balances.referralBonus.toFixed(2)}</strong><span>Referral Bonus</span></div>
             <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/commission?tab=cashback")}><div className="cm-dwc-icon"><FaGift /></div><strong>₹{balances.cashback.toFixed(2)}</strong><span>Lifetime Cashback</span></div>
             <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/commission?tab=incentive")}><div className="cm-dwc-icon"><HiMiniSquares2X2 /></div><strong>₹{balances.incentive.toFixed(2)}</strong><span>Lifetime Incentive</span></div>
             <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/referrals")}><div className="cm-dwc-icon"><FaUsers /></div><strong>{balances.referralUsers}</strong><span>Referral Users</span></div>
@@ -350,11 +288,6 @@ const ProtectedShell = () => {
 
         {/* Bottom actions */}
         <div className="cm-drawer-bottom">
-          <button className="cm-drawer-action-btn" type="button" onClick={handleClearCache}>
-            <span className="cm-drawer-link-icon"><FaTrashAlt /></span>
-            <span>Clear Cache</span>
-            <FaChevronRight className="cm-drawer-link-arrow" />
-          </button>
           <button className="cm-drawer-action-btn cm-drawer-action-btn--danger" type="button" onClick={() => setShowLogoutConfirm(true)}>
             <span className="cm-drawer-link-icon"><FaSignOutAlt /></span>
             <span>Logout</span>
@@ -426,7 +359,19 @@ const ProtectedShell = () => {
               <div className="cm-drawer-mobile">{userMobile ? `+91 ${userMobile}` : ""}</div>
             </div>
           </div>
-          <div className="cm-drawer-qr-wrap">
+          <div
+            className="cm-drawer-qr-wrap"
+            onClick={() => openQrStickerWindow(userMobile, 360)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                openQrStickerWindow(userMobile, 360);
+              }
+            }}
+            title="Open QR sticker"
+          >
             <img src={qrUrl} alt="QR Code" className="cm-drawer-qr-img" />
           </div>
           <div className="cm-drawer-qr-actions">
@@ -440,7 +385,7 @@ const ProtectedShell = () => {
           <h3 className="cm-drawer-section-title">My Wallet</h3>
           <div className="cm-drawer-wallets">
             <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/wallet")}><div className="cm-dwc-icon"><FaWallet /></div><strong>₹{balances.balance.toFixed(2)}</strong><span>Wallet Balance</span></div>
-            <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/wallet")}><div className="cm-dwc-icon"><FaUsers /></div><strong>₹{balances.referralBonus.toFixed(2)}</strong><span>Referral Bonus</span></div>
+            <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/commission?tab=bonus")}><div className="cm-dwc-icon"><FaUsers /></div><strong>₹{balances.referralBonus.toFixed(2)}</strong><span>Referral Bonus</span></div>
             <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/commission?tab=cashback")}><div className="cm-dwc-icon"><FaGift /></div><strong>₹{balances.cashback.toFixed(2)}</strong><span>Lifetime Cashback</span></div>
             <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/commission?tab=incentive")}><div className="cm-dwc-icon"><HiMiniSquares2X2 /></div><strong>₹{balances.incentive.toFixed(2)}</strong><span>Lifetime Incentive</span></div>
             <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/referrals")}><div className="cm-dwc-icon"><FaUsers /></div><strong>{balances.referralUsers}</strong><span>Referral Users</span></div>
@@ -483,11 +428,6 @@ const ProtectedShell = () => {
 
         {/* Bottom actions */}
         <div className="cm-drawer-bottom">
-          <button className="cm-drawer-action-btn" type="button" onClick={handleClearCache}>
-            <span className="cm-drawer-link-icon"><FaTrashAlt /></span>
-            <span>Clear Cache</span>
-            <FaChevronRight className="cm-drawer-link-arrow" />
-          </button>
           <button className="cm-drawer-action-btn cm-drawer-action-btn--danger" type="button" onClick={() => setShowLogoutConfirm(true)}>
             <span className="cm-drawer-link-icon"><FaSignOutAlt /></span>
             <span>Logout</span>
@@ -520,31 +460,6 @@ const ProtectedShell = () => {
       {/* Chatbot FAB */}
       <ChatbotFAB />
 
-      {/* QR Code Modal */}
-      {showQrModal && (
-        <div className="qr-modal-overlay" onClick={() => setShowQrModal(false)}>
-          <div className="qr-modal" onClick={(e) => e.stopPropagation()}>
-            <button className="qr-modal-close" type="button" onClick={() => setShowQrModal(false)}><FaTimes /></button>
-            <div className="qr-modal-accent" />
-            <img src="https://webdekho.in/images/vasbazaar1.png" alt="VasBazaar" className="qr-modal-logo" />
-            <div className="qr-modal-subtitle">Scan & Pay with any UPI App</div>
-            <div className="qr-modal-qr-wrap">
-              <img src={`https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(`https://web.vasbazaar.com?code=${userMobile}`)}`} alt="QR Code" className="qr-modal-qr" />
-            </div>
-            <div className="qr-modal-name">{userName}</div>
-            <div className="qr-modal-mobile">+91 {userMobile}</div>
-            <div className="qr-modal-ref-label">REFERRAL CODE</div>
-            <div className="qr-modal-ref-code">{userMobile}</div>
-            <div className="qr-modal-actions">
-              <button type="button" className="qr-modal-action-btn" onClick={() => { handleDownloadQR(); setShowQrModal(false); }}><FaDownload /> Download QR</button>
-              <button type="button" className="qr-modal-action-btn" onClick={handleShareLink}><FaShareAlt /> Share Link</button>
-              <button type="button" className="qr-modal-action-btn" onClick={() => window.print()}><FaPrint /> Print</button>
-            </div>
-            <div className="qr-modal-footer">Powered by VasBazaar</div>
-          </div>
-        </div>
-      )}
-
       {/* KYC Pending Popup */}
       {showKycPopup && (
         <div className="tc-modal-overlay" onClick={() => setShowKycPopup(false)}>
@@ -552,9 +467,9 @@ const ProtectedShell = () => {
             <div className="kyc-popup-icon-wrap">
               <FaShieldAlt />
             </div>
-            <h3 className="tc-modal-title">Complete Your KYC</h3>
+            <h3 className="tc-modal-title">Proceed with KYC</h3>
             <p className="kyc-popup-desc">
-              Your KYC verification is pending. Complete it now to unlock unlimited transactions and full access to all features.
+              Complete your KYC now to unlock unlimited transactions and full access to all features.
             </p>
             <div className="kyc-popup-benefits">
               <div className="kyc-popup-benefit"><FaShieldAlt /> Unlimited Transactions</div>
@@ -567,14 +482,14 @@ const ProtectedShell = () => {
                 className="kyc-popup-btn kyc-popup-btn--primary"
                 onClick={() => { setShowKycPopup(false); navigate("/customer/app/kyc", { state: { returnTo: location.pathname } }); }}
               >
-                <FaShieldAlt /> Verify Now
+                <FaShieldAlt /> Proceed with KYC
               </button>
               <button
                 type="button"
                 className="kyc-popup-btn kyc-popup-btn--skip"
                 onClick={() => setShowKycPopup(false)}
               >
-                Remind Me Later
+                Skip KYC
               </button>
             </div>
           </div>

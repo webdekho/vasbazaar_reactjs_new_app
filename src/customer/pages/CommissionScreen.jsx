@@ -4,12 +4,13 @@ import { FaArrowLeft, FaCalendarAlt, FaFilter, FaCheckCircle, FaClock, FaTimesCi
 import { FiInbox, FiArrowDownLeft, FiArrowUpRight } from "react-icons/fi";
 import { walletService } from "../services/walletService";
 
-const tabs = ["cashback", "commission", "incentive", "bonus"];
+const tabs = ["cashback", "incentive", "bonus"];
+const normalizeTab = (value) => (tabs.includes(value) ? value : "cashback");
 
 const CommissionScreen = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const initialTab = searchParams.get("tab") || "cashback";
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = normalizeTab(searchParams.get("tab"));
   const [activeTab, setActiveTab] = useState(initialTab);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +31,16 @@ const CommissionScreen = () => {
       setHasMore(list.length >= 10);
     }
   };
+
+  useEffect(() => {
+    const nextTab = normalizeTab(searchParams.get("tab"));
+    if (nextTab !== activeTab) {
+      setActiveTab(nextTab);
+    }
+    if (searchParams.get("tab") !== nextTab) {
+      setSearchParams({ tab: nextTab }, { replace: true });
+    }
+  }, [searchParams, activeTab, setSearchParams]);
 
   useEffect(() => { setPage(0); setRecords([]); fetchData(activeTab, 0); }, [activeTab]);
 
@@ -71,7 +82,10 @@ const CommissionScreen = () => {
       <div className="cp-tabs">
         {tabs.map((t) => (
           <button key={t} type="button" className={`cp-tab${activeTab === t ? " is-active" : ""}`}
-            onClick={() => setActiveTab(t)}>
+            onClick={() => {
+              setActiveTab(t);
+              setSearchParams({ tab: t });
+            }}>
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}

@@ -1,382 +1,313 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  FaArrowLeft, FaPlaneDeparture, FaPlaneArrival, FaHotel, FaCalendarAlt,
-  FaUsers, FaSearch, FaExchangeAlt, FaStar, FaMapMarkerAlt, FaClock,
-  FaRupeeSign, FaWifi, FaSuitcase, FaUtensils, FaSwimmingPool, FaParking,
+  FaArrowLeft, FaPlaneDeparture, FaPlaneArrival, FaCalendarAlt,
+  FaSearch, FaExchangeAlt, FaTicketAlt, FaUsers, FaChild, FaBaby,
+  FaStar, FaGlobeAmericas,
 } from "react-icons/fa";
+import { travelService } from "../services/travelService";
+import { useTheme } from "../context/ThemeContext";
 
-const AIRPORTS = [
-  { code: "BOM", city: "Mumbai", name: "Chhatrapati Shivaji Intl" },
-  { code: "DEL", city: "Delhi", name: "Indira Gandhi Intl" },
-  { code: "BLR", city: "Bangalore", name: "Kempegowda Intl" },
-  { code: "HYD", city: "Hyderabad", name: "Rajiv Gandhi Intl" },
-  { code: "MAA", city: "Chennai", name: "Chennai Intl" },
-  { code: "CCU", city: "Kolkata", name: "Netaji Subhas Chandra Bose Intl" },
-  { code: "PNQ", city: "Pune", name: "Pune Airport" },
-  { code: "AMD", city: "Ahmedabad", name: "Sardar Vallabhbhai Patel Intl" },
-  { code: "JAI", city: "Jaipur", name: "Jaipur Intl" },
-  { code: "GOI", city: "Goa", name: "Manohar Intl" },
-  { code: "LKO", city: "Lucknow", name: "Chaudhary Charan Singh Intl" },
-  { code: "COK", city: "Kochi", name: "Cochin Intl" },
-  { code: "GAU", city: "Guwahati", name: "Lokpriya Gopinath Bordoloi Intl" },
-  { code: "IXC", city: "Chandigarh", name: "Chandigarh Airport" },
-  { code: "PAT", city: "Patna", name: "Jay Prakash Narayan Intl" },
-  { code: "VNS", city: "Varanasi", name: "Lal Bahadur Shastri Intl" },
-  { code: "SXR", city: "Srinagar", name: "Sheikh ul-Alam Intl" },
-  { code: "IXB", city: "Bagdogra", name: "Bagdogra Airport" },
-  { code: "UDR", city: "Udaipur", name: "Maharana Pratap Airport" },
-  { code: "IDR", city: "Indore", name: "Devi Ahilyabai Holkar Airport" },
+const FALLBACK_AIRPORTS = [
+  { airportCode: "BOM", cityName: "Mumbai", airportName: "Chhatrapati Shivaji Intl" },
+  { airportCode: "DEL", cityName: "Delhi", airportName: "Indira Gandhi Intl" },
+  { airportCode: "BLR", cityName: "Bangalore", airportName: "Kempegowda Intl" },
+  { airportCode: "HYD", cityName: "Hyderabad", airportName: "Rajiv Gandhi Intl" },
+  { airportCode: "MAA", cityName: "Chennai", airportName: "Chennai Intl" },
+  { airportCode: "CCU", cityName: "Kolkata", airportName: "Netaji Subhas Chandra Bose Intl" },
+  { airportCode: "PNQ", cityName: "Pune", airportName: "Pune Airport" },
+  { airportCode: "AMD", cityName: "Ahmedabad", airportName: "Sardar Vallabhbhai Patel Intl" },
+  { airportCode: "JAI", cityName: "Jaipur", airportName: "Jaipur Intl" },
+  { airportCode: "GOI", cityName: "Goa", airportName: "Manohar Intl" },
 ];
 
-const HOTEL_CITIES = [
-  "Mumbai", "Delhi", "Bangalore", "Hyderabad", "Chennai", "Kolkata",
-  "Goa", "Jaipur", "Udaipur", "Shimla", "Manali", "Ooty",
-  "Munnar", "Rishikesh", "Varanasi", "Agra", "Amritsar", "Darjeeling",
-];
-
-// Generate mock flight results
-const generateFlights = (from, to, date) => {
-  const airlines = [
-    { name: "IndiGo", code: "6E", color: "#003B7A" },
-    { name: "Air India", code: "AI", color: "#E31837" },
-    { name: "SpiceJet", code: "SG", color: "#FFD100" },
-    { name: "Vistara", code: "UK", color: "#4B286D" },
-    { name: "GoFirst", code: "G8", color: "#00A651" },
-    { name: "AirAsia India", code: "I5", color: "#FF0000" },
-  ];
-  const fromCode = AIRPORTS.find((a) => a.city === from || a.code === from)?.code || "BOM";
-  const toCode = AIRPORTS.find((a) => a.city === to || a.code === to)?.code || "DEL";
-
-  return airlines.slice(0, 4 + Math.floor(Math.random() * 3)).map((airline, i) => {
-    const depHour = 5 + Math.floor(Math.random() * 16);
-    const depMin = Math.floor(Math.random() * 60);
-    const duration = 1 + Math.floor(Math.random() * 3);
-    const durMin = Math.floor(Math.random() * 50);
-    const arrHour = (depHour + duration) % 24;
-    const arrMin = (depMin + durMin) % 60;
-    const basePrice = 2500 + Math.floor(Math.random() * 6000);
-    const pad = (n) => String(n).padStart(2, "0");
-
-    return {
-      id: `fl-${i}`,
-      airline: airline.name,
-      airlineCode: airline.code,
-      color: airline.color,
-      flightNo: `${airline.code}-${100 + Math.floor(Math.random() * 900)}`,
-      from: fromCode,
-      to: toCode,
-      depTime: `${pad(depHour)}:${pad(depMin)}`,
-      arrTime: `${pad(arrHour)}:${pad(arrMin)}`,
-      duration: `${duration}h ${durMin}m`,
-      stops: Math.random() > 0.6 ? 1 : 0,
-      price: basePrice,
-      seats: 2 + Math.floor(Math.random() * 15),
-      baggage: "15 kg",
-      meal: Math.random() > 0.5,
-    };
-  }).sort((a, b) => a.price - b.price);
-};
-
-// Generate mock hotel results
-const generateHotels = (city) => {
-  const names = [
-    "Grand Hyatt", "Taj Palace", "ITC Royal", "The Oberoi", "Lemon Tree Premier",
-    "Radisson Blu", "Marriott Suites", "Holiday Inn", "Novotel", "FabHotel Prime",
-    "OYO Townhouse", "Treebo Trend", "Ginger Hotel",
-  ];
-  return names.slice(0, 5 + Math.floor(Math.random() * 4)).map((name, i) => {
-    const rating = (3.5 + Math.random() * 1.5).toFixed(1);
-    const basePrice = 1200 + Math.floor(Math.random() * 8000);
-    const discount = Math.floor(Math.random() * 30) + 10;
-    return {
-      id: `ht-${i}`,
-      name: `${name} ${city}`,
-      rating: Number(rating),
-      stars: Math.floor(Number(rating)),
-      reviews: 50 + Math.floor(Math.random() * 500),
-      price: basePrice,
-      originalPrice: Math.round(basePrice * (100 / (100 - discount))),
-      discount,
-      amenities: ["wifi", "parking", "pool", "restaurant"].filter(() => Math.random() > 0.3),
-      location: `${["MG Road", "Station Road", "City Centre", "Airport Road", "Beach Side"][Math.floor(Math.random() * 5)]}, ${city}`,
-    };
-  }).sort((a, b) => a.price - b.price);
-};
-
-const AMENITY_ICONS = { wifi: <FaWifi />, parking: <FaParking />, pool: <FaSwimmingPool />, restaurant: <FaUtensils /> };
+const TRAVEL_CLASS_MAP = { economy: "ECONOMY", premium_economy: "PREMIUM_ECONOMY", business: "BUSINESS", first: "FIRST" };
 
 const TravelScreen = () => {
   const navigate = useNavigate();
-  const [tab, setTab] = useState("flights");
+  const { theme } = useTheme();
+  const isLight = theme === "light";
   const [tripType, setTripType] = useState("oneway");
   const [focusedField, setFocusedField] = useState("");
+  const [airports, setAirports] = useState(FALLBACK_AIRPORTS);
 
-  const [flightForm, setFlightForm] = useState({
-    fromCity: "", toCity: "", date: "", returnDate: "", passengers: "1", travelClass: "economy",
+  const [form, setForm] = useState({
+    fromCity: "", toCity: "", date: "", returnDate: "",
+    adultCount: "1", childCount: "0", infantCount: "0", travelClass: "economy",
   });
 
-  const [hotelForm, setHotelForm] = useState({
-    city: "", checkIn: "", checkOut: "", rooms: "1", guests: "2",
-  });
-
-  const [flightResults, setFlightResults] = useState(null);
-  const [hotelResults, setHotelResults] = useState(null);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
   const [errors, setErrors] = useState({});
-
   const today = new Date().toISOString().split("T")[0];
 
-  const swapCities = () => setFlightForm((f) => ({ ...f, fromCity: f.toCity, toCity: f.fromCity }));
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await travelService.getAirports();
+        if (res.success && res.data?.data?.data) {
+          const list = res.data.data.data;
+          if (Array.isArray(list) && list.length > 0) setAirports(list);
+        }
+      } catch (e) { /* fallback */ }
+    })();
+  }, []);
 
-  const handleFlightSearch = (e) => {
-    e.preventDefault();
-    const errs = {};
-    if (!flightForm.fromCity.trim()) errs.fromCity = "Required";
-    if (!flightForm.toCity.trim()) errs.toCity = "Required";
-    if (!flightForm.date) errs.date = "Required";
-    if (tripType === "roundtrip" && !flightForm.returnDate) errs.returnDate = "Required";
-    if (flightForm.fromCity && flightForm.toCity && flightForm.fromCity === flightForm.toCity) errs.toCity = "Must differ";
-    setErrors(errs);
-    if (Object.keys(errs).length > 0) return;
-    setSearching(true);
-    setTimeout(() => {
-      setFlightResults(generateFlights(flightForm.fromCity, flightForm.toCity, flightForm.date));
-      setSearching(false);
-    }, 1200);
-  };
+  const resolveCode = useCallback((input) => {
+    if (!input) return "";
+    const t = input.trim();
+    const byCode = airports.find((a) => a.airportCode === t.toUpperCase());
+    if (byCode) return byCode.airportCode;
+    const byCity = airports.find((a) => a.cityName?.toLowerCase() === t.toLowerCase());
+    if (byCity) return byCity.airportCode;
+    const partial = airports.find((a) => a.cityName?.toLowerCase().includes(t.toLowerCase()) || a.airportName?.toLowerCase().includes(t.toLowerCase()));
+    return partial?.airportCode || t.toUpperCase().substring(0, 3);
+  }, [airports]);
 
-  const handleHotelSearch = (e) => {
-    e.preventDefault();
-    const errs = {};
-    if (!hotelForm.city.trim()) errs.city = "Required";
-    if (!hotelForm.checkIn) errs.checkIn = "Required";
-    if (!hotelForm.checkOut) errs.checkOut = "Required";
-    if (hotelForm.checkIn && hotelForm.checkOut && hotelForm.checkOut <= hotelForm.checkIn) errs.checkOut = "After check-in";
-    setErrors(errs);
-    if (Object.keys(errs).length > 0) return;
-    setSearching(true);
-    setTimeout(() => {
-      setHotelResults(generateHotels(hotelForm.city));
-      setSearching(false);
-    }, 1200);
-  };
-
-  const handleTabSwitch = (t) => { setTab(t); setErrors({}); setFlightResults(null); setHotelResults(null); };
-
+  const getAirportInfo = (cityName) => airports.find((a) => a.cityName === cityName);
+  const swap = () => setForm((f) => ({ ...f, fromCity: f.toCity, toCity: f.fromCity }));
   const ff = (name) => ({ onFocus: () => setFocusedField(name), onBlur: () => setFocusedField("") });
 
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    const errs = {};
+    if (!form.fromCity.trim()) errs.fromCity = "Required";
+    if (!form.toCity.trim()) errs.toCity = "Required";
+    if (!form.date) errs.date = "Required";
+    if (tripType === "roundtrip" && !form.returnDate) errs.returnDate = "Required";
+    if (form.fromCity && form.toCity && form.fromCity === form.toCity) errs.toCity = "Must differ";
+    setErrors(errs);
+    setSearchError("");
+    if (Object.keys(errs).length > 0) return;
+
+    setSearching(true);
+    try {
+      const payload = {
+        segments: [{ origin: resolveCode(form.fromCity), destination: resolveCode(form.toCity), departureDate: form.date, returnDate: tripType === "roundtrip" ? form.returnDate : "" }],
+        resultFareType: "REGULARFARE",
+        adultCount: form.adultCount, childCount: form.childCount, infantCount: form.infantCount,
+        journeyType: tripType === "roundtrip" ? "ROUNDTRIP" : "ONEWAY",
+        preferredAirlines: null, travelClass: TRAVEL_CLASS_MAP[form.travelClass] || "ECONOMY", travelStop: "",
+      };
+      const res = await travelService.searchFlights(payload);
+      if (res.success && res.data?.data?.data?.length > 0) {
+        navigate("/customer/app/flight-results", {
+          state: { flights: res.data.data.data, searchParams: { ...payload, adultCount: form.adultCount, childCount: form.childCount, infantCount: form.infantCount }, token: res.data.data.data[0]?.token || "" },
+        });
+      } else {
+        setSearchError(res.data?.data?.message || res.message || "No flights found. Try different dates or routes.");
+      }
+    } catch (e) {
+      setSearchError("Search failed. Please try again.");
+    }
+    setSearching(false);
+  };
+
+  // Theme-aware colors
+  const accent = "#40E0D0";
+  const accentBlue = "#007BFF";
+  const t = {
+    pageBg: isLight ? "#F8FAFC" : "var(--cm-bg, #0B0B0B)",
+    cardBg: isLight ? "#FFFFFF" : "var(--cm-card, #1A1A1A)",
+    cardBorder: isLight ? "#E2E8F0" : "rgba(255,255,255,0.06)",
+    text: isLight ? "#0F172A" : "#fff",
+    textSoft: isLight ? "#64748B" : "rgba(255,255,255,0.5)",
+    textMuted: isLight ? "#94A3B8" : "rgba(255,255,255,0.3)",
+    inputBg: isLight ? "#F8FAFC" : "rgba(255,255,255,0.04)",
+    focusBg: isLight ? "rgba(0,123,255,0.04)" : "rgba(64,224,208,0.06)",
+    focusBorder: isLight ? accentBlue : accent,
+    divider: isLight ? "#F1F5F9" : "rgba(255,255,255,0.04)",
+    toggleBg: isLight ? "#F1F5F9" : "rgba(255,255,255,0.04)",
+    toggleInactive: isLight ? "#94A3B8" : "rgba(255,255,255,0.4)",
+    heroBg: isLight
+      ? "linear-gradient(135deg, #E0F2FE 0%, #DBEAFE 40%, #EDE9FE 100%)"
+      : "linear-gradient(135deg, rgba(64,224,208,0.08) 0%, rgba(0,123,255,0.08) 100%)",
+    errBg: isLight ? "#FEF2F2" : "rgba(239,68,68,0.1)",
+    errBorder: isLight ? "#FECACA" : "rgba(239,68,68,0.2)",
+    errColor: isLight ? "#DC2626" : "#F87171",
+  };
+
+  const fieldStyle = (name) => ({
+    padding: "16px 18px", borderBottom: `1px solid ${t.divider}`, transition: "all 0.2s",
+    background: focusedField === name ? t.focusBg : "transparent",
+    borderLeft: focusedField === name ? `3px solid ${t.focusBorder}` : "3px solid transparent",
+  });
+
+  const labelStyle = { display: "flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "1.5px", color: t.textMuted, marginBottom: 6 };
+  const inputStyle = { width: "100%", background: "transparent", border: "none", outline: "none", color: t.text, fontSize: 17, fontWeight: 600, padding: 0 };
+  const selectStyle = { ...inputStyle, appearance: "none", cursor: "pointer" };
+  const codeStyle = { fontSize: 22, fontWeight: 900, color: accent, opacity: 0.6, letterSpacing: "1px" };
+
   return (
-    <div className="fc-page">
-      {/* Header */}
-      <div className="th-header">
-        <button className="th-back" type="button" onClick={() => navigate(-1)}><FaArrowLeft /></button>
-        <div className="th-header-text">
-          <h1 className="th-title">Travel Booking</h1>
-          <span className="th-count">Search flights & hotels</span>
+    <div style={{ minHeight: "100vh", background: t.pageBg, paddingBottom: 40 }}>
+      <style>{`
+        @keyframes tv-float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
+        @keyframes tv-pulse { 0%,100% { opacity: 0.6 } 50% { opacity: 1 } }
+        @keyframes tv-spin { to { transform: rotate(360deg) } }
+        .tv2-swap:hover { transform: translateY(-50%) scale(1.1) rotate(180deg) !important; }
+        .tv2-search:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(64,224,208,0.35) !important; }
+        .tv2-search:active:not(:disabled) { transform: translateY(0); }
+        select option { background: ${isLight ? "#fff" : "#1A1A1A"}; color: ${t.text}; }
+        input[type="date"]::-webkit-calendar-picker-indicator { filter: ${isLight ? "none" : "invert(1) opacity(0.4)"}; cursor: pointer; }
+      `}</style>
+
+      {/* ── Header ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 16px 0" }}>
+        <button onClick={() => navigate(-1)} style={{ width: 40, height: 40, borderRadius: 12, background: isLight ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)", border: "none", color: t.text, cursor: "pointer", display: "grid", placeItems: "center", fontSize: 15 }}>
+          <FaArrowLeft />
+        </button>
+        <div style={{ flex: 1 }}>
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: t.text, letterSpacing: "-0.3px" }}>Flights</h1>
+        </div>
+        <button onClick={() => navigate("/customer/app/my-bookings")} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 10, background: `linear-gradient(135deg, ${accent}15, ${accentBlue}15)`, border: `1px solid ${accent}30`, color: accent, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+          <FaTicketAlt /> My Trips
+        </button>
+      </div>
+
+      {/* ── Hero Banner ── */}
+      <div style={{ margin: "16px 16px 0", padding: "20px", borderRadius: 20, background: t.heroBg, border: `1px solid ${t.cardBorder}`, position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", right: -10, top: -10, fontSize: 80, opacity: 0.06, animation: "tv-float 4s ease-in-out infinite" }}>
+          <FaPlaneDeparture />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${accent}, ${accentBlue})`, display: "grid", placeItems: "center", color: "#fff", fontSize: 16 }}>
+            <FaGlobeAmericas />
+          </div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: t.text }}>Where to next?</div>
+            <div style={{ fontSize: 12, color: t.textSoft }}>Search best deals across airlines</div>
+          </div>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="tv-tabs">
-        <button className={`tv-tab${tab === "flights" ? " is-active" : ""}`} type="button" onClick={() => handleTabSwitch("flights")}>
-          <FaPlaneDeparture /> <span>Flights</span>
-        </button>
-        <button className={`tv-tab${tab === "hotels" ? " is-active" : ""}`} type="button" onClick={() => handleTabSwitch("hotels")}>
-          <FaHotel /> <span>Hotels</span>
-        </button>
+      {/* ── Trip Toggle ── */}
+      <div style={{ display: "flex", margin: "16px 16px 0", background: t.toggleBg, borderRadius: 14, padding: 4, border: `1px solid ${t.cardBorder}` }}>
+        {["oneway", "roundtrip"].map((type) => (
+          <button key={type} type="button" onClick={() => setTripType(type)} style={{
+            flex: 1, padding: "11px 0", border: "none", borderRadius: 11, cursor: "pointer", fontSize: 13, fontWeight: 700, transition: "all 0.3s",
+            ...(tripType === type
+              ? { background: `linear-gradient(135deg, ${accent}, ${accentBlue})`, color: "#fff", boxShadow: `0 4px 16px ${accent}50` }
+              : { background: "transparent", color: t.toggleInactive })
+          }}>
+            {type === "oneway" ? "One Way" : "Round Trip"}
+          </button>
+        ))}
       </div>
 
-      {/* ── FLIGHTS ── */}
-      {tab === "flights" && (
-        <>
-          {/* Trip type toggle */}
-          <div className="tv-trip-toggle">
-            <button type="button" className={`tv-trip-btn${tripType === "oneway" ? " is-active" : ""}`} onClick={() => setTripType("oneway")}>One Way</button>
-            <button type="button" className={`tv-trip-btn${tripType === "roundtrip" ? " is-active" : ""}`} onClick={() => setTripType("roundtrip")}>Round Trip</button>
-          </div>
+      {/* ── Search Card ── */}
+      <form onSubmit={handleSearch}>
+        <div style={{ margin: "16px 16px 0", borderRadius: 20, background: t.cardBg, border: `1px solid ${t.cardBorder}`, overflow: "hidden", boxShadow: isLight ? "0 4px 20px rgba(0,0,0,0.04)" : "0 4px 20px rgba(0,0,0,0.2)" }}>
 
-          <form className="fc-form" onSubmit={handleFlightSearch}>
-            <div style={{ position: "relative" }}>
-              <div className={`fc-field${focusedField === "fromCity" ? " is-focused" : ""}`}>
-                <label className="fc-label"><FaPlaneDeparture className="fc-label-icon" /> From</label>
-                <input className="fc-input" list="airports-from" placeholder="City or airport" value={flightForm.fromCity}
-                  onChange={(e) => setFlightForm({ ...flightForm, fromCity: e.target.value })} {...ff("fromCity")} />
-                <datalist id="airports-from">{AIRPORTS.map((a) => <option key={a.code} value={a.city} label={`${a.code} — ${a.name}`} />)}</datalist>
-                {errors.fromCity && <span className="fc-error">{errors.fromCity}</span>}
-              </div>
-              <button type="button" className="tv-swap-btn" onClick={swapCities}><FaExchangeAlt /></button>
-              <div className={`fc-field${focusedField === "toCity" ? " is-focused" : ""}`} style={{ marginTop: 8 }}>
-                <label className="fc-label"><FaPlaneArrival className="fc-label-icon" /> To</label>
-                <input className="fc-input" list="airports-to" placeholder="City or airport" value={flightForm.toCity}
-                  onChange={(e) => setFlightForm({ ...flightForm, toCity: e.target.value })} {...ff("toCity")} />
-                <datalist id="airports-to">{AIRPORTS.map((a) => <option key={a.code} value={a.city} label={`${a.code} — ${a.name}`} />)}</datalist>
-                {errors.toCity && <span className="fc-error">{errors.toCity}</span>}
-              </div>
-            </div>
-
-            <div className="fc-date-row">
-              <div className={`fc-field${focusedField === "date" ? " is-focused" : ""}`}>
-                <label className="fc-label"><FaCalendarAlt className="fc-label-icon" /> Departure</label>
-                <input className="fc-input" type="date" min={today} value={flightForm.date}
-                  onChange={(e) => setFlightForm({ ...flightForm, date: e.target.value })} {...ff("date")} />
-                {errors.date && <span className="fc-error">{errors.date}</span>}
-              </div>
-              {tripType === "roundtrip" && (
-                <div className={`fc-field${focusedField === "returnDate" ? " is-focused" : ""}`}>
-                  <label className="fc-label"><FaCalendarAlt className="fc-label-icon" /> Return</label>
-                  <input className="fc-input" type="date" min={flightForm.date || today} value={flightForm.returnDate}
-                    onChange={(e) => setFlightForm({ ...flightForm, returnDate: e.target.value })} {...ff("returnDate")} />
-                  {errors.returnDate && <span className="fc-error">{errors.returnDate}</span>}
-                </div>
+          {/* From */}
+          <div style={{ ...fieldStyle("from"), position: "relative" }}>
+            <div style={labelStyle}><FaPlaneDeparture style={{ fontSize: 11, color: accent }} /> From</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <input style={inputStyle} list="ap-from" placeholder="Departure city" value={form.fromCity}
+                onChange={(e) => setForm({ ...form, fromCity: e.target.value })} {...ff("from")} />
+              {form.fromCity && getAirportInfo(form.fromCity) && (
+                <span style={codeStyle}>{getAirportInfo(form.fromCity).airportCode}</span>
               )}
             </div>
+            <datalist id="ap-from">{airports.map((a) => <option key={a.airportCode} value={a.cityName} label={`${a.airportCode} - ${a.airportName}`} />)}</datalist>
+            {errors.fromCity && <div style={{ color: "#EF4444", fontSize: 11, marginTop: 4, fontWeight: 600 }}>{errors.fromCity}</div>}
+          </div>
 
-            <div className="fc-date-row">
-              <div className={`fc-field${focusedField === "passengers" ? " is-focused" : ""}`}>
-                <label className="fc-label"><FaUsers className="fc-label-icon" /> Travellers</label>
-                <select className="fc-select" value={flightForm.passengers} onChange={(e) => setFlightForm({ ...flightForm, passengers: e.target.value })} {...ff("passengers")}>
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </div>
-              <div className={`fc-field${focusedField === "class" ? " is-focused" : ""}`}>
-                <label className="fc-label"><FaStar className="fc-label-icon" /> Class</label>
-                <select className="fc-select" value={flightForm.travelClass} onChange={(e) => setFlightForm({ ...flightForm, travelClass: e.target.value })} {...ff("class")}>
-                  <option value="economy">Economy</option>
-                  <option value="premium_economy">Premium Economy</option>
-                  <option value="business">Business</option>
-                  <option value="first">First Class</option>
-                </select>
-              </div>
-            </div>
-
-            <button type="submit" className="fc-submit" disabled={searching}>
-              {searching ? <><span className="md-spinner" /> Searching...</> : <><FaSearch /> Search Flights</>}
+          {/* Swap Button */}
+          <div style={{ position: "relative", height: 0, zIndex: 5 }}>
+            <button type="button" className="tv2-swap" onClick={swap} style={{
+              position: "absolute", right: 18, top: "50%", transform: "translateY(-50%)",
+              width: 40, height: 40, borderRadius: "50%", border: `2px solid ${t.cardBorder}`,
+              background: `linear-gradient(135deg, ${accent}, ${accentBlue})`, color: "#fff",
+              cursor: "pointer", display: "grid", placeItems: "center", fontSize: 14,
+              boxShadow: `0 4px 16px ${accent}40`, transition: "all 0.3s",
+            }}>
+              <FaExchangeAlt style={{ transform: "rotate(90deg)" }} />
             </button>
-          </form>
+          </div>
 
-          {/* Flight Results */}
-          {flightResults && (
-            <div className="tv-results">
-              <div className="tv-results-header">{flightResults.length} flights found</div>
-              {flightResults.map((fl) => (
-                <div key={fl.id} className="tv-flight-card">
-                  <div className="tv-flight-top">
-                    <div className="tv-airline">
-                      <div className="tv-airline-badge" style={{ background: fl.color }}>{fl.airlineCode}</div>
-                      <div><div className="tv-airline-name">{fl.airline}</div><div className="tv-flight-no">{fl.flightNo}</div></div>
-                    </div>
-                    <div className="tv-flight-price">
-                      <span className="tv-price">₹{fl.price.toLocaleString()}</span>
-                      <span className="tv-per-person">per person</span>
-                    </div>
-                  </div>
-                  <div className="tv-flight-route">
-                    <div className="tv-route-point">
-                      <div className="tv-route-time">{fl.depTime}</div>
-                      <div className="tv-route-code">{fl.from}</div>
-                    </div>
-                    <div className="tv-route-line">
-                      <div className="tv-route-duration"><FaClock size={10} /> {fl.duration}</div>
-                      <div className="tv-route-bar" />
-                      <div className="tv-route-stops">{fl.stops === 0 ? "Non-stop" : `${fl.stops} stop`}</div>
-                    </div>
-                    <div className="tv-route-point">
-                      <div className="tv-route-time">{fl.arrTime}</div>
-                      <div className="tv-route-code">{fl.to}</div>
-                    </div>
-                  </div>
-                  <div className="tv-flight-meta">
-                    <span><FaSuitcase size={10} /> {fl.baggage}</span>
-                    {fl.meal && <span><FaUtensils size={10} /> Meal</span>}
-                    <span className="tv-seats-left">{fl.seats} seats left</span>
-                  </div>
-                  <button type="button" className="tv-book-btn" onClick={() => alert("API integration pending. This will connect to a flight booking API.")}>Book Now</button>
-                </div>
-              ))}
+          {/* To */}
+          <div style={fieldStyle("to")}>
+            <div style={labelStyle}><FaPlaneArrival style={{ fontSize: 11, color: accentBlue }} /> To</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <input style={inputStyle} list="ap-to" placeholder="Arrival city" value={form.toCity}
+                onChange={(e) => setForm({ ...form, toCity: e.target.value })} {...ff("to")} />
+              {form.toCity && getAirportInfo(form.toCity) && (
+                <span style={codeStyle}>{getAirportInfo(form.toCity).airportCode}</span>
+              )}
             </div>
-          )}
-        </>
-      )}
+            <datalist id="ap-to">{airports.map((a) => <option key={a.airportCode} value={a.cityName} label={`${a.airportCode} - ${a.airportName}`} />)}</datalist>
+            {errors.toCity && <div style={{ color: "#EF4444", fontSize: 11, marginTop: 4, fontWeight: 600 }}>{errors.toCity}</div>}
+          </div>
 
-      {/* ── HOTELS ── */}
-      {tab === "hotels" && (
-        <>
-          <form className="fc-form" onSubmit={handleHotelSearch}>
-            <div className={`fc-field${focusedField === "city" ? " is-focused" : ""}`}>
-              <label className="fc-label"><FaMapMarkerAlt className="fc-label-icon" /> Destination</label>
-              <input className="fc-input" list="hotel-cities" placeholder="City, area or hotel name" value={hotelForm.city}
-                onChange={(e) => setHotelForm({ ...hotelForm, city: e.target.value })} {...ff("city")} />
-              <datalist id="hotel-cities">{HOTEL_CITIES.map((c) => <option key={c} value={c} />)}</datalist>
-              {errors.city && <span className="fc-error">{errors.city}</span>}
+          {/* Dates */}
+          <div style={{ display: "flex" }}>
+            <div style={{ ...fieldStyle("date"), flex: 1, borderRight: tripType === "roundtrip" ? `1px solid ${t.divider}` : "none" }}>
+              <div style={labelStyle}><FaCalendarAlt style={{ fontSize: 11, color: accent }} /> Departure</div>
+              <input style={inputStyle} type="date" min={today} value={form.date}
+                onChange={(e) => setForm({ ...form, date: e.target.value })} {...ff("date")} />
+              {errors.date && <div style={{ color: "#EF4444", fontSize: 11, marginTop: 4, fontWeight: 600 }}>{errors.date}</div>}
             </div>
-
-            <div className="fc-date-row">
-              <div className={`fc-field${focusedField === "checkIn" ? " is-focused" : ""}`}>
-                <label className="fc-label"><FaCalendarAlt className="fc-label-icon" /> Check-in</label>
-                <input className="fc-input" type="date" min={today} value={hotelForm.checkIn}
-                  onChange={(e) => setHotelForm({ ...hotelForm, checkIn: e.target.value })} {...ff("checkIn")} />
-                {errors.checkIn && <span className="fc-error">{errors.checkIn}</span>}
+            {tripType === "roundtrip" && (
+              <div style={{ ...fieldStyle("return"), flex: 1 }}>
+                <div style={labelStyle}><FaCalendarAlt style={{ fontSize: 11, color: accentBlue }} /> Return</div>
+                <input style={inputStyle} type="date" min={form.date || today} value={form.returnDate}
+                  onChange={(e) => setForm({ ...form, returnDate: e.target.value })} {...ff("return")} />
+                {errors.returnDate && <div style={{ color: "#EF4444", fontSize: 11, marginTop: 4, fontWeight: 600 }}>{errors.returnDate}</div>}
               </div>
-              <div className={`fc-field${focusedField === "checkOut" ? " is-focused" : ""}`}>
-                <label className="fc-label"><FaCalendarAlt className="fc-label-icon" /> Check-out</label>
-                <input className="fc-input" type="date" min={hotelForm.checkIn || today} value={hotelForm.checkOut}
-                  onChange={(e) => setHotelForm({ ...hotelForm, checkOut: e.target.value })} {...ff("checkOut")} />
-                {errors.checkOut && <span className="fc-error">{errors.checkOut}</span>}
-              </div>
-            </div>
+            )}
+          </div>
 
-            <div className="fc-date-row">
-              <div className={`fc-field${focusedField === "rooms" ? " is-focused" : ""}`}>
-                <label className="fc-label"><FaHotel className="fc-label-icon" /> Rooms</label>
-                <select className="fc-select" value={hotelForm.rooms} onChange={(e) => setHotelForm({ ...hotelForm, rooms: e.target.value })} {...ff("rooms")}>
-                  {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+          {/* Passengers */}
+          <div style={{ display: "flex" }}>
+            {[
+              { key: "adultCount", label: "Adults", sub: "12+", icon: <FaUsers />, options: [1,2,3,4,5,6,7,8,9] },
+              { key: "childCount", label: "Children", sub: "2-11", icon: <FaChild />, options: [0,1,2,3,4,5,6] },
+              { key: "infantCount", label: "Infants", sub: "0-2", icon: <FaBaby />, options: [0,1,2,3,4] },
+            ].map((pax, i) => (
+              <div key={pax.key} style={{ ...fieldStyle(pax.key), flex: 1, borderRight: i < 2 ? `1px solid ${t.divider}` : "none" }}>
+                <div style={labelStyle}>{pax.label} <span style={{ opacity: 0.5, fontWeight: 500 }}>{pax.sub}</span></div>
+                <select style={selectStyle} value={form[pax.key]} onChange={(e) => setForm({ ...form, [pax.key]: e.target.value })} {...ff(pax.key)}>
+                  {pax.options.map((n) => <option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
-              <div className={`fc-field${focusedField === "guests" ? " is-focused" : ""}`}>
-                <label className="fc-label"><FaUsers className="fc-label-icon" /> Guests</label>
-                <select className="fc-select" value={hotelForm.guests} onChange={(e) => setHotelForm({ ...hotelForm, guests: e.target.value })} {...ff("guests")}>
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </div>
-            </div>
+            ))}
+          </div>
 
-            <button type="submit" className="fc-submit" disabled={searching}>
-              {searching ? <><span className="md-spinner" /> Searching...</> : <><FaSearch /> Search Hotels</>}
-            </button>
-          </form>
+          {/* Class */}
+          <div style={fieldStyle("class")}>
+            <div style={labelStyle}><FaStar style={{ fontSize: 11, color: "#FFB800" }} /> Cabin Class</div>
+            <select style={selectStyle} value={form.travelClass} onChange={(e) => setForm({ ...form, travelClass: e.target.value })} {...ff("class")}>
+              <option value="economy">Economy</option>
+              <option value="premium_economy">Premium Economy</option>
+              <option value="business">Business</option>
+              <option value="first">First Class</option>
+            </select>
+          </div>
+        </div>
 
-          {/* Hotel Results */}
-          {hotelResults && (
-            <div className="tv-results">
-              <div className="tv-results-header">{hotelResults.length} hotels found</div>
-              {hotelResults.map((ht) => (
-                <div key={ht.id} className="tv-hotel-card">
-                  <div className="tv-hotel-top">
-                    <div>
-                      <div className="tv-hotel-name">{ht.name}</div>
-                      <div className="tv-hotel-location"><FaMapMarkerAlt size={10} /> {ht.location}</div>
-                      <div className="tv-hotel-rating">
-                        <span className="tv-rating-badge">{ht.rating} <FaStar size={9} /></span>
-                        <span className="tv-reviews">({ht.reviews} reviews)</span>
-                      </div>
-                    </div>
-                    <div className="tv-hotel-price-col">
-                      <div className="tv-hotel-discount">-{ht.discount}%</div>
-                      <div className="tv-hotel-original">₹{ht.originalPrice.toLocaleString()}</div>
-                      <div className="tv-hotel-price">₹{ht.price.toLocaleString()}</div>
-                      <div className="tv-per-night">per night</div>
-                    </div>
-                  </div>
-                  <div className="tv-hotel-amenities">
-                    {ht.amenities.map((a) => <span key={a} className="tv-amenity">{AMENITY_ICONS[a]} {a}</span>)}
-                  </div>
-                  <button type="button" className="tv-book-btn" onClick={() => alert("API integration pending. This will connect to a hotel booking API.")}>Book Now</button>
-                </div>
-              ))}
-            </div>
+        {/* Search Button */}
+        <button type="submit" className="tv2-search" disabled={searching} style={{
+          margin: "20px 16px 0", width: "calc(100% - 32px)", padding: "16px 24px",
+          border: "none", borderRadius: 16, cursor: "pointer",
+          background: `linear-gradient(135deg, ${accent} 0%, ${accentBlue} 100%)`,
+          color: "#fff", fontSize: 16, fontWeight: 800, letterSpacing: "0.5px",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+          boxShadow: `0 8px 30px ${accent}30`, transition: "all 0.3s",
+          ...(searching ? { opacity: 0.7, cursor: "not-allowed" } : {}),
+        }}>
+          {searching ? (
+            <><span style={{ width: 18, height: 18, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "tv-spin 0.6s linear infinite", display: "inline-block" }} /> Searching...</>
+          ) : (
+            <><FaSearch /> Search Flights</>
           )}
-        </>
+        </button>
+      </form>
+
+      {/* Error */}
+      {searchError && (
+        <div style={{ margin: "16px", padding: 16, borderRadius: 14, background: t.errBg, border: `1px solid ${t.errBorder}`, color: t.errColor, fontSize: 13, textAlign: "center", fontWeight: 600 }}>
+          {searchError}
+        </div>
       )}
     </div>
   );

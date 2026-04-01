@@ -40,8 +40,18 @@ const CouponListScreen = () => {
   useEffect(() => { fetchData(0); }, []);
 
   const now = Date.now();
-  const active = coupons.filter((c) => !c.isExpired && (!c.validity || new Date(c.validity).getTime() >= now));
-  const expired = coupons.filter((c) => c.isExpired || (c.validity && new Date(c.validity).getTime() < now));
+  const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
+
+  // Active: validity not passed yet
+  const active = coupons.filter((c) => !c.validity || new Date(c.validity).getTime() >= now);
+
+  // Expired but still visible: validity passed, but less than 15 days ago
+  const expired = coupons.filter((c) => {
+    if (!c.validity) return false;
+    const validityTime = new Date(c.validity).getTime();
+    return validityTime < now && (now - validityTime) <= FIFTEEN_DAYS_MS;
+  });
+
   const filtered = tab === "active" ? active : expired;
 
   const handleCopy = (code) => {
@@ -53,6 +63,18 @@ const CouponListScreen = () => {
   const getDaysLeft = (validity) => {
     if (!validity) return null;
     return Math.ceil((new Date(validity).getTime() - now) / (1000 * 60 * 60 * 24));
+  };
+
+  const getDaysAgoExpired = (validity) => {
+    if (!validity) return null;
+    const diff = Math.floor((now - new Date(validity).getTime()) / (1000 * 60 * 60 * 24));
+    return diff > 0 ? diff : 0;
+  };
+
+  const getDaysUntilRemoval = (validity) => {
+    if (!validity) return null;
+    const expiryTime = new Date(validity).getTime();
+    return Math.ceil((expiryTime + FIFTEEN_DAYS_MS - now) / (1000 * 60 * 60 * 24));
   };
 
   return (
@@ -91,7 +113,7 @@ const CouponListScreen = () => {
           </div>
           <h3 className="md-empty-title">No {tab === "active" ? "Active" : "Expired"} Coupons</h3>
           <p className="md-empty-desc">
-            {tab === "active" ? "Complete transactions to earn coupons and rewards." : "Your expired coupons will appear here."}
+            {tab === "active" ? "Complete transactions to earn coupons and rewards." : "Expired coupons are visible for 15 days after expiry."}
           </p>
         </div>
       ) : (
@@ -142,7 +164,7 @@ const CouponListScreen = () => {
                     {c.validity && (
                       <span className="cp-meta-item">
                         <FaClock />
-                        {isExp ? "Expired" : "Valid until"} {new Date(c.validity).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                        {isExp ? "Expired on" : "Valid until"} {new Date(c.validity).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                       </span>
                     )}
                     {!isExp && daysLeft !== null && (
@@ -150,6 +172,14 @@ const CouponListScreen = () => {
                         {daysLeft <= 0 ? "Expires today" : daysLeft === 1 ? "1 day left" : `${daysLeft} days left`}
                       </span>
                     )}
+                    {isExp && c.validity && (() => {
+                      const remDays = getDaysUntilRemoval(c.validity);
+                      return remDays !== null ? (
+                        <span className="cp-days-left cp-days-left--removal">
+                          Removes in {remDays} day{remDays !== 1 ? "s" : ""}
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
 
                   {/* Description */}

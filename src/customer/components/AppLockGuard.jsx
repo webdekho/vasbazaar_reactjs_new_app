@@ -3,7 +3,7 @@ import { FaFingerprint, FaLock, FaBackspace, FaShieldAlt } from "react-icons/fa"
 import { useCustomerModern } from "../context/CustomerModernContext";
 import { authService } from "../services/authService";
 import { userService } from "../services/userService";
-import { setAppLocked } from "../services/apiClient";
+import { setAppLocked, onSessionExpired } from "../services/apiClient";
 import { useTheme } from "../context/ThemeContext";
 
 const LOCK_KEYS = {
@@ -396,10 +396,25 @@ const AppLockGuard = ({ children }) => {
     };
   }, [locked, needsPin, resetTimer]);
 
-  // Tell the 401 interceptor to skip redirect while lock screen is active
+  // Register callback so the 401 interceptor can lock the app instead of redirecting to login
   useEffect(() => {
-    setAppLocked(locked || needsPin);
-    return () => { setAppLocked(false); };
+    onSessionExpired(() => setLocked(true));
+    return () => onSessionExpired(null);
+  }, []);
+
+  // Tell the 401 interceptor to skip while lock screen is active
+  const unlockGraceTimer = useRef(null);
+  useEffect(() => {
+    if (locked || needsPin) {
+      if (unlockGraceTimer.current) { clearTimeout(unlockGraceTimer.current); unlockGraceTimer.current = null; }
+      setAppLocked(true);
+    } else {
+      unlockGraceTimer.current = setTimeout(() => { setAppLocked(false); }, 3000);
+    }
+    return () => {
+      if (unlockGraceTimer.current) { clearTimeout(unlockGraceTimer.current); unlockGraceTimer.current = null; }
+      setAppLocked(false);
+    };
   }, [locked, needsPin]);
 
   if (needsPin) {

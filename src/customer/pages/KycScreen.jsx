@@ -190,6 +190,7 @@ const KycScreen = () => {
             onChange={handleAadhaarChange}
             maxLength={14}
             inputMode="numeric"
+            autoFocus
           />
         </div>
         {error && <p className="kyc-error">{error}</p>}

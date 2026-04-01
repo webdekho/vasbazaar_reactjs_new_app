@@ -292,8 +292,10 @@ const OfferScreen = () => {
     }
 
     recordAttempt();
+    const meta = catMeta(offer.categoryId);
     const applied = {
       ...offer,
+      offerType: offer.offerType || meta.type,
       discountValue: offer.randomDiscount || offer.maxDiscount || offer.amount || 0,
       formattedDesc: offer.formattedDesc || offer.description,
     };

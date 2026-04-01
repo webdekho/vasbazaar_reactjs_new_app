@@ -9,6 +9,7 @@ import { userService } from "../services/userService";
 import { ChangePinScreen } from "../components/AppLockGuard";
 import { useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { openQrStickerWindow } from "../utils/qrSticker";
 
 const ProfileScreen = () => {
   const { userData, logout, setAuthSession } = useCustomerModern();
@@ -28,7 +29,7 @@ const ProfileScreen = () => {
   const name = userData?.name || userData?.firstName || userData?.userName || userData?.user_name || userData?.customerName || "Customer";
   const mobile = userData?.mobile || userData?.mobileNumber || "--";
   const email = userData?.email || "Not provided";
-  const referral = userData?.referalCode || userData?.referralCode || userData?.refferalCode || userData?.refferal_code || userData?.mobile || userData?.mobileNumber || "--";
+  const referral = userData?.mobile || userData?.mobileNumber || userData?.referalCode || userData?.referralCode || userData?.refferalCode || userData?.refferal_code || "--";
   const userType = userData?.userType || "customer";
   const rawPhoto = userData?.profile || userData?.profilePhoto || userData?.photo || localStorage.getItem("profile_photo") || "";
   const [localPhoto, setLocalPhoto] = useState(null);
@@ -201,23 +202,7 @@ const ProfileScreen = () => {
             <button type="button" className="pf-referral-btn pf-referral-btn--share" onClick={shareReferral}>
               <FaShareAlt size={11} /> Share
             </button>
-            <button type="button" className="pf-referral-btn pf-referral-btn--qr" onClick={() => {
-              const qrWin = window.open("", "_blank", "width=420,height=600");
-              const qrImg = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(`https://web.vasbazaar.in?code=${mobile}`)}`;
-              qrWin.document.write(`<html><head><title>VasBazaar QR</title><style>body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f5f7fa;font-family:-apple-system,sans-serif}
-              .card{background:#fff;border-radius:24px;padding:32px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.1);max-width:360px;width:100%}
-              .accent{height:6px;background:linear-gradient(90deg,#40E0D0,#007BFF);border-radius:3px;margin-bottom:20px}
-              .brand{font-size:24px;font-weight:900;color:#1a1a2e}
-              .sub{font-size:12px;color:#9ca3af;margin-top:4px}
-              .qr{margin:20px auto;border:2px solid #e5e7eb;border-radius:16px;padding:16px;display:inline-block}
-              .name{font-size:16px;font-weight:800;color:#1a1a2e;margin-top:12px}
-              .mobile{font-size:13px;color:#6b7280}
-              .ref-label{font-size:10px;font-weight:700;color:#40E0D0;text-transform:uppercase;letter-spacing:.06em;margin-top:14px}
-              .ref-code{font-size:18px;font-weight:900;color:#1a1a2e;letter-spacing:1px}
-              .footer{font-size:10px;color:#9ca3af;margin-top:16px}
-              </style></head><body><div class="card"><div class="accent"></div><div class="brand">VasBazaar</div><div class="sub">Scan & Pay with any UPI App</div><div class="qr"><img src="${qrImg}" width="240" height="240"/></div><div class="name">${name}</div><div class="mobile">+91 ${mobile}</div><div class="ref-label">REFERRAL CODE</div><div class="ref-code">${referral}</div><div class="footer">Powered by VasBazaar</div></div></body></html>`);
-              qrWin.document.close();
-            }}>
+            <button type="button" className="pf-referral-btn pf-referral-btn--qr" onClick={() => openQrStickerWindow(mobile, 360)}>
               <FaQrcode size={11} /> QR
             </button>
           </div>

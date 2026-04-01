@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaWallet, FaShieldAlt, FaLock, FaCheckCircle, FaTimes } from "react-icons/fa";
 import { FiZap, FiCreditCard } from "react-icons/fi";
@@ -7,7 +7,7 @@ import { Browser } from "@capacitor/browser";
 import { App } from "@capacitor/app";
 import { userService } from "../services/userService";
 import { rechargeService } from "../services/rechargeService";
-import juspayService from "../services/juspayService";
+import juspayService, { isPwaStandalone } from "../services/juspayService";
 
 const FALLBACK_LOGO = "/assets/images/Brand_favicon.png";
 const handleLogoError = (e) => { e.target.onerror = null; e.target.src = FALLBACK_LOGO; };
@@ -35,7 +35,7 @@ const numberToWords = (num) => {
 const PaymentScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const paymentState = location.state || {};
+  const paymentState = useMemo(() => location.state || {}, [location.state]);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
@@ -43,6 +43,34 @@ const PaymentScreen = () => {
   const [ready, setReady] = useState(false);
   const [nativePaymentPending, setNativePaymentPending] = useState(false);
   const paymentContextRef = useRef(null);
+  const amount = Math.round(Number(paymentState.amount) * 100) / 100;
+  const discount = Math.round(Number(paymentState.discountValue || 0) * 100) / 100;
+  const finalAmount = Math.round(Math.max(0, amount - discount) * 100) / 100;
+  const canPayWallet = walletBalance >= finalAmount;
+
+  const buildSuccessState = useCallback((statusPayload, payType, txnIdValue, context = paymentState) => ({
+    type: context.type,
+    amount: context.amount,
+    label: context.label,
+    txnId: txnIdValue,
+    statusPayload,
+    paymentType: payType,
+    couponCode: context.couponCode || null,
+    couponName: context.couponName || null,
+    couponDesc: context.couponDesc || null,
+    discountValue: context.discountValue || 0,
+    cashbackValue: context.cashbackValue || 0,
+    offerType: context.offerType || null,
+    mobile: context.mobile || context.field1 || "",
+    field1: context.field1 || context.mobile || "",
+    field2: context.field2 || null,
+    operatorId: context.operatorId || null,
+    operatorName: context.operatorName || context.contactName || context.label || "",
+    logo: context.logo || "",
+    validity: context.validity || null,
+    viewBillResponse: context.viewBillResponse || {},
+    serviceId: context.serviceId || null,
+  }), [paymentState]);
 
   // Handle payment callback from deep link (native apps)
   const handlePaymentCallback = useCallback(async (url) => {
@@ -84,19 +112,7 @@ const PaymentScreen = () => {
       if (statusResponse.success && (payStatus === "CHARGED" || payStatus === "SUCCESS" || payStatus === "COMPLETED")) {
         // Payment successful
         navigate("/customer/app/success", {
-          state: {
-            type: context.type,
-            amount: context.amount,
-            label: context.label,
-            txnId: orderId,
-            statusPayload: statusResponse.data,
-            paymentType: "upi",
-            couponCode: context.couponCode,
-            couponName: context.couponName,
-            discountValue: context.discountValue,
-            cashbackValue: context.cashbackValue,
-            offerType: context.offerType,
-          },
+          state: buildSuccessState(statusResponse.data, "upi", orderId, context),
         });
       } else if (payStatus === "PENDING" || payStatus === "PENDING_VBG" || payStatus === "STARTED" || payStatus === "AUTHORIZING") {
         // Navigate to failure page with pending status
@@ -134,7 +150,7 @@ const PaymentScreen = () => {
         },
       });
     }
-  }, [navigate]);
+  }, [buildSuccessState, navigate]);
 
   useEffect(() => {
     const load = async () => {
@@ -168,19 +184,26 @@ const PaymentScreen = () => {
 
   if (!paymentState.amount) return <Navigate to="/customer/app/services" replace />;
 
-  const amount = Math.round(Number(paymentState.amount) * 100) / 100;
-  const discount = Math.round(Number(paymentState.discountValue || 0) * 100) / 100;
-  const finalAmount = Math.round(Math.max(0, amount - discount) * 100) / 100;
-  const canPayWallet = walletBalance >= finalAmount;
-
   const proceed = async (payType) => {
     setLoading(true); setStatus("");
     const payload = paymentState.type === "bill"
       ? { amount, operatorId: Number(paymentState.operatorId), validity: 30, payType, mobile: paymentState.field1, name: "Customer", field1: paymentState.field1, field2: paymentState.field2, viewBillResponse: paymentState.viewBillResponse || {} }
       : { amount, operatorId: Number(paymentState.operatorId), validity: Number.parseInt(String(paymentState.validity).replace(/\D/g, ""), 10) || 30, payType, mobile: paymentState.mobile, name: "Customer", field1: paymentState.mobile, field2: null, viewBillResponse: {} };
 
-    if (paymentState.couponId) payload.couponId = paymentState.couponId;
-    if (paymentState.couponCode) payload.couponCode = paymentState.couponCode;
+    if (paymentState.couponId) {
+      payload.couponId = paymentState.couponId;
+      payload.couponId1 = paymentState.couponId;
+    }
+    if (paymentState.couponCode) {
+      payload.couponCode = paymentState.couponCode;
+      payload.couponId2 = paymentState.couponCode;
+    }
+    if (paymentState.couponName) {
+      payload.couponName = paymentState.couponName;
+    }
+    if (paymentState.couponDesc) {
+      payload.couponDesc = paymentState.couponDesc;
+    }
 
     // For UPI, use Juspay redirect flow
     const rechargeCall = payType === "upi"
@@ -206,9 +229,15 @@ const PaymentScreen = () => {
           logo: paymentState.logo,
           couponCode: paymentState.couponCode || null,
           couponName: paymentState.couponName || null,
+          couponDesc: paymentState.couponDesc || null,
           discountValue: paymentState.discountValue || 0,
           cashbackValue: paymentState.cashbackValue || 0,
           offerType: paymentState.offerType || null,
+          field1: paymentState.field1 || paymentState.mobile || "",
+          field2: paymentState.field2 || null,
+          validity: paymentState.validity || null,
+          viewBillResponse: paymentState.viewBillResponse || {},
+          serviceId: paymentState.serviceId || null,
         };
         await juspayService.savePaymentContext(paymentContext);
 
@@ -239,7 +268,23 @@ const PaymentScreen = () => {
           return;
         }
 
-        // Web: redirect to payment URL (don't touch web functionality)
+        // PWA standalone: open payment in new browser window, keep PWA alive
+        if (isPwaStandalone()) {
+          setLoading(false);
+          setNativePaymentPending(true);
+          paymentContextRef.current = paymentContext;
+
+          try {
+            window.open(paymentUrl, "_blank");
+          } catch (e) {
+            console.error("PWA window.open error:", e);
+            setNativePaymentPending(false);
+            setStatus("Could not open payment page. Please try again.");
+          }
+          return;
+        }
+
+        // Regular browser: redirect to payment URL
         window.location.href = paymentUrl;
         return;
       }
@@ -249,15 +294,9 @@ const PaymentScreen = () => {
     const txnId = response.data?.txnId || response.data?.txnid || response.data?.transactionId || response.raw?.data?.txnId || `VB${Date.now()}`;
     const statusResponse = await rechargeService.checkRechargeStatus({ txnId, field1: payload.field1, field2: payload.field2, validity: payload.validity, recharge: true, viewBillResponse: payload.viewBillResponse });
     setLoading(false);
-    navigate("/customer/app/success", { state: {
-      type: paymentState.type, amount: paymentState.amount, label: paymentState.label,
-      txnId, statusPayload: statusResponse.data || response.data, paymentType: payType,
-      couponCode: paymentState.couponCode || null,
-      couponName: paymentState.couponName || null,
-      discountValue: paymentState.discountValue || 0,
-      cashbackValue: paymentState.cashbackValue || 0,
-      offerType: paymentState.offerType || null,
-    } });
+    navigate("/customer/app/success", {
+      state: buildSuccessState(statusResponse.data || response.data, payType, txnId),
+    });
   };
 
   // Handle manual check of payment status (for native apps when user returns)
@@ -277,19 +316,7 @@ const PaymentScreen = () => {
       if (statusResponse.success && (payStatus === "CHARGED" || payStatus === "SUCCESS" || payStatus === "COMPLETED")) {
         setNativePaymentPending(false);
         navigate("/customer/app/success", {
-          state: {
-            type: context.type,
-            amount: context.amount,
-            label: context.label,
-            txnId: context.orderId,
-            statusPayload: statusResponse.data,
-            paymentType: "upi",
-            couponCode: context.couponCode,
-            couponName: context.couponName,
-            discountValue: context.discountValue,
-            cashbackValue: context.cashbackValue,
-            offerType: context.offerType,
-          },
+          state: buildSuccessState(statusResponse.data, "upi", context.orderId, context),
         });
       } else if (payStatus === "PENDING" || payStatus === "PENDING_VBG" || payStatus === "STARTED" || payStatus === "AUTHORIZING") {
         setNativePaymentPending(false);
@@ -397,8 +424,8 @@ const PaymentScreen = () => {
 
       {/* Error */}
       {status && (
-        <div className="xpay-error xpay-in">
-          {status}
+        <div className="xpay-error xpay-in" style={status.toLowerCase().includes("kyc") ? { display: "flex", alignItems: "center", justifyContent: "space-between" } : {}}>
+          {status.toLowerCase().includes("kyc") ? "KYC verification required." : status}
           {status.toLowerCase().includes("kyc") && (
             <button
               type="button"

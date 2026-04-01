@@ -7,6 +7,17 @@ import { Preferences } from "@capacitor/preferences";
 const NATIVE_PAYMENT_CALLBACK_SCHEME = "vasbazaar://payment-callback";
 
 /**
+ * Detect if the app is running as an installed PWA (standalone mode).
+ * This is true when the user has added the app to their home screen.
+ */
+export const isPwaStandalone = () => {
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone === true
+  );
+};
+
+/**
  * Juspay/HDFC payment gateway service for web and native apps.
  * Handles redirect-based payment flow:
  *   1. Encrypt & send recharge payload with paymentGateway:'juspay'
@@ -44,7 +55,14 @@ export const extractOrderId = (response) => {
   );
 };
 
-/** Save payment context - uses Preferences for native, sessionStorage for web */
+/**
+ * Get the appropriate web storage for payment context.
+ * PWA standalone mode uses localStorage (survives app switches/OS suspension).
+ * Regular browser uses sessionStorage (cleared when tab closes).
+ */
+const getWebStorage = () => isPwaStandalone() ? localStorage : sessionStorage;
+
+/** Save payment context - uses Preferences for native, localStorage for PWA, sessionStorage for browser */
 export const savePaymentContext = async (context) => {
   const data = JSON.stringify({ ...context, timestamp: Date.now() });
 
@@ -56,14 +74,14 @@ export const savePaymentContext = async (context) => {
     }
   } else {
     try {
-      sessionStorage.setItem(PENDING_PAYMENT_KEY, data);
+      getWebStorage().setItem(PENDING_PAYMENT_KEY, data);
     } catch (e) {
       console.warn("Failed to save payment context:", e);
     }
   }
 };
 
-/** Retrieve and clear payment context - uses Preferences for native, sessionStorage for web */
+/** Retrieve and clear payment context - uses Preferences for native, localStorage for PWA, sessionStorage for browser */
 export const getPaymentContext = async () => {
   if (Capacitor.isNativePlatform()) {
     try {
@@ -79,8 +97,9 @@ export const getPaymentContext = async () => {
     }
   } else {
     try {
-      const raw = sessionStorage.getItem(PENDING_PAYMENT_KEY);
-      sessionStorage.removeItem(PENDING_PAYMENT_KEY);
+      const storage = getWebStorage();
+      const raw = storage.getItem(PENDING_PAYMENT_KEY);
+      storage.removeItem(PENDING_PAYMENT_KEY);
       if (!raw) return null;
       const ctx = JSON.parse(raw);
       // Expire after 15 minutes

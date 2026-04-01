@@ -25,8 +25,12 @@ import TransactionHistoryScreen from "./pages/TransactionHistoryScreen";
 import MyDuesScreen from "./pages/MyDuesScreen";
 import CouponListScreen from "./pages/CouponListScreen";
 import AutoPayScreen from "./pages/AutoPayScreen";
+import AutoPayCallbackScreen from "./pages/AutoPayCallbackScreen";
 import HelpScreen from "./pages/HelpScreen";
 import TravelScreen from "./pages/TravelScreen";
+import FlightResultsScreen from "./pages/FlightResultsScreen";
+import FlightBookingScreen from "./pages/FlightBookingScreen";
+import MyBookingsScreen from "./pages/MyBookingsScreen";
 import ComplaintListScreen from "./pages/ComplaintListScreen";
 import TrackComplaintScreen from "./pages/TrackComplaintScreen";
 import JuspayCallbackScreen from "./pages/JuspayCallbackScreen";
@@ -88,8 +92,12 @@ const CustomerModernRoutes = () => {
             <Route path="my-dues" element={<MyDuesScreen />} />
             <Route path="my-coupons" element={<CouponListScreen />} />
             <Route path="autopay" element={<AutoPayScreen />} />
+            <Route path="autopay-callback" element={<AutoPayCallbackScreen />} />
             <Route path="help" element={<HelpScreen />} />
             <Route path="travel" element={<TravelScreen />} />
+            <Route path="flight-results" element={<FlightResultsScreen />} />
+            <Route path="flight-booking" element={<FlightBookingScreen />} />
+            <Route path="my-bookings" element={<MyBookingsScreen />} />
             <Route path="kyc" element={<KycScreen />} />
             <Route path="kyc-callback" element={<KycCallbackScreen />} />
             <Route path="*" element={<Navigate to="/customer/app/services" replace />} />

@@ -39,6 +39,24 @@ export const userService = {
   getReferredUsers: (pageNumber = 0, pageSize = 10) =>
     authGet("/api/customer/user/getReffered_user", { pageNumber, pageSize, isactive: 1 }),
 
+  completeOnboarding: async ({ name, sessionToken }) => {
+    try {
+      const response = await apiClient.post(
+        "/api/customer/user/completeOnboarding",
+        { name },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            access_token: sessionToken,
+          },
+        }
+      );
+      return parseApiResponse(response);
+    } catch (error) {
+      return { success: false, message: getErrorMessage(error), data: null, raw: null };
+    }
+  },
+
   updateUserProfile: (profileData) =>
     authPost("/user/update-profile", profileData),
 };

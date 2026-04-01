@@ -449,11 +449,19 @@ const MobileNumberSheet = ({ open, operator, isPostpaid, navigate, serviceData, 
    Contact List Screen (Prepaid & Postpaid)
    ══════════════════════════════════════════════ */
 const PrepaidFlow = ({ serviceData, operators, navigate }) => {
+  const location = useLocation();
+  const prefill = location.state?.prefill;
   const [banners, setBanners] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [search, setSearch] = useState("");
   const [loadingNumber, setLoadingNumber] = useState(null);
-  const [planView, setPlanView] = useState(null);
+  const [planView, setPlanView] = useState(() => {
+    // If navigating from My Dues with prefill data, skip to plans view directly
+    if (prefill?.mobile && prefill?.operatorData) {
+      return { contactName: prefill.contactName || "", mobile: prefill.mobile, operatorData: prefill.operatorData };
+    }
+    return null;
+  });
   const [contactsLoading, setContactsLoading] = useState(false);
   const fileInputRef = useRef(null);
   const contactsLoadedRef = useRef(false);

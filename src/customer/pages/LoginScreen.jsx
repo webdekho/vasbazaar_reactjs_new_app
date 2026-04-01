@@ -98,12 +98,12 @@ const LoginScreen = () => {
               <div className={`cm-auth-field${focused === "referral" ? " is-focused" : ""}`}>
                 <label htmlFor="referral">
                   <FaGift className="cm-auth-field-icon" />
-                  Referral Code
+                  Referral Code / Referrer Mobile Number
                 </label>
                 <input
                   id="referral"
                   className="cm-auth-input cm-auth-input--full"
-                  placeholder="Optional referral code"
+                  placeholder="Optional referral code or mobile number"
                   value={referralCode}
                   onChange={(e) => setReferralCode(e.target.value)}
                   onFocus={() => setFocused("referral")}
