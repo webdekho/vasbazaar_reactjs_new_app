@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.vasbazaar.customer',
-  appName: 'vasbazaar_reactjs_new_app',
+  appId: 'com.vasbazaar.app',
+  appName: 'VasBazaar',
   webDir: 'build'
 };
 
