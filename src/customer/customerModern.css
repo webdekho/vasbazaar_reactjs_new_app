@@ -2899,7 +2899,7 @@
    OFFERS PAGE — Cutting Edge
    ═══════════════════════════════════════════════════════════════ */
 
-.off-page { display: flex; flex-direction: column; min-height: 100vh; animation: cm-page-fadeIn 0.4s ease both; overflow-x: hidden; width: 100%; max-width: 100%; box-sizing: border-box; }
+.off-page { display: flex; flex-direction: column; min-height: 100vh; overflow-x: hidden; width: 100%; max-width: 100%; box-sizing: border-box; }
 
 .off-header {
   display: flex;
@@ -3261,27 +3261,37 @@
 }
 
 .off-proceed {
+  width: 100%;
+  padding: 16px 20px;
+  border: none;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #40E0D0, #007BFF);
+  color: #FFFFFF;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  width: 100%;
-  max-width: 480px;
-  margin: 0 auto;
-  padding: 16px;
-  border: none;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #40E0D0, #007BFF);
-  color: #fff;
-  font-size: 1rem;
-  font-weight: 800;
-  cursor: pointer;
-  box-shadow: 0 8px 28px rgba(64, 224, 208, 0.25);
+  box-shadow: 0 12px 40px rgba(64, 224, 208, 0.25);
   transition: transform 0.2s, box-shadow 0.2s;
-  letter-spacing: 0.02em;
+  position: relative;
+  overflow: hidden;
 }
 
-.off-proceed:hover { transform: translateY(-2px); box-shadow: 0 12px 36px rgba(64, 224, 208, 0.35); }
+.off-proceed::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  animation: xpay-btn-shimmer 3s ease-in-out infinite;
+}
+
+.off-proceed:hover { transform: translateY(-2px); box-shadow: 0 16px 48px rgba(64, 224, 208, 0.35); }
 .off-proceed:active { transform: translateY(0); }
 
 /* Confetti */
@@ -10205,6 +10215,18 @@
   border-bottom: 1px solid #2A2A2A;
 }
 
+/* Desktop: align header with main content area (accounting for sidebar) */
+@media (min-width: 768px) {
+  .customer-modern-protected .xpay-header {
+    left: 260px;
+    right: 0;
+    padding: 14px 24px;
+  }
+  .customer-modern-protected.cm-sidebar-hidden .xpay-header {
+    left: 0;
+  }
+}
+
 .xpay-back {
   width: 40px;
   height: 40px;
@@ -10515,6 +10537,22 @@
   -webkit-backdrop-filter: blur(16px);
 }
 
+/* Desktop: align footer with main content area (accounting for sidebar) */
+@media (min-width: 768px) {
+  .customer-modern-protected .xpay-footer {
+    left: 260px;
+    right: 0;
+    padding: 12px 24px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  .customer-modern-protected.cm-sidebar-hidden .xpay-footer {
+    left: 0;
+  }
+  .xpay-pay-btn {
+    max-width: 500px;
+    margin: 0 auto;
+  }
+}
+
 .xpay-pay-btn {
   width: 100%;
   padding: 16px 20px;
@@ -10716,12 +10754,32 @@
 
 /* ── Sticky Footer ── */
 .off-sticky-footer {
-  margin-top: auto;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
   background: rgba(18, 18, 18, 0.97);
   border-top: 1px solid #2A2A2A;
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+}
+
+/* Desktop: align footer with main content area (accounting for sidebar) */
+@media (min-width: 768px) {
+  .customer-modern-protected .off-sticky-footer {
+    left: 260px;
+    right: 0;
+    padding: 12px 24px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  .customer-modern-protected.cm-sidebar-hidden .off-sticky-footer {
+    left: 0;
+  }
+  .off-proceed {
+    max-width: 500px;
+    margin: 0 auto;
+  }
 }
 
 .off-footer-summary {
@@ -10756,9 +10814,9 @@
 
 .off-footer-total span:last-child { font-size: 16px; }
 
-/* Adjust page body to account for sticky footer */
+/* Adjust page body to account for fixed footer */
 .off-page .off-body {
-  padding-bottom: 0;
+  padding-bottom: 140px;
 }
 
 .off-sticky-footer {
