@@ -29,6 +29,7 @@ export const server_api = () => {
       return DEFAULT_API_URL;
     }
 
-    // Use empty path for web - CRA proxy handles requests
-    return '';
+    // Development uses proxy, production uses direct API URL
+    const isDev = process.env.NODE_ENV === 'development';
+    return isDev ? '' : DEFAULT_API_URL;
   };
