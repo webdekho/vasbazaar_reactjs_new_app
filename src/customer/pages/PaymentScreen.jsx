@@ -133,7 +133,7 @@ const PaymentScreen = () => {
       <div className="xpay-header">
         <button className="xpay-back" type="button" onClick={() => navigate(-1)}><FaArrowLeft /></button>
         <h1 className="xpay-title">Payment</h1>
-        <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="xpay-bc-logo" />
+        <img src="/images/bbps.svg" alt="Bharat Connect" className="xpay-bc-logo" />
       </div>
 
       {/* Amount hero */}

@@ -159,7 +159,7 @@ const UpcomingDuesSection = ({ dues }) => {
 };
 
 const quickAccessItems = [
-  { label: "Services", icon: HiMiniSquares2X2, to: "#services", color: "#40E0D0", isScroll: true, iconUrl: "https://webdekho.in/images/b.png" },
+  { label: "Services", icon: HiMiniSquares2X2, to: "#services", color: "#40E0D0", isScroll: true, iconUrl: "/images/b.png" },
   { label: "Travel", icon: FaPlaneDeparture, to: "/customer/app/travel", color: "#007BFF" },
   { label: "My Dues", icon: FaClock, to: "/customer/app/my-dues", color: "#FF3B30" },
   { label: "Cashback", icon: HiOutlineCurrencyRupee, to: "/customer/app/commission?tab=cashback", color: "#FF9800" },
@@ -312,7 +312,7 @@ const ServicesScreen = () => {
               <FaSearch style={{ color: "var(--cm-disabled, #6B6B6B)", fontSize: 14, flexShrink: 0 }} />
               <span style={{ color: "var(--cm-disabled, #6B6B6B)", fontSize: 14 }}>Search services...</span>
             </div>
-            <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-logo" />
+            <img src="/images/bbps.svg" alt="Bharat Connect" className="cm-bc-logo" />
           </div>
         </div>
         <SkeletonGrid />
@@ -343,7 +343,7 @@ const ServicesScreen = () => {
                 onBlur={() => setSearchFocused(false)}
               />
             </div>
-            <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-logo" />
+            <img src="/images/bbps.svg" alt="Bharat Connect" className="cm-bc-logo" />
           </div>
         </div>
 

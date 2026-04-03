@@ -8,6 +8,7 @@ import { customerStorage } from "../services/storageService";
 import { extractSessionToken } from "../components/serviceUtils";
 import { triggerPWAInstall } from "../hooks/usePWAInstall";
 import { useTheme } from "../context/ThemeContext";
+import { markLoginTime } from "../services/apiClient";
 
 const OtpScreen = () => {
   const navigate = useNavigate();
@@ -92,6 +93,7 @@ const OtpScreen = () => {
     const apiData = (typeof response.data === "object" && response.data !== null) ? response.data : (response.raw?.data || {});
     const rawData = response.raw || {};
     const sessionToken = apiData.token || extractSessionToken(response.data) || token;
+    console.log('[OTP] Verify response:', { apiDataToken: apiData.token, extractedToken: extractSessionToken(response.data), tempToken: token, finalToken: sessionToken });
     customerStorage.setDevOtp(null);
     if (apiData.profile) {
       localStorage.setItem("profile_photo", apiData.profile);
@@ -106,6 +108,8 @@ const OtpScreen = () => {
       refferalCode: apiData.refferalCode || "", verified_status: apiData.verified_status,
       profile: apiData.profile || "",
     };
+    // Mark login time to prevent false 401 session expired on Android
+    markLoginTime();
     setAuthSession({ sessionToken, userData, tempToken: null });
     triggerPWAInstall();
     navigate("/customer/app/services", { replace: true });
@@ -151,7 +155,7 @@ const OtpScreen = () => {
 
           <div className="cm-auth-header">
             <div className="cm-auth-logo">
-              <img src={theme === "light" ? "https://webdekho.in/images/vasbazaar1.png" : "https://webdekho.in/images/vasbazaar.png"} alt="VasBazaar" className="cm-auth-logo-img" />
+              <img src={theme === "light" ? "/images/vasbazaar-light.png" : "/images/vasbazaar-dark.png"} alt="VasBazaar" className="cm-auth-logo-img" />
             </div>
           </div>
 

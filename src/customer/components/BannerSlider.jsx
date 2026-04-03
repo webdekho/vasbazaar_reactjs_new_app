@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FaTimes, FaChevronLeft, FaChevronRight, FaUserCircle } from "react-icons/fa";
+import { useTheme } from "../context/ThemeContext";
 
 // Extract dominant color from image edges using canvas
 const getDominantColor = (imgEl) => {
@@ -24,6 +25,7 @@ const maskMobile = (mobile) => {
 };
 
 const BannerSlider = ({ banners = [], userData, balances, showCustomerCard = true }) => {
+  const { theme } = useTheme();
   const [current, setCurrent] = useState(0);
   const [slideBgColors, setSlideBgColors] = useState({});
   const [popupSlide, setPopupSlide] = useState(null);
@@ -195,7 +197,7 @@ const BannerSlider = ({ banners = [], userData, balances, showCustomerCard = tru
 
                     {/* Logo */}
                     <div style={{ display: "flex", justifyContent: "center", margin: "12px 0 4px" }}>
-                      <img src="https://webdekho.in/images/vb_logo.png" alt="VasBazaar" style={{ height: 36, objectFit: "contain", opacity: 0.85 }} />
+                      <img src={theme === "light" ? "/images/vasbazaar-light.png" : "/images/vasbazaar-dark.png"} alt="VasBazaar" style={{ height: 36, objectFit: "contain", opacity: 0.85 }} />
                     </div>
 
                     {/* Stats row */}

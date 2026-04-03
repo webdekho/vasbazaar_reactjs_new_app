@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { FaArrowLeft, FaSearch, FaChevronRight, FaTimes, FaCheck } from "react-icons/fa";
 import { FiArrowRight } from "react-icons/fi";
+import { Capacitor } from "@capacitor/core";
 import { serviceService } from "../services/serviceService";
 import { rechargeService } from "../services/rechargeService";
 import { advertisementService } from "../services/advertisementService";
@@ -9,6 +10,26 @@ import DataState from "../components/DataState";
 import BannerSlider from "../components/BannerSlider";
 import { getServiceVisual, normalizeService } from "../components/serviceUtils";
 import BillerFlowScreen from "./BillerFlowScreen";
+
+// Helper to get contacts using Capacitor plugin
+const getCapacitorContacts = async () => {
+  try {
+    const { Contacts } = await import("@capacitor-community/contacts");
+    const permission = await Contacts.requestPermissions();
+    if (permission.contacts !== "granted") return null;
+    const result = await Contacts.getContacts({ projection: { name: true, phones: true } });
+    return (result.contacts || [])
+      .filter((c) => c.phones?.length)
+      .map((c, i) => ({
+        id: `cap-${i}`,
+        name: c.name?.display || c.name?.given || "Unknown",
+        number: c.phones[0]?.number || "",
+        phones: c.phones.map((p) => p.number),
+      }));
+  } catch {
+    return null;
+  }
+};
 
 const FALLBACK_LOGO = "/assets/images/Brand_favicon.png";
 const handleLogoError = (e) => { e.target.onerror = null; e.target.src = FALLBACK_LOGO; };
@@ -207,7 +228,7 @@ const RechargePlansView = ({ contactName, mobile, operatorData: initialOperatorD
       <div className="cm-flow-title-row">
         <button className="cm-back-icon" type="button" onClick={onBack}><FaArrowLeft /></button>
         <h1>Mobile Recharge Plans</h1>
-        <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
+        <img src="/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
       </div>
 
       {/* Operator info card */}
@@ -463,6 +484,18 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
 
   useEffect(() => { advertisementService.getServiceAdvertisements().then((res) => { if (res.success && Array.isArray(res.data)) setBanners(res.data); }); }, []);
 
+  // Auto-load contacts on native platforms
+  useEffect(() => {
+    const autoLoadContacts = async () => {
+      if (!Capacitor.isNativePlatform()) return;
+      const capContacts = await getCapacitorContacts();
+      if (capContacts?.length) {
+        setContacts(capContacts.map((c) => ({ ...c, number: normalizeMobile(c.number) })));
+      }
+    };
+    autoLoadContacts();
+  }, []);
+
   /* ── Contact import helpers ── */
   const parseContactFile = (text, fileName) => {
     const parsed = [];
@@ -489,7 +522,15 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
   };
 
   const handleImportContacts = async () => {
-    // Try native Contact Picker API first (Android Chrome)
+    // Try Capacitor Contacts plugin first (native apps)
+    if (Capacitor.isNativePlatform()) {
+      const capContacts = await getCapacitorContacts();
+      if (capContacts?.length) {
+        setContacts(capContacts.map((c) => ({ ...c, number: normalizeMobile(c.number) })));
+        return;
+      }
+    }
+    // Try native Contact Picker API (Android Chrome)
     if ("contacts" in navigator && "select" in navigator.contacts) {
       try {
         const selected = await navigator.contacts.select(["name", "tel"], { multiple: true });
@@ -691,6 +732,15 @@ const PostpaidFlow = ({ serviceData, operators, navigate }) => {
   }, []);
 
   const handlePickContact = async () => {
+    // Try Capacitor Contacts plugin first (native apps)
+    if (Capacitor.isNativePlatform()) {
+      const capContacts = await getCapacitorContacts();
+      if (capContacts?.length) {
+        const num = normalizeMobile(capContacts[0].number);
+        if (num) { setMobile(num); return; }
+      }
+    }
+    // Try native Contact Picker API
     if ("contacts" in navigator && "select" in navigator.contacts) {
       try {
         const selected = await navigator.contacts.select(["name", "tel"], { multiple: false });
@@ -786,7 +836,7 @@ const PostpaidFlow = ({ serviceData, operators, navigate }) => {
           else navigate("/customer/app/services");
         }}><FaArrowLeft /></button>
         <h1>{step === "mobile" ? "Postpaid Bill Payment" : step === "operator" ? "Select Operator" : "Bill Details"}</h1>
-        <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
+        <img src="/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
       </div>
 
       {/* Step indicator */}
@@ -963,7 +1013,7 @@ const BillerFlow = ({ serviceData, operators, navigate }) => {
   return (
     <div className="cm-stack">
       <div className="cm-card">
-        <div className="cm-flow-header"><div className="cm-flow-title-row"><button className="cm-back-icon" type="button" onClick={() => navigate("/customer/app/services")}><FaArrowLeft /></button><h1>{serviceData.name}</h1><img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" /></div><p className="cm-page-subtitle">Select a biller and fill in your details.</p></div>
+        <div className="cm-flow-header"><div className="cm-flow-title-row"><button className="cm-back-icon" type="button" onClick={() => navigate("/customer/app/services")}><FaArrowLeft /></button><h1>{serviceData.name}</h1><img src="/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" /></div><p className="cm-page-subtitle">Select a biller and fill in your details.</p></div>
         <div className="cm-summary-strip"><div className="cm-search-wrap"><FaSearch /><input className="cm-input" placeholder="Search billers" value={search} onChange={(e) => setSearch(e.target.value)} /></div></div>
       </div>
       {error && <div className="cm-status cm-status-error">{error}</div>}

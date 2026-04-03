@@ -1,7 +1,7 @@
 import { useTheme } from "../context/ThemeContext";
 
-const LOGO_DARK = "https://webdekho.in/images/vasbazaar.png";
-const LOGO_LIGHT = "https://webdekho.in/images/vasbazaar1.png";
+const LOGO_DARK = "/images/vasbazaar-dark.png";
+const LOGO_LIGHT = "/images/vasbazaar-light.png";
 
 const AppBrand = ({ subtitle }) => {
   const { theme } = useTheme();

@@ -19,7 +19,22 @@
       "Bash(ls:*)",
       "Bash(curl:*)",
       "Bash(./gradlew clean:*)",
-      "Bash(./gradlew assembleRelease:*)"
+      "Bash(./gradlew assembleRelease:*)",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)",
+      "Bash(npx cap:*)",
+      "Bash(sudo gem install:*)",
+      "Bash(brew install:*)",
+      "Bash(/opt/homebrew/bin/brew install cocoapods)",
+      "Bash(/usr/local/bin/brew install cocoapods)",
+      "Bash(export PATH=\"/opt/homebrew/bin:$PATH\")",
+      "Bash(pod install)",
+      "Bash(xcodebuild:*)",
+      "Bash(open:*)",
+      "Bash(sw_vers:*)",
+      "Bash(adb uninstall:*)",
+      "Bash(npm ls:*)",
+      "Bash(npm uninstall:*)"
     ]
   }
 }

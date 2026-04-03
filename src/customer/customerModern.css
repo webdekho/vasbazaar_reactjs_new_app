@@ -1835,6 +1835,7 @@
   user-select: none;
   -webkit-user-select: none;
   cursor: grab;
+  margin-top: 16px;
 }
 
 .cm-slider:active { cursor: grabbing; }
@@ -2898,7 +2899,7 @@
    OFFERS PAGE — Cutting Edge
    ═══════════════════════════════════════════════════════════════ */
 
-.off-page { display: flex; flex-direction: column; min-height: 100vh; animation: cm-page-fadeIn 0.4s ease both; }
+.off-page { display: flex; flex-direction: column; min-height: 100vh; animation: cm-page-fadeIn 0.4s ease both; overflow-x: hidden; width: 100%; max-width: 100%; box-sizing: border-box; }
 
 .off-header {
   display: flex;
@@ -2930,7 +2931,7 @@
 .off-back:active { background: rgba(255,255,255,0.08); }
 .off-header-title { font-size: 1.1rem; font-weight: 800; color: var(--cm-ink); flex: 1; margin: 0; }
 
-.off-body { flex: 1; padding: 0 0 0; }
+.off-body { flex: 1; padding: 0 0 160px; overflow-x: hidden; }
 
 /* Operator strip */
 .off-op {
@@ -2964,7 +2965,7 @@
 }
 
 /* Offers section */
-.off-offers { padding: 0 16px; margin-top: 4px; }
+.off-offers { padding: 0 16px; margin-top: 4px; overflow: hidden; width: 100%; max-width: 100%; box-sizing: border-box; }
 
 .off-offers-head {
   display: flex;
@@ -3175,6 +3176,9 @@
   cursor: pointer;
   transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s;
   animation: cm-svc-fade-in 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .off-offer:hover { border-color: color-mix(in srgb, var(--cm-accent) 25%, transparent); transform: translateY(-1px); }
@@ -3196,9 +3200,9 @@
   flex-shrink: 0;
 }
 
-.off-offer-body { flex: 1; min-width: 0; }
-.off-offer-name { font-size: 0.88rem; font-weight: 700; color: var(--cm-ink); }
-.off-offer-desc { font-size: 0.72rem; color: var(--cm-muted); margin-top: 3px; }
+.off-offer-body { flex: 1; min-width: 0; overflow: hidden; }
+.off-offer-name { font-size: 0.88rem; font-weight: 700; color: var(--cm-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.off-offer-desc { font-size: 0.72rem; color: var(--cm-muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .off-offer-btn {
   padding: 8px 16px;
@@ -9482,6 +9486,7 @@
   box-sizing: border-box;
   overflow: hidden;
   -webkit-overflow-scrolling: touch;
+  margin-top: 16px;
 }
 
 .cm-slider-track {
@@ -10143,7 +10148,11 @@
   display: flex;
   flex-direction: column;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-top: 60px;
+  padding-bottom: 140px;
+  box-sizing: border-box;
 }
 
 /* Ambient background */
@@ -10185,10 +10194,12 @@
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 10;
-  background: rgba(11, 11, 11, 0.9);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: rgba(11, 11, 11, 0.95);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid #2A2A2A;
@@ -10493,11 +10504,15 @@
 
 /* ── Footer / Pay Button ── */
 .xpay-footer {
-  margin-top: auto;
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
-  position: relative;
-  z-index: 1;
-  flex-shrink: 0;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: rgba(11, 11, 11, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 .xpay-pay-btn {
@@ -10643,6 +10658,7 @@
   color: #9CA3AF;
 }
 
+.theme-light .xpay-footer { background: rgba(255, 255, 255, 0.95); }
 .theme-light .xpay-secure { color: #6B7280; }
 
 

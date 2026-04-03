@@ -134,7 +134,7 @@ const HelpScreen = () => {
 
       {/* Footer */}
       <div className="hp-footer">
-        <img src={theme === "light" ? "https://webdekho.in/images/vasbazaar1.png" : "https://webdekho.in/images/vasbazaar.png"} alt="VasBazaar" className="hp-footer-logo" />
+        <img src={theme === "light" ? "/images/vasbazaar-light.png" : "/images/vasbazaar-dark.png"} alt="VasBazaar" className="hp-footer-logo" />
         <span>VasBazaar v1.0.0</span>
         <span className="hp-footer-heart">Made with <FaHeart /> in India</span>
       </div>

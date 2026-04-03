@@ -359,7 +359,7 @@ const OfferScreen = () => {
       <div className="off-header">
         <button className="off-back" type="button" onClick={() => navigate(-1)}><FaArrowLeft /></button>
         <h1 className="off-header-title">{label}</h1>
-        <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
+        <img src="/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
       </div>
 
       <div className="off-body">

@@ -1,0 +1,16 @@
+{
+  "appId": "com.vasbazaar.app",
+  "appName": "VasBazaar",
+  "webDir": "build",
+  "android": {
+    "allowMixedContent": true
+  },
+  "server": {
+    "androidScheme": "https",
+    "allowNavigation": [
+      "api.vasbazaar.com",
+      "apis.vasbazaar.com",
+      "*.vasbazaar.com"
+    ]
+  }
+}

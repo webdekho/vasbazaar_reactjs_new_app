@@ -20,7 +20,7 @@ import BannerSlider from "../components/BannerSlider";
 /* ── Bharat Connect Logo ── */
 const BharatConnectLogo = () => (
   <img
-    src="https://webdekho.in/images/bbps.svg"
+    src="/images/bbps.svg"
     alt="Bharat Connect"
     className="bf-bharat-logo"
   />

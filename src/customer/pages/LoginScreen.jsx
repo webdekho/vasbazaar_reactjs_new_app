@@ -55,7 +55,7 @@ const LoginScreen = () => {
 
           <div className="cm-auth-header">
             <div className="cm-auth-logo">
-              <img src={theme === "light" ? "https://webdekho.in/images/vasbazaar1.png" : "https://webdekho.in/images/vasbazaar.png"} alt="VasBazaar" className="cm-auth-logo-img" />
+              <img src={theme === "light" ? "/images/vasbazaar-light.png" : "/images/vasbazaar-dark.png"} alt="VasBazaar" className="cm-auth-logo-img" />
             </div>
             <div className="cm-auth-badge-row">
               <span className="cm-auth-chip"><FiCreditCard /> Bills</span>

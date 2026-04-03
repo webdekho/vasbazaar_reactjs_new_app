@@ -41,6 +41,55 @@ const apiClient = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+// In-memory token backup for Android WebView timing issues
+let memoryToken = null;
+
+// Set token in both localStorage, memory, AND axios defaults
+export const setSessionToken = (token) => {
+  memoryToken = token;
+  if (token) {
+    localStorage.setItem(CUSTOMER_STORAGE_KEYS.sessionToken, token);
+    // Also set on axios defaults for immediate availability
+    apiClient.defaults.headers.common['access_token'] = token;
+  } else {
+    localStorage.removeItem(CUSTOMER_STORAGE_KEYS.sessionToken);
+    delete apiClient.defaults.headers.common['access_token'];
+  }
+};
+
+// Get token from memory first, then localStorage as fallback
+export const getSessionToken = () => {
+  if (memoryToken) return memoryToken;
+  const stored = localStorage.getItem(CUSTOMER_STORAGE_KEYS.sessionToken);
+  if (stored) {
+    memoryToken = stored; // sync to memory
+    // Also sync to axios defaults
+    apiClient.defaults.headers.common['access_token'] = stored;
+  }
+  return stored;
+};
+
+// Initialize token from localStorage on module load
+(() => {
+  const stored = localStorage.getItem(CUSTOMER_STORAGE_KEYS.sessionToken);
+  if (stored) {
+    memoryToken = stored;
+    apiClient.defaults.headers.common['access_token'] = stored;
+  }
+})();
+
+// Request interceptor to ensure token is added to authenticated requests
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = getSessionToken();
+    if (token) {
+      config.headers.access_token = token;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 const parseApiResponse = (response) => {
   const payload = response?.data || {};
   const { Status, STATUS, status, message, data, RDATA, ref_id } = payload;
@@ -63,10 +112,22 @@ const getErrorMessage = (error) => {
   if (error?.response?.headers?.["content-type"]?.includes("text/html")) {
     return "API returned HTML instead of JSON. Check the customer panel API base URL.";
   }
-  return error?.response?.data?.message || error?.message || "Unexpected error";
+  // Extract message from various API response formats
+  const responseData = error?.response?.data;
+  if (responseData) {
+    return responseData.message || responseData.Message || responseData.error || responseData.Error || "Request failed";
+  }
+  // Network error or timeout
+  if (error?.code === "ERR_NETWORK") {
+    return "Network error. Please check your internet connection.";
+  }
+  if (error?.code === "ECONNABORTED") {
+    return "Request timeout. Please try again.";
+  }
+  return error?.message || "Unexpected error";
 };
 
-const getCustomerToken = () => localStorage.getItem(CUSTOMER_STORAGE_KEYS.sessionToken);
+const getCustomerToken = () => getSessionToken();
 
 export const guestPost = async (endpoint, payload) => {
   try {
@@ -134,10 +195,24 @@ export const authPut = async (endpoint, payload) => {
 // ── Global 401 Interceptor ──
 // Detects session invalidation (e.g. logged_in_from_another_device) and forces re-login
 let isRedirecting = false;
+let loginTimestamp = 0;
+const LOGIN_GRACE_PERIOD = 5000; // 5 seconds grace period after login
+
+// Export function to set login timestamp (called after successful OTP verification)
+export const markLoginTime = () => {
+  loginTimestamp = Date.now();
+};
+
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error?.response?.status === 401 && !isRedirecting) {
+      // Skip 401 handling during grace period after login (prevents false session expired on Android)
+      if (Date.now() - loginTimestamp < LOGIN_GRACE_PERIOD) {
+        console.log("401 ignored during login grace period");
+        return Promise.reject(error);
+      }
+
       isRedirecting = true;
       const msg = error?.response?.data?.message || "Session expired";
 

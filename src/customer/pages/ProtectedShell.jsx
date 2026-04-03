@@ -19,7 +19,7 @@ import ChatbotFAB from "../components/ChatbotFAB";
 const bottomNavItems = [
   { to: "/customer/app/history", label: "History", icon: <FaHistory /> },
   { to: "/customer/app/wallet", label: "Wallet", icon: <FaWallet /> },
-  { to: "/customer/app/services", label: "Services", icon: <img src="https://webdekho.in/images/b.png" alt="" style={{ width: 24, height: 24, objectFit: "contain", filter: "brightness(0) invert(1)" }} />, isCenter: true },
+  { to: "/customer/app/services", label: "Services", icon: <img src="/images/b.png" alt="" style={{ width: 24, height: 24, objectFit: "contain", filter: "brightness(0) invert(1)" }} />, isCenter: true },
   { to: "/customer/app/coupons", label: "Coupons", icon: <FaGift /> },
   { to: "/customer/app/profile", label: "Profile", icon: <FaUserCircle /> },
 ];
@@ -137,7 +137,7 @@ const ProtectedShell = () => {
 
     // Load logo and QR in parallel
     try {
-      const logoUrl = "https://webdekho.in/images/vasbazaar1.png";
+      const logoUrl = "/images/vasbazaar-light.png";
       const qrBig = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(`https://vasbazaar.web.webdekho.in?code=${userMobile}`)}`;
 
       const loadImg = (src) => { const i = new Image(); i.crossOrigin = "anonymous"; return new Promise((res, rej) => { i.onload = () => res(i); i.onerror = rej; i.src = src; }); };
@@ -485,7 +485,7 @@ const ProtectedShell = () => {
           <div className="qr-modal" onClick={(e) => e.stopPropagation()}>
             <button className="qr-modal-close" type="button" onClick={() => setShowQrModal(false)}><FaTimes /></button>
             <div className="qr-modal-accent" />
-            <img src="https://webdekho.in/images/vasbazaar1.png" alt="VasBazaar" className="qr-modal-logo" />
+            <img src="/images/vasbazaar-light.png" alt="VasBazaar" className="qr-modal-logo" />
             <div className="qr-modal-subtitle">Scan & Pay with any UPI App</div>
             <div className="qr-modal-qr-wrap">
               <img src={`https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(`https://vasbazaar.web.webdekho.in?code=${userMobile}`)}`} alt="QR Code" className="qr-modal-qr" />

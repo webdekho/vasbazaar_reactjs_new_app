@@ -64,7 +64,7 @@ const TrackComplaintScreen = () => {
           <h1 className="tc-title">Track Complaint</h1>
           <p className="tc-subtitle">Bharat Connect Grievance</p>
         </div>
-        <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="tc-bbps-logo" />
+        <img src="/images/bbps.svg" alt="Bharat Connect" className="tc-bbps-logo" />
       </div>
 
       {/* Search form */}

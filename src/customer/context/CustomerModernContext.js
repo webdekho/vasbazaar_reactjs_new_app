@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { userService } from "../services/userService";
 import { customerStorage } from "../services/storageService";
@@ -12,15 +12,25 @@ export const CustomerModernProvider = ({ children }) => {
   const location = useLocation();
   const [sessionToken, setSessionToken] = useState(customerStorage.getSessionToken());
   const [userData, setUserData] = useState(customerStorage.getUserData());
+  // Track if we just logged in to skip immediate hydrate (prevents 401 on Android)
+  const justLoggedIn = useRef(false);
 
   useEffect(() => {
     if (!sessionToken) {
       setUserData(null);
+      justLoggedIn.current = false;
       return;
     }
 
     // Skip authenticated API calls on login/OTP pages to avoid 401s with stale tokens
     if (AUTH_PAGES.includes(location.pathname)) return;
+
+    // Skip hydrate immediately after login - userData already set by OtpScreen
+    // This prevents 401 issues on Android where API call happens before token is fully ready
+    if (justLoggedIn.current) {
+      justLoggedIn.current = false;
+      return;
+    }
 
     const hydrate = async () => {
       const profile = await userService.getUserProfile();
@@ -51,6 +61,10 @@ export const CustomerModernProvider = ({ children }) => {
       userData,
       setAuthSession: (payload) => {
         customerStorage.setAuthSession(payload);
+        // Mark as just logged in to skip immediate hydrate API call
+        if (payload.sessionToken && payload.userData) {
+          justLoggedIn.current = true;
+        }
         if (payload.sessionToken) setSessionToken(payload.sessionToken);
         if (payload.userData) setUserData(payload.userData);
       },

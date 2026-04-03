@@ -148,7 +148,7 @@ const LockScreen = ({ onUnlock }) => {
       <div className="al-card">
         <div className="al-logo-wrap">
           <img
-            src={theme === "light" ? "https://webdekho.in/images/vasbazaar1.png" : "https://webdekho.in/images/vasbazaar.png"}
+            src={theme === "light" ? "/images/vasbazaar-light.png" : "/images/vasbazaar-dark.png"}
             alt="VasBazaar" className="al-logo"
           />
         </div>
@@ -222,7 +222,7 @@ const SetPinScreen = ({ onComplete }) => {
       <div className="al-card">
         <div className="al-logo-wrap">
           <img
-            src={theme === "light" ? "https://webdekho.in/images/vasbazaar1.png" : "https://webdekho.in/images/vasbazaar.png"}
+            src={theme === "light" ? "/images/vasbazaar-light.png" : "/images/vasbazaar-dark.png"}
             alt="VasBazaar" className="al-logo"
           />
         </div>
