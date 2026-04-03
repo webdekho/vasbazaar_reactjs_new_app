@@ -11,11 +11,11 @@
     }
   ],
   "rewrites": [
-    { "source": "/vb-api/:path*", "destination": "https://apis.uat.vasbazaar.com:8081/:path*" },
-    { "source": "/api/:path*", "destination": "https://apis.uat.vasbazaar.com:8081/api/:path*" },
-    { "source": "/login/:path*", "destination": "https://apis.uat.vasbazaar.com:8081/login/:path*" },
-    { "source": "/coupon/:path*", "destination": "https://apis.uat.vasbazaar.com:8081/coupon/:path*" },
-    { "source": "/user/:path*", "destination": "https://apis.uat.vasbazaar.com:8081/user/:path*" },
+    { "source": "/vb-api/:path*", "destination": "https://api.vasbazaar.com/:path*" },
+    { "source": "/api/:path*", "destination": "https://api.vasbazaar.com/api/:path*" },
+    { "source": "/login/:path*", "destination": "https://api.vasbazaar.com/login/:path*" },
+    { "source": "/coupon/:path*", "destination": "https://api.vasbazaar.com/coupon/:path*" },
+    { "source": "/user/:path*", "destination": "https://api.vasbazaar.com/user/:path*" },
     { "source": "/customer/static/(.*)", "destination": "/static/$1" },
     { "source": "/customer/favicon.png", "destination": "/favicon.png" },
     { "source": "/customer/manifest.json", "destination": "/manifest.json" },

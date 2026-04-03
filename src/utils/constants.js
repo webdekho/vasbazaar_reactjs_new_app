@@ -2,6 +2,7 @@ export const loader = "LOADER";
 
 // Allowed API hosts — prevents localStorage tampering
 const ALLOWED_HOSTS = [
+  'https://api.vasbazaar.com',
   'https://apis.vasbazaar.com',
   'https://apis.uat.vasbazaar.com',
   'https://api.prod.webdekho.in',
@@ -9,7 +10,7 @@ const ALLOWED_HOSTS = [
 ];
 
 // Default production API URL for native apps
-const NATIVE_API_URL = 'https://apis.uat.vasbazaar.com:8081';
+const NATIVE_API_URL = 'https://api.vasbazaar.com';
 
 // Detect if running inside Capacitor native app
 const isCapacitorNative = () => {
@@ -32,7 +33,7 @@ export const server_api = () => {
      if (isCapacitorNative()) return NATIVE_API_URL;
 
      // In development, CRA proxy (package.json "proxy") forwards to the API server
-     // so we use empty string (relative to origin). In production, Apache proxies /vb-api/.
+     // so we use empty string (relative to origin). In production, use direct API URL.
      if (process.env.NODE_ENV === 'development') return '';
-     return '/vb-api';
+     return 'https://api.vasbazaar.com';
    };
