@@ -34,7 +34,11 @@
       "Bash(sw_vers:*)",
       "Bash(adb uninstall:*)",
       "Bash(npm ls:*)",
-      "Bash(npm uninstall:*)"
+      "Bash(npm uninstall:*)",
+      "Bash(npm start)",
+      "Bash(lsof:*)",
+      "Bash(xargs kill:*)",
+      "Bash(git ls-tree:*)"
     ]
   }
 }
