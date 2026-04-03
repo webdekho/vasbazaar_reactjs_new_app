@@ -1,7 +1,7 @@
 import {
   FaPhone, FaEnvelope, FaIdBadge, FaCopy,
   FaShareAlt, FaWallet, FaCamera, FaSignOutAlt, FaUserCircle,
-  FaCheck, FaTimes, FaCrop, FaQrcode,
+  FaCheck, FaTimes, FaCrop, FaQrcode, FaShieldAlt, FaExclamationTriangle,
 } from "react-icons/fa";
 import { FiEdit2, FiChevronRight, FiShield, FiGift, FiHelpCircle } from "react-icons/fi";
 import { useCustomerModern } from "../context/CustomerModernContext";
@@ -36,6 +36,12 @@ const ProfileScreen = () => {
   const balance = userData?.balance || userData?.walletBalance || "0.00";
   const cashback = userData?.cashback || userData?.totalCashback || "0";
   const referralCount = userData?.referralCount || userData?.totalReferrals || "0";
+  const isKycVerified = userData?.verified_status === 1 || userData?.verified_status === "1" || userData?.kyc_verified === true;
+
+  // Debug: Log verified_status
+  console.log("Profile - userData:", userData);
+  console.log("Profile - verified_status:", userData?.verified_status, "type:", typeof userData?.verified_status);
+  console.log("Profile - isKycVerified:", isKycVerified);
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
@@ -120,6 +126,13 @@ const ProfileScreen = () => {
 
   const actions = [
     { icon: <FaWallet />, label: "Wallet", onClick: () => navigate("/customer/app/wallet") },
+    {
+      icon: isKycVerified ? <FaShieldAlt /> : <FaExclamationTriangle />,
+      label: "KYC Status",
+      onClick: () => navigate("/customer/app/kyc", { state: { returnTo: "/customer/app/profile" } }),
+      badge: isKycVerified ? "Verified" : "Pending",
+      badgeColor: isKycVerified ? "#00C853" : "#FF9800",
+    },
     { icon: <FiShield />, label: "Change PIN", onClick: () => setShowChangePin(true) },
     { icon: <FiHelpCircle />, label: "Help & Support", onClick: () => navigate("/customer/app/help") },
     { icon: <FaSignOutAlt />, label: "Logout", onClick: logout, danger: true },
@@ -190,7 +203,7 @@ const ProfileScreen = () => {
             </button>
             <button type="button" className="pf-referral-btn pf-referral-btn--qr" onClick={() => {
               const qrWin = window.open("", "_blank", "width=420,height=600");
-              const qrImg = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(`https://web.vasbazaar.com?code=${mobile}`)}`;
+              const qrImg = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(`https://web.vasbazaar.in?code=${mobile}`)}`;
               qrWin.document.write(`<html><head><title>VasBazaar QR</title><style>body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f5f7fa;font-family:-apple-system,sans-serif}
               .card{background:#fff;border-radius:24px;padding:32px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.1);max-width:360px;width:100%}
               .accent{height:6px;background:linear-gradient(90deg,#40E0D0,#007BFF);border-radius:3px;margin-bottom:20px}
@@ -215,8 +228,13 @@ const ProfileScreen = () => {
       <div className="pf-card">
         {actions.map((a, i) => (
           <div key={a.label} className={`pf-action${a.danger ? " pf-action--danger" : ""}`} onClick={a.onClick} style={{ borderBottom: i < actions.length - 1 ? "1px solid #2A2A2A" : "none" }}>
-            <div className={`pf-action-icon${a.danger ? " pf-action-icon--danger" : ""}`}>{a.icon}</div>
+            <div className={`pf-action-icon${a.danger ? " pf-action-icon--danger" : ""}${a.badge && !isKycVerified ? " pf-action-icon--warn" : ""}`}>{a.icon}</div>
             <span className="pf-action-label">{a.label}</span>
+            {a.badge && (
+              <span className="pf-action-badge" style={{ background: a.badgeColor, color: "#fff" }}>
+                {a.badge}
+              </span>
+            )}
             <FiChevronRight size={16} color={a.danger ? "#FF3B30" : "#6B6B6B"} />
           </div>
         ))}
