@@ -67,8 +67,8 @@ const KycScreen = () => {
     // Construct return URL based on platform
     let returnUrl;
     if (Capacitor.isNativePlatform()) {
-      // For mobile apps, use the PHP redirect page that will deep link back to app
-      returnUrl = "https://digilocker.app.vasbazaar.com/new_app.php";
+      // For mobile apps, use Vercel redirect page that will deep link back to app
+      returnUrl = "https://web.vasbazaar.com/api/kyc-redirect";
     } else {
       // For web, use web callback URL
       returnUrl = `${window.location.origin}/customer/app/kyc-callback`;
