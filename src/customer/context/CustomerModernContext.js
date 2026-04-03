@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, useRef } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { userService } from "../services/userService";
 import { customerStorage } from "../services/storageService";
@@ -12,25 +12,15 @@ export const CustomerModernProvider = ({ children }) => {
   const location = useLocation();
   const [sessionToken, setSessionToken] = useState(customerStorage.getSessionToken());
   const [userData, setUserData] = useState(customerStorage.getUserData());
-  // Track if we just logged in to skip immediate hydrate (prevents 401 on Android)
-  const justLoggedIn = useRef(false);
 
   useEffect(() => {
     if (!sessionToken) {
       setUserData(null);
-      justLoggedIn.current = false;
       return;
     }
 
     // Skip authenticated API calls on login/OTP pages to avoid 401s with stale tokens
     if (AUTH_PAGES.includes(location.pathname)) return;
-
-    // Skip hydrate immediately after login - userData already set by OtpScreen
-    // This prevents 401 issues on Android where API call happens before token is fully ready
-    if (justLoggedIn.current) {
-      justLoggedIn.current = false;
-      return;
-    }
 
     const hydrate = async () => {
       const profile = await userService.getUserProfile();
@@ -46,7 +36,10 @@ export const CustomerModernProvider = ({ children }) => {
           || profileData.user_name || profileData.customerName
           || rawData.name || rawData.firstName || rawData.userName
           || existing?.name || existing?.firstName || "";
-        const merged = { ...profileData, mobile, name };
+        // Preserve verified_status from existing userData or API response
+        const verified_status = profileData.verified_status ?? rawData.verified_status ?? existing?.verified_status;
+        const merged = { ...existing, ...profileData, mobile, name, verified_status };
+        console.log("Hydrate - verified_status:", verified_status, "merged:", merged);
         setUserData(merged);
         customerStorage.setAuthSession({ sessionToken, userData: merged });
       }
@@ -60,13 +53,18 @@ export const CustomerModernProvider = ({ children }) => {
       sessionToken,
       userData,
       setAuthSession: (payload) => {
-        customerStorage.setAuthSession(payload);
-        // Mark as just logged in to skip immediate hydrate API call
-        if (payload.sessionToken && payload.userData) {
-          justLoggedIn.current = true;
-        }
+        // Merge new userData with existing to preserve fields not in the payload
+        const mergedUserData = payload.userData
+          ? { ...userData, ...payload.userData }
+          : userData;
+
+        customerStorage.setAuthSession({
+          ...payload,
+          userData: mergedUserData,
+        });
+
         if (payload.sessionToken) setSessionToken(payload.sessionToken);
-        if (payload.userData) setUserData(payload.userData);
+        if (payload.userData) setUserData(mergedUserData);
       },
       logout: () => {
         customerStorage.clear();

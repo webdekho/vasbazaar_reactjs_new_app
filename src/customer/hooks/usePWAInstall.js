@@ -39,7 +39,7 @@ export function usePWAInstall() {
     const isNativeApp = !!(
       (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) ||
       window.cordova ||
-      document.URL.indexOf("http://") === -1 && document.URL.indexOf("https://") === -1
+      (document.URL.indexOf("http://") === -1 && document.URL.indexOf("https://") === -1)
     );
 
     // Check if opened from home screen (TWA / WebAPK)
@@ -53,19 +53,33 @@ export function usePWAInstall() {
     const onReady = () => setCanInstall(true);
     window.addEventListener("pwaPromptReady", onReady);
 
+    // Check cooldown helper
+    const isCooldownActive = () => {
+      const dismissedAt = localStorage.getItem(STORAGE_KEYS.PWA_DISMISSED_AT);
+      return dismissedAt && Date.now() - Number(dismissedAt) < 60 * 60 * 1000;
+    };
+
     // Check if trigger was set (after login)
     const checkTrigger = () => {
       if (localStorage.getItem(STORAGE_KEYS.PWA_TRIGGER) === "true") {
-        // Check cooldown — don't show again within 1 hour of dismissal
-        const dismissedAt = localStorage.getItem(STORAGE_KEYS.PWA_DISMISSED_AT);
-        if (dismissedAt && Date.now() - Number(dismissedAt) < 60 * 60 * 1000) {
-          localStorage.removeItem(STORAGE_KEYS.PWA_TRIGGER);
-          return;
-        }
-        setVisible(true);
         localStorage.removeItem(STORAGE_KEYS.PWA_TRIGGER);
+        if (isCooldownActive()) return;
+        setVisible(true);
       }
     };
+
+    // Auto-show once per session on home page landing
+    if (!sessionStorage.getItem("vb_pwa_session_shown") && !isCooldownActive()) {
+      // Small delay to let the page render first
+      const autoShowTimer = setTimeout(() => {
+        if (!sessionStorage.getItem("vb_pwa_session_shown")) {
+          sessionStorage.setItem("vb_pwa_session_shown", "1");
+          setVisible(true);
+        }
+      }, 1500);
+      // Clean up timer if unmounted
+      var clearAutoShow = () => clearTimeout(autoShowTimer);
+    }
 
     // Check once on mount for any trigger set before this hook mounted
     checkTrigger();
@@ -77,6 +91,7 @@ export function usePWAInstall() {
     return () => {
       window.removeEventListener("pwaPromptReady", onReady);
       window.removeEventListener("pwaInstallTrigger", onTrigger);
+      if (clearAutoShow) clearAutoShow();
     };
   }, []);
 
@@ -103,6 +118,7 @@ export function usePWAInstall() {
 
   const dismiss = useCallback(() => {
     localStorage.setItem(STORAGE_KEYS.PWA_DISMISSED_AT, Date.now().toString());
+    sessionStorage.setItem("vb_pwa_session_shown", "1");
     setVisible(false);
   }, []);
 

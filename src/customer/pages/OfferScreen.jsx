@@ -1,31 +1,13 @@
 import { useEffect, useState, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaTag, FaGift, FaPercent, FaTimes, FaSearch, FaCheck } from "react-icons/fa";
 import { FiZap, FiArrowRight } from "react-icons/fi";
 import { offerService } from "../services/offerService";
+import { useTheme } from "../context/ThemeContext";
 
 const FALLBACK_LOGO = "/assets/images/Brand_favicon.png";
 const handleLogoError = (e) => { e.target.onerror = null; e.target.src = FALLBACK_LOGO; };
-
-const numberToWords = (num) => {
-  if (num === 0) return "Zero";
-  const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
-    "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
-  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
-  const convert = (n) => {
-    if (n < 20) return ones[n];
-    if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 ? " " + ones[n % 10] : "");
-    if (n < 1000) return ones[Math.floor(n / 100)] + " Hundred" + (n % 100 ? " " + convert(n % 100) : "");
-    if (n < 100000) return convert(Math.floor(n / 1000)) + " Thousand" + (n % 1000 ? " " + convert(n % 1000) : "");
-    if (n < 10000000) return convert(Math.floor(n / 100000)) + " Lakh" + (n % 100000 ? " " + convert(n % 100000) : "");
-    return convert(Math.floor(n / 10000000)) + " Crore" + (n % 10000000 ? " " + convert(n % 10000000) : "");
-  };
-  const whole = Math.floor(num);
-  const paise = Math.round((num - whole) * 100);
-  let result = "Rupees " + convert(whole);
-  if (paise > 0) result += " and " + convert(paise) + " Paise";
-  return result + " Only";
-};
 
 const catMeta = (cat) => {
   const n = (cat?.name || cat || "").toLowerCase();
@@ -38,14 +20,18 @@ const catMeta = (cat) => {
 const CelebrationOverlay = ({ show, message, amount }) => {
   if (!show) return null;
   const colors = ["#40E0D0", "#007BFF", "#00C853", "#FFD700", "#FF6B6B", "#A78BFA", "#FF9800", "#06B6D4", "#E040FB", "#00E5FF", "#76FF03", "#FF4081"];
+  // Use fewer particles on mobile/Safari to avoid GPU compositing limits
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+  const confettiCount = isMobile ? 60 : 150;
+  const starCount = isMobile ? 12 : 24;
   return (
     <div className="celeb-overlay">
       {/* Full-screen confetti rain from top */}
       <div className="celeb-confetti">
-        {Array.from({ length: 150 }).map((_, i) => (
+        {Array.from({ length: confettiCount }).map((_, i) => (
           <div key={i} className="celeb-piece" style={{
             left: `${Math.random() * 100}%`,
-            top: `${-10 - Math.random() * 20}%`,
+            top: `${-5 - Math.random() * 10}%`,
             animationDelay: `${Math.random() * 1.2}s`,
             animationDuration: `${2 + Math.random() * 2}s`,
             width: `${5 + Math.random() * 12}px`,
@@ -61,8 +47,6 @@ const CelebrationOverlay = ({ show, message, amount }) => {
         <div className="celeb-ring celeb-ring--1" />
         <div className="celeb-ring celeb-ring--2" />
         <div className="celeb-ring celeb-ring--3" />
-        <div className="celeb-ring celeb-ring--4" />
-        <div className="celeb-ring celeb-ring--5" />
       </div>
       {/* Firework bursts at different positions */}
       {[{ t: "15%", l: "20%" }, { t: "25%", l: "75%" }, { t: "70%", l: "15%" }, { t: "65%", l: "80%" }].map((pos, fi) => (
@@ -81,7 +65,7 @@ const CelebrationOverlay = ({ show, message, amount }) => {
         <div className="celeb-msg">{message}</div>
       </div>
       {/* Sparkle stars spread across full screen */}
-      {Array.from({ length: 24 }).map((_, i) => (
+      {Array.from({ length: starCount }).map((_, i) => (
         <div key={`s${i}`} className="celeb-star" style={{
           top: `${5 + Math.random() * 90}%`,
           left: `${5 + Math.random() * 90}%`,
@@ -162,6 +146,7 @@ const CouponModal = ({ open, coupons, loading, amount, appliedId, onApply, onClo
 const OfferScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { theme } = useTheme();
   const paymentState = location.state || {};
   const [offers, setOffers] = useState([]);
   const [coupons, setCoupons] = useState([]);
@@ -175,16 +160,16 @@ const OfferScreen = () => {
   // Store random discount values per offer so they don't change on re-render
   const randomValues = useRef({});
 
-  // Rate limiting: max 5 apply/toggle actions per hour
-  const RATE_LIMIT_KEY = "vb_offer_attempts";
-  const RATE_LIMIT_MAX = 5;
-  const RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour
+  // Rate limiting: only count offer SWITCHES (changing from one offer to another)
+  // First selection and deselection are free — only rapid switching is blocked
+  const RATE_LIMIT_KEY = "vb_offer_switch_attempts";
+  const RATE_LIMIT_MAX = 10;
+  const RATE_LIMIT_WINDOW = 10 * 60 * 1000; // 10 minutes
 
   const getAttempts = () => {
     try {
       const data = JSON.parse(localStorage.getItem(RATE_LIMIT_KEY) || "{}");
       const now = Date.now();
-      // Filter out expired attempts
       const valid = (data.timestamps || []).filter((t) => now - t < RATE_LIMIT_WINDOW);
       return valid;
     } catch { return []; }
@@ -197,19 +182,20 @@ const OfferScreen = () => {
       const unlockTime = oldestAttempt + RATE_LIMIT_WINDOW;
       const minsLeft = Math.ceil((unlockTime - Date.now()) / 60000);
       setRateLimited(true);
-      setRateLimitMsg(`You have exceeded the maximum number of attempts. Please try again after ${minsLeft} minute${minsLeft !== 1 ? "s" : ""}.`);
+      setRateLimitMsg(`You have exceeded the maximum number of offer changes. Please try again after ${minsLeft} minute${minsLeft !== 1 ? "s" : ""}.`);
       return false;
     }
     return true;
   };
 
-  const recordAttempt = () => {
+  const recordSwitchAttempt = () => {
     const attempts = getAttempts();
     attempts.push(Date.now());
     localStorage.setItem(RATE_LIMIT_KEY, JSON.stringify({ timestamps: attempts }));
   };
 
   // Check on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { checkRateLimit(); }, []);
 
   const amount = Number(paymentState.amount || 0);
@@ -255,9 +241,9 @@ const OfferScreen = () => {
         }
       }
 
-      // Round to nearest 0.5 for clean display
-      const displayMax = Math.round(maxDiscount * 2) / 2;
-      const displayStr = displayMax % 1 === 0 ? displayMax.toFixed(0) : displayMax.toFixed(1);
+      // Show actual max value rounded to 2 decimals, drop trailing zeros
+      const displayMax = Math.round(maxDiscount * 100) / 100;
+      const displayStr = displayMax % 1 === 0 ? displayMax.toFixed(0) : parseFloat(displayMax.toFixed(2)).toString();
       const desc = (offer.description || "")
         .replace(/\{#discount#\}/g, `₹${displayStr}`)
         .replace(/\{#cashback#\}/g, `₹${displayStr}`);
@@ -276,33 +262,43 @@ const OfferScreen = () => {
   if (!paymentState.amount) return <Navigate to="/customer/app/services" replace />;
 
   const triggerCelebration = (msg, amountStr) => {
-    setCelebration({ message: msg, amount: amountStr });
-    setTimeout(() => setCelebration(null), 3000);
+    setCelebration(null);
+    // Force re-mount so animations restart fresh every time
+    requestAnimationFrame(() => {
+      setCelebration({ message: msg, amount: amountStr });
+      setTimeout(() => setCelebration(null), 3500);
+    });
   };
 
   const handleApply = (offer) => {
-    // Check rate limit
-    if (!checkRateLimit()) return;
-
     const wasApplied = appliedOffer?.id === offer.id;
+
+    // Deselecting current offer — always allowed, no rate limit
     if (wasApplied) {
-      recordAttempt();
       setAppliedOffer(null);
       return;
     }
 
-    recordAttempt();
+    // Switching from one offer to another — count as a switch attempt
+    if (appliedOffer) {
+      if (!checkRateLimit()) return;
+      recordSwitchAttempt();
+    }
+    // First selection (no offer was applied) — always allowed
+
+    const meta = catMeta(offer.categoryId);
     const applied = {
       ...offer,
+      offerType: offer.offerType || meta.type,
       discountValue: offer.randomDiscount || offer.maxDiscount || offer.amount || 0,
       formattedDesc: offer.formattedDesc || offer.description,
     };
     setAppliedOffer(applied);
 
-    // Trigger celebration — show upto amount rounded to nearest 0.5
+    // Trigger celebration — show upto amount rounded to 2 decimals
     const uptoRaw = offer.maxDiscount || offer.amount || 0;
-    const uptoAmount = Math.round(uptoRaw * 2) / 2; // round to nearest 0.5
-    const uptoStr = uptoAmount % 1 === 0 ? uptoAmount.toFixed(0) : uptoAmount.toFixed(1);
+    const uptoAmount = Math.round(uptoRaw * 100) / 100;
+    const uptoStr = uptoAmount % 1 === 0 ? uptoAmount.toFixed(0) : parseFloat(uptoAmount.toFixed(2)).toString();
     if (offer.offerType === "cashback") {
       triggerCelebration(`You will get cashback upto ₹${uptoStr}`, "🎉");
     } else if (offer.offerType === "discount") {
@@ -351,115 +347,121 @@ const OfferScreen = () => {
   const couponOffers = enhancedOffers.filter((o) => o.catName.includes("other") || o.catName === "coupons");
 
   return (
-    <div className="off-page">
-      {/* Celebration animation */}
-      <CelebrationOverlay show={!!celebration} message={celebration?.message} amount={celebration?.amount} />
+    <><div className="off-page">
+        {/* Celebration animation */}
+        <CelebrationOverlay show={!!celebration} message={celebration?.message} amount={celebration?.amount} />
 
-      {/* Header */}
-      <div className="off-header">
-        <button className="off-back" type="button" onClick={() => navigate(-1)}><FaArrowLeft /></button>
-        <h1 className="off-header-title">{label}</h1>
-        <img src="/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
-      </div>
-
-      <div className="off-body">
-        {/* Compact operator + amount strip */}
-        <div className="off-summary-strip off-slide" style={{ animationDelay: "0s" }}>
-          <img src={logo || FALLBACK_LOGO} alt="" className="off-strip-logo" onError={handleLogoError} />
-          <div className="off-strip-info">
-            <div className="off-strip-name">{opName}{mobile ? ` · ${mobile}` : ""}</div>
-            <div className="off-strip-sub">{label}</div>
-          </div>
-          <div className="off-strip-amount">₹{amount}</div>
+        {/* Header */}
+        <div className="off-header">
+          <button className="off-back" type="button" onClick={() => navigate(-1)}><FaArrowLeft /></button>
+          <h1 className="off-header-title">{label}</h1>
+          <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
         </div>
 
-        {/* Offers */}
-        <div className="off-offers">
-          <div className="off-offers-head off-slide" style={{ animationDelay: "0.06s" }}>
-            <FiZap className="off-offers-head-icon" />
-            <h2>Offers for You</h2>
-          </div>
-
-          {rateLimited && (
-            <div className="off-rate-limit-alert">
-              <strong>Too many attempts!</strong>
-              <p>{rateLimitMsg}</p>
-              <p>Please proceed to pay with your current selection.</p>
+        <div className="off-body">
+          {/* Compact operator + amount strip */}
+          <div className="off-summary-strip off-slide" style={{ animationDelay: "0s" }}>
+            <img src={logo || FALLBACK_LOGO} alt="" className="off-strip-logo" onError={handleLogoError} />
+            <div className="off-strip-info">
+              <div className="off-strip-name">{opName}{mobile ? ` · ${mobile}` : ""}</div>
+              <div className="off-strip-sub">{label}</div>
             </div>
-          )}
-
-          {loading ? (
-            [1, 2, 3].map((i) => (
-              <div key={i} className="off-offer off-offer-skeleton">
-                <div className="cm-skeleton-pulse" style={{ width: 44, height: 44, borderRadius: 14 }} />
-                <div style={{ flex: 1 }}><div className="cm-skeleton-pulse" style={{ width: "55%", height: 14 }} /><div className="cm-skeleton-pulse" style={{ width: "35%", height: 12, marginTop: 6 }} /></div>
-                <div className="cm-skeleton-pulse" style={{ width: 64, height: 34, borderRadius: 10 }} />
-              </div>
-            ))
-          ) : enhancedOffers.length === 0 ? (
-            <div className="off-empty-state"><FaTag className="off-empty-icon" /><p>No offers available right now</p></div>
-          ) : (
-            <>
-              {mainOffers.map((offer, idx) => {
-                const isApplied = appliedOffer?.id === offer.id;
-                const meta = catMeta(offer.categoryId);
-                return (
-                  <div key={offer.id || idx} className={`off-offer off-slide${isApplied ? " is-applied" : ""}`} style={{ animationDelay: `${0.1 + idx * 0.05}s` }}>
-                    <div className="off-offer-icon" style={{ background: meta.gradient }}>{meta.icon}</div>
-                    <div className="off-offer-body">
-                      <div className="off-offer-name">{offer.couponName || "Offer"}</div>
-                      <div className="off-offer-desc">{offer.formattedDesc}</div>
-                      {offer.offerType === "cashback" && <div className="off-offer-hint">Cashback credited after payment</div>}
-                      {offer.offerType === "discount" && <div className="off-offer-hint off-offer-hint--disc">Instant discount on payment</div>}
-                    </div>
-                    <button type="button" className={`off-offer-btn${isApplied ? " is-applied" : ""}`} onClick={() => handleApply(offer)}>
-                      {isApplied ? <><FaCheck /> Applied</> : "Apply"}
-                    </button>
-                  </div>
-                );
-              })}
-
-              {couponOffers.map((offer, idx) => {
-                const isDirectApplied = appliedOffer?.id === offer.id;
-                const isCouponFromModal = !isDirectApplied && appliedOffer && !mainOffers.some((o) => o.id === appliedOffer.id);
-                const isApplied = isDirectApplied || isCouponFromModal;
-                const meta = catMeta(offer.categoryId);
-                return (
-                  <div key={offer.id || idx} className={`off-offer off-slide${isApplied ? " is-applied" : ""}`} style={{ animationDelay: `${0.1 + (mainOffers.length + idx) * 0.05}s` }}>
-                    <div className="off-offer-icon" style={{ background: meta.gradient }}>{meta.icon}</div>
-                    <div className="off-offer-body">
-                      <div className="off-offer-name">{isApplied && appliedOffer?.couponName ? appliedOffer.couponName : (offer.couponName || "Coupons")}</div>
-                      <div className="off-offer-desc">{isApplied && appliedOffer?.couponCode ? `Code: ${appliedOffer.couponCode}` : offer.formattedDesc}</div>
-                    </div>
-                    <button type="button" className={`off-offer-btn off-offer-btn--select${isApplied ? " is-applied" : ""}`} onClick={() => isApplied ? setAppliedOffer(null) : handleOpenCoupons()}>
-                      {isApplied ? <><FaCheck /> Selected</> : "Select"}
-                    </button>
-                  </div>
-                );
-              })}
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Coupon Modal */}
-      <CouponModal open={showCouponModal} coupons={coupons} loading={couponsLoading} amount={amount} appliedId={appliedOffer?.id} onApply={handleApply} onClose={() => setShowCouponModal(false)} />
-
-      {/* Sticky footer */}
-      <div className="off-sticky-footer">
-        {appliedOffer && (
-          <div className="off-footer-summary">
-            {discountAmount > 0 && <div className="off-footer-line"><span>Instant Discount</span><span className="off-footer-green">-₹{discountAmount.toFixed(2)}</span></div>}
-            {cashbackAmount > 0 && <div className="off-footer-line"><span>Cashback (after payment)</span><span className="off-footer-green">₹{cashbackAmount.toFixed(2)}</span></div>}
-            <div className="off-footer-line off-footer-total"><span>You Pay</span><span>₹{payableAmount}</span></div>
+            <div className="off-strip-amount">₹{amount}</div>
           </div>
-        )}
-        <button type="button" className="off-proceed" onClick={handleProceed}>
-          <span>Proceed to Pay ₹{payableAmount}</span>
-          <FiArrowRight />
-        </button>
+
+          {/* Offers */}
+          <div className="off-offers">
+            <div className="off-offers-head off-slide" style={{ animationDelay: "0.06s" }}>
+              <FiZap className="off-offers-head-icon" />
+              <h2>Offers for You</h2>
+            </div>
+
+            {rateLimited && (
+              <div className="off-rate-limit-alert">
+                <strong>Too many offer changes!</strong>
+                <p>{rateLimitMsg}</p>
+                <p>Please proceed to pay with your current selection.</p>
+              </div>
+            )}
+
+            {loading ? (
+              [1, 2, 3].map((i) => (
+                <div key={i} className="off-offer off-offer-skeleton">
+                  <div className="cm-skeleton-pulse" style={{ width: 44, height: 44, borderRadius: 14 }} />
+                  <div style={{ flex: 1 }}><div className="cm-skeleton-pulse" style={{ width: "55%", height: 14 }} /><div className="cm-skeleton-pulse" style={{ width: "35%", height: 12, marginTop: 6 }} /></div>
+                  <div className="cm-skeleton-pulse" style={{ width: 64, height: 34, borderRadius: 10 }} />
+                </div>
+              ))
+            ) : enhancedOffers.length === 0 ? (
+              <div className="off-empty-state"><FaTag className="off-empty-icon" /><p>No offers available right now</p></div>
+            ) : (
+              <>
+                {mainOffers.map((offer, idx) => {
+                  const isApplied = appliedOffer?.id === offer.id;
+                  const meta = catMeta(offer.categoryId);
+                  return (
+                    <div key={offer.id || idx} className={`off-offer off-slide${isApplied ? " is-applied" : ""}`} style={{ animationDelay: `${0.1 + idx * 0.05}s` }}>
+                      <div className="off-offer-icon" style={{ background: meta.gradient }}>{meta.icon}</div>
+                      <div className="off-offer-body">
+                        <div className="off-offer-name">{offer.couponName || "Offer"}</div>
+                        <div className="off-offer-desc">{offer.formattedDesc}</div>
+                        {offer.offerType === "cashback" && <div className="off-offer-hint">Cashback credited after payment</div>}
+                        {offer.offerType === "discount" && <div className="off-offer-hint off-offer-hint--disc">Instant discount on payment</div>}
+                      </div>
+                      <button type="button" className={`off-offer-btn${isApplied ? " is-applied" : ""}`} onClick={() => handleApply(offer)}>
+                        {isApplied ? <><FaCheck /> Applied</> : "Apply"}
+                      </button>
+                    </div>
+                  );
+                })}
+
+                {couponOffers.map((offer, idx) => {
+                  const isDirectApplied = appliedOffer?.id === offer.id;
+                  const isCouponFromModal = !isDirectApplied && appliedOffer && !mainOffers.some((o) => o.id === appliedOffer.id);
+                  const isApplied = isDirectApplied || isCouponFromModal;
+                  const meta = catMeta(offer.categoryId);
+                  return (
+                    <div key={offer.id || idx} className={`off-offer off-slide${isApplied ? " is-applied" : ""}`} style={{ animationDelay: `${0.1 + (mainOffers.length + idx) * 0.05}s` }}>
+                      <div className="off-offer-icon" style={{ background: meta.gradient }}>{meta.icon}</div>
+                      <div className="off-offer-body">
+                        <div className="off-offer-name">{isApplied && appliedOffer?.couponName ? appliedOffer.couponName : (offer.couponName || "Coupons")}</div>
+                        <div className="off-offer-desc">{isApplied && appliedOffer?.couponCode ? `Code: ${appliedOffer.couponCode}` : offer.formattedDesc}</div>
+                      </div>
+                      <button type="button" className={`off-offer-btn off-offer-btn--select${isApplied ? " is-applied" : ""}`} onClick={() => isApplied ? setAppliedOffer(null) : handleOpenCoupons()}>
+                        {isApplied ? <><FaCheck /> Selected</> : "Select"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Coupon Modal */}
+        <CouponModal open={showCouponModal} coupons={coupons} loading={couponsLoading} amount={amount} appliedId={appliedOffer?.id} onApply={handleApply} onClose={() => setShowCouponModal(false)} />
       </div>
-    </div>
+
+      {/* Payment footer — portaled to body so position:fixed works regardless of parent transforms/animations */}
+      {createPortal(
+        <div className={`off-sticky-footer${theme === "light" ? " theme-light" : ""}`}>
+          <div className="off-sticky-footer-inner">
+            {appliedOffer && (
+              <div className="off-footer-summary">
+                {discountAmount > 0 && <div className="off-footer-line"><span>Instant Discount</span><span className="off-footer-green">-₹{discountAmount.toFixed(2)}</span></div>}
+                {cashbackAmount > 0 && <div className="off-footer-line"><span>Cashback (after payment)</span><span className="off-footer-green">₹{cashbackAmount.toFixed(2)}</span></div>}
+                <div className="off-footer-line off-footer-total"><span>You Pay</span><span>₹{payableAmount}</span></div>
+              </div>
+            )}
+            <button type="button" className="off-proceed" onClick={handleProceed}>
+              <span>Proceed to Pay ₹{payableAmount}</span>
+              <FiArrowRight />
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
   );
 };
 

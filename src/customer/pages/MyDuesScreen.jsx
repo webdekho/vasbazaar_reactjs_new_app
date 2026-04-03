@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FaArrowLeft, FaCalendarAlt, FaClock, FaExclamationCircle,
-  FaExclamationTriangle, FaChevronRight, FaReceipt
+  FaExclamationTriangle, FaChevronRight, FaReceipt, FaTimes
 } from "react-icons/fa";
 import { walletService } from "../services/walletService";
 import { rechargeService } from "../services/rechargeService";
@@ -76,7 +76,7 @@ const EmptyState = ({ onExplore }) => (
 );
 
 /* ─── Due card ─── */
-const DueCard = ({ item, index, onPay, processing }) => {
+const DueCard = ({ item, index, onPay, processing, onDelete, deleting }) => {
   const st = getStatus(item);
   const operatorName = item.operatorId?.operatorName || item.operator?.name || item.name || "Service Provider";
   const serviceName = item.operatorId?.serviceId?.serviceName || item.service?.serviceName || "Bill Payment";
@@ -89,6 +89,17 @@ const DueCard = ({ item, index, onPay, processing }) => {
     <div className="md-card" style={{ animationDelay: `${index * 60}ms` }}>
       {/* Status accent bar */}
       <div className="md-card-accent" style={{ background: st.color }} />
+
+      {/* Cross button to cancel/remove reminder */}
+      <button
+        className="md-card-close"
+        type="button"
+        title="Remove reminder"
+        disabled={deleting}
+        onClick={() => onDelete(item.id)}
+      >
+        {deleting ? <span className="md-spinner md-spinner--sm" /> : <FaTimes />}
+      </button>
 
       <div className="md-card-body">
         {/* Top: logo + info + amount */}
@@ -136,7 +147,7 @@ const DueCard = ({ item, index, onPay, processing }) => {
           )}
         </div>
 
-        {/* Bottom: pay button */}
+        {/* Bottom: transact button */}
         <button
           className="md-pay-btn"
           type="button"
@@ -146,7 +157,7 @@ const DueCard = ({ item, index, onPay, processing }) => {
           {processing ? (
             <span className="md-pay-loading"><span className="md-spinner" /> Processing...</span>
           ) : (
-            <>Pay Now <FaChevronRight /></>
+            <>Transact Now <FaChevronRight /></>
           )}
         </button>
       </div>
@@ -161,6 +172,7 @@ const MyDuesScreen = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [processingId, setProcessingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -178,17 +190,47 @@ const MyDuesScreen = () => {
     setProcessingId(item.id);
     const serviceName = item.operatorId?.serviceId?.serviceName || item.service?.serviceName || "prepaid";
     const slug = serviceName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-    const res = await rechargeService.fetchOperatorCircle(mobile);
-    setProcessingId(null);
-    if (res.success) {
+    const isPrepaid = slug === "prepaid" || slug === "postpaid";
+
+    if (isPrepaid) {
+      // For mobile recharge: detect operator and skip to plans/amount page
+      const res = await rechargeService.fetchOperatorCircle(mobile);
+      setProcessingId(null);
       navigate(`/customer/app/services/${slug}`, {
         state: {
-          service: item.service || item.operatorId?.serviceId,
-          prefill: { mobile, operatorId: item.operatorId?.id }
+          service: item.operatorId?.serviceId || item.service,
+          prefill: {
+            mobile,
+            contactName: item.name || "",
+            operatorData: res.success ? res.data : null,
+            operatorId: item.operatorId?.id,
+          }
         }
       });
     } else {
-      navigate(`/customer/app/services/${slug}`);
+      // For bill payments: pass operator info to skip biller selection
+      setProcessingId(null);
+      navigate(`/customer/app/services/${slug}`, {
+        state: {
+          service: item.operatorId?.serviceId || item.service,
+          prefill: {
+            mobile,
+            operatorId: item.operatorId?.id,
+            operatorName: item.operatorId?.operatorName,
+            operatorCode: item.operatorId?.operatorCode,
+            amount: item.amount,
+          }
+        }
+      });
+    }
+  };
+
+  const handleDelete = async (id) => {
+    setDeletingId(id);
+    const res = await walletService.deleteReminder(id);
+    setDeletingId(null);
+    if (res.success) {
+      setDues((prev) => prev.filter((d) => d.id !== id));
     }
   };
 
@@ -240,6 +282,8 @@ const MyDuesScreen = () => {
               index={i}
               onPay={handlePay}
               processing={processingId === item.id}
+              onDelete={handleDelete}
+              deleting={deletingId === item.id}
             />
           ))}
         </div>

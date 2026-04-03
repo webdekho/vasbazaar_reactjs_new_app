@@ -1,35 +1,38 @@
-import { Capacitor } from "@capacitor/core";
-
 export const loader = "LOADER";
-
-// API Base URL - used by proxy and native apps
-export const API_BASE_URL = "https://api.vasbazaar.com";
-const DEFAULT_API_URL = API_BASE_URL;
 
 // Allowed API hosts — prevents localStorage tampering
 const ALLOWED_HOSTS = [
-  'https://api.vasbazaar.com',
   'https://apis.vasbazaar.com',
   'https://apis.uat.vasbazaar.com',
   'https://api.prod.webdekho.in',
-  '',
+  '/vb-api',
 ];
 
+// Default production API URL for native apps
+const NATIVE_API_URL = 'https://apis.uat.vasbazaar.com:8081';
+
+// Detect if running inside Capacitor native app
+const isCapacitorNative = () => {
+  try {
+    return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  } catch { return false; }
+};
+
 export const server_api = () => {
+
     const storedUrl = localStorage.getItem('host');
 
-    // Validate stored URL against whitelist before using
-    if (storedUrl) {
-      const isAllowed = ALLOWED_HOSTS.some(host => storedUrl.startsWith(host));
-      if (isAllowed) return storedUrl;
-    }
+     // Validate stored URL against whitelist before using
+     if (storedUrl) {
+       const isAllowed = ALLOWED_HOSTS.some(host => storedUrl.startsWith(host));
+       if (isAllowed) return storedUrl;
+     }
 
-    // For native Capacitor apps, use full API URL directly
-    if (Capacitor.isNativePlatform()) {
-      return DEFAULT_API_URL;
-    }
+     // In native Capacitor app, use the production API URL directly
+     if (isCapacitorNative()) return NATIVE_API_URL;
 
-    // Development uses proxy, production uses direct API URL
-    const isDev = process.env.NODE_ENV === 'development';
-    return isDev ? '' : DEFAULT_API_URL;
-  };
+     // In development, CRA proxy (package.json "proxy") forwards to the API server
+     // so we use empty string (relative to origin). In production, Apache proxies /vb-api/.
+     if (process.env.NODE_ENV === 'development') return '';
+     return '/vb-api';
+   };

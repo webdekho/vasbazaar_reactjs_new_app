@@ -14,7 +14,6 @@ const trimTrailingSlash = (value) => value.replace(/\/+$/, "");
 
 // Allowed API hosts — prevents localStorage tampering
 const ALLOWED_HOSTS = [
-  "https://api.vasbazaar.com",
   "https://apis.vasbazaar.com",
   "https://apis.uat.vasbazaar.com",
   "https://api.prod.webdekho.in",
@@ -42,55 +41,6 @@ const apiClient = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// In-memory token backup for Android WebView timing issues
-let memoryToken = null;
-
-// Set token in both localStorage, memory, AND axios defaults
-export const setSessionToken = (token) => {
-  memoryToken = token;
-  if (token) {
-    localStorage.setItem(CUSTOMER_STORAGE_KEYS.sessionToken, token);
-    // Also set on axios defaults for immediate availability
-    apiClient.defaults.headers.common['access_token'] = token;
-  } else {
-    localStorage.removeItem(CUSTOMER_STORAGE_KEYS.sessionToken);
-    delete apiClient.defaults.headers.common['access_token'];
-  }
-};
-
-// Get token from memory first, then localStorage as fallback
-export const getSessionToken = () => {
-  if (memoryToken) return memoryToken;
-  const stored = localStorage.getItem(CUSTOMER_STORAGE_KEYS.sessionToken);
-  if (stored) {
-    memoryToken = stored; // sync to memory
-    // Also sync to axios defaults
-    apiClient.defaults.headers.common['access_token'] = stored;
-  }
-  return stored;
-};
-
-// Initialize token from localStorage on module load
-(() => {
-  const stored = localStorage.getItem(CUSTOMER_STORAGE_KEYS.sessionToken);
-  if (stored) {
-    memoryToken = stored;
-    apiClient.defaults.headers.common['access_token'] = stored;
-  }
-})();
-
-// Request interceptor to ensure token is added to authenticated requests
-apiClient.interceptors.request.use(
-  (config) => {
-    const token = getSessionToken();
-    if (token) {
-      config.headers.access_token = token;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
 const parseApiResponse = (response) => {
   const payload = response?.data || {};
   const { Status, STATUS, status, message, data, RDATA, ref_id } = payload;
@@ -113,22 +63,10 @@ const getErrorMessage = (error) => {
   if (error?.response?.headers?.["content-type"]?.includes("text/html")) {
     return "API returned HTML instead of JSON. Check the customer panel API base URL.";
   }
-  // Extract message from various API response formats
-  const responseData = error?.response?.data;
-  if (responseData) {
-    return responseData.message || responseData.Message || responseData.error || responseData.Error || "Request failed";
-  }
-  // Network error or timeout
-  if (error?.code === "ERR_NETWORK") {
-    return "Network error. Please check your internet connection.";
-  }
-  if (error?.code === "ECONNABORTED") {
-    return "Request timeout. Please try again.";
-  }
-  return error?.message || "Unexpected error";
+  return error?.response?.data?.message || error?.message || "Unexpected error";
 };
 
-const getCustomerToken = () => getSessionToken();
+const getCustomerToken = () => localStorage.getItem(CUSTOMER_STORAGE_KEYS.sessionToken);
 
 export const guestPost = async (endpoint, payload) => {
   try {
@@ -155,9 +93,13 @@ export const guestGet = async (endpoint, params = {}) => {
 
 export const authGet = async (endpoint, params = {}) => {
   try {
+    const token = getCustomerToken();
+    if (!token) {
+      return { success: false, message: "Authentication required. Please login.", data: null, raw: null };
+    }
     const response = await apiClient.get(endpoint, {
       params,
-      headers: { access_token: getCustomerToken() },
+      headers: { access_token: token },
     });
     return parseApiResponse(response);
   } catch (error) {
@@ -167,10 +109,14 @@ export const authGet = async (endpoint, params = {}) => {
 
 export const authPost = async (endpoint, payload) => {
   try {
+    const token = getCustomerToken();
+    if (!token) {
+      return { success: false, message: "Authentication required. Please login.", data: null, raw: null };
+    }
     const response = await apiClient.post(endpoint, payload, {
       headers: {
         "Content-Type": "application/json",
-        access_token: getCustomerToken(),
+        access_token: token,
       },
     });
     return parseApiResponse(response);
@@ -193,46 +139,52 @@ export const authPut = async (endpoint, payload) => {
   }
 };
 
-// ── Global 401 Interceptor ──
-// Detects session invalidation (e.g. logged_in_from_another_device) and forces re-login
-let isRedirecting = false;
-let loginTimestamp = 0;
-const LOGIN_GRACE_PERIOD = 5000; // 5 seconds grace period after login
-
-// Export function to set login timestamp (called after successful OTP verification)
-export const markLoginTime = () => {
-  loginTimestamp = Date.now();
+export const authDelete = async (endpoint, params = {}) => {
+  try {
+    const token = getCustomerToken();
+    if (!token) {
+      return { success: false, message: "Authentication required. Please login.", data: null, raw: null };
+    }
+    const response = await apiClient.delete(endpoint, {
+      params,
+      headers: { access_token: token },
+    });
+    return parseApiResponse(response);
+  } catch (error) {
+    return { success: false, message: getErrorMessage(error), data: null, raw: null };
+  }
 };
 
+// ── App Lock state ──
+// When a 401 occurs, lock the app instead of redirecting to login.
+// PIN unlock returns a fresh token — the user never needs to re-login via OTP.
+let _appLocked = false;
+let _onSessionExpired = null;
+export const setAppLocked = (val) => { _appLocked = val; };
+export const onSessionExpired = (cb) => { _onSessionExpired = cb; };
+
+// ── Global 401 Interceptor ──
+// On session expiry: lock the app so the user re-authenticates with PIN.
+// PIN login returns a fresh token — session is revalidated, never re-registered.
+let _handling401 = false;
+const LOGIN_PAGES = ["/customer/login", "/customer/verify-otp"];
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error?.response?.status === 401 && !isRedirecting) {
-      // Skip 401 handling during grace period after login (prevents false session expired on Android)
-      if (Date.now() - loginTimestamp < LOGIN_GRACE_PERIOD) {
-        console.log("401 ignored during login grace period");
-        return Promise.reject(error);
-      }
+    const isOnLoginPage = LOGIN_PAGES.some((p) => window.location.pathname.endsWith(p));
+    const hasAccessToken = error?.config?.headers?.access_token;
 
-      isRedirecting = true;
-      const msg = error?.response?.data?.message || "Session expired";
+    if (error?.response?.status === 401 && !_handling401 && !isOnLoginPage && hasAccessToken && !_appLocked) {
+      _handling401 = true;
 
-      // Clear all auth data
-      Object.values(CUSTOMER_STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
-      localStorage.removeItem("vb_pin_set");
+      // Don't clear sessionToken — pinLogin needs it to identify the user
+      // Just clear last-active so the lock screen shows immediately
       localStorage.removeItem("vb_last_active");
 
-      // Redirect to login with message
-      const basePath = window.location.pathname.includes("/vasbazaar/")
-        ? "/vasbazaar/customer/login"
-        : "/customer/login";
+      // Trigger app lock instead of redirecting to login
+      if (_onSessionExpired) _onSessionExpired();
 
-      const reason = msg.includes("another_device") || msg.includes("another device")
-        ? "You were logged out because your account was accessed from another device."
-        : "Your session has expired. Please log in again.";
-
-      sessionStorage.setItem("vb_logout_reason", reason);
-      window.location.href = basePath;
+      setTimeout(() => { _handling401 = false; }, 2000);
     }
     return Promise.reject(error);
   }

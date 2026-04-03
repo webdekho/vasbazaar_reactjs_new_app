@@ -34,6 +34,7 @@ export default function BankDetailsTab() {
   const [form, setForm] = useState({ accountNumber: "", ifscCode: "", bankName: "" });
   const [formErrors, setFormErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [verifyFailed, setVerifyFailed] = useState(false);
 
   const [transferData, setTransferData] = useState({ amount: "", transferMode: "IMPS" });
   const [transferErrors, setTransferErrors] = useState({});
@@ -66,18 +67,27 @@ export default function BankDetailsTab() {
     return Object.keys(errs).length === 0;
   };
 
-  const handleSubmitBank = async () => {
+  const handleSubmitBank = async (skipVerification = false) => {
     if (!validateForm()) return;
     setSubmitting(true);
+    setVerifyFailed(false);
+    const payload = skipVerification
+      ? { ...form, skipVerification: true }
+      : { ...form };
     const res = editingBank
-      ? await walletService.updateBankDetails({ id: editingBank.id, ...form })
-      : await walletService.addBankDetails(form);
+      ? await walletService.updateBankDetails({ id: editingBank.id, ...payload })
+      : await walletService.addBankDetails(payload);
     setSubmitting(false);
     if (res.success) {
       closeAddModal();
       fetchBanks();
     } else {
-      setFormErrors({ submit: res.message || "Failed to save bank account" });
+      const msg = res.message || "Failed to save bank account";
+      const isVerifyError = msg.toLowerCase().includes("verification failed") || msg.toLowerCase().includes("verify");
+      if (isVerifyError && !skipVerification) {
+        setVerifyFailed(true);
+      }
+      setFormErrors({ submit: msg });
     }
   };
 
@@ -93,6 +103,7 @@ export default function BankDetailsTab() {
     setEditingBank(null);
     setForm({ accountNumber: "", ifscCode: "", bankName: "" });
     setFormErrors({});
+    setVerifyFailed(false);
   };
 
   const openTransfer = (bank) => {
@@ -231,12 +242,33 @@ export default function BankDetailsTab() {
                 {formErrors.ifscCode && <span className="cm-form-error">{formErrors.ifscCode}</span>}
               </div>
               {formErrors.submit && <p className="cm-form-error" style={{ marginTop: 8 }}>{formErrors.submit}</p>}
+              {verifyFailed && (
+                <div style={{ marginTop: 10, padding: "10px 12px", background: "#FFF8E1", borderRadius: 10, border: "1px solid #FFE082" }}>
+                  <p style={{ margin: 0, fontSize: 12, color: "#F57F17", fontWeight: 600 }}>
+                    Bank verification could not be completed. You can still add this account — it will need admin approval before transfers.
+                  </p>
+                </div>
+              )}
             </div>
             <div className="cm-modal-footer">
-              <button type="button" className="cm-button" onClick={handleSubmitBank} disabled={submitting}>
-                {submitting ? <FaSpinner className="cm-spin" /> : <FaCheck />}
-                {editingBank ? "Update Account" : "Add Account"}
-              </button>
+              {verifyFailed ? (
+                <>
+                  <button type="button" className="cm-button" onClick={() => handleSubmitBank(true)} disabled={submitting}
+                    style={{ background: "#FF9800", color: "#fff" }}>
+                    {submitting ? <FaSpinner className="cm-spin" /> : <FaCheck />}
+                    Add Anyway (Pending Approval)
+                  </button>
+                  <button type="button" className="cm-button" onClick={() => handleSubmitBank(false)} disabled={submitting}
+                    style={{ background: "transparent", border: "1px solid var(--cm-line, #ddd)", color: "var(--cm-text, #333)" }}>
+                    Retry Verification
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="cm-button" onClick={() => handleSubmitBank(false)} disabled={submitting}>
+                  {submitting ? <FaSpinner className="cm-spin" /> : <FaCheck />}
+                  {editingBank ? "Update Account" : "Add Account"}
+                </button>
+              )}
               <button type="button" className="cm-button-ghost" onClick={closeAddModal} disabled={submitting}>Cancel</button>
             </div>
           </div>

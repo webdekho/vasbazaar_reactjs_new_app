@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaSearch, FaDownload, FaWallet, FaUserCircle, FaSyncAlt, FaClock, FaThLarge, FaPlaneDeparture } from "react-icons/fa";
-import { FiShare, FiPlusSquare, FiFileText, FiAlertTriangle, FiClock } from "react-icons/fi";
+import { FaSearch, FaDownload, FaSyncAlt, FaClock, FaPlaneDeparture } from "react-icons/fa";
+import { FiShare, FiPlusSquare, FiAlertTriangle, FiClock } from "react-icons/fi";
 import { HiOutlineCurrencyRupee, HiMiniSquares2X2 } from "react-icons/hi2";
 import { FaCalendarAlt, FaChevronRight, FaReceipt } from "react-icons/fa";
 import { serviceService } from "../services/serviceService";
@@ -287,10 +287,12 @@ const ServicesScreen = () => {
       setServices((Array.isArray(svcRes.data) ? svcRes.data : []).map(normalizeService));
       setBanners(Array.isArray(adRes.data) ? adRes.data : []);
       if (balRes.success && balRes.data) {
+        // Handle potential nested data structure from API
+        const d = balRes.data?.data || balRes.data;
         setBalances({
-          cashback: balRes.data.cashback || "0.00",
-          incentive: balRes.data.incentive || "0.00",
-          wallet: balRes.data.balance || balRes.data.walletBalance || "0.00",
+          cashback: d.cashback ?? d.Cashback ?? "0.00",
+          incentive: d.incentive ?? d.Incentive ?? "0.00",
+          wallet: d.balance ?? d.Balance ?? d.walletBalance ?? d.wallet ?? "0.00",
         });
       }
       if (duesRes.success) {
@@ -322,7 +324,7 @@ const ServicesScreen = () => {
 
   return (
     <DataState loading={false} error={error}>
-      <div className="cm-services-page">
+      <div className={`cm-services-page${query ? " is-searching" : ""}`}>
         {/* Install App banner */}
         {!query && <InstallAppBanner />}
 
@@ -354,7 +356,7 @@ const ServicesScreen = () => {
         {!query && <UpcomingDuesSection dues={upcomingDues} />}
 
         {/* Service icons grid - 4 per row */}
-        <div id="services-grid-section" className="cm-quick-access" style={query ? { marginTop: 0 } : {}}>
+        <div id="services-grid-section" className={`cm-quick-access${query ? " is-searching" : ""}`}>
           {!query && <div className="cm-quick-access-title">Services</div>}
         <div className="cm-services-grid-4" style={{ padding: "0 4px 8px", border: "none", boxShadow: "none", background: "transparent" }}>
           {filtered.length === 0 ? (

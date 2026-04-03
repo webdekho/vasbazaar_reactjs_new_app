@@ -11,7 +11,8 @@ import {
 import { FiCreditCard, FiArrowRight } from "react-icons/fi";
 import { serviceService } from "../services/serviceService";
 import { rechargeService } from "../services/rechargeService";
-import juspayService from "../services/juspayService";
+import { Capacitor } from "@capacitor/core";
+import juspayService, { isPwaStandalone } from "../services/juspayService";
 import { advertisementService } from "../services/advertisementService";
 import { offerService } from "../services/offerService";
 import { userService } from "../services/userService";
@@ -27,6 +28,7 @@ const BharatConnectLogo = () => (
 );
 
 /* ── Step Indicator ── */
+// eslint-disable-next-line no-unused-vars
 const StepIndicator = ({ current, total }) => (
   <div className="bf-step-indicator">
     {Array.from({ length: total }).map((_, i) => (
@@ -65,6 +67,7 @@ const getGradient = (ch) => GRADIENTS[ch.charCodeAt(0) % GRADIENTS.length];
 const BillerList = ({ operators, isLoading: listLoading, onSelect, onBack, serviceName, banners }) => {
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
+  // eslint-disable-next-line no-unused-vars
   const [activeLetter, setActiveLetter] = useState(null);
   const listRef = useRef(null);
 
@@ -91,15 +94,7 @@ const BillerList = ({ operators, isLoading: listLoading, onSelect, onBack, servi
     return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
   }, [filtered]);
 
-  const allLetters = grouped.map(([l]) => l);
   const matchCount = filtered.length;
-
-  const scrollToLetter = (letter) => {
-    setActiveLetter(letter);
-    const el = document.getElementById(`bf-grp-${letter}`);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    setTimeout(() => setActiveLetter(null), 1200);
-  };
 
   return (
     <div className="bf-step bf-step-enter">
@@ -544,6 +539,7 @@ const DTHPlansView = ({ biller, mobile, operators, onSelectPlan, onBack, onChang
       setLoading(false);
     };
     fetchDTH();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [billerOpCode]);
 
   /* Extract categories from Language field */
@@ -1186,6 +1182,13 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
   /* Step 5: Execute payment */
   const handlePay = async (payType) => {
     setLoading(true);
+
+    // Pre-open window synchronously for PWA standalone (Safari blocks async window.open as popup)
+    let pwaWindow = null;
+    if (payType === "upi" && !Capacitor.isNativePlatform() && isPwaStandalone()) {
+      pwaWindow = window.open("about:blank", "_blank");
+    }
+
     const payload = {
       amount: Number(amount),
       operatorId: Number(selectedBiller.id),
@@ -1205,6 +1208,7 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
 
     const response = await rechargeCall;
     if (!response.success) {
+      if (pwaWindow) pwaWindow.close();
       setLoading(false);
       alert(response.message || "Payment could not be processed.");
       return;
@@ -1230,7 +1234,13 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
           cashbackValue: couponData?.cashbackValue || 0,
           offerType: couponData?.offerType || null,
         });
-        window.location.href = paymentUrl;
+
+        // PWA standalone: use pre-opened window (Safari blocks async popups)
+        if (pwaWindow && !pwaWindow.closed) {
+          pwaWindow.location.href = paymentUrl;
+        } else {
+          window.location.href = paymentUrl;
+        }
         return;
       }
     }

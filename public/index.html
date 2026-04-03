@@ -2,18 +2,25 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <script>if (location.protocol !== 'https:' && location.hostname !== 'localhost') location.replace('https:' + location.href.substring(location.protocol.length));</script>
     <link rel="shortcut icon" href="%PUBLIC_URL%/favicon.png" />
     <link rel="icon" type="image/png" href="%PUBLIC_URL%/favicon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#0B0B0B" />
     <meta
       name="description"
       content="VasBazaar - Recharge, pay bills, manage wallet and earn rewards"
     />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/favicon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="VasBazaar" />
     <!-- Security headers -->
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <!-- X-Frame-Options must be set via HTTP header, not meta tag. Configure on server. -->
     <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <!-- CSP should be set via HTTP response header on the server, not in meta tag.
+         Meta-tag CSP blocks dev-server WebSocket and causes reload loops. -->
     <!--
       manifest.json provides metadata used when your web app is installed on a
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/

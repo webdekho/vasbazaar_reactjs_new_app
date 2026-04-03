@@ -18,6 +18,7 @@ const KycCallbackScreen = () => {
     if (processedRef.current) return;
     processedRef.current = true;
     processCallback();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const processCallback = async () => {

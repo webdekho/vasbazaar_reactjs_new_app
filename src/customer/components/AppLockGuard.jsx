@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { FaFingerprint, FaLock, FaBackspace, FaShieldAlt } from "react-icons/fa";
 import { useCustomerModern } from "../context/CustomerModernContext";
 import { authService } from "../services/authService";
-// import { customerStorage } from "../services/storageService";
+import { userService } from "../services/userService";
+import { setAppLocked, onSessionExpired } from "../services/apiClient";
 import { useTheme } from "../context/ThemeContext";
 
 const LOCK_KEYS = {
@@ -119,14 +120,24 @@ const LockScreen = ({ onUnlock }) => {
         setShowPin(true);
       }
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleBiometric = async () => {
     setError("");
     const success = await authenticateWithBiometric();
     if (success) {
-      localStorage.setItem(LOCK_KEYS.lastActive, Date.now().toString());
-      onUnlock();
+      // Verify the session token is still valid after biometric unlock
+      const profileCheck = await userService.getUserProfile();
+      if (profileCheck.success) {
+        localStorage.setItem(LOCK_KEYS.lastActive, Date.now().toString());
+        onUnlock();
+      } else {
+        // Session expired — biometric verified identity but token is stale
+        // Fall back to PIN which returns a fresh token from the server
+        setError("Session expired. Please enter your PIN to continue.");
+        setShowPin(true);
+      }
     } else {
       setShowPin(true);
     }
@@ -136,7 +147,7 @@ const LockScreen = ({ onUnlock }) => {
     setError("");
     const res = await authService.authenticateWithPin({ pin, permanentToken: sessionToken });
     if (res.success) {
-      // Update session token with the new token from PIN login response
+      // CRITICAL: Update session token with the new token from PIN login response
       const newToken = res.data?.token || res.raw?.data?.token;
       if (newToken) {
         console.log("PIN Login: Updating session token");
@@ -160,7 +171,7 @@ const LockScreen = ({ onUnlock }) => {
       <div className="al-card">
         <div className="al-logo-wrap">
           <img
-            src={theme === "light" ? "/images/vasbazaar-light.png" : "/images/vasbazaar-dark.png"}
+            src={theme === "light" ? "https://webdekho.in/images/vasbazaar1.png" : "https://webdekho.in/images/vasbazaar.png"}
             alt="VasBazaar" className="al-logo"
           />
         </div>
@@ -234,7 +245,7 @@ const SetPinScreen = ({ onComplete }) => {
       <div className="al-card">
         <div className="al-logo-wrap">
           <img
-            src={theme === "light" ? "/images/vasbazaar-light.png" : "/images/vasbazaar-dark.png"}
+            src={theme === "light" ? "https://webdekho.in/images/vasbazaar1.png" : "https://webdekho.in/images/vasbazaar.png"}
             alt="VasBazaar" className="al-logo"
           />
         </div>
@@ -385,6 +396,27 @@ const AppLockGuard = ({ children }) => {
       if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
     };
   }, [locked, needsPin, resetTimer]);
+
+  // Register callback so the 401 interceptor can lock the app instead of redirecting to login
+  useEffect(() => {
+    onSessionExpired(() => setLocked(true));
+    return () => onSessionExpired(null);
+  }, []);
+
+  // Tell the 401 interceptor to skip while lock screen is active
+  const unlockGraceTimer = useRef(null);
+  useEffect(() => {
+    if (locked || needsPin) {
+      if (unlockGraceTimer.current) { clearTimeout(unlockGraceTimer.current); unlockGraceTimer.current = null; }
+      setAppLocked(true);
+    } else {
+      unlockGraceTimer.current = setTimeout(() => { setAppLocked(false); }, 3000);
+    }
+    return () => {
+      if (unlockGraceTimer.current) { clearTimeout(unlockGraceTimer.current); unlockGraceTimer.current = null; }
+      setAppLocked(false);
+    };
+  }, [locked, needsPin]);
 
   if (needsPin) {
     return <SetPinScreen onComplete={() => { setNeedsPin(false); setLocked(false); }} />;

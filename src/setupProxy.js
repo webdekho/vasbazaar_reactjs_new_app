@@ -1,19 +1,32 @@
-module.exports = function(app) {
-  // Handle payment callback POST - convert to GET redirect for React Router
-  app.post('/customer/app/payment-callback', (req, res) => {
-    let body = '';
-    req.on('data', chunk => { body += chunk; });
-    req.on('end', () => {
-      // Parse form data
-      const params = new URLSearchParams(body);
-      const orderId = params.get('order_id') || params.get('orderId') || '';
-      const status = params.get('status') || '';
+const { createProxyMiddleware } = require("http-proxy-middleware");
 
-      // Redirect to GET with params so React Router can handle it
-      const redirectUrl = `/customer/app/payment-callback?order_id=${orderId}&status=${status}`;
-      console.log('[Proxy] Payment callback POST -> GET redirect:', redirectUrl);
+const PROXY_TARGET = "https://apis.uat.vasbazaar.com:8081";
 
-      res.redirect(303, redirectUrl);
+module.exports = function (app) {
+  // Intercept POST to /customer/app/payment-callback from payment gateway
+  // and redirect to GET with form data as query params so CRA serves index.html
+  app.post("/customer/app/payment-callback", (req, res) => {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk.toString();
     });
+    req.on("end", () => {
+      const queryString = body || "";
+      res.redirect(302, `/customer/app/payment-callback?${queryString}`);
+    });
+  });
+
+  // Proxy each backend path with its own middleware instance
+  const paths = ["/api", "/login", "/coupon", "/user"];
+  paths.forEach((path) => {
+    app.use(
+      path,
+      createProxyMiddleware({
+        target: PROXY_TARGET,
+        changeOrigin: true,
+        secure: false,
+        logLevel: "debug",
+      })
+    );
   });
 };

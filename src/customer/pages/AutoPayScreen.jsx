@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
-  FaArrowLeft, FaSyncAlt, FaCheckCircle, FaClock, FaTimesCircle,
-  FaPauseCircle, FaBan, FaChevronDown, FaCalendarAlt, FaExclamationTriangle
+  FaArrowLeft, FaSyncAlt, FaCheckCircle, FaClock,
+  FaPauseCircle, FaBan, FaChevronDown, FaExclamationTriangle
 } from "react-icons/fa";
 import { FiInbox } from "react-icons/fi";
 import { walletService } from "../services/walletService";
@@ -34,6 +34,7 @@ const SkeletonCard = ({ delay }) => (
 
 const AutoPayScreen = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [tab, setTab] = useState("active");
   const [mandates, setMandates] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +44,10 @@ const AutoPayScreen = () => {
   const [expandedId, setExpandedId] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
+  const [flash, setFlash] = useState(() => ({
+    type: location.state?.autopayType || "",
+    message: location.state?.autopayMessage || "",
+  }));
 
   const fetchData = async (pageNum = 1, statusFilter = tab, append = false) => {
     if (!append) setLoading(true);
@@ -55,7 +60,13 @@ const AutoPayScreen = () => {
     setHasMore(list.length >= 10);
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { setPage(1); fetchData(1, tab); }, [tab]);
+  useEffect(() => {
+    if (!flash.message) return undefined;
+    const timer = setTimeout(() => setFlash({ type: "", message: "" }), 5000);
+    return () => clearTimeout(timer);
+  }, [flash]);
 
   const handleRevoke = async (id) => {
     setActionLoading(id);
@@ -81,6 +92,23 @@ const AutoPayScreen = () => {
         <button className="th-back" type="button" onClick={() => navigate(-1)}><FaArrowLeft /></button>
         <div className="th-header-text"><h1 className="th-title">AutoPay Mandates</h1><span className="th-count">Manage recurring payments</span></div>
       </div>
+
+      {flash.message && (
+        <div
+          style={{
+            padding: "12px 14px",
+            borderRadius: 16,
+            border: `1px solid ${flash.type === "success" ? "rgba(0, 200, 83, 0.22)" : flash.type === "pending" ? "rgba(255, 152, 0, 0.22)" : "rgba(255, 71, 87, 0.22)"}`,
+            background: flash.type === "success" ? "rgba(0, 200, 83, 0.08)" : flash.type === "pending" ? "rgba(255, 152, 0, 0.08)" : "rgba(255, 71, 87, 0.08)",
+            color: flash.type === "success" ? "#00C853" : flash.type === "pending" ? "#FF9800" : "#FF4757",
+            fontSize: 14,
+            fontWeight: 700,
+            lineHeight: 1.5,
+          }}
+        >
+          {flash.message}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="ap-tabs">

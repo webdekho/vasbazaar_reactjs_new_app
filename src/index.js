@@ -11,11 +11,11 @@ root.render(
   </React.StrictMode>
 );
 
-// Service worker disabled for now
-// if ('serviceWorker' in navigator) {
-//   window.addEventListener('load', () => {
-//     navigator.serviceWorker.register('/sw.js').catch(() => {});
-//   });
-// }
+// Register service worker for PWA support
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/customer/sw.js').catch(() => {});
+  });
+}
 
 reportWebVitals();

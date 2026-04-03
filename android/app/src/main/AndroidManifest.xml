@@ -23,6 +23,30 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Deep linking for payment callback -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="vasbazaar" android:host="payment-callback" />
+            </intent-filter>
+
+            <!-- Deep linking for DigiLocker KYC callback -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="vasbazaar" android:host="kyc-callback" />
+            </intent-filter>
+
+            <!-- HTTPS deep link for payment callback -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="app.vasbazaar.com" android:pathPrefix="/payment-callback" />
+            </intent-filter>
+
         </activity>
 
         <provider

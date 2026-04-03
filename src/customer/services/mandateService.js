@@ -1,11 +1,8 @@
 import forge from "node-forge";
 import { authGet, authPost, getErrorMessage, guestGet } from "./apiClient";
+import { isPwaStandalone } from "./juspayService";
 
 const PENDING_MANDATE_KEY = "vb_pending_mandate";
-
-const isPwaStandalone = () =>
-  window.matchMedia("(display-mode: standalone)").matches ||
-  window.navigator.standalone === true;
 
 const base64ToArrayBuffer = (base64) => {
   const bin = window.atob(base64);

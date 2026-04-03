@@ -10,3 +10,5 @@ export { transactionService } from "./transactionService";
 export { customerStorage } from "./storageService";
 export { complaintService } from "./complaintService";
 export { offerService } from "./offerService";
+export { digiLockerService } from "./digiLockerService";
+export { travelService } from "./travelService";

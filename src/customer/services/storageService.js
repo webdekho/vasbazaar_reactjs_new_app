@@ -1,9 +1,9 @@
-import { CUSTOMER_STORAGE_KEYS, trimTrailingSlash, resolveApiBase, apiClient, setSessionToken, getSessionToken } from "./apiClient";
+import { CUSTOMER_STORAGE_KEYS, trimTrailingSlash, resolveApiBase, apiClient } from "./apiClient";
 
 export const customerStorage = {
   keys: CUSTOMER_STORAGE_KEYS,
 
-  getSessionToken: () => getSessionToken(),
+  getSessionToken: () => localStorage.getItem(CUSTOMER_STORAGE_KEYS.sessionToken),
 
   getApiBaseUrl: () => localStorage.getItem(CUSTOMER_STORAGE_KEYS.apiBaseUrl) || resolveApiBase(),
 
@@ -26,8 +26,14 @@ export const customerStorage = {
   },
 
   setAuthSession: ({ sessionToken, userData, tempToken }) => {
-    if (sessionToken) setSessionToken(sessionToken); // Use memory-backed setter for Android reliability
-    if (userData) localStorage.setItem(CUSTOMER_STORAGE_KEYS.userData, JSON.stringify(userData));
+    if (sessionToken) localStorage.setItem(CUSTOMER_STORAGE_KEYS.sessionToken, sessionToken);
+    if (userData) {
+      // Merge with existing userData to preserve fields not in the payload
+      const existing = localStorage.getItem(CUSTOMER_STORAGE_KEYS.userData);
+      const existingData = existing ? JSON.parse(existing) : {};
+      const merged = { ...existingData, ...userData };
+      localStorage.setItem(CUSTOMER_STORAGE_KEYS.userData, JSON.stringify(merged));
+    }
     if (typeof tempToken === "string" && tempToken) {
       localStorage.setItem(CUSTOMER_STORAGE_KEYS.tempToken, tempToken);
     } else if (tempToken === null) {
@@ -64,7 +70,6 @@ export const customerStorage = {
   getReferralCode: () => localStorage.getItem(CUSTOMER_STORAGE_KEYS.referralCode),
 
   clear: () => {
-    setSessionToken(null); // Clear memory token too
     Object.values(CUSTOMER_STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
   },
 };

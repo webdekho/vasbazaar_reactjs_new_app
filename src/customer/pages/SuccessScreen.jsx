@@ -47,26 +47,122 @@ const ScratchRewardModal = ({ open, couponCode, couponName, couponDesc, copied, 
     const ctx = canvas.getContext("2d");
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const coverGradient = ctx.createLinearGradient(0, 0, width, height);
-    coverGradient.addColorStop(0, "#EEF2FF");
-    coverGradient.addColorStop(0.5, "#C7D2FE");
-    coverGradient.addColorStop(1, "#BFDBFE");
-    ctx.fillStyle = coverGradient;
+    /* ── Rich metallic gradient base ── */
+    const baseGrad = ctx.createLinearGradient(0, 0, width, height);
+    baseGrad.addColorStop(0, "#1a0533");
+    baseGrad.addColorStop(0.3, "#2d1b69");
+    baseGrad.addColorStop(0.5, "#1e3a5f");
+    baseGrad.addColorStop(0.7, "#0d4f4f");
+    baseGrad.addColorStop(1, "#1a0533");
+    ctx.fillStyle = baseGrad;
     ctx.fillRect(0, 0, width, height);
 
-    ctx.fillStyle = "rgba(255, 255, 255, 0.28)";
-    for (let index = 0; index < 7; index += 1) {
-      const x = (width / 6) * index - 30;
-      ctx.fillRect(x, 0, 18, height);
+    /* ── Holographic shimmer streaks ── */
+    const shimmerColors = [
+      "rgba(255, 0, 128, 0.15)", "rgba(0, 200, 255, 0.12)", "rgba(255, 215, 0, 0.14)",
+      "rgba(0, 255, 170, 0.1)", "rgba(180, 100, 255, 0.12)", "rgba(255, 100, 50, 0.1)",
+    ];
+    for (let i = 0; i < 12; i++) {
+      const angle = (i * 15 + 10) * Math.PI / 180;
+      const sx = -50 + (i * width / 8);
+      ctx.save();
+      ctx.translate(sx, 0);
+      ctx.rotate(angle);
+      const streak = ctx.createLinearGradient(0, 0, 40, height * 1.5);
+      streak.addColorStop(0, "transparent");
+      streak.addColorStop(0.4, shimmerColors[i % shimmerColors.length]);
+      streak.addColorStop(0.6, shimmerColors[(i + 2) % shimmerColors.length]);
+      streak.addColorStop(1, "transparent");
+      ctx.fillStyle = streak;
+      ctx.fillRect(0, -20, 28, height * 1.5);
+      ctx.restore();
     }
 
-    ctx.fillStyle = "#1E3A8A";
-    ctx.font = '800 24px "Arial", sans-serif';
+    /* ── Glowing orbs ── */
+    const drawGlow = (cx, cy, r, color) => {
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      g.addColorStop(0, color);
+      g.addColorStop(1, "transparent");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+    };
+    drawGlow(width * 0.2, height * 0.25, 80, "rgba(255, 0, 200, 0.18)");
+    drawGlow(width * 0.8, height * 0.3, 70, "rgba(0, 200, 255, 0.16)");
+    drawGlow(width * 0.5, height * 0.75, 90, "rgba(255, 215, 0, 0.14)");
+    drawGlow(width * 0.15, height * 0.8, 60, "rgba(0, 255, 170, 0.12)");
+
+    /* ── Sparkle dots ── */
+    const sparkles = [
+      [0.12, 0.18], [0.85, 0.15], [0.92, 0.55], [0.08, 0.72], [0.75, 0.82],
+      [0.45, 0.12], [0.55, 0.88], [0.3, 0.5], [0.7, 0.45], [0.18, 0.42],
+      [0.88, 0.38], [0.42, 0.65], [0.62, 0.2], [0.25, 0.85], [0.78, 0.65],
+    ];
+    sparkles.forEach(([sx, sy]) => {
+      const x = sx * width;
+      const y = sy * height;
+      const size = 1.5 + Math.random() * 2.5;
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.4 + Math.random() * 0.5})`;
+      ctx.beginPath();
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fill();
+      /* cross sparkle */
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.2 + Math.random() * 0.3})`;
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(x - size * 2.5, y);
+      ctx.lineTo(x + size * 2.5, y);
+      ctx.moveTo(x, y - size * 2.5);
+      ctx.lineTo(x, y + size * 2.5);
+      ctx.stroke();
+    });
+
+    /* ── Coin/star burst (center) ── */
+    const cx = width / 2;
+    const cy = height / 2 - 8;
+    const coinGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 44);
+    coinGrad.addColorStop(0, "rgba(255, 215, 0, 0.35)");
+    coinGrad.addColorStop(0.5, "rgba(255, 180, 0, 0.15)");
+    coinGrad.addColorStop(1, "transparent");
+    ctx.fillStyle = coinGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 44, 0, Math.PI * 2);
+    ctx.fill();
+
+    /* Star icon */
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.fillStyle = "rgba(255, 215, 0, 0.7)";
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const a = (i * 72 - 90) * Math.PI / 180;
+      const ia = ((i * 72) + 36 - 90) * Math.PI / 180;
+      ctx.lineTo(Math.cos(a) * 18, Math.sin(a) * 18);
+      ctx.lineTo(Math.cos(ia) * 8, Math.sin(ia) * 8);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    /* ── Main text ── */
     ctx.textAlign = "center";
-    ctx.fillText("Scratch To Reveal", width / 2, height / 2 - 8);
-    ctx.font = '600 13px "Arial", sans-serif';
-    ctx.fillStyle = "#475569";
-    ctx.fillText("Your selected coupon is hidden below", width / 2, height / 2 + 22);
+    ctx.shadowColor = "rgba(255, 215, 0, 0.4)";
+    ctx.shadowBlur = 16;
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = '900 22px "Arial", sans-serif';
+    ctx.fillText("Scratch & Win", width / 2, height / 2 + 38);
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = "transparent";
+
+    ctx.font = '600 12px "Arial", sans-serif';
+    ctx.fillStyle = "rgba(200, 220, 255, 0.7)";
+    ctx.fillText("Your reward is hidden underneath", width / 2, height / 2 + 60);
+
+    /* ── Border glow ── */
+    ctx.strokeStyle = "rgba(255, 215, 0, 0.18)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(6, 6, width - 12, height - 12);
 
     return () => {
       document.body.style.overflow = "";
@@ -241,6 +337,7 @@ const SuccessScreen = () => {
       });
     }
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

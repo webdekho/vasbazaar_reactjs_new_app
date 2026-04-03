@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaSearch, FaHashtag, FaPhoneAlt, FaCalendarAlt, FaCheckCircle, FaClock, FaTimesCircle } from "react-icons/fa";
 import { FiInbox } from "react-icons/fi";
 import { walletService } from "../services/walletService";
+import { formatCurrency, matchesTransactionSearch, normalizeTransaction } from "../utils/transactionHistory";
 
 const statusCfg = (s) => {
   const v = (s || "").toLowerCase();
@@ -10,6 +11,13 @@ const statusCfg = (s) => {
   if (v.includes("pending")) return { color: "#FF9800", label: "Pending", icon: <FaClock /> };
   return { color: "#FF3B30", label: "Failed", icon: <FaTimesCircle /> };
 };
+
+const TransactionMetaItem = ({ label, value, valueClassName = "" }) => (
+  <div className="th-meta-item">
+    <span className="th-meta-label">{label}</span>
+    <span className={`th-meta-value${valueClassName ? ` ${valueClassName}` : ""}`}>{value || "—"}</span>
+  </div>
+);
 
 const SearchTransactionScreen = () => {
   const navigate = useNavigate();
@@ -35,8 +43,8 @@ const SearchTransactionScreen = () => {
     const list = res.data?.records || (Array.isArray(res.data) ? res.data : []);
     const q = mode === "txn" ? txnId.trim().toLowerCase() : mobile.trim();
     const filtered = list.filter((t) => {
-      if (mode === "txn") return (t.txnId || "").toLowerCase().includes(q);
-      const matchMobile = (t.operatorNo || t.mobile || "").includes(q);
+      if (mode === "txn") return matchesTransactionSearch(t, q);
+      const matchMobile = matchesTransactionSearch(t, q) || (t.operatorNo || t.mobile || "").includes(q);
       if (!matchMobile) return false;
       if (fromDate) { const d = new Date(t.date); if (d < new Date(fromDate)) return false; }
       if (toDate) { const d = new Date(t.date); if (d > new Date(toDate + "T23:59:59")) return false; }
@@ -105,18 +113,45 @@ const SearchTransactionScreen = () => {
             <div className="th-list">
               {results.map((t, i) => {
                 const st = statusCfg(t.status);
+                const txn = normalizeTransaction(t);
                 return (
                   <div key={t.txnId || i} className="th-card" style={{ animationDelay: `${i * 40}ms` }}>
                     <div className="th-card-row">
                       <div className="th-info">
-                        <div className="th-info-name">{t.operatorNo || t.customerName || "Transaction"}</div>
+                        <div className="th-info-name">{txn.mobile || t.customerName || "Transaction"}</div>
                         <div className="th-info-desc">ID: {t.txnId || "—"}</div>
                         <div className="th-info-date">{t.date} {t.time}</div>
                       </div>
                       <div className="th-right">
-                        <div className="th-amount">&#8377;{t.txnAmt || t.amount || 0}</div>
+                        <div className="th-amount">{formatCurrency(txn.amount ?? t.txnAmt ?? t.amount ?? 0)}</div>
                         <div className="th-status" style={{ "--st-color": st.color }}>{st.icon} {t.status || st.label}</div>
                       </div>
+                    </div>
+                    <div className="th-meta-grid">
+                      <TransactionMetaItem label="Service" value={txn.service} />
+                      <TransactionMetaItem label="Operator" value={txn.operator} />
+                      <TransactionMetaItem label="Payment Mode" value={txn.paymentMode} />
+                      <TransactionMetaItem
+                        label="Offer Method"
+                        value={txn.offerMethodLabel}
+                        valueClassName={`th-meta-value--offer th-meta-value--offer-${txn.offerMethod}`}
+                      />
+                      {txn.offerMethod === "discount" && (
+                        <>
+                          <TransactionMetaItem label="Discount" value={formatCurrency(txn.discountAmount)} />
+                          <TransactionMetaItem label="Paid Amount" value={formatCurrency(txn.paidAmount ?? txn.amount)} />
+                        </>
+                      )}
+                      {txn.offerMethod === "cashback" && (
+                        <TransactionMetaItem label="Cashback Amount" value={formatCurrency(txn.cashbackAmount)} />
+                      )}
+                      {txn.offerMethod === "coupon" && (
+                        <>
+                          <TransactionMetaItem label="Coupon Name" value={txn.couponName} />
+                          <TransactionMetaItem label="Coupon Code" value={txn.couponCode} />
+                          <TransactionMetaItem label="Coupon Validity" value={txn.couponValidity} />
+                        </>
+                      )}
                     </div>
                   </div>
                 );

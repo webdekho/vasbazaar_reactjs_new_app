@@ -1,35 +1,15 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { FaArrowLeft, FaSearch, FaChevronRight, FaTimes, FaCheck } from "react-icons/fa";
 import { FiArrowRight } from "react-icons/fi";
 import { Capacitor } from "@capacitor/core";
+import { Contacts } from "@capacitor-community/contacts";
 import { serviceService } from "../services/serviceService";
 import { rechargeService } from "../services/rechargeService";
 import { advertisementService } from "../services/advertisementService";
 import DataState from "../components/DataState";
-import BannerSlider from "../components/BannerSlider";
-import { getServiceVisual, normalizeService } from "../components/serviceUtils";
+import { normalizeService } from "../components/serviceUtils";
 import BillerFlowScreen from "./BillerFlowScreen";
-
-// Helper to get contacts using Capacitor plugin
-const getCapacitorContacts = async () => {
-  try {
-    const { Contacts } = await import("@capacitor-community/contacts");
-    const permission = await Contacts.requestPermissions();
-    if (permission.contacts !== "granted") return null;
-    const result = await Contacts.getContacts({ projection: { name: true, phones: true } });
-    return (result.contacts || [])
-      .filter((c) => c.phones?.length)
-      .map((c, i) => ({
-        id: `cap-${i}`,
-        name: c.name?.display || c.name?.given || "Unknown",
-        number: c.phones[0]?.number || "",
-        phones: c.phones.map((p) => p.number),
-      }));
-  } catch {
-    return null;
-  }
-};
 
 const FALLBACK_LOGO = "/assets/images/Brand_favicon.png";
 const handleLogoError = (e) => { e.target.onerror = null; e.target.src = FALLBACK_LOGO; };
@@ -228,7 +208,7 @@ const RechargePlansView = ({ contactName, mobile, operatorData: initialOperatorD
       <div className="cm-flow-title-row">
         <button className="cm-back-icon" type="button" onClick={onBack}><FaArrowLeft /></button>
         <h1>Mobile Recharge Plans</h1>
-        <img src="/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
+        <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
       </div>
 
       {/* Operator info card */}
@@ -313,6 +293,7 @@ const RechargePlansView = ({ contactName, mobile, operatorData: initialOperatorD
 /* ══════════════════════════════════════════════
    Mobile Number Bottom Sheet (Prepaid: View Plans / Postpaid: Fetch Bill)
    ══════════════════════════════════════════════ */
+// eslint-disable-next-line no-unused-vars
 const MobileNumberSheet = ({ open, operator, isPostpaid, navigate, serviceData, onSubmit, onClose }) => {
   const [mobile, setMobile] = useState("");
   const [amount, setAmount] = useState("");
@@ -468,12 +449,22 @@ const MobileNumberSheet = ({ open, operator, isPostpaid, navigate, serviceData, 
    Contact List Screen (Prepaid & Postpaid)
    ══════════════════════════════════════════════ */
 const PrepaidFlow = ({ serviceData, operators, navigate }) => {
-  const [banners, setBanners] = useState([]);
+  const location = useLocation();
+  const prefill = location.state?.prefill;
+  const [, setBanners] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [search, setSearch] = useState("");
   const [loadingNumber, setLoadingNumber] = useState(null);
-  const [planView, setPlanView] = useState(null);
+  const [planView, setPlanView] = useState(() => {
+    // If navigating from My Dues with prefill data, skip to plans view directly
+    if (prefill?.mobile && prefill?.operatorData) {
+      return { contactName: prefill.contactName || "", mobile: prefill.mobile, operatorData: prefill.operatorData };
+    }
+    return null;
+  });
+  const [contactsLoading, setContactsLoading] = useState(false);
   const fileInputRef = useRef(null);
+  const contactsLoadedRef = useRef(false);
 
   const userData = useMemo(() => {
     try {
@@ -484,15 +475,60 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
 
   useEffect(() => { advertisementService.getServiceAdvertisements().then((res) => { if (res.success && Array.isArray(res.data)) setBanners(res.data); }); }, []);
 
-  // Auto-load contacts on native platforms
+  // Auto-load contacts on mount for native apps and PWA
   useEffect(() => {
+    if (contactsLoadedRef.current) return;
+
     const autoLoadContacts = async () => {
-      if (!Capacitor.isNativePlatform()) return;
-      const capContacts = await getCapacitorContacts();
-      if (capContacts?.length) {
-        setContacts(capContacts.map((c) => ({ ...c, number: normalizeMobile(c.number) })));
+      // For native apps (Android/iOS)
+      if (Capacitor.isNativePlatform()) {
+        contactsLoadedRef.current = true;
+        setContactsLoading(true);
+        try {
+          const checkStatus = await Contacts.checkPermissions();
+          let permGranted = checkStatus.contacts === "granted" || checkStatus.contacts === "limited";
+
+          if (!permGranted) {
+            const reqStatus = await Contacts.requestPermissions();
+            permGranted = reqStatus.contacts === "granted" || reqStatus.contacts === "limited";
+          }
+
+          if (permGranted) {
+            const result = await Contacts.getContacts({
+              projection: { name: true, phones: true }
+            });
+
+            if (result?.contacts?.length) {
+              const imported = result.contacts
+                .filter(c => c.phones?.length > 0)
+                .map((c, i) => ({
+                  id: `native-${c.contactId || i}`,
+                  name: c.name?.display || c.name?.given || c.name?.family || "Contact",
+                  number: normalizeMobile(c.phones[0]?.number || ""),
+                  phones: c.phones?.map(p => p.number).filter(Boolean) || []
+                }))
+                .filter(c => c.number && c.number.length >= 10);
+
+              if (imported.length) {
+                setContacts(imported);
+              }
+            }
+          }
+        } catch (e) {
+          console.log("Auto-load contacts error:", e);
+        }
+        setContactsLoading(false);
+        return;
+      }
+
+      // For PWA / Web with Contact Picker API support
+      if ("contacts" in navigator && "select" in navigator.contacts) {
+        // Don't auto-trigger on web as it requires user gesture
+        // Just mark as loaded so we don't try again
+        contactsLoadedRef.current = true;
       }
     };
+
     autoLoadContacts();
   }, []);
 
@@ -522,15 +558,59 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
   };
 
   const handleImportContacts = async () => {
-    // Try Capacitor Contacts plugin first (native apps)
+    // Use Capacitor plugin on native Android/iOS - fetch all contacts
     if (Capacitor.isNativePlatform()) {
-      const capContacts = await getCapacitorContacts();
-      if (capContacts?.length) {
-        setContacts(capContacts.map((c) => ({ ...c, number: normalizeMobile(c.number) })));
+      try {
+        // Check current permission status
+        const checkStatus = await Contacts.checkPermissions();
+        let permGranted = checkStatus.contacts === "granted" || checkStatus.contacts === "limited";
+
+        // Request permission if not granted
+        if (!permGranted) {
+          const reqStatus = await Contacts.requestPermissions();
+          permGranted = reqStatus.contacts === "granted" || reqStatus.contacts === "limited";
+        }
+
+        if (!permGranted) {
+          alert("Please allow contacts permission to import contacts from your device.");
+          return;
+        }
+
+        // Fetch all contacts from device
+        const result = await Contacts.getContacts({
+          projection: { name: true, phones: true }
+        });
+
+        console.log("Contacts result:", result?.contacts?.length || 0, "contacts found");
+
+        if (result?.contacts?.length) {
+          const imported = result.contacts
+            .filter(c => c.phones?.length > 0)
+            .map((c, i) => ({
+              id: `native-${c.contactId || i}`,
+              name: c.name?.display || c.name?.given || c.name?.family || "Contact",
+              number: normalizeMobile(c.phones[0]?.number || ""),
+              phones: c.phones?.map(p => p.number).filter(Boolean) || []
+            }))
+            .filter(c => c.number && c.number.length >= 10);
+
+          if (imported.length) {
+            setContacts(imported);
+          } else {
+            alert("No contacts with valid phone numbers found.");
+          }
+        } else {
+          alert("No contacts found on this device.");
+        }
+        return;
+      } catch (e) {
+        console.error("Native contacts error:", e);
+        alert("Error reading contacts: " + (e.message || "Unknown error"));
         return;
       }
     }
-    // Try native Contact Picker API (Android Chrome)
+
+    // Web Contact Picker API fallback (Chrome Android)
     if ("contacts" in navigator && "select" in navigator.contacts) {
       try {
         const selected = await navigator.contacts.select(["name", "tel"], { multiple: true });
@@ -540,17 +620,8 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
         if (imported.length) { setContacts(imported); return; }
       } catch { /* fall through */ }
     }
-    // Fallback: prompt user to enter number or import file
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    if (isMobile) {
-      // On mobile without Contact Picker, focus the search bar so user can type a number
-      const searchInput = document.querySelector(".cm-contact-search-input");
-      if (searchInput) {
-        searchInput.focus();
-        searchInput.placeholder = "Type a 10-digit mobile number...";
-        return;
-      }
-    }
+
+    // Final fallback: file import (only for web browsers)
     fileInputRef.current?.click();
   };
 
@@ -696,6 +767,12 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
             })}
           </div>
         </>
+      ) : contactsLoading ? (
+        <div className="cm-cl-empty">
+          <div className="cm-cl-loading-spinner" />
+          <p className="cm-cl-empty-title">Loading contacts...</p>
+          <p className="cm-cl-empty-desc">Please wait while we fetch your contacts</p>
+        </div>
       ) : (
         <div className="cm-cl-empty">
           <div className="cm-cl-empty-icon-wrap" onClick={handleImportContacts} role="button" tabIndex={0}>
@@ -732,15 +809,6 @@ const PostpaidFlow = ({ serviceData, operators, navigate }) => {
   }, []);
 
   const handlePickContact = async () => {
-    // Try Capacitor Contacts plugin first (native apps)
-    if (Capacitor.isNativePlatform()) {
-      const capContacts = await getCapacitorContacts();
-      if (capContacts?.length) {
-        const num = normalizeMobile(capContacts[0].number);
-        if (num) { setMobile(num); return; }
-      }
-    }
-    // Try native Contact Picker API
     if ("contacts" in navigator && "select" in navigator.contacts) {
       try {
         const selected = await navigator.contacts.select(["name", "tel"], { multiple: false });
@@ -836,7 +904,7 @@ const PostpaidFlow = ({ serviceData, operators, navigate }) => {
           else navigate("/customer/app/services");
         }}><FaArrowLeft /></button>
         <h1>{step === "mobile" ? "Postpaid Bill Payment" : step === "operator" ? "Select Operator" : "Bill Details"}</h1>
-        <img src="/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
+        <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
       </div>
 
       {/* Step indicator */}
@@ -999,6 +1067,7 @@ const PostpaidFlow = ({ serviceData, operators, navigate }) => {
 /* ══════════════════════════════════════════════
    Biller Flow (existing)
    ══════════════════════════════════════════════ */
+// eslint-disable-next-line no-unused-vars
 const BillerFlow = ({ serviceData, operators, navigate }) => {
   const [search, setSearch] = useState("");
   const [selectedOperatorId, setSelectedOperatorId] = useState("");
@@ -1013,7 +1082,7 @@ const BillerFlow = ({ serviceData, operators, navigate }) => {
   return (
     <div className="cm-stack">
       <div className="cm-card">
-        <div className="cm-flow-header"><div className="cm-flow-title-row"><button className="cm-back-icon" type="button" onClick={() => navigate("/customer/app/services")}><FaArrowLeft /></button><h1>{serviceData.name}</h1><img src="/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" /></div><p className="cm-page-subtitle">Select a biller and fill in your details.</p></div>
+        <div className="cm-flow-header"><div className="cm-flow-title-row"><button className="cm-back-icon" type="button" onClick={() => navigate("/customer/app/services")}><FaArrowLeft /></button><h1>{serviceData.name}</h1><img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" /></div><p className="cm-page-subtitle">Select a biller and fill in your details.</p></div>
         <div className="cm-summary-strip"><div className="cm-search-wrap"><FaSearch /><input className="cm-input" placeholder="Search billers" value={search} onChange={(e) => setSearch(e.target.value)} /></div></div>
       </div>
       {error && <div className="cm-status cm-status-error">{error}</div>}
@@ -1043,7 +1112,7 @@ const ServiceFlowScreen = () => {
   const params = useParams();
   const location = useLocation();
   const rawService = location.state?.service;
-  const service = rawService ? { ...rawService, ...getServiceVisual(rawService.name) } : null;
+  const service = rawService ? normalizeService(rawService) : null;
   const [serviceData, setServiceData] = useState(service || null);
   const [operators, setOperators] = useState([]);
   const [loading, setLoading] = useState(true);

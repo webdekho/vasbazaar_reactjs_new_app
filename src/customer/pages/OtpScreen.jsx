@@ -1,14 +1,26 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaArrowLeft, FaChevronRight } from "react-icons/fa";
-import { FiRefreshCw, FiShield } from "react-icons/fi";
+import { FiRefreshCw, FiUser } from "react-icons/fi";
 import { useCustomerModern } from "../context/CustomerModernContext";
 import { authService } from "../services/authService";
+import { userService } from "../services/userService";
 import { customerStorage } from "../services/storageService";
 import { extractSessionToken } from "../components/serviceUtils";
 import { triggerPWAInstall } from "../hooks/usePWAInstall";
 import { useTheme } from "../context/ThemeContext";
-import { markLoginTime } from "../services/apiClient";
+
+const NAME_PLACEHOLDERS = new Set([
+  "NA",
+  "N/A",
+  "NULL",
+  "UNDEFINED",
+  "NONE",
+  "CUSTOMER",
+  "CUSTOMER NAME",
+  "USER",
+  "USER NAME",
+]);
 
 const OtpScreen = () => {
   const navigate = useNavigate();
@@ -21,13 +33,19 @@ const OtpScreen = () => {
   const [loading, setLoading] = useState(false);
   const [devOtp, setDevOtp] = useState(customerStorage.getDevOtp());
   const [shake, setShake] = useState(false);
+  const [pendingSession, setPendingSession] = useState(null);
+  const [name, setName] = useState("");
+  const [nameStatus, setNameStatus] = useState(null);
+  const [nameLoading, setNameLoading] = useState(false);
+  const [focused, setFocused] = useState("");
   const mobile = searchParams.get("mobile");
 
   // Auto-focus first OTP input on mount (works on mobile too)
   useEffect(() => {
-    const t = setTimeout(() => document.getElementById("otp-0")?.focus(), 300);
+    const focusId = pendingSession ? "onboarding-name" : "otp-0";
+    const t = setTimeout(() => document.getElementById(focusId)?.focus(), 300);
     return () => clearTimeout(t);
-  }, []);
+  }, [pendingSession]);
 
   useEffect(() => {
     if (timer <= 0) return undefined;
@@ -70,6 +88,12 @@ const OtpScreen = () => {
     }
   };
 
+  const finishLogin = (sessionToken, userData) => {
+    setAuthSession({ sessionToken, userData, tempToken: null });
+    triggerPWAInstall();
+    navigate("/customer/app/services", { replace: true });
+  };
+
   const submit = async (event) => {
     event.preventDefault();
     const otpValue = otp.join("");
@@ -93,7 +117,6 @@ const OtpScreen = () => {
     const apiData = (typeof response.data === "object" && response.data !== null) ? response.data : (response.raw?.data || {});
     const rawData = response.raw || {};
     const sessionToken = apiData.token || extractSessionToken(response.data) || token;
-    console.log('[OTP] Verify response:', { apiDataToken: apiData.token, extractedToken: extractSessionToken(response.data), tempToken: token, finalToken: sessionToken });
     customerStorage.setDevOtp(null);
     if (apiData.profile) {
       localStorage.setItem("profile_photo", apiData.profile);
@@ -108,18 +131,60 @@ const OtpScreen = () => {
       refferalCode: apiData.refferalCode || "", verified_status: apiData.verified_status,
       profile: apiData.profile || "",
     };
-    // Mark login time to prevent false 401 session expired on Android
-    markLoginTime();
-    setAuthSession({ sessionToken, userData, tempToken: null });
-    triggerPWAInstall();
+    const normalizedName = (extractedName || "").trim().replace(/\s+/g, " ");
+    const normalizedNameKey = normalizedName.toUpperCase();
+    const nameDigits = normalizedName.replace(/\D/g, "");
+    const mobileDigits = String(userData.mobile || "").replace(/\D/g, "");
+    const needsNameOnboarding =
+      !normalizedName
+      || NAME_PLACEHOLDERS.has(normalizedNameKey)
+      || (nameDigits.length >= 10 && mobileDigits && nameDigits === mobileDigits);
 
-    // Check if KYC is needed (verified_status is 0, null, or undefined)
-    const verifiedStatus = apiData.verified_status;
-    if (verifiedStatus === 0 || verifiedStatus === null || verifiedStatus === undefined || verifiedStatus === "0") {
-      navigate("/customer/app/kyc", { replace: true, state: { returnTo: "/customer/app/services", fromLogin: true } });
-    } else {
-      navigate("/customer/app/services", { replace: true });
+    if (needsNameOnboarding) {
+      setStatus(null);
+      setNameStatus(null);
+      setName("");
+      setPendingSession({ sessionToken, userData: { ...userData, name: "" } });
+      return;
     }
+
+    finishLogin(sessionToken, userData);
+  };
+
+  const submitName = async (event) => {
+    event.preventDefault();
+    if (!pendingSession) return;
+
+    const trimmedName = name.trim().replace(/\s+/g, " ");
+    if (trimmedName.length < 2) {
+      setNameStatus({ type: "error", message: "Please enter your full name." });
+      return;
+    }
+
+    setNameLoading(true);
+    const response = await userService.completeOnboarding({
+      name: trimmedName,
+      sessionToken: pendingSession.sessionToken,
+    });
+    setNameLoading(false);
+
+    if (!response.success) {
+      setNameStatus({ type: "error", message: response.message || "Failed to save your name." });
+      return;
+    }
+
+    const updatedData = {
+      ...pendingSession.userData,
+      ...(response.data || {}),
+      name: response.data?.name || trimmedName,
+      mobile: response.data?.mobile || response.data?.mobileNumber || pendingSession.userData.mobile,
+      verified_status: response.data?.verified_status ?? pendingSession.userData.verified_status,
+      profile: response.data?.profile || pendingSession.userData.profile || "",
+    };
+
+    setPendingSession(null);
+    setNameStatus(null);
+    finishLogin(pendingSession.sessionToken, updatedData);
   };
 
   const resendOtp = async () => {
@@ -135,7 +200,7 @@ const OtpScreen = () => {
       setDevOtp(nextDevOtp);
       setTimer(30);
       setOtp(["", "", "", "", "", ""]);
-      setStatus({ type: "success", message: response.message || "OTP resent." });
+      setStatus({ type: "success", message: "OTP resent successfully" });
     } else {
       setStatus({ type: "error", message: response.message });
     }
@@ -162,68 +227,108 @@ const OtpScreen = () => {
 
           <div className="cm-auth-header">
             <div className="cm-auth-logo">
-              <img src={theme === "light" ? "/images/vasbazaar-light.png" : "/images/vasbazaar-dark.png"} alt="VasBazaar" className="cm-auth-logo-img" />
+              <img src={theme === "light" ? "https://webdekho.in/images/vasbazaar1.png" : "https://webdekho.in/images/vasbazaar.png"} alt="VasBazaar" className="cm-auth-logo-img" />
             </div>
           </div>
 
           <div className="cm-auth-hero-text">
-            <h1>Verify OTP</h1>
-            <p>We sent a 6-digit code to <strong>+91 {mobile || "your number"}</strong></p>
+            <h1>{pendingSession ? "Please enter your name" : "Verify OTP"}</h1>
+            <p>
+              {pendingSession
+                ? "Please enter your name to finish your first-time signup."
+                : <>We sent a 6-digit code to <strong>+91 {mobile || "your number"}</strong></>}
+            </p>
           </div>
 
-          <form className="cm-auth-form" onSubmit={submit}>
-            <div className={`cm-auth-otp-grid${shake ? " cm-shake" : ""}`}>
-              {otp.map((digit, index) => (
+          {pendingSession ? (
+            <form className="cm-auth-form" onSubmit={submitName}>
+              <div className={`cm-auth-field${focused === "name" ? " is-focused" : ""}`}>
+                <label htmlFor="onboarding-name">
+                  <FiUser className="cm-auth-field-icon" />
+                  Full Name
+                </label>
                 <input
-                  key={index}
-                  id={`otp-${index}`}
-                  className={`cm-auth-otp-input${digit ? " has-value" : ""}`}
-                  inputMode="numeric"
-                  maxLength={index === 0 ? 6 : 1}
-                  value={digit}
-                  onChange={(e) => handleOtpChange(index, e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(index, e)}
-                  autoFocus={index === 0}
-                  autoComplete={index === 0 ? "one-time-code" : "off"}
+                  id="onboarding-name"
+                  className="cm-auth-input cm-auth-input--full"
+                  placeholder="Please enter your name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onFocus={() => setFocused("name")}
+                  onBlur={() => setFocused("")}
+                  autoComplete="name"
                 />
-              ))}
-            </div>
+              </div>
 
-            <div className="cm-auth-timer-row">
-              {timer > 0 ? (
-                <div className="cm-auth-timer">
-                  <svg className="cm-auth-timer-ring" viewBox="0 0 36 36">
-                    <circle cx="18" cy="18" r="15.5" fill="none" className="cm-auth-timer-track" strokeWidth="3" />
-                    <circle cx="18" cy="18" r="15.5" fill="none" stroke="url(#timerGrad)" strokeWidth="3"
-                      strokeDasharray={`${(timer / 30) * 97.4} 97.4`}
-                      strokeLinecap="round" transform="rotate(-90 18 18)" />
-                    <defs>
-                      <linearGradient id="timerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#40E0D0" />
-                        <stop offset="100%" stopColor="#007BFF" />
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                  <span className="cm-auth-timer-text">{timer}s</span>
+              {nameStatus && (
+                <div className={`cm-auth-alert cm-auth-alert--${nameStatus.type}`}>
+                  <span className="cm-auth-alert-dot" />
+                  {nameStatus.message}
                 </div>
-              ) : (
-                <button className="cm-auth-resend-btn" type="button" onClick={resendOtp} disabled={loading}>
-                  <FiRefreshCw /> Resend OTP
-                </button>
               )}
-            </div>
 
-            {devOtp && <div className="cm-auth-alert cm-auth-alert--success"><span className="cm-auth-alert-dot" />Development OTP: {devOtp}</div>}
-            {status && <div className={`cm-auth-alert cm-auth-alert--${status.type}`}><span className="cm-auth-alert-dot" />{status.message}</div>}
+              <button className="cm-auth-btn" type="submit" disabled={nameLoading}>
+                {nameLoading ? (
+                  <span className="cm-auth-btn-loading"><span className="cm-auth-spinner" />Saving...</span>
+                ) : (
+                  <>Continue <FaChevronRight className="cm-auth-btn-arrow" /></>
+                )}
+              </button>
+            </form>
+          ) : (
+            <form className="cm-auth-form" onSubmit={submit}>
+              <div className={`cm-auth-otp-grid${shake ? " cm-shake" : ""}`}>
+                {otp.map((digit, index) => (
+                  <input
+                    key={index}
+                    id={`otp-${index}`}
+                    className={`cm-auth-otp-input${digit ? " has-value" : ""}`}
+                    inputMode="numeric"
+                    maxLength={index === 0 ? 6 : 1}
+                    value={digit}
+                    onChange={(e) => handleOtpChange(index, e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(index, e)}
+                    autoFocus={index === 0}
+                    autoComplete={index === 0 ? "one-time-code" : "off"}
+                  />
+                ))}
+              </div>
 
-            <button id="otp-submit-btn" className="cm-auth-btn" type="submit" disabled={loading}>
-              {loading ? (
-                <span className="cm-auth-btn-loading"><span className="cm-auth-spinner" />Verifying...</span>
-              ) : (
-                <>Verify & Enter <FaChevronRight className="cm-auth-btn-arrow" /></>
-              )}
-            </button>
-          </form>
+              <div className="cm-auth-timer-row">
+                {timer > 0 ? (
+                  <div className="cm-auth-timer">
+                    <svg className="cm-auth-timer-ring" viewBox="0 0 36 36">
+                      <circle cx="18" cy="18" r="15.5" fill="none" className="cm-auth-timer-track" strokeWidth="3" />
+                      <circle cx="18" cy="18" r="15.5" fill="none" stroke="url(#timerGrad)" strokeWidth="3"
+                        strokeDasharray={`${(timer / 30) * 97.4} 97.4`}
+                        strokeLinecap="round" transform="rotate(-90 18 18)" />
+                      <defs>
+                        <linearGradient id="timerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%" stopColor="#40E0D0" />
+                          <stop offset="100%" stopColor="#007BFF" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                    <span className="cm-auth-timer-text">{timer}s</span>
+                  </div>
+                ) : (
+                  <button className="cm-auth-resend-btn" type="button" onClick={resendOtp} disabled={loading}>
+                    <FiRefreshCw /> Resend OTP
+                  </button>
+                )}
+              </div>
+
+              {devOtp && <div className="cm-auth-alert cm-auth-alert--success"><span className="cm-auth-alert-dot" />Development OTP: {devOtp}</div>}
+              {status && <div className={`cm-auth-alert cm-auth-alert--${status.type}`}><span className="cm-auth-alert-dot" />{status.message}</div>}
+
+              <button id="otp-submit-btn" className="cm-auth-btn" type="submit" disabled={loading}>
+                {loading ? (
+                  <span className="cm-auth-btn-loading"><span className="cm-auth-spinner" />Verifying...</span>
+                ) : (
+                  <>Verify & Enter <FaChevronRight className="cm-auth-btn-arrow" /></>
+                )}
+              </button>
+            </form>
+          )}
         </div>
       </div>
     </div>

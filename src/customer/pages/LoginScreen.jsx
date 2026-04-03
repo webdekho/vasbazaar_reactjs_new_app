@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaChevronRight, FaGift } from "react-icons/fa";
 import { FiPhoneCall, FiCreditCard, FiGift } from "react-icons/fi";
@@ -9,24 +9,18 @@ import { useTheme } from "../context/ThemeContext";
 
 const LoginScreen = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { theme } = useTheme();
-  const urlCode = searchParams.get("code");
+  const [searchParams] = useSearchParams();
+  const urlCode = searchParams.get("code") || "";
   const [mobileNumber, setMobileNumber] = useState("");
-  const [referralCode, setReferralCode] = useState(
-    urlCode || customerStorage.getReferralCode() || ""
-  );
-  const [status, setStatus] = useState(null);
+  const [referralCode, setReferralCode] = useState(urlCode || customerStorage.getReferralCode() || "");
+  const [status, setStatus] = useState(() => {
+    const reason = sessionStorage.getItem("vb_logout_reason");
+    if (reason) { sessionStorage.removeItem("vb_logout_reason"); return { type: "error", message: reason }; }
+    return null;
+  });
   const [loading, setLoading] = useState(false);
   const [focused, setFocused] = useState("");
-
-  // Redirect to app if already logged in
-  useEffect(() => {
-    const token = customerStorage.getSessionToken();
-    if (token) {
-      navigate("/customer/app/services", { replace: true });
-    }
-  }, [navigate]);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -63,7 +57,7 @@ const LoginScreen = () => {
 
           <div className="cm-auth-header">
             <div className="cm-auth-logo">
-              <img src={theme === "light" ? "/images/vasbazaar-light.png" : "/images/vasbazaar-dark.png"} alt="VasBazaar" className="cm-auth-logo-img" />
+              <img src={theme === "light" ? "https://webdekho.in/images/vasbazaar1.png" : "https://webdekho.in/images/vasbazaar.png"} alt="VasBazaar" className="cm-auth-logo-img" />
             </div>
             <div className="cm-auth-badge-row">
               <span className="cm-auth-chip"><FiCreditCard /> Bills</span>
@@ -104,12 +98,12 @@ const LoginScreen = () => {
               <div className={`cm-auth-field${focused === "referral" ? " is-focused" : ""}`}>
                 <label htmlFor="referral">
                   <FaGift className="cm-auth-field-icon" />
-                  Referral Code
+                  Referral Code / Referrer Mobile Number
                 </label>
                 <input
                   id="referral"
                   className="cm-auth-input cm-auth-input--full"
-                  placeholder="Optional referral code"
+                  placeholder="Optional referral code or mobile number"
                   value={referralCode}
                   onChange={(e) => setReferralCode(e.target.value)}
                   onFocus={() => setFocused("referral")}

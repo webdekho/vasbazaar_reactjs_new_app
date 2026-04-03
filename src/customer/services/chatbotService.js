@@ -1,7 +1,6 @@
 import { userService } from "./userService";
 import { walletService } from "./walletService";
 import { rechargeService } from "./rechargeService";
-import { serviceService } from "./serviceService";
 import { offerService } from "./offerService";
 
 const AI_PROXY_URL = window.location.hostname === "localhost"

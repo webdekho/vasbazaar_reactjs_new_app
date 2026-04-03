@@ -2,22 +2,22 @@
   "name": "vasbazaar_reactjs_new_app",
   "version": "0.1.0",
   "private": true,
-  "homepage": "/",
+  "homepage": "/customer",
   "dependencies": {
     "@capacitor-community/contacts": "^7.1.0",
     "@capacitor/android": "^8.2.0",
+    "@capacitor/app": "^8.0.1",
     "@capacitor/browser": "^8.0.2",
     "@capacitor/cli": "^7.6.0",
     "@capacitor/core": "^8.2.0",
     "@capacitor/ios": "^8.2.0",
+    "@capacitor/preferences": "^8.0.1",
     "@capacitor/share": "^8.0.1",
-    "@capacitor/status-bar": "^8.0.2",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^13.5.0",
     "axios": "^1.13.6",
-    "node-forge": "^1.4.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-icons": "^5.6.0",
@@ -27,7 +27,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "DISABLE_ESLINT_PLUGIN=true react-scripts build",
+    "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
@@ -37,7 +37,6 @@
       "react-app/jest"
     ]
   },
-  "proxy": "https://api.vasbazaar.com",
   "browserslist": {
     "production": [
       ">0.2%",
@@ -49,8 +48,5 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-  },
-  "devDependencies": {
-    "http-proxy-middleware": "^3.0.5"
   }
 }
