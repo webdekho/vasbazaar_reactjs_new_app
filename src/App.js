@@ -2,8 +2,8 @@ import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import CustomerModernRoutes from "./customer/CustomerModernRoutes";
 
-// Use no basename for native apps, "/vasbazaar" for web
-const basename = Capacitor.isNativePlatform() ? "/" : "/vasbazaar";
+// Always use "/" as basename since app is deployed at root
+const basename = "/";
 
 function App() {
   return (

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { FaFingerprint, FaLock, FaBackspace, FaShieldAlt } from "react-icons/fa";
 import { useCustomerModern } from "../context/CustomerModernContext";
 import { authService } from "../services/authService";
-import { customerStorage } from "../services/storageService";
+// import { customerStorage } from "../services/storageService";
 import { useTheme } from "../context/ThemeContext";
 
 const LOCK_KEYS = {

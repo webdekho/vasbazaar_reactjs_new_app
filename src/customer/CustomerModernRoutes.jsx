@@ -14,7 +14,7 @@ import OfferScreen from "./pages/OfferScreen";
 import PaymentScreen from "./pages/PaymentScreen";
 import SuccessScreen from "./pages/SuccessScreen";
 import WalletScreen from "./pages/WalletScreen";
-import CouponsScreen from "./pages/CouponsScreen";
+// import CouponsScreen from "./pages/CouponsScreen";
 import NotificationsScreen from "./pages/NotificationsScreen";
 import ProfileScreen from "./pages/ProfileScreen";
 import ComplaintScreen from "./pages/ComplaintScreen";
