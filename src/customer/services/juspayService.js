@@ -1,8 +1,24 @@
 import { rechargeService } from "./rechargeService";
 import { PENDING_PAYMENT_KEY } from "../../shared/constants/juspay";
+import { Capacitor } from "@capacitor/core";
+import { Preferences } from "@capacitor/preferences";
+
+// Deep link scheme for native app payment callback
+const NATIVE_PAYMENT_CALLBACK_SCHEME = "vasbazaar://payment-callback";
 
 /**
- * Juspay/HDFC payment gateway service for web.
+ * Detect if the app is running as an installed PWA (standalone mode).
+ * This is true when the user has added the app to their home screen.
+ */
+export const isPwaStandalone = () => {
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone === true
+  );
+};
+
+/**
+ * Juspay/HDFC payment gateway service for web and native apps.
  * Handles redirect-based payment flow:
  *   1. Encrypt & send recharge payload with paymentGateway:'juspay'
  *   2. Extract payment URL from response
@@ -39,38 +55,74 @@ export const extractOrderId = (response) => {
   );
 };
 
-/** Save payment context to sessionStorage before redirecting */
-export const savePaymentContext = (context) => {
-  try {
-    sessionStorage.setItem(PENDING_PAYMENT_KEY, JSON.stringify({
-      ...context,
-      timestamp: Date.now(),
-    }));
-  } catch (e) {
-    console.warn("Failed to save payment context:", e);
+/**
+ * Get the appropriate web storage for payment context.
+ * PWA standalone mode uses localStorage (survives app switches/OS suspension).
+ * Regular browser uses sessionStorage (cleared when tab closes).
+ */
+const getWebStorage = () => isPwaStandalone() ? localStorage : sessionStorage;
+
+/** Save payment context - uses Preferences for native, localStorage for PWA, sessionStorage for browser */
+export const savePaymentContext = async (context) => {
+  const data = JSON.stringify({ ...context, timestamp: Date.now() });
+
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await Preferences.set({ key: PENDING_PAYMENT_KEY, value: data });
+    } catch (e) {
+      console.warn("Failed to save payment context to Preferences:", e);
+    }
+  } else {
+    try {
+      getWebStorage().setItem(PENDING_PAYMENT_KEY, data);
+    } catch (e) {
+      console.warn("Failed to save payment context:", e);
+    }
   }
 };
 
-/** Retrieve and clear payment context from sessionStorage */
-export const getPaymentContext = () => {
-  try {
-    const raw = sessionStorage.getItem(PENDING_PAYMENT_KEY);
-    sessionStorage.removeItem(PENDING_PAYMENT_KEY);
-    if (!raw) return null;
-    const ctx = JSON.parse(raw);
-    // Expire after 15 minutes
-    if (Date.now() - ctx.timestamp > 15 * 60 * 1000) return null;
-    return ctx;
-  } catch {
-    return null;
+/** Retrieve and clear payment context - uses Preferences for native, localStorage for PWA, sessionStorage for browser */
+export const getPaymentContext = async () => {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const { value } = await Preferences.get({ key: PENDING_PAYMENT_KEY });
+      await Preferences.remove({ key: PENDING_PAYMENT_KEY });
+      if (!value) return null;
+      const ctx = JSON.parse(value);
+      // Expire after 15 minutes
+      if (Date.now() - ctx.timestamp > 15 * 60 * 1000) return null;
+      return ctx;
+    } catch {
+      return null;
+    }
+  } else {
+    try {
+      const storage = getWebStorage();
+      const raw = storage.getItem(PENDING_PAYMENT_KEY);
+      storage.removeItem(PENDING_PAYMENT_KEY);
+      if (!raw) return null;
+      const ctx = JSON.parse(raw);
+      // Expire after 15 minutes
+      if (Date.now() - ctx.timestamp > 15 * 60 * 1000) return null;
+      return ctx;
+    } catch {
+      return null;
+    }
   }
 };
 
 /**
  * Build the callback URL for Juspay to redirect to after payment.
- * Uses the current origin + the payment-callback route.
+ * For native apps: uses deep link scheme (vasbazaar://payment-callback)
+ * For web: uses the current origin + the payment-callback route
  */
 export const getReturnUrl = () => {
+  // For native apps, use deep link scheme
+  if (Capacitor.isNativePlatform()) {
+    return NATIVE_PAYMENT_CALLBACK_SCHEME;
+  }
+
+  // For web, use HTTP URL
   const origin = window.location.origin;
   const path = window.location.pathname;
   // Detect base path from current URL (e.g. /vasbazaar)
@@ -81,14 +133,15 @@ export const getReturnUrl = () => {
 
 /**
  * Execute a recharge with Juspay as the payment gateway.
- * Injects paymentGateway:'juspay', platform:'web', and returnUrl into the payload
- * so the backend sets the correct Juspay redirect target.
+ * For native apps: uses deep link return URL and platform:'app'
+ * For web: uses HTTP return URL and platform:'web'
  */
 export const rechargeWithJuspay = async (payload) => {
+  const isNative = Capacitor.isNativePlatform();
   return rechargeService.recharge({
     ...payload,
     paymentGateway: "juspay",
-    platform: "web",
+    platform: isNative ? "app" : "web",
     returnUrl: getReturnUrl(),
   });
 };

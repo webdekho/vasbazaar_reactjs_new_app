@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { FaFingerprint, FaLock, FaBackspace, FaShieldAlt } from "react-icons/fa";
 import { useCustomerModern } from "../context/CustomerModernContext";
 import { authService } from "../services/authService";
-import { customerStorage } from "../services/storageService";
+import { userService } from "../services/userService";
+import { setAppLocked, onSessionExpired } from "../services/apiClient";
 import { useTheme } from "../context/ThemeContext";
 
 const LOCK_KEYS = {
@@ -106,7 +107,7 @@ const LockScreen = ({ onUnlock }) => {
   const [biometricAvail, setBiometricAvail] = useState(false);
   const [showPin, setShowPin] = useState(false);
   const { theme } = useTheme();
-  const { sessionToken } = useCustomerModern();
+  const { sessionToken, setAuthSession } = useCustomerModern();
   const attempted = useRef(false);
 
   useEffect(() => {
@@ -119,14 +120,24 @@ const LockScreen = ({ onUnlock }) => {
         setShowPin(true);
       }
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleBiometric = async () => {
     setError("");
     const success = await authenticateWithBiometric();
     if (success) {
-      localStorage.setItem(LOCK_KEYS.lastActive, Date.now().toString());
-      onUnlock();
+      // Verify the session token is still valid after biometric unlock
+      const profileCheck = await userService.getUserProfile();
+      if (profileCheck.success) {
+        localStorage.setItem(LOCK_KEYS.lastActive, Date.now().toString());
+        onUnlock();
+      } else {
+        // Session expired — biometric verified identity but token is stale
+        // Fall back to PIN which returns a fresh token from the server
+        setError("Session expired. Please enter your PIN to continue.");
+        setShowPin(true);
+      }
     } else {
       setShowPin(true);
     }
@@ -136,6 +147,18 @@ const LockScreen = ({ onUnlock }) => {
     setError("");
     const res = await authService.authenticateWithPin({ pin, permanentToken: sessionToken });
     if (res.success) {
+      // CRITICAL: Update session token with the new token from PIN login response
+      const newToken = res.data?.token || res.raw?.data?.token;
+      if (newToken) {
+        console.log("PIN Login: Updating session token");
+        setAuthSession({
+          sessionToken: newToken,
+          userData: {
+            name: res.data?.name || res.raw?.data?.name,
+            mobile: res.data?.mobile || res.raw?.data?.mobile,
+          },
+        });
+      }
       localStorage.setItem(LOCK_KEYS.lastActive, Date.now().toString());
       onUnlock();
     } else {
@@ -245,13 +268,24 @@ export const ChangePinScreen = ({ onClose }) => {
   const [step, setStep] = useState("old"); // old | new | confirm
   const [newPin, setNewPin] = useState("");
   const [error, setError] = useState("");
-  const { sessionToken } = useCustomerModern();
+  const { sessionToken, setAuthSession } = useCustomerModern();
   const { theme } = useTheme();
 
   const handleOldPin = async (pin) => {
     setError("");
     const res = await authService.authenticateWithPin({ pin, permanentToken: sessionToken });
     if (res.success) {
+      // Update session token with the new token from PIN verification
+      const newToken = res.data?.token || res.raw?.data?.token;
+      if (newToken) {
+        setAuthSession({
+          sessionToken: newToken,
+          userData: {
+            name: res.data?.name || res.raw?.data?.name,
+            mobile: res.data?.mobile || res.raw?.data?.mobile,
+          },
+        });
+      }
       setStep("new");
     } else {
       setError("Incorrect current PIN");
@@ -362,6 +396,27 @@ const AppLockGuard = ({ children }) => {
       if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
     };
   }, [locked, needsPin, resetTimer]);
+
+  // Register callback so the 401 interceptor can lock the app instead of redirecting to login
+  useEffect(() => {
+    onSessionExpired(() => setLocked(true));
+    return () => onSessionExpired(null);
+  }, []);
+
+  // Tell the 401 interceptor to skip while lock screen is active
+  const unlockGraceTimer = useRef(null);
+  useEffect(() => {
+    if (locked || needsPin) {
+      if (unlockGraceTimer.current) { clearTimeout(unlockGraceTimer.current); unlockGraceTimer.current = null; }
+      setAppLocked(true);
+    } else {
+      unlockGraceTimer.current = setTimeout(() => { setAppLocked(false); }, 3000);
+    }
+    return () => {
+      if (unlockGraceTimer.current) { clearTimeout(unlockGraceTimer.current); unlockGraceTimer.current = null; }
+      setAppLocked(false);
+    };
+  }, [locked, needsPin]);
 
   if (needsPin) {
     return <SetPinScreen onComplete={() => { setNeedsPin(false); setLocked(false); }} />;

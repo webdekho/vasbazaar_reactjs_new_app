@@ -1,9 +1,296 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { FaCheck, FaShareAlt, FaHome, FaCopy, FaReceipt, FaWallet, FaGift, FaPercent, FaTag, FaUsers } from "react-icons/fa";
+import { FaCheck, FaShareAlt, FaCopy, FaReceipt, FaWallet, FaGift, FaPercent, FaTag, FaUsers, FaSyncAlt, FaTimes } from "react-icons/fa";
 import { FiArrowRight } from "react-icons/fi";
 import { useCustomerModern } from "../context/CustomerModernContext";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { addRecentService } from "./ServicesScreen";
+import { Capacitor } from "@capacitor/core";
+import { Share } from "@capacitor/share";
+import {
+  createMandate,
+  getMandateReturnUrl,
+  savePendingMandateContext,
+} from "../services/mandateService";
+
+const ScratchRewardModal = ({ open, couponCode, couponName, couponDesc, copied, onCopy, onClose, loading, error }) => {
+  const canvasRef = useRef(null);
+  const surfaceRef = useRef(null);
+  const drawingRef = useRef(false);
+  const [revealed, setRevealed] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    if (!open || loading || error) return undefined;
+
+    setRevealed(false);
+    setProgress(0);
+    document.body.style.overflow = "hidden";
+
+    const surface = surfaceRef.current;
+    const canvas = canvasRef.current;
+    if (!surface || !canvas) {
+      return () => {
+        document.body.style.overflow = "";
+      };
+    }
+
+    const dpr = window.devicePixelRatio || 1;
+    const rect = surface.getBoundingClientRect();
+    const width = Math.max(280, Math.floor(rect.width));
+    const height = Math.max(220, Math.floor(rect.height));
+
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    /* ── Rich metallic gradient base ── */
+    const baseGrad = ctx.createLinearGradient(0, 0, width, height);
+    baseGrad.addColorStop(0, "#1a0533");
+    baseGrad.addColorStop(0.3, "#2d1b69");
+    baseGrad.addColorStop(0.5, "#1e3a5f");
+    baseGrad.addColorStop(0.7, "#0d4f4f");
+    baseGrad.addColorStop(1, "#1a0533");
+    ctx.fillStyle = baseGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    /* ── Holographic shimmer streaks ── */
+    const shimmerColors = [
+      "rgba(255, 0, 128, 0.15)", "rgba(0, 200, 255, 0.12)", "rgba(255, 215, 0, 0.14)",
+      "rgba(0, 255, 170, 0.1)", "rgba(180, 100, 255, 0.12)", "rgba(255, 100, 50, 0.1)",
+    ];
+    for (let i = 0; i < 12; i++) {
+      const angle = (i * 15 + 10) * Math.PI / 180;
+      const sx = -50 + (i * width / 8);
+      ctx.save();
+      ctx.translate(sx, 0);
+      ctx.rotate(angle);
+      const streak = ctx.createLinearGradient(0, 0, 40, height * 1.5);
+      streak.addColorStop(0, "transparent");
+      streak.addColorStop(0.4, shimmerColors[i % shimmerColors.length]);
+      streak.addColorStop(0.6, shimmerColors[(i + 2) % shimmerColors.length]);
+      streak.addColorStop(1, "transparent");
+      ctx.fillStyle = streak;
+      ctx.fillRect(0, -20, 28, height * 1.5);
+      ctx.restore();
+    }
+
+    /* ── Glowing orbs ── */
+    const drawGlow = (cx, cy, r, color) => {
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      g.addColorStop(0, color);
+      g.addColorStop(1, "transparent");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+    };
+    drawGlow(width * 0.2, height * 0.25, 80, "rgba(255, 0, 200, 0.18)");
+    drawGlow(width * 0.8, height * 0.3, 70, "rgba(0, 200, 255, 0.16)");
+    drawGlow(width * 0.5, height * 0.75, 90, "rgba(255, 215, 0, 0.14)");
+    drawGlow(width * 0.15, height * 0.8, 60, "rgba(0, 255, 170, 0.12)");
+
+    /* ── Sparkle dots ── */
+    const sparkles = [
+      [0.12, 0.18], [0.85, 0.15], [0.92, 0.55], [0.08, 0.72], [0.75, 0.82],
+      [0.45, 0.12], [0.55, 0.88], [0.3, 0.5], [0.7, 0.45], [0.18, 0.42],
+      [0.88, 0.38], [0.42, 0.65], [0.62, 0.2], [0.25, 0.85], [0.78, 0.65],
+    ];
+    sparkles.forEach(([sx, sy]) => {
+      const x = sx * width;
+      const y = sy * height;
+      const size = 1.5 + Math.random() * 2.5;
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.4 + Math.random() * 0.5})`;
+      ctx.beginPath();
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fill();
+      /* cross sparkle */
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.2 + Math.random() * 0.3})`;
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(x - size * 2.5, y);
+      ctx.lineTo(x + size * 2.5, y);
+      ctx.moveTo(x, y - size * 2.5);
+      ctx.lineTo(x, y + size * 2.5);
+      ctx.stroke();
+    });
+
+    /* ── Coin/star burst (center) ── */
+    const cx = width / 2;
+    const cy = height / 2 - 8;
+    const coinGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 44);
+    coinGrad.addColorStop(0, "rgba(255, 215, 0, 0.35)");
+    coinGrad.addColorStop(0.5, "rgba(255, 180, 0, 0.15)");
+    coinGrad.addColorStop(1, "transparent");
+    ctx.fillStyle = coinGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 44, 0, Math.PI * 2);
+    ctx.fill();
+
+    /* Star icon */
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.fillStyle = "rgba(255, 215, 0, 0.7)";
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const a = (i * 72 - 90) * Math.PI / 180;
+      const ia = ((i * 72) + 36 - 90) * Math.PI / 180;
+      ctx.lineTo(Math.cos(a) * 18, Math.sin(a) * 18);
+      ctx.lineTo(Math.cos(ia) * 8, Math.sin(ia) * 8);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    /* ── Main text ── */
+    ctx.textAlign = "center";
+    ctx.shadowColor = "rgba(255, 215, 0, 0.4)";
+    ctx.shadowBlur = 16;
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = '900 22px "Arial", sans-serif';
+    ctx.fillText("Scratch & Win", width / 2, height / 2 + 38);
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = "transparent";
+
+    ctx.font = '600 12px "Arial", sans-serif';
+    ctx.fillStyle = "rgba(200, 220, 255, 0.7)";
+    ctx.fillText("Your reward is hidden underneath", width / 2, height / 2 + 60);
+
+    /* ── Border glow ── */
+    ctx.strokeStyle = "rgba(255, 215, 0, 0.18)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(6, 6, width - 12, height - 12);
+
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open, loading, error]);
+
+  const updateRevealProgress = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const { width, height } = canvas;
+    const pixels = ctx.getImageData(0, 0, width, height).data;
+    let transparent = 0;
+    for (let index = 3; index < pixels.length; index += 16) {
+      if (pixels[index] < 30) transparent += 1;
+    }
+    const total = pixels.length / 16;
+    const nextProgress = Math.min(100, Math.round((transparent / total) * 100));
+    setProgress(nextProgress);
+    if (nextProgress >= 42) {
+      ctx.clearRect(0, 0, width, height);
+      setRevealed(true);
+    }
+  };
+
+  const scratchAtPoint = (clientX, clientY) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    const ctx = canvas.getContext("2d");
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.beginPath();
+    ctx.arc(x, y, 26, 0, Math.PI * 2);
+    ctx.fill();
+  };
+
+  const handlePointerDown = (event) => {
+    drawingRef.current = true;
+    scratchAtPoint(event.clientX, event.clientY);
+  };
+
+  const handlePointerMove = (event) => {
+    if (!drawingRef.current || revealed || loading || error) return;
+    scratchAtPoint(event.clientX, event.clientY);
+  };
+
+  const handlePointerUp = () => {
+    if (!drawingRef.current) return;
+    drawingRef.current = false;
+    updateRevealProgress();
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="sx-scratch-backdrop" onClick={onClose}>
+      <div className="sx-scratch-modal" onClick={(event) => event.stopPropagation()}>
+        <button type="button" className="sx-scratch-close" onClick={onClose} aria-label="Close reward popup">
+          <FaTimes />
+        </button>
+
+        <div className="sx-scratch-head">
+          <div className="sx-scratch-kicker"><FaGift /> Reward Unlocked</div>
+          <h3 className="sx-scratch-title">{error ? "Reward is getting ready" : "Your coupon is waiting underneath"}</h3>
+          <p className="sx-scratch-subtitle">
+            {error
+              ? error
+              : "Scratch the card to reveal the coupon you selected for this transaction."}
+          </p>
+        </div>
+
+        <div className={`sx-scratch-shell${revealed ? " is-revealed" : ""}`}>
+          <div ref={surfaceRef} className="sx-scratch-surface">
+            {loading ? (
+              <div className="sx-scratch-loading">
+                <div className="sx-scratch-spinner" />
+                <div className="sx-scratch-loading-title">Preparing your coupon</div>
+                <div className="sx-scratch-loading-copy">We are preparing the coupon you selected for this transaction.</div>
+              </div>
+            ) : (
+              <div className="sx-scratch-content">
+                <div className="sx-scratch-chip"><FaTag /> Your Selected Coupon</div>
+                <div className="sx-scratch-name">{couponName || "Coupon"}</div>
+                <div className="sx-scratch-code-wrap">
+                  <div className="sx-scratch-code">{couponCode || couponName || "--"}</div>
+                  {couponCode && (
+                    <button type="button" className="sx-scratch-copy" onClick={() => onCopy(couponCode, "coupon")}>
+                      <FaCopy /> {copied === "coupon" ? "Copied" : "Copy"}
+                    </button>
+                  )}
+                </div>
+                {couponDesc && <div className="sx-scratch-description">{couponDesc}</div>}
+              </div>
+            )}
+
+            {!revealed && !loading && !error && (
+              <canvas
+                ref={canvasRef}
+                className="sx-scratch-canvas"
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerLeave={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+              />
+            )}
+          </div>
+
+          <div className="sx-scratch-progress">
+            <span>{loading ? "Preparing reward" : error ? "Reward unavailable" : revealed ? "Coupon revealed" : "Scratch to reveal"}</span>
+            <strong>{loading ? "..." : revealed ? "100%" : `${progress}%`}</strong>
+          </div>
+        </div>
+
+        <div className="sx-scratch-actions">
+          <button type="button" className="sx-scratch-btn sx-scratch-btn--ghost" onClick={() => couponCode && onCopy(couponCode, "coupon")} disabled={loading || !couponCode}>
+            <FaCopy /> {copied === "coupon" ? "Copied" : "Copy Code"}
+          </button>
+          <button type="button" className="sx-scratch-btn sx-scratch-btn--primary" onClick={onClose}>
+            {revealed ? "Continue" : loading ? "Wait" : "Skip Reveal"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const SuccessScreen = () => {
   const navigate = useNavigate();
@@ -12,6 +299,10 @@ const SuccessScreen = () => {
   const { userData } = useCustomerModern();
   const [copied, setCopied] = useState("");
   const [showContent, setShowContent] = useState(false);
+  const [isEnablingAutoPay, setIsEnablingAutoPay] = useState(false);
+  const [autopayError, setAutopayError] = useState("");
+  const [showScratchReward, setShowScratchReward] = useState(false);
+  const [rewardCoupon, setRewardCoupon] = useState(null);
   const userMobile = userData?.mobile || userData?.mobileNumber || "";
 
   const txnId = data.txnId || data.statusPayload?.txnId || "--";
@@ -24,6 +315,13 @@ const SuccessScreen = () => {
   const offerType = data.offerType || null;
   const couponCode = data.couponCode || null;
   const couponName = data.couponName || null;
+  const couponDesc = data.couponDesc || null;
+  const autopayTarget = String(data.field1 || data.mobile || "").trim();
+  const autopayOperatorId = Number(data.operatorId || 0);
+  const autopayValidity = Number.parseInt(String(data.validity || "").replace(/\D/g, ""), 10) || 30;
+  const autopayEligible = Boolean(autopayTarget && autopayOperatorId && amount > 0);
+  const autopayType = data.type === "bill" ? "bill" : "mobileRecharge";
+  const scratchRewardEligible = Boolean((offerType === "coupon" || (!offerType && (couponCode || couponName || couponDesc))) && (couponCode || couponName || couponDesc));
 
   // Show content after celebration animation + save recent service
   useEffect(() => {
@@ -39,7 +337,23 @@ const SuccessScreen = () => {
       });
     }
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!scratchRewardEligible) return undefined;
+    const timer = setTimeout(() => {
+      // Use the selected coupon data passed through navigation state
+      // instead of fetching a generic reward coupon from the API
+      setRewardCoupon({
+        couponCode: couponCode || null,
+        couponName: couponName || null,
+        couponDesc: couponDesc || null,
+      });
+      setShowScratchReward(true);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [scratchRewardEligible, couponCode, couponName, couponDesc]);
 
   const copyToClipboard = (text, label) => {
     navigator.clipboard?.writeText(text).then(() => {
@@ -48,12 +362,100 @@ const SuccessScreen = () => {
     });
   };
 
-  const handleShare = () => {
-    const shareText = `Payment of ₹${amount.toFixed(2)} completed successfully!\nTransaction ID: ${txnId}\nPowered by VasBazaar - Bharat Connect`;
+  const handleShare = async () => {
+    const shareText = `Payment of ₹${amount.toFixed(2)} completed successfully!\nTransaction ID: ${txnId}\nReference ID: ${refId}\nDate: ${dateTime}\n\nPowered by VasBazaar - Bharat Connect`;
+    const shareUrl = "https://web.vasbazaar.com";
+
+    // Use Capacitor Share for native apps
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await Share.share({
+          title: "Transaction Successful",
+          text: shareText,
+          url: shareUrl,
+          dialogTitle: "Share Payment Receipt",
+        });
+        return;
+      } catch (e) {
+        console.log("Native share error:", e);
+      }
+    }
+
+    // Web: use navigator.share or WhatsApp fallback
     if (navigator.share) {
-      navigator.share({ title: "Payment Successful", text: shareText });
-    } else {
-      copyToClipboard(shareText, "share");
+      try {
+        await navigator.share({ title: "Transaction Successful", text: shareText, url: shareUrl });
+        return;
+      } catch (e) {
+        console.log("Web share error:", e);
+      }
+    }
+
+    // Final fallback: open WhatsApp
+    window.open(`https://wa.me/?text=${encodeURIComponent(shareText + "\n" + shareUrl)}`, "_blank");
+  };
+
+  const handleEnableAutoPay = async () => {
+    if (!autopayEligible || isEnablingAutoPay) return;
+
+    setIsEnablingAutoPay(true);
+    setAutopayError("");
+
+    const executionDay = new Date().getDate();
+    const mandatePayload = {
+      returnUrl: getMandateReturnUrl(),
+      billNo: autopayTarget,
+      operatorId: autopayOperatorId,
+      field1: data.field1 || autopayTarget,
+      executionDay,
+      amount: amount.toFixed(2),
+      validity: autopayType === "mobileRecharge" ? autopayValidity : 60,
+      mandateType: autopayType,
+    };
+
+    try {
+      const response = await createMandate(mandatePayload);
+
+      if (!response.success) {
+        setAutopayError(response.message || "Failed to start AutoPay setup.");
+        setIsEnablingAutoPay(false);
+        return;
+      }
+
+      const paymentLink =
+        response?.data?.paymentLink ||
+        response?.data?.rawResponse?.payment_links?.web ||
+        response?.raw?.data?.paymentLink ||
+        response?.raw?.data?.rawResponse?.payment_links?.web;
+
+      const orderId =
+        response?.data?.mandateCustomerId ||
+        response?.data?.rawResponse?.order_id ||
+        response?.raw?.data?.mandateCustomerId ||
+        response?.raw?.data?.rawResponse?.order_id ||
+        null;
+
+      savePendingMandateContext({
+        orderId,
+        mandateCustomerId: response?.data?.mandateCustomerId || response?.raw?.data?.mandateCustomerId || null,
+        type: autopayType,
+        target: autopayTarget,
+        amount,
+        operatorId: autopayOperatorId,
+        operatorName: data.operatorName || data.label || "",
+        txnId,
+      });
+
+      if (paymentLink) {
+        window.location.href = paymentLink;
+        return;
+      }
+
+      setAutopayError("AutoPay setup link was not received. Please try again.");
+      setIsEnablingAutoPay(false);
+    } catch (error) {
+      setAutopayError(error.message || "Unable to enable AutoPay right now.");
+      setIsEnablingAutoPay(false);
     }
   };
 
@@ -107,7 +509,7 @@ const SuccessScreen = () => {
       </div>
 
       {/* ── Title ── */}
-      <h1 className="sx-title">Payment Successful!</h1>
+      <h1 className="sx-title">Transaction Successful!</h1>
       <p className="sx-subtitle">Your transaction has been completed</p>
 
       {/* ── Amount ── */}
@@ -126,7 +528,7 @@ const SuccessScreen = () => {
             <FaPercent /> ₹{discount.toFixed(2)} Instant Discount Applied
           </div>
         )}
-        {couponCode && (
+        {couponCode && !offerType && !cashback && !discount && (
           <div className="sx-offer-pill sx-offer-pill--coupon">
             <FaTag /> Coupon: {couponCode}{couponName ? ` — ${couponName}` : ""}
           </div>
@@ -167,14 +569,41 @@ const SuccessScreen = () => {
           <span className="sx-detail-value">{paymentType}</span>
         </div>
 
+        {autopayTarget && (
+          <div className="sx-detail-row">
+            <span className="sx-detail-label">{data.type === "bill" ? "Account / Bill No" : "Mobile Number"}</span>
+            <span className="sx-detail-value">{autopayTarget}</span>
+          </div>
+        )}
+
         <div className="sx-detail-row">
           <span className="sx-detail-label">Date & Time</span>
           <span className="sx-detail-value">{dateTime}</span>
         </div>
       </div>
 
+      {autopayEligible && (
+        <div className={`sx-autopay-card${showContent ? " sx-in sx-d2" : ""}`}>
+          <div className="sx-autopay-head">
+            <div className="sx-autopay-icon"><FaSyncAlt /></div>
+            <div>
+              <div className="sx-autopay-title">Enable AutoPay</div>
+              <div className="sx-autopay-subtitle">Turn this {data.type === "bill" ? "bill payment" : "recharge"} into a recurring payment.</div>
+            </div>
+          </div>
+          <div className="sx-autopay-copy">
+            {data.type === "bill"
+              ? "Never miss the due date. Set up a mandate once and let VasBazaar handle the next cycle."
+              : "Set up recurring recharge for this number so the next cycle is handled automatically."}
+          </div>
+          <button type="button" className="sx-autopay-btn" onClick={handleEnableAutoPay} disabled={isEnablingAutoPay}>
+            <FaSyncAlt className={isEnablingAutoPay ? "sx-spin" : ""} /> {isEnablingAutoPay ? "Setting up AutoPay..." : "Enable AutoPay"}
+          </button>
+        </div>
+      )}
+
       {/* ── Actions ── */}
-      <div className={`sx-actions${showContent ? " sx-in sx-d2" : ""}`}>
+      <div className={`sx-actions${showContent ? " sx-in sx-d3" : ""}`}>
         <button type="button" className="sx-btn sx-btn--share" onClick={handleShare}>
           <FaShareAlt /> Share
         </button>
@@ -185,8 +614,8 @@ const SuccessScreen = () => {
 
       {/* ── Refer Button ── */}
       <button type="button" className={`sx-refer-btn${showContent ? " sx-in sx-d3" : ""}`} onClick={() => {
-        const msg = `Earn cashback on every recharge & bill payment! Join VasBazaar using my referral code: ${userMobile}\n\nhttps://vasbazaar.web.webdekho.in?code=${userMobile}`;
-        if (navigator.share) { navigator.share({ title: "Join VasBazaar", text: msg }); }
+        const msg = `Earn cashback on every recharge & bill payment! Join VasBazaar using my referral code: ${userMobile}\n\nhttps://web.vasbazaar.com?code=${userMobile}`;
+        if (navigator.share) { navigator.share({ title: "Join VasBazaar", text: msg }).catch(() => {}); }
         else { navigator.clipboard?.writeText(msg); setCopied("refer"); setTimeout(() => setCopied(""), 1500); }
       }}>
         <FaUsers /> Refer & Earn Cashback
@@ -194,6 +623,37 @@ const SuccessScreen = () => {
 
       {/* Copied toast */}
       {copied && <div className="sx-toast">{copied === "refer" ? "Referral link copied!" : "Copied!"}</div>}
+
+      {(isEnablingAutoPay || autopayError) && (
+        <div className="sx-modal-backdrop" onClick={() => { if (!isEnablingAutoPay) setAutopayError(""); }}>
+          <div className="sx-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className={`sx-modal-icon${autopayError ? " is-error" : ""}`}>
+              {autopayError ? <FaTimes /> : <FaSyncAlt className="sx-spin" />}
+            </div>
+            <h3 className="sx-modal-title">{autopayError ? "AutoPay Setup Failed" : "Setting up AutoPay"}</h3>
+            <p className="sx-modal-text">
+              {autopayError || "Please wait while we create your AutoPay mandate and redirect you to complete the setup."}
+            </p>
+            {autopayError && (
+              <button type="button" className="sx-modal-btn" onClick={() => setAutopayError("")}>
+                Close
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      <ScratchRewardModal
+        open={showScratchReward}
+        couponCode={rewardCoupon?.couponCode || null}
+        couponName={rewardCoupon?.couponName || null}
+        couponDesc={rewardCoupon?.couponDesc || null}
+        copied={copied}
+        onCopy={copyToClipboard}
+        onClose={() => setShowScratchReward(false)}
+        loading={false}
+        error=""
+      />
     </div>
   );
 };

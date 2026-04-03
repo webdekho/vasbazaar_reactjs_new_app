@@ -1,6 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import { FaWallet, FaSearch, FaTimes, FaSyncAlt, FaCheckCircle, FaClock, FaTimesCircle, FaChevronDown, FaPlus } from "react-icons/fa";
+import { FaWallet, FaSearch, FaSyncAlt, FaCheckCircle, FaClock, FaTimesCircle, FaChevronDown } from "react-icons/fa";
 import { FiArrowDownLeft, FiArrowUpRight, FiGift, FiDollarSign, FiInbox } from "react-icons/fi";
 import { userService } from "../services/userService";
 import { walletService } from "../services/walletService";
@@ -22,8 +21,8 @@ const formatMonth = (dateStr) => {
 };
 
 const SkeletonCard = ({ delay }) => (
-  <div className="wt-card wt-skeleton" style={{ animationDelay: `${delay}ms` }}>
-    <div className="wt-skeleton-row">
+  <div className="th-card th-skeleton" style={{ animationDelay: `${delay}ms` }}>
+    <div className="th-card-row">
       <div className="th-skeleton-circle" />
       <div className="th-skeleton-lines" style={{ flex: 1 }}>
         <div className="th-skeleton-bar" style={{ width: "55%" }} />
@@ -35,7 +34,6 @@ const SkeletonCard = ({ delay }) => (
 );
 
 const WalletScreen = () => {
-  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("wallet");
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -134,10 +132,6 @@ const WalletScreen = () => {
                 </button>
               </div>
 
-              <button className="wl-add-money" type="button" onClick={() => navigate("/customer/add-money")}>
-                <FaPlus /> Add Money
-              </button>
-
               {lastUpdated && <div className="wl-last-updated">Last updated: {lastUpdated.toLocaleTimeString()}</div>}
             </div>
           </div>
@@ -176,7 +170,9 @@ const WalletScreen = () => {
                     const isExpanded = expanded === (txn.txnId || txn.id || i);
                     const isCredit = txn.txnMode === 0 || (txn.message || "").toLowerCase().includes("credit");
                     return (
-                      <div key={txn.txnId || txn.id || i} className="wt-card"
+                      <div key={txn.txnId || txn.id || i}
+                        className={`th-card th-card--collapsible${isExpanded ? " is-expanded" : ""}`}
+                        style={{ cursor: "pointer" }}
                         onClick={() => setExpanded(isExpanded ? null : (txn.txnId || txn.id || i))}>
                         <div className="th-card-row">
                           <div className={`th-dir-icon th-dir-icon--${isCredit ? "credit" : "debit"}`}>
@@ -185,30 +181,41 @@ const WalletScreen = () => {
                           <div className="th-info">
                             <div className="th-info-name">{txn.operatorNo || txn.mobile || txn.operatorId?.operatorName || "Transaction"}</div>
                             <div className="th-info-desc">{txn.message || txn.description || txn.serviceType || "—"}</div>
+                            <div className="th-info-date">{txn.date} {txn.time}</div>
                           </div>
                           <div className="th-right">
                             <div className={`th-amount th-amount--${isCredit ? "credit" : "debit"}`}>
                               {isCredit ? "+" : "−"}&#8377;{Number(txn.txnAmt || txn.amount || 0).toFixed(2)}
                             </div>
-                            <div className="th-status" style={{ "--st-color": st.color }}>{st.icon} {st.label}</div>
+                            <div className="th-status" style={{ "--st-color": st.color }}>{st.icon} {txn.status || st.label}</div>
+                            <button
+                              type="button"
+                              className={`th-expand-toggle${isExpanded ? " is-expanded" : ""}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpanded(isExpanded ? null : (txn.txnId || txn.id || i));
+                              }}
+                              aria-label={isExpanded ? "Collapse" : "Expand"}
+                            >
+                              <FaChevronDown />
+                            </button>
                           </div>
-                          <FaChevronDown className={`wt-chevron${isExpanded ? " is-open" : ""}`} />
                         </div>
 
                         {isExpanded && (
-                          <div className="wt-expanded">
-                            {[
-                              ["Transaction ID", txn.txnId || "—"],
-                              ["Date & Time", `${txn.date || ""} ${txn.time || ""}`],
-                              ...((txn.referenceId || txn.refId) ? [["Reference ID", txn.referenceId || txn.refId]] : []),
-                              ...(txn.openingBal != null ? [["Opening Balance", `₹${Number(txn.openingBal).toFixed(2)}`]] : []),
-                              ...(txn.closingBal != null ? [["Closing Balance", `₹${Number(txn.closingBal).toFixed(2)}`]] : []),
-                            ].map(([label, value]) => (
-                              <div key={label} className="wt-detail-row">
-                                <span className="wt-detail-label">{label}</span>
-                                <span className="wt-detail-value">{value}</span>
-                              </div>
-                            ))}
+                          <div className="th-meta-grid">
+                            <div className="th-meta-item"><span className="th-meta-label">Transaction ID</span><span className="th-meta-value">{txn.txnId || "—"}</span></div>
+                            <div className="th-meta-item"><span className="th-meta-label">Service</span><span className="th-meta-value">{txn.serviceType || "—"}</span></div>
+                            {(txn.referenceId || txn.refId) && (
+                              <div className="th-meta-item"><span className="th-meta-label">Reference ID</span><span className="th-meta-value">{txn.referenceId || txn.refId}</span></div>
+                            )}
+                            <div className="th-meta-item"><span className="th-meta-label">Payment Mode</span><span className="th-meta-value">{txn.serviceType || "Wallet"}</span></div>
+                            {txn.openingBal != null && (
+                              <div className="th-meta-item"><span className="th-meta-label">Opening Balance</span><span className="th-meta-value">₹{Number(txn.openingBal).toFixed(2)}</span></div>
+                            )}
+                            {txn.closingBal != null && (
+                              <div className="th-meta-item"><span className="th-meta-label">Closing Balance</span><span className="th-meta-value">₹{Number(txn.closingBal).toFixed(2)}</span></div>
+                            )}
                           </div>
                         )}
                       </div>

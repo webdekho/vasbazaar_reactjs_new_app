@@ -79,16 +79,18 @@ const ReferralListScreen = () => {
         <div className="th-list">
           {users.map((user, i) => {
             const isExp = expandedId === (user.id || i);
+            const rawPhone = (user.mobileNumber || user.mobile || "").replace(/\D/g, "");
+            const displayName = user.name || rawPhone || "User";
             return (
               <div key={user.id || i} className="rf-card" style={{ animationDelay: `${i * 50}ms` }}
                 onClick={() => setExpandedId(isExp ? null : (user.id || i))}>
                 <div className="rf-card-row">
                   <div className="rf-avatar">
-                    {(user.name || "U")[0].toUpperCase()}
+                    {displayName[0].toUpperCase()}
                   </div>
                   <div className="rf-info">
-                    <div className="rf-name">{user.name || "User"}</div>
-                    <div className="rf-phone"><FaPhoneAlt /> {user.mobileNumber || user.mobile || "—"}</div>
+                    <div className="rf-name">{displayName}</div>
+                    <div className="rf-phone"><FaPhoneAlt /> {rawPhone || "—"}</div>
                   </div>
                   <div className="rf-num">#{i + 1}</div>
                   <FaChevronDown className={`wt-chevron${isExp ? " is-open" : ""}`} />

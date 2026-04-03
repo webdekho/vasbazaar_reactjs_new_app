@@ -7,19 +7,9 @@
       "Bash(git branch:*)",
       "Bash(git push:*)",
       "Bash(gh auth:*)",
-      "Bash(npx cap sync:*)",
-      "Bash(./gradlew assembleDebug:*)",
-      "Bash(./gradlew clean)",
-      "Bash(adb devices:*)",
-      "Bash(adb install:*)",
-      "Bash(npm install:*)",
-      "Bash(adb logcat:*)",
-      "Bash(adb shell am:*)",
-      "Bash(adb shell:*)",
-      "Bash(ls:*)",
-      "Bash(curl:*)",
-      "Bash(./gradlew clean:*)",
-      "Bash(./gradlew assembleRelease:*)"
+      "Bash(git pull:*)",
+      "Bash(git stash:*)",
+      "Bash(npx eslint:*)"
     ]
   }
 }

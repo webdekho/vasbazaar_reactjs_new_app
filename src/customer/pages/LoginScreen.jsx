@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaChevronRight, FaGift } from "react-icons/fa";
 import { FiPhoneCall, FiCreditCard, FiGift } from "react-icons/fi";
 import { authService } from "../services/authService";
@@ -10,8 +10,10 @@ import { useTheme } from "../context/ThemeContext";
 const LoginScreen = () => {
   const navigate = useNavigate();
   const { theme } = useTheme();
+  const [searchParams] = useSearchParams();
+  const urlCode = searchParams.get("code") || "";
   const [mobileNumber, setMobileNumber] = useState("");
-  const [referralCode, setReferralCode] = useState(customerStorage.getReferralCode() || "");
+  const [referralCode, setReferralCode] = useState(urlCode || customerStorage.getReferralCode() || "");
   const [status, setStatus] = useState(() => {
     const reason = sessionStorage.getItem("vb_logout_reason");
     if (reason) { sessionStorage.removeItem("vb_logout_reason"); return { type: "error", message: reason }; }
@@ -92,21 +94,23 @@ const LoginScreen = () => {
               </div>
             </div>
 
-            <div className={`cm-auth-field${focused === "referral" ? " is-focused" : ""}`}>
-              <label htmlFor="referral">
-                <FaGift className="cm-auth-field-icon" />
-                Referral Code
-              </label>
-              <input
-                id="referral"
-                className="cm-auth-input cm-auth-input--full"
-                placeholder="Optional referral code"
-                value={referralCode}
-                onChange={(e) => setReferralCode(e.target.value)}
-                onFocus={() => setFocused("referral")}
-                onBlur={() => setFocused("")}
-              />
-            </div>
+            {!urlCode && (
+              <div className={`cm-auth-field${focused === "referral" ? " is-focused" : ""}`}>
+                <label htmlFor="referral">
+                  <FaGift className="cm-auth-field-icon" />
+                  Referral Code / Referrer Mobile Number
+                </label>
+                <input
+                  id="referral"
+                  className="cm-auth-input cm-auth-input--full"
+                  placeholder="Optional referral code or mobile number"
+                  value={referralCode}
+                  onChange={(e) => setReferralCode(e.target.value)}
+                  onFocus={() => setFocused("referral")}
+                  onBlur={() => setFocused("")}
+                />
+              </div>
+            )}
 
             {status && (
               <div className={`cm-auth-alert cm-auth-alert--${status.type}`}>

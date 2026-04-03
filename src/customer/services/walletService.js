@@ -1,4 +1,4 @@
-import { authGet, authPost, authPut } from "./apiClient";
+import { authGet, authPost, authPut, authDelete } from "./apiClient";
 
 export const walletService = {
   getWalletTransactions: (pageNumber = 0, pageSize = 10) =>
@@ -15,6 +15,9 @@ export const walletService = {
 
   getUpcomingDues: () =>
     authGet("/api/customer/schedular/getAllRecharges"),
+
+  deleteReminder: (id) =>
+    authDelete(`/api/customer/schedular/${id}`),
 
   getCoupons: (pageNumber = 0, pageSize = 10) =>
     authGet("/api/customer/transaction/couponDetails", { pageNumber, pageSize }),

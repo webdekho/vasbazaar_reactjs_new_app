@@ -1,16 +1,17 @@
-import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
-import { Capacitor } from "@capacitor/core";
+import { BrowserRouter, Route, Routes, Navigate, useLocation } from "react-router-dom";
 import CustomerModernRoutes from "./customer/CustomerModernRoutes";
 
-// Use no basename for native apps, "/vasbazaar" for web
-const basename = Capacitor.isNativePlatform() ? "/" : "/vasbazaar";
+const RootRedirect = () => {
+  const { search } = useLocation();
+  return <Navigate to={`/customer${search}`} replace />;
+};
 
 function App() {
   return (
-    <BrowserRouter basename={basename}>
+    <BrowserRouter>
       <Routes>
         <Route path="/customer/*" element={<CustomerModernRoutes />} />
-        <Route path="*" element={<Navigate to="/customer" replace />} />
+        <Route path="*" element={<RootRedirect />} />
       </Routes>
     </BrowserRouter>
   );

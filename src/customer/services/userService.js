@@ -21,14 +21,15 @@ export const userService = {
   getUserBalance: async () => {
     const result = await authGet("/api/customer/user/getByUserId");
     if (result.success && result.data) {
-      const d = result.data;
+      // Handle potential nested data structure from API
+      const d = result.data?.data || result.data;
       return {
         ...result,
         data: {
-          balance: parseFloat(d.balance || 0).toFixed(2),
-          cashback: parseFloat(d.cashback || 0).toFixed(2),
-          incentive: parseFloat(d.incentive || 0).toFixed(2),
-          referralBonus: parseFloat(d.referralBonus || 0).toFixed(2),
+          balance: parseFloat(d.balance ?? d.Balance ?? d.walletBalance ?? 0).toFixed(2),
+          cashback: parseFloat(d.cashback ?? d.Cashback ?? 0).toFixed(2),
+          incentive: parseFloat(d.incentive ?? d.Incentive ?? 0).toFixed(2),
+          referralBonus: parseFloat(d.referralBonus ?? d.referal_bonus ?? d.referral_bonus ?? 0).toFixed(2),
         },
       };
     }
@@ -37,6 +38,24 @@ export const userService = {
 
   getReferredUsers: (pageNumber = 0, pageSize = 10) =>
     authGet("/api/customer/user/getReffered_user", { pageNumber, pageSize, isactive: 1 }),
+
+  completeOnboarding: async ({ name, sessionToken }) => {
+    try {
+      const response = await apiClient.post(
+        "/api/customer/user/completeOnboarding",
+        { name },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            access_token: sessionToken,
+          },
+        }
+      );
+      return parseApiResponse(response);
+    } catch (error) {
+      return { success: false, message: getErrorMessage(error), data: null, raw: null };
+    }
+  },
 
   updateUserProfile: (profileData) =>
     authPost("/user/update-profile", profileData),

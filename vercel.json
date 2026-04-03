@@ -1,0 +1,28 @@
+{
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "X-XSS-Protection", "value": "1; mode=block" }
+      ]
+    }
+  ],
+  "rewrites": [
+    { "source": "/vb-api/:path*", "destination": "https://apis.uat.vasbazaar.com:8081/:path*" },
+    { "source": "/api/:path*", "destination": "https://apis.uat.vasbazaar.com:8081/api/:path*" },
+    { "source": "/login/:path*", "destination": "https://apis.uat.vasbazaar.com:8081/login/:path*" },
+    { "source": "/coupon/:path*", "destination": "https://apis.uat.vasbazaar.com:8081/coupon/:path*" },
+    { "source": "/user/:path*", "destination": "https://apis.uat.vasbazaar.com:8081/user/:path*" },
+    { "source": "/customer/static/(.*)", "destination": "/static/$1" },
+    { "source": "/customer/favicon.png", "destination": "/favicon.png" },
+    { "source": "/customer/manifest.json", "destination": "/manifest.json" },
+    { "source": "/customer/icon-(.*)", "destination": "/icon-$1" },
+    { "source": "/customer/sw.js", "destination": "/sw.js" },
+    { "source": "/customer/assets/(.*)", "destination": "/assets/$1" },
+    { "source": "/customer/(.*)", "destination": "/index.html" },
+    { "source": "/((?!static|favicon|icon|manifest|sw|screenshot|assets|vb-api|api|login|coupon|user).*)", "destination": "/index.html" }
+  ]
+}

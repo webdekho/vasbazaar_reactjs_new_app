@@ -93,9 +93,13 @@ export const guestGet = async (endpoint, params = {}) => {
 
 export const authGet = async (endpoint, params = {}) => {
   try {
+    const token = getCustomerToken();
+    if (!token) {
+      return { success: false, message: "Authentication required. Please login.", data: null, raw: null };
+    }
     const response = await apiClient.get(endpoint, {
       params,
-      headers: { access_token: getCustomerToken() },
+      headers: { access_token: token },
     });
     return parseApiResponse(response);
   } catch (error) {
@@ -105,10 +109,14 @@ export const authGet = async (endpoint, params = {}) => {
 
 export const authPost = async (endpoint, payload) => {
   try {
+    const token = getCustomerToken();
+    if (!token) {
+      return { success: false, message: "Authentication required. Please login.", data: null, raw: null };
+    }
     const response = await apiClient.post(endpoint, payload, {
       headers: {
         "Content-Type": "application/json",
-        access_token: getCustomerToken(),
+        access_token: token,
       },
     });
     return parseApiResponse(response);
@@ -131,32 +139,52 @@ export const authPut = async (endpoint, payload) => {
   }
 };
 
+export const authDelete = async (endpoint, params = {}) => {
+  try {
+    const token = getCustomerToken();
+    if (!token) {
+      return { success: false, message: "Authentication required. Please login.", data: null, raw: null };
+    }
+    const response = await apiClient.delete(endpoint, {
+      params,
+      headers: { access_token: token },
+    });
+    return parseApiResponse(response);
+  } catch (error) {
+    return { success: false, message: getErrorMessage(error), data: null, raw: null };
+  }
+};
+
+// ── App Lock state ──
+// When a 401 occurs, lock the app instead of redirecting to login.
+// PIN unlock returns a fresh token — the user never needs to re-login via OTP.
+let _appLocked = false;
+let _onSessionExpired = null;
+export const setAppLocked = (val) => { _appLocked = val; };
+export const onSessionExpired = (cb) => { _onSessionExpired = cb; };
+
 // ── Global 401 Interceptor ──
-// Detects session invalidation (e.g. logged_in_from_another_device) and forces re-login
-let isRedirecting = false;
+// On session expiry: lock the app so the user re-authenticates with PIN.
+// PIN login returns a fresh token — session is revalidated, never re-registered.
+let _handling401 = false;
+const LOGIN_PAGES = ["/customer/login", "/customer/verify-otp"];
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error?.response?.status === 401 && !isRedirecting) {
-      isRedirecting = true;
-      const msg = error?.response?.data?.message || "Session expired";
+    const isOnLoginPage = LOGIN_PAGES.some((p) => window.location.pathname.endsWith(p));
+    const hasAccessToken = error?.config?.headers?.access_token;
 
-      // Clear all auth data
-      Object.values(CUSTOMER_STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
-      localStorage.removeItem("vb_pin_set");
+    if (error?.response?.status === 401 && !_handling401 && !isOnLoginPage && hasAccessToken && !_appLocked) {
+      _handling401 = true;
+
+      // Don't clear sessionToken — pinLogin needs it to identify the user
+      // Just clear last-active so the lock screen shows immediately
       localStorage.removeItem("vb_last_active");
 
-      // Redirect to login with message
-      const basePath = window.location.pathname.includes("/vasbazaar/")
-        ? "/vasbazaar/customer/login"
-        : "/customer/login";
+      // Trigger app lock instead of redirecting to login
+      if (_onSessionExpired) _onSessionExpired();
 
-      const reason = msg.includes("another_device") || msg.includes("another device")
-        ? "You were logged out because your account was accessed from another device."
-        : "Your session has expired. Please log in again.";
-
-      sessionStorage.setItem("vb_logout_reason", reason);
-      window.location.href = basePath;
+      setTimeout(() => { _handling401 = false; }, 2000);
     }
     return Promise.reject(error);
   }

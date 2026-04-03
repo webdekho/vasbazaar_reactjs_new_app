@@ -10,6 +10,9 @@ export const transactionService = {
   submitComplaint: ({ txnId, description, action }) =>
     authPost("/api/customer/complaint/addComplaint", { txnId, description, action }),
 
+  getRewardCoupon: (txnId) =>
+    authGet("/api/customer/transaction/reward-coupon", { txnId }),
+
   checkTransactionStatus: (payload) =>
     authPost("/api/customer/plan_recharge/check-status", payload),
 };

@@ -2,13 +2,17 @@
   "name": "vasbazaar_reactjs_new_app",
   "version": "0.1.0",
   "private": true,
-  "homepage": "/",
+  "homepage": "/customer",
   "dependencies": {
+    "@capacitor-community/contacts": "^7.1.0",
     "@capacitor/android": "^8.2.0",
+    "@capacitor/app": "^8.0.1",
+    "@capacitor/browser": "^8.0.2",
     "@capacitor/cli": "^7.6.0",
     "@capacitor/core": "^8.2.0",
     "@capacitor/ios": "^8.2.0",
-    "@capacitor/status-bar": "^8.0.2",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/share": "^8.0.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -33,7 +37,6 @@
       "react-app/jest"
     ]
   },
-  "proxy": "https://apis.uat.vasbazaar.com:8081",
   "browserslist": {
     "production": [
       ">0.2%",
