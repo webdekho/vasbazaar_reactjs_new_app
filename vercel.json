@@ -1,5 +1,12 @@
 {
   "env": {
     "CI": "false"
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/customer/app/payment-callback",
+      "destination": "/api/payment-callback",
+      "has": [{ "type": "header", "key": "content-type", "value": "application/x-www-form-urlencoded(.*)" }]
+    }
+  ]
 }
