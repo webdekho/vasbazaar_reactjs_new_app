@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaCheckCircle, FaTimesCircle, FaClock, FaHome, FaRedo } from "react-icons/fa";
 import { isSuccessStatus, isPendingStatus } from "../../shared/constants/juspay";
@@ -10,8 +10,13 @@ const JuspayCallbackScreen = () => {
   const [state, setState] = useState("verifying"); // verifying | success | pending | failed
   const [message, setMessage] = useState("Verifying your payment...");
   const [txnId, setTxnId] = useState("");
+  const verifyCalledRef = useRef(false);
 
   useEffect(() => {
+    // Prevent multiple calls (React StrictMode, re-mounts)
+    if (verifyCalledRef.current) return;
+    verifyCalledRef.current = true;
+
     const verify = async () => {
       // 1. Get order ID from URL params or saved context
       const urlOrderId = searchParams.get("order_id") || searchParams.get("orderId");
@@ -27,8 +32,8 @@ const JuspayCallbackScreen = () => {
       setTxnId(orderId);
 
       try {
-        // 2. Verify order status with backend (retries for pending)
-        const response = await juspayService.checkOrderStatus(orderId, 3);
+        // 2. Verify order status with backend (single call)
+        const response = await juspayService.checkOrderStatus(orderId, 1);
         const status = (
           response?.data?.status ||
           response?.data?.txnStatus ||
