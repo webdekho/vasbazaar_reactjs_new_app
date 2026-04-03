@@ -6,6 +6,28 @@ import juspayService from "../services/juspayService";
 import { authPost } from "../services/apiClient";
 import { useTheme } from "../context/ThemeContext";
 
+// Helper to get/set verified order cache in sessionStorage
+const VERIFIED_ORDERS_KEY = "juspay_verified_orders";
+
+const getVerifiedOrder = (orderId) => {
+  try {
+    const cache = JSON.parse(sessionStorage.getItem(VERIFIED_ORDERS_KEY) || "{}");
+    return cache[orderId] || null;
+  } catch {
+    return null;
+  }
+};
+
+const setVerifiedOrder = (orderId, result) => {
+  try {
+    const cache = JSON.parse(sessionStorage.getItem(VERIFIED_ORDERS_KEY) || "{}");
+    cache[orderId] = { ...result, verifiedAt: Date.now() };
+    sessionStorage.setItem(VERIFIED_ORDERS_KEY, JSON.stringify(cache));
+  } catch {
+    // Ignore storage errors
+  }
+};
+
 const JuspayCallbackScreen = () => {
   const navigate = useNavigate();
   const { theme } = useTheme();
@@ -41,6 +63,24 @@ const JuspayCallbackScreen = () => {
 
       setTxnId(orderId);
 
+      // Check if this order was already verified (prevents duplicate calls on refresh)
+      const cachedResult = getVerifiedOrder(orderId);
+      if (cachedResult) {
+        setState(cachedResult.state);
+        setMessage(cachedResult.message);
+
+        // If it was successful, navigate to success screen
+        if (cachedResult.state === "success" && cachedResult.successState) {
+          setTimeout(() => {
+            navigate("/customer/app/success", {
+              replace: true,
+              state: cachedResult.successState,
+            });
+          }, 1500);
+        }
+        return;
+      }
+
       try {
         // 2. Verify order status with backend (single API call only)
         const response = await juspayService.checkOrderStatus(orderId, 1);
@@ -55,37 +95,45 @@ const JuspayCallbackScreen = () => {
           setState("success");
           setMessage("Payment successful!");
 
+          const successState = {
+            type: ctx?.type || "recharge",
+            amount: ctx?.amount,
+            label: ctx?.label,
+            txnId: orderId,
+            statusPayload: response.data,
+            paymentType: "upi",
+            couponCode: ctx?.couponCode || null,
+            couponName: ctx?.couponName || null,
+            discountValue: ctx?.discountValue || 0,
+            cashbackValue: ctx?.cashbackValue || 0,
+            offerType: ctx?.offerType || null,
+            mobile: ctx?.mobile || ctx?.field1 || "",
+            field1: ctx?.field1 || ctx?.mobile || "",
+            field2: ctx?.field2 || null,
+            operatorId: ctx?.operatorId || null,
+            operatorName: ctx?.operatorName || ctx?.label || "",
+            logo: ctx?.logo || "",
+            validity: ctx?.validity || null,
+            viewBillResponse: ctx?.viewBillResponse || {},
+            serviceId: ctx?.serviceId || null,
+          };
+
+          // Cache the result
+          setVerifiedOrder(orderId, { state: "success", message: "Payment successful!", successState });
+
           // Navigate to success screen with context
           setTimeout(() => {
             navigate("/customer/app/success", {
               replace: true,
-              state: {
-                type: ctx?.type || "recharge",
-                amount: ctx?.amount,
-                label: ctx?.label,
-                txnId: orderId,
-                statusPayload: response.data,
-                paymentType: "upi",
-                couponCode: ctx?.couponCode || null,
-                couponName: ctx?.couponName || null,
-                discountValue: ctx?.discountValue || 0,
-                cashbackValue: ctx?.cashbackValue || 0,
-                offerType: ctx?.offerType || null,
-                mobile: ctx?.mobile || ctx?.field1 || "",
-                field1: ctx?.field1 || ctx?.mobile || "",
-                field2: ctx?.field2 || null,
-                operatorId: ctx?.operatorId || null,
-                operatorName: ctx?.operatorName || ctx?.label || "",
-                logo: ctx?.logo || "",
-                validity: ctx?.validity || null,
-                viewBillResponse: ctx?.viewBillResponse || {},
-                serviceId: ctx?.serviceId || null,
-              },
+              state: successState,
             });
           }, 1500);
         } else if (isPendingStatus(status)) {
           setState("pending");
-          setMessage("Your payment is being processed. Please check your transaction history for the latest status.");
+          const pendingMsg = "Your payment is being processed. Please check your transaction history for the latest status.";
+          setMessage(pendingMsg);
+          // Cache pending result
+          setVerifiedOrder(orderId, { state: "pending", message: pendingMsg });
         } else {
           setState("failed");
           const rawReason =
@@ -103,10 +151,15 @@ const JuspayCallbackScreen = () => {
             ? "Payment could not be completed. Please choose a refund option below or retry the transaction."
             : rawReason;
           setMessage(failReason);
+          // Cache failed result
+          setVerifiedOrder(orderId, { state: "failed", message: failReason });
         }
       } catch (err) {
         setState("failed");
-        setMessage("Unable to verify payment status. Please check your transaction history.");
+        const errorMsg = "Unable to verify payment status. Please check your transaction history.";
+        setMessage(errorMsg);
+        // Cache error result
+        setVerifiedOrder(orderId, { state: "failed", message: errorMsg });
       }
     };
 
