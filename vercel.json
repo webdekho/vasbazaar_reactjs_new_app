@@ -10,6 +10,13 @@
       ]
     }
   ],
+  "routes": [
+    {
+      "src": "/customer/app/payment-callback",
+      "methods": ["POST"],
+      "dest": "/api/payment-callback"
+    }
+  ],
   "rewrites": [
     { "source": "/vb-api/:path*", "destination": "https://api.vasbazaar.com/:path*" },
     { "source": "/api/:path*", "destination": "https://api.vasbazaar.com/api/:path*" },
