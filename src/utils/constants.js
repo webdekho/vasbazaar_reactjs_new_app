@@ -2,8 +2,9 @@ import { Capacitor } from "@capacitor/core";
 
 export const loader = "LOADER";
 
-// Default API URL for native apps
-const DEFAULT_API_URL = "https://api.vasbazaar.com";
+// API Base URL - used by proxy and native apps
+export const API_BASE_URL = "https://api.vasbazaar.com";
+const DEFAULT_API_URL = API_BASE_URL;
 
 // Allowed API hosts — prevents localStorage tampering
 const ALLOWED_HOSTS = [
@@ -11,7 +12,7 @@ const ALLOWED_HOSTS = [
   'https://apis.vasbazaar.com',
   'https://apis.uat.vasbazaar.com',
   'https://api.prod.webdekho.in',
-  '/vb-api',
+  '',
 ];
 
 export const server_api = () => {
@@ -28,6 +29,6 @@ export const server_api = () => {
       return DEFAULT_API_URL;
     }
 
-    // Use relative proxy path for web (Apache proxies /vb-api/ -> API)
-    return '/vb-api';
+    // Use empty path for web - CRA proxy handles requests
+    return '';
   };

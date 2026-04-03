@@ -14,6 +14,7 @@ const trimTrailingSlash = (value) => value.replace(/\/+$/, "");
 
 // Allowed API hosts — prevents localStorage tampering
 const ALLOWED_HOSTS = [
+  "https://api.vasbazaar.com",
   "https://apis.vasbazaar.com",
   "https://apis.uat.vasbazaar.com",
   "https://api.prod.webdekho.in",

@@ -185,7 +185,7 @@ const SuccessScreen = () => {
 
       {/* ── Refer Button ── */}
       <button type="button" className={`sx-refer-btn${showContent ? " sx-in sx-d3" : ""}`} onClick={() => {
-        const msg = `Earn cashback on every recharge & bill payment! Join VasBazaar using my referral code: ${userMobile}\n\nhttps://vasbazaar.web.webdekho.in?code=${userMobile}`;
+        const msg = `Earn cashback on every recharge & bill payment! Join VasBazaar using my referral code: ${userMobile}\n\nhttps://web.vasbazaar.com?code=${userMobile}`;
         if (navigator.share) { navigator.share({ title: "Join VasBazaar", text: msg }); }
         else { navigator.clipboard?.writeText(msg); setCopied("refer"); setTimeout(() => setCopied(""), 1500); }
       }}>

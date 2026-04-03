@@ -190,7 +190,7 @@ const ProfileScreen = () => {
             </button>
             <button type="button" className="pf-referral-btn pf-referral-btn--qr" onClick={() => {
               const qrWin = window.open("", "_blank", "width=420,height=600");
-              const qrImg = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(`https://vasbazaar.web.webdekho.in?code=${mobile}`)}`;
+              const qrImg = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(`https://web.vasbazaar.com?code=${mobile}`)}`;
               qrWin.document.write(`<html><head><title>VasBazaar QR</title><style>body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f5f7fa;font-family:-apple-system,sans-serif}
               .card{background:#fff;border-radius:24px;padding:32px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.1);max-width:360px;width:100%}
               .accent{height:6px;background:linear-gradient(90deg,#40E0D0,#007BFF);border-radius:3px;margin-bottom:20px}
