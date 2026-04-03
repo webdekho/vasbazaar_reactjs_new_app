@@ -30,6 +30,8 @@ import TravelScreen from "./pages/TravelScreen";
 import ComplaintListScreen from "./pages/ComplaintListScreen";
 import TrackComplaintScreen from "./pages/TrackComplaintScreen";
 import JuspayCallbackScreen from "./pages/JuspayCallbackScreen";
+import KycScreen from "./pages/KycScreen";
+import KycCallbackScreen from "./pages/KycCallbackScreen";
 
 const ThemedApp = ({ children }) => {
   const { theme } = useTheme();
@@ -81,6 +83,8 @@ const CustomerModernRoutes = () => {
             <Route path="autopay" element={<AutoPayScreen />} />
             <Route path="help" element={<HelpScreen />} />
             <Route path="travel" element={<TravelScreen />} />
+            <Route path="kyc" element={<KycScreen />} />
+            <Route path="kyc-callback" element={<KycCallbackScreen />} />
             <Route path="*" element={<Navigate to="/customer/app/services" replace />} />
           </Route>
           <Route path="*" element={<Navigate to="/customer/login" replace />} />

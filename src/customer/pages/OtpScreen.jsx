@@ -112,7 +112,14 @@ const OtpScreen = () => {
     markLoginTime();
     setAuthSession({ sessionToken, userData, tempToken: null });
     triggerPWAInstall();
-    navigate("/customer/app/services", { replace: true });
+
+    // Check if KYC is needed (verified_status is 0, null, or undefined)
+    const verifiedStatus = apiData.verified_status;
+    if (verifiedStatus === 0 || verifiedStatus === null || verifiedStatus === undefined || verifiedStatus === "0") {
+      navigate("/customer/app/kyc", { replace: true, state: { returnTo: "/customer/app/services", fromLogin: true } });
+    } else {
+      navigate("/customer/app/services", { replace: true });
+    }
   };
 
   const resendOtp = async () => {
