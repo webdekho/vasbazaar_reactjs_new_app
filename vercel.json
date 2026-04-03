@@ -1,15 +1,10 @@
 {
+  "buildCommand": "npm run build",
+  "outputDirectory": "build",
+  "framework": "create-react-app",
   "build": {
     "env": {
-      "CI": "false",
-      "DISABLE_ESLINT_PLUGIN": "true"
+      "CI": "false"
     }
-  },
-  "rewrites": [
-    { "source": "/static/(.*)", "destination": "/static/$1" },
-    { "source": "/images/(.*)", "destination": "/images/$1" },
-    { "source": "/manifest.json", "destination": "/manifest.json" },
-    { "source": "/favicon.ico", "destination": "/favicon.ico" },
-    { "source": "/((?!static|images|manifest|favicon).*)", "destination": "/index.html" }
-  ]
+  }
 }
