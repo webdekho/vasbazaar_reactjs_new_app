@@ -16,11 +16,7 @@ const LoginScreen = () => {
   const [referralCode, setReferralCode] = useState(
     urlCode || customerStorage.getReferralCode() || ""
   );
-  const [status, setStatus] = useState(() => {
-    const reason = sessionStorage.getItem("vb_logout_reason");
-    if (reason) { sessionStorage.removeItem("vb_logout_reason"); return { type: "error", message: reason }; }
-    return null;
-  });
+  const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [focused, setFocused] = useState("");
 
