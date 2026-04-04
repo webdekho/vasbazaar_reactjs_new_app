@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { FaFingerprint, FaLock, FaBackspace, FaShieldAlt } from "react-icons/fa";
+import { FaFingerprint, FaLock, FaBackspace, FaShieldAlt, FaSignOutAlt } from "react-icons/fa";
 import { useCustomerModern } from "../context/CustomerModernContext";
 import { authService } from "../services/authService";
 import { userService } from "../services/userService";
@@ -106,8 +106,10 @@ const LockScreen = ({ onUnlock }) => {
   const [error, setError] = useState("");
   const [biometricAvail, setBiometricAvail] = useState(false);
   const [showPin, setShowPin] = useState(false);
+  const [pinAttempts, setPinAttempts] = useState(0);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const { theme } = useTheme();
-  const { sessionToken, setAuthSession } = useCustomerModern();
+  const { sessionToken, setAuthSession, logout } = useCustomerModern();
   const attempted = useRef(false);
 
   useEffect(() => {
@@ -135,7 +137,8 @@ const LockScreen = ({ onUnlock }) => {
       } else {
         // Session expired — biometric verified identity but token is stale
         // Fall back to PIN which returns a fresh token from the server
-        setError("Session expired. Please enter your PIN to continue.");
+        setSessionExpired(true);
+        setError("Session expired. Enter PIN to continue.");
         setShowPin(true);
       }
     } else {
@@ -160,10 +163,26 @@ const LockScreen = ({ onUnlock }) => {
         });
       }
       localStorage.setItem(LOCK_KEYS.lastActive, Date.now().toString());
+      setPinAttempts(0);
       onUnlock();
     } else {
-      setError(res.message || "Incorrect PIN. Try again.");
+      const attempts = pinAttempts + 1;
+      setPinAttempts(attempts);
+      if (attempts >= 3) {
+        setError("Multiple failed attempts. Please logout and login again.");
+      } else {
+        setError(res.message || "Incorrect PIN. Try again.");
+      }
     }
+  };
+
+  const handleLogout = () => {
+    // Clear PIN state
+    localStorage.removeItem(LOCK_KEYS.pinSet);
+    localStorage.removeItem(LOCK_KEYS.lastActive);
+    localStorage.removeItem(LOCK_KEYS.biometricEnabled);
+    // Logout and redirect to login
+    logout();
   };
 
   return (
@@ -176,8 +195,10 @@ const LockScreen = ({ onUnlock }) => {
           />
         </div>
         <FaShieldAlt className="al-shield-icon" />
-        <div className="al-lock-title">App Locked</div>
-        <div className="al-lock-sub">Verify your identity to continue</div>
+        <div className="al-lock-title">{sessionExpired ? "Session Expired" : "App Locked"}</div>
+        <div className="al-lock-sub">
+          {sessionExpired ? "Enter PIN to refresh your session" : "Verify your identity to continue"}
+        </div>
 
         {biometricAvail && !showPin && (
           <div className="al-biometric-section">
@@ -194,13 +215,18 @@ const LockScreen = ({ onUnlock }) => {
         {showPin && (
           <>
             <PinPad onComplete={handlePinSubmit} error={error} />
-            {biometricAvail && (
+            {biometricAvail && !sessionExpired && (
               <button type="button" className="al-switch-btn" onClick={() => { setShowPin(false); handleBiometric(); }}>
                 <FaFingerprint size={14} /> Use Biometric
               </button>
             )}
           </>
         )}
+
+        {/* Logout button - always visible */}
+        <button type="button" className="al-logout-btn" onClick={handleLogout}>
+          <FaSignOutAlt size={14} /> Logout & Login Again
+        </button>
       </div>
     </div>
   );

@@ -14343,6 +14343,37 @@
 .al-switch-btn:hover { color: #40E0D0; }
 .al-overlay--light .al-switch-btn:hover { color: #007BFF; }
 
+/* Logout button */
+.al-logout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  margin-top: 24px;
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  border-radius: 8px;
+  color: #ef4444;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+}
+.al-logout-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
+}
+.al-overlay--light .al-logout-btn {
+  border-color: rgba(220, 38, 38, 0.5);
+  color: #dc2626;
+}
+.al-overlay--light .al-logout-btn:hover {
+  background: rgba(220, 38, 38, 0.1);
+  border-color: #dc2626;
+}
+
 /* PIN section */
 .al-pin-section { margin-top: 8px; }
 
