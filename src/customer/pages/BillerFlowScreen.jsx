@@ -638,14 +638,48 @@ const DTHPlansView = ({ biller, mobile, operators, onSelectPlan, onBack, onChang
               </div>
             ))}
           </div>
-        ) : filtered.length === 0 ? (
-          <div className="bf-empty">
-            <div className="bf-empty-circle"><FaTv /></div>
-            <p className="bf-empty-title">No plans found</p>
-            <p className="bf-empty-desc">Try a different search or category</p>
-          </div>
         ) : (
-          filtered.map((plan) => (
+          <>
+            {/* Custom amount card — shown when searched amount not found in plans */}
+            {(() => {
+              const digits = search.trim().replace(/\D/g, "");
+              if (digits && Number(digits) > 0) {
+                const exactMatch = allPlans.some((p) =>
+                  p.pricing.some((pr) => String(pr.Amount).replace(/[^0-9]/g, "") === digits)
+                );
+                if (!exactMatch) {
+                  return (
+                    <div className="bf-dth-plan-group bf-dth-custom-card" onClick={() => onSelectPlan({ rs: digits, validity: "Custom", category: "Custom Recharge", desc: `Custom DTH recharge of ₹${digits}` })}>
+                      <div className="bf-dth-plan-group-header">
+                        <h3 className="bf-dth-plan-group-title">Custom Recharge</h3>
+                        <span className="bf-dth-plan-group-badge bf-dth-custom-badge">CUSTOM</span>
+                      </div>
+                      <div className="bf-dth-custom-amount">₹{digits}</div>
+                      <p className="bf-dth-custom-desc">Recharge with your custom amount</p>
+                      <div className="bf-dth-recharge-list">
+                        <button type="button" className="bf-dth-recharge-card bf-dth-custom-btn">
+                          <div>
+                            <div className="bf-dth-recharge-price">₹{digits}</div>
+                            <div className="bf-dth-recharge-validity">Tap to proceed</div>
+                          </div>
+                          <FiArrowRight className="bf-dth-recharge-arrow" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+              }
+              return null;
+            })()}
+
+            {filtered.length === 0 ? (
+              <div className="bf-empty">
+                <div className="bf-empty-circle"><FaTv /></div>
+                <p className="bf-empty-title">No plans found</p>
+                <p className="bf-empty-desc">Try a different search or category</p>
+              </div>
+            ) : (
+              filtered.map((plan) => (
             <div key={plan.id} className="bf-dth-plan-group">
               <div className="bf-dth-plan-group-header">
                 <h3 className="bf-dth-plan-group-title">{plan.planName}</h3>
@@ -670,7 +704,9 @@ const DTHPlansView = ({ biller, mobile, operators, onSelectPlan, onBack, onChang
                 ))}
               </div>
             </div>
-          ))
+              ))
+            )}
+          </>
         )}
         <div className="bf-dth-disclaimer">Disclaimer: Review your plan with the operator before recharging.</div>
       </div>

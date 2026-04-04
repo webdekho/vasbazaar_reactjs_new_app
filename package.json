@@ -2,11 +2,11 @@
   "name": "vasbazaar_reactjs_new_app",
   "version": "0.1.0",
   "private": true,
-  "homepage": "/customer",
+  "homepage": ".",
   "dependencies": {
     "@capacitor-community/contacts": "^7.1.0",
     "@capacitor/android": "^8.2.0",
-    "@capacitor/app": "^8.0.1",
+    "@capacitor/app": "^8.1.0",
     "@capacitor/browser": "^8.0.2",
     "@capacitor/cli": "^7.6.0",
     "@capacitor/core": "^8.2.0",

@@ -32,8 +32,6 @@ export const server_api = () => {
      // In native Capacitor app, use the production API URL directly
      if (isCapacitorNative()) return NATIVE_API_URL;
 
-     // In development, CRA proxy (package.json "proxy") forwards to the API server
-     // so we use empty string (relative to origin). In production, use direct API URL.
-     if (process.env.NODE_ENV === 'development') return '';
+     // Always use the production API URL (localhost and production both)
      return 'https://api.vasbazaar.com';
    };

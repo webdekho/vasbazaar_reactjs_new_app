@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaChevronRight, FaGift } from "react-icons/fa";
 import { FiPhoneCall, FiCreditCard, FiGift } from "react-icons/fi";
@@ -21,6 +21,14 @@ const LoginScreen = () => {
   });
   const [loading, setLoading] = useState(false);
   const [focused, setFocused] = useState("");
+
+  // Redirect to app if already logged in
+  useEffect(() => {
+    const sessionToken = customerStorage.getSessionToken();
+    if (sessionToken) {
+      navigate("/customer/app", { replace: true });
+    }
+  }, [navigate]);
 
   const submit = async (event) => {
     event.preventDefault();

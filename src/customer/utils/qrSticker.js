@@ -1,3 +1,7 @@
+// VasBazaar logo as base64 data URI for html2canvas compatibility
+// This is loaded dynamically from /images/vasbazaar-light.png and converted to base64
+const VASBAZAAR_LOGO_URL = "/images/vasbazaar-light.png";
+
 export const qrStickerBenefits = [
   {
     key: "recharge",
@@ -68,7 +72,7 @@ const getBenefitIconDataUri = (key) => {
   return `data:image/svg+xml;base64,${btoa(colored)}`;
 };
 
-export const buildQrStickerWindowHtml = ({ qrImg, mobile }) => {
+export const buildQrStickerWindowHtml = ({ qrImg, mobile, returnUrl = '/' }) => {
   const benefitMarkup = qrStickerBenefits
     .map(
       (benefit) => `
@@ -154,6 +158,31 @@ export const buildQrStickerWindowHtml = ({ qrImg, mobile }) => {
           gap: 14px;
           height: 100%;
         }
+        .vb-close-btn {
+          position: absolute;
+          top: 12px;
+          right: 12px;
+          width: 32px;
+          height: 32px;
+          border: none;
+          border-radius: 50%;
+          background: rgba(15, 23, 42, 0.08);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 10;
+          transition: background 0.2s;
+        }
+        .vb-close-btn:hover {
+          background: rgba(15, 23, 42, 0.15);
+        }
+        .vb-close-btn svg {
+          width: 18px;
+          height: 18px;
+          stroke: #475569;
+          stroke-width: 2.5;
+        }
         .vb-header {
           display: flex;
           align-items: center;
@@ -161,9 +190,18 @@ export const buildQrStickerWindowHtml = ({ qrImg, mobile }) => {
           gap: 10px;
         }
         .vb-logo {
-          width: 214px;
+          width: 180px;
           height: auto;
           display: block;
+        }
+        .vb-logo-text {
+          font-size: 32px;
+          font-weight: 800;
+          background: linear-gradient(135deg, #6366f1 0%, #0ea5e9 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          letter-spacing: -0.02em;
         }
         .vb-title {
           margin: 0;
@@ -400,6 +438,7 @@ export const buildQrStickerWindowHtml = ({ qrImg, mobile }) => {
           body { background: #ffffff; padding: 0; }
           .vb-sticker { box-shadow: none; }
           .vb-btn-row { display: none; }
+          .vb-close-btn { display: none; }
         }
       </style>
     </head>
@@ -409,8 +448,15 @@ export const buildQrStickerWindowHtml = ({ qrImg, mobile }) => {
         <div class="vb-orb-two"></div>
         <div class="vb-orb-three"></div>
         <div class="vb-content">
+          <button class="vb-close-btn" id="vb-close-btn" title="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
           <div class="vb-header">
-            <img class="vb-logo" src="https://webdekho.in/images/vasbazaar1.png" alt="VasBazaar" crossorigin="anonymous" />
+            <img class="vb-logo" src="https://web.vasbazaar.com/images/vasbazaar-light.png" alt="VasBazaar" crossorigin="anonymous" onerror="this.style.display='none';this.nextElementSibling.style.display='inline';" />
+            <span class="vb-logo-text" style="display:none;">VasBazaar</span>
           </div>
           <div>
             <h1 class="vb-title">Scan & Discover</h1>
@@ -455,6 +501,22 @@ export const buildQrStickerWindowHtml = ({ qrImg, mobile }) => {
       <script>
         var stickerEl = document.querySelector('.vb-sticker');
         var mobile = '${escapeHtml(mobile || "")}';
+        var returnUrl = '${escapeHtml(returnUrl)}';
+
+        // Close button handler - works for popup windows and Capacitor apps
+        document.getElementById('vb-close-btn').addEventListener('click', function() {
+          // Try window.close() first (for popup windows)
+          try {
+            if (window.opener) {
+              window.close();
+              return;
+            }
+          } catch(e) {}
+
+          // Navigate to root - this will reload the app correctly
+          // The app's routing will handle showing the correct page
+          window.location.href = '/';
+        });
 
         /* Convert all external images to base64 data URIs so html2canvas can render them */
         function convertImagesToBase64() {
@@ -501,12 +563,39 @@ export const buildQrStickerWindowHtml = ({ qrImg, mobile }) => {
         }
 
         document.getElementById('vb-download-btn').addEventListener('click', function() {
-          captureSticker().then(function(canvas) {
-            var a = document.createElement('a');
-            a.href = canvas.toDataURL('image/png');
-            a.download = 'vasbazaar-qr-sticker-' + (mobile || 'code') + '.png';
-            document.body.appendChild(a); a.click(); document.body.removeChild(a);
-          });
+          var fileName = 'vasbazaar-qr-' + (mobile || 'code') + '.png';
+          var qrImageUrl = document.querySelector('.vb-qr-image').src;
+
+          // Fetch the QR image and convert to blob for sharing/download
+          fetch(qrImageUrl)
+            .then(function(response) { return response.blob(); })
+            .then(function(blob) {
+              var file = new File([blob], fileName, { type: 'image/png' });
+
+              // Check if we can share files (mobile/Capacitor)
+              if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                navigator.share({
+                  title: 'VasBazaar QR Code',
+                  text: 'Save this QR code image',
+                  files: [file]
+                }).catch(function() {});
+                return;
+              }
+
+              // Fallback: Create blob URL and download (for web browsers)
+              var url = URL.createObjectURL(blob);
+              var a = document.createElement('a');
+              a.href = url;
+              a.download = fileName;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+            })
+            .catch(function(err) {
+              // If fetch fails, open the QR image directly
+              window.open(qrImageUrl, '_blank');
+            });
         });
 
         document.getElementById('vb-share-btn').addEventListener('click', function() {
@@ -533,14 +622,30 @@ export const buildQrStickerWindowHtml = ({ qrImg, mobile }) => {
 
 export const openQrStickerWindow = (mobile, size = 360) => {
   const qrImg = getQrStickerUrl(mobile, size);
+  const returnUrl = window.location.href;
+
+  // Check if running in Capacitor
+  const isCapacitor = window.Capacitor?.isNativePlatform?.() || false;
+
+  if (isCapacitor) {
+    // For Capacitor, navigate in same window (no popup)
+    const html = buildQrStickerWindowHtml({ qrImg, mobile, returnUrl: '/' });
+    document.open();
+    document.write(html);
+    document.close();
+    return;
+  }
+
+  // For web browsers, use popup window
   const qrWin = window.open("", "_blank", "width=420,height=600");
 
   if (!qrWin) {
+    // If popup blocked, just open the QR image directly
     window.open(qrImg, "_blank");
     return;
   }
 
-  qrWin.document.write(buildQrStickerWindowHtml({ qrImg, mobile }));
+  qrWin.document.write(buildQrStickerWindowHtml({ qrImg, mobile, returnUrl }));
   qrWin.document.close();
 };
 

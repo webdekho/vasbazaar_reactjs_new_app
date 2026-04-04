@@ -5,6 +5,7 @@ import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import AuthGuard from "./components/AuthGuard";
 import AppLockGuard from "./components/AppLockGuard";
 import { ChatbotProvider } from "./context/ChatbotContext";
+import { customerStorage } from "./services/storageService";
 import LoginScreen from "./pages/LoginScreen";
 import OtpScreen from "./pages/OtpScreen";
 import ProtectedShell from "./pages/ProtectedShell";
@@ -42,8 +43,13 @@ const ThemedApp = ({ children }) => {
   return <div className={`customer-modern-app${theme === "light" ? " theme-light" : ""}`}>{children}</div>;
 };
 
-const LoginRedirect = () => {
+const SmartRedirect = () => {
   const { search } = useLocation();
+  // If user is logged in, redirect to app (AuthGuard + AppLockGuard will handle the rest)
+  const sessionToken = customerStorage.getSessionToken();
+  if (sessionToken) {
+    return <Navigate to="/customer/app" replace />;
+  }
   return <Navigate to={`/customer/login${search}`} replace />;
 };
 
@@ -53,7 +59,7 @@ const CustomerModernRoutes = () => {
       <ThemedApp>
       <CustomerModernProvider>
         <Routes>
-          <Route path="/" element={<LoginRedirect />} />
+          <Route path="/" element={<SmartRedirect />} />
           <Route path="/login" element={<LoginScreen />} />
           <Route path="/verify-otp" element={<OtpScreen />} />
           <Route
@@ -101,7 +107,7 @@ const CustomerModernRoutes = () => {
             <Route path="kyc-callback" element={<KycCallbackScreen />} />
             <Route path="*" element={<Navigate to="/customer/app/services" replace />} />
           </Route>
-          <Route path="*" element={<LoginRedirect />} />
+          <Route path="*" element={<SmartRedirect />} />
         </Routes>
       </CustomerModernProvider>
       </ThemedApp>
