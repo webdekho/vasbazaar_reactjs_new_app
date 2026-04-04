@@ -4,6 +4,7 @@ import { FaCheck, FaTimes, FaSpinner } from "react-icons/fa";
 import { useCustomerModern } from "../context/CustomerModernContext";
 import { digiLockerService } from "../services/digiLockerService";
 import { userService } from "../services/userService";
+import { customerStorage } from "../services/storageService";
 
 const KycCallbackScreen = () => {
   const navigate = useNavigate();
@@ -17,6 +18,11 @@ const KycCallbackScreen = () => {
     // Prevent double processing
     if (processedRef.current) return;
     processedRef.current = true;
+
+    // Log full URL and params for debugging
+    console.log("KYC Callback - Full URL:", window.location.href);
+    console.log("KYC Callback - Session token exists:", !!customerStorage.getSessionToken());
+
     processCallback();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -30,6 +36,7 @@ const KycCallbackScreen = () => {
       const callbackStatus = searchParams.get("status");
 
       console.log("KYC Callback params:", { gateway, type, clientId, callbackStatus });
+      console.log("KYC Callback - userData available:", !!userData);
 
       // Get pending state from sessionStorage
       const pendingState = JSON.parse(sessionStorage.getItem("pendingDigiLocker") || "{}");
@@ -53,6 +60,8 @@ const KycCallbackScreen = () => {
 
       setMessage("Verifying with DigiLocker...");
 
+      console.log("KYC Callback - Calling processDigiLockerCallback API...");
+
       // Process the callback via API
       const result = await digiLockerService.processDigiLockerCallback({
         gateway,
@@ -61,7 +70,7 @@ const KycCallbackScreen = () => {
         status: callbackStatus,
       });
 
-      console.log("DigiLocker callback result:", result);
+      console.log("KYC Callback - API result:", JSON.stringify(result, null, 2));
 
       if (result.success) {
         setMessage("Updating KYC status...");
@@ -110,6 +119,7 @@ const KycCallbackScreen = () => {
       }
     } catch (error) {
       console.error("KYC Callback error:", error);
+      console.error("KYC Callback error stack:", error?.stack);
       setStatus("error");
       setMessage("An error occurred while processing verification.");
       setTimeout(() => navigate("/customer/app/profile", { replace: true }), 3000);

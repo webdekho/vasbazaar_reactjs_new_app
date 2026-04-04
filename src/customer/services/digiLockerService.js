@@ -77,7 +77,10 @@ export const processDigiLockerCallback = async (callbackParams) => {
   try {
     const { gateway, type, client_id, status } = callbackParams;
 
+    console.log("DigiLocker processCallback - Input params:", callbackParams);
+
     if (!gateway || !type || !client_id) {
+      console.log("DigiLocker processCallback - Missing params");
       return {
         success: false,
         message: "Missing required callback parameters",
@@ -86,6 +89,7 @@ export const processDigiLockerCallback = async (callbackParams) => {
     }
 
     if (status !== "success") {
+      console.log("DigiLocker processCallback - Status not success:", status);
       return {
         success: false,
         message: "DigiLocker verification failed or was cancelled",
@@ -93,12 +97,14 @@ export const processDigiLockerCallback = async (callbackParams) => {
       };
     }
 
+    console.log("DigiLocker processCallback - Calling /login/callBack API");
     const result = await authGet("/login/callBack", {
       gateway,
       type,
       client_id,
       status,
     });
+    console.log("DigiLocker processCallback - API response:", JSON.stringify(result, null, 2));
 
     if (result.success) {
       const verifiedData = result.data || result.raw?.data;

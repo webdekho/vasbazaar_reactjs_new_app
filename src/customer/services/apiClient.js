@@ -95,15 +95,20 @@ export const guestGet = async (endpoint, params = {}) => {
 export const authGet = async (endpoint, params = {}) => {
   try {
     const token = getCustomerToken();
+    console.log(`authGet ${endpoint} - Token exists:`, !!token, "Token length:", token?.length || 0);
     if (!token) {
+      console.log(`authGet ${endpoint} - No token found, returning auth required error`);
       return { success: false, message: "Authentication required. Please login.", data: null, raw: null };
     }
+    console.log(`authGet ${endpoint} - Making request with params:`, params);
     const response = await apiClient.get(endpoint, {
       params,
       headers: { access_token: token },
     });
+    console.log(`authGet ${endpoint} - Response status:`, response?.status);
     return parseApiResponse(response);
   } catch (error) {
+    console.error(`authGet ${endpoint} - Error:`, error?.message, "Status:", error?.response?.status);
     return { success: false, message: getErrorMessage(error), data: null, raw: null };
   }
 };
