@@ -1,7 +1,3 @@
-// VasBazaar logo as base64 data URI for html2canvas compatibility
-// This is loaded dynamically from /images/vasbazaar-light.png and converted to base64
-const VASBAZAAR_LOGO_URL = "/images/vasbazaar-light.png";
-
 export const qrStickerBenefits = [
   {
     key: "recharge",
