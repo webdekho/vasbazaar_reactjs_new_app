@@ -19,9 +19,18 @@ const SkeletonLoader = () => (
   </div>
 );
 
-const DataState = ({ loading, error, children, empty = null }) => {
+const DataState = ({ loading, error, children, empty = null, onRetry }) => {
   if (loading) return <SkeletonLoader />;
-  if (error) return <div className="cm-status cm-status-error">{error}</div>;
+  if (error) return (
+    <div className="cm-error-state">
+      <div className="cm-error-card" role="alert">
+        <div className="cm-error-card-icon">!</div>
+        <p className="cm-error-card-title">Connection issue</p>
+        <p className="cm-error-card-msg">{typeof error === "string" ? error : "An unexpected error occurred. Please try again."}</p>
+        {onRetry && <button type="button" className="cm-error-card-retry" onClick={onRetry}>Try Again</button>}
+      </div>
+    </div>
+  );
   if (empty) return <div className="cm-empty">{empty}</div>;
   return children;
 };

@@ -9,7 +9,17 @@
       "Bash(gh auth:*)",
       "Bash(git pull:*)",
       "Bash(git stash:*)",
-      "Bash(npx eslint:*)"
+      "Bash(npx eslint:*)",
+      "Bash(npm install:*)",
+      "Bash(adb logcat:*)",
+      "Bash(grep:*)",
+      "Bash(curl:*)",
+      "Bash(adb devices:*)",
+      "Bash(./gradlew:*)",
+      "Bash(npx cap sync android)",
+      "Bash(adb install:*)",
+      "Bash(adb shell am start:*)",
+      "Bash(open:*)"
     ]
   }
 }

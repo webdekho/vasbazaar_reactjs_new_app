@@ -25,6 +25,7 @@ import {
   getQrStickerUrl,
   openQrStickerWindow,
 } from "../utils/qrSticker";
+import { useToast } from "../context/ToastContext";
 
 const bottomNavItems = [
   { to: "/customer/app/history", label: "History", icon: <FaHistory /> },
@@ -67,6 +68,7 @@ const ProtectedShell = () => {
   const { isOpen: isChatbotOpen, togglePanel: toggleChatbot } = useChatbot();
   const location = useLocation();
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -127,7 +129,11 @@ const ProtectedShell = () => {
   }, []);
 
   useEffect(() => { fetchBalances(); }, [fetchBalances]);
-  useEffect(() => { if (drawerOpen) fetchBalances(); }, [drawerOpen, fetchBalances]);
+  /**
+   * PERF FIX: Removed duplicate balance fetch on drawer open.
+   * Previously, opening the drawer triggered another getUserProfile() call.
+   * The mount-level fetch + API cache (30s TTL) ensures fresh data is displayed.
+   */
   useEffect(() => { setDrawerOpen(false); }, [location.pathname, location.search]);
   useEffect(() => {
     document.body.style.overflow = drawerOpen ? "hidden" : "";
@@ -185,17 +191,22 @@ const ProtectedShell = () => {
           setProfilePhoto(url);
           localStorage.setItem("profile_photo", url);
         } else {
-          alert(res.message || "Upload failed.");
+          showToast("Upload failed. Please try again.", "error");
         }
       }, "image/jpeg", 0.9);
     };
     img.src = URL.createObjectURL(file);
   };
 
-  const handleDrawerNav = (to) => {
+  /**
+   * PERF FIX: Wrapped with useCallback to prevent re-creation on every render.
+   * This function is passed to 14+ drawer menu items — without memoization,
+   * each render created a new function reference causing all items to re-render.
+   */
+  const handleDrawerNav = useCallback((to) => {
     setDrawerOpen(false);
     navigate(to);
-  };
+  }, [navigate]);
 
   const isServiceFlowPage = location.pathname === "/customer/app/payment";
   const hideBottomNav = isServiceFlowPage || location.pathname === "/customer/app/offers" || location.pathname === "/customer/app/success";
@@ -349,7 +360,8 @@ const ProtectedShell = () => {
             }}
             title="Open QR sticker"
           >
-            <img src={qrUrl} alt="QR Code" className="cm-drawer-qr-img" />
+            {/* PERF FIX: Lazy-load QR code image — drawer is closed by default, no need to fetch immediately */}
+            <img src={qrUrl} alt="QR Code" className="cm-drawer-qr-img" loading="lazy" />
           </div>
         </div>
 

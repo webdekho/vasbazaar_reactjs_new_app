@@ -1,6 +1,6 @@
 const { createProxyMiddleware } = require("http-proxy-middleware");
 
-const PROXY_TARGET = "https://apis.uat.vasbazaar.com:8081";
+const PROXY_TARGET = process.env.REACT_APP_API_URL || "https://apis.uat.vasbazaar.com:8081";
 
 module.exports = function (app) {
   // Intercept POST to /customer/app/payment-callback from payment gateway

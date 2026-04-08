@@ -10,6 +10,7 @@ import { advertisementService } from "../services/advertisementService";
 import DataState from "../components/DataState";
 import { normalizeService } from "../components/serviceUtils";
 import BillerFlowScreen from "./BillerFlowScreen";
+import { useToast } from "../context/ToastContext";
 
 const FALLBACK_LOGO = "/assets/images/Brand_favicon.png";
 const handleLogoError = (e) => { e.target.onerror = null; e.target.src = FALLBACK_LOGO; };
@@ -450,6 +451,7 @@ const MobileNumberSheet = ({ open, operator, isPostpaid, navigate, serviceData, 
    ══════════════════════════════════════════════ */
 const PrepaidFlow = ({ serviceData, operators, navigate }) => {
   const location = useLocation();
+  const { showToast } = useToast();
   const prefill = location.state?.prefill;
   const [, setBanners] = useState([]);
   const [contacts, setContacts] = useState([]);
@@ -572,7 +574,7 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
         }
 
         if (!permGranted) {
-          alert("Please allow contacts permission to import contacts from your device.");
+          showToast("Please allow contacts permission to import contacts from your device.", "error");
           return;
         }
 
@@ -597,15 +599,15 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
           if (imported.length) {
             setContacts(imported);
           } else {
-            alert("No contacts with valid phone numbers found.");
+            showToast("No contacts with valid phone numbers found.", "info");
           }
         } else {
-          alert("No contacts found on this device.");
+          showToast("No contacts found on this device.", "info");
         }
         return;
       } catch (e) {
         console.error("Native contacts error:", e);
-        alert("Error reading contacts: " + (e.message || "Unknown error"));
+        showToast("Error reading contacts. Please try again.", "error");
         return;
       }
     }

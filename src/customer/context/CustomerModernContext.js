@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { userService } from "../services/userService";
 import { customerStorage } from "../services/storageService";
@@ -12,6 +12,13 @@ export const CustomerModernProvider = ({ children }) => {
   const location = useLocation();
   const [sessionToken, setSessionToken] = useState(customerStorage.getSessionToken());
   const [userData, setUserData] = useState(customerStorage.getUserData());
+  /**
+   * PERF FIX: Use a ref to read current pathname without adding it as a dependency.
+   * Previously, location.pathname was in the dependency array, causing getUserProfile()
+   * to re-run on EVERY route change — the single biggest source of duplicate API calls.
+   */
+  const pathnameRef = useRef(location.pathname);
+  pathnameRef.current = location.pathname;
 
   useEffect(() => {
     if (!sessionToken) {
@@ -20,7 +27,7 @@ export const CustomerModernProvider = ({ children }) => {
     }
 
     // Skip authenticated API calls on login/OTP pages to avoid 401s with stale tokens
-    if (AUTH_PAGES.includes(location.pathname)) return;
+    if (AUTH_PAGES.includes(pathnameRef.current)) return;
 
     const hydrate = async () => {
       const profile = await userService.getUserProfile();
@@ -39,14 +46,14 @@ export const CustomerModernProvider = ({ children }) => {
         // Preserve verified_status from existing userData or API response
         const verified_status = profileData.verified_status ?? rawData.verified_status ?? existing?.verified_status;
         const merged = { ...existing, ...profileData, mobile, name, verified_status };
-        console.log("Hydrate - verified_status:", verified_status, "merged:", merged);
         setUserData(merged);
         customerStorage.setAuthSession({ sessionToken, userData: merged });
       }
     };
 
     hydrate();
-  }, [sessionToken, location.pathname]);
+    // PERF FIX: Only hydrate when sessionToken changes (login/PIN unlock), not on every route change
+  }, [sessionToken]);
 
   const value = useMemo(
     () => ({

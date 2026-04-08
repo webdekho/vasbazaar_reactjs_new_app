@@ -5,6 +5,7 @@ import { authService } from "../services/authService";
 import { userService } from "../services/userService";
 import { setAppLocked, onSessionExpired } from "../services/apiClient";
 import { useTheme } from "../context/ThemeContext";
+import { sanitizeBackendMessage } from "../utils/userMessages";
 
 const LOCK_KEYS = {
   pinSet: "vb_pin_set",
@@ -171,7 +172,7 @@ const LockScreen = ({ onUnlock }) => {
       if (attempts >= 3) {
         setError("Multiple failed attempts. Please logout and login again.");
       } else {
-        setError(res.message || "Incorrect PIN. Try again.");
+        setError(sanitizeBackendMessage(res.message, "Incorrect PIN. Try again."));
       }
     }
   };
@@ -260,7 +261,7 @@ const SetPinScreen = ({ onComplete }) => {
       localStorage.setItem(LOCK_KEYS.lastActive, Date.now().toString());
       onComplete();
     } else {
-      setError(res.message || "Failed to set PIN. Try again.");
+      setError(sanitizeBackendMessage(res.message, "Failed to set PIN. Try again."));
       setStep("create");
       setFirstPin("");
     }
@@ -335,7 +336,7 @@ export const ChangePinScreen = ({ onClose }) => {
     if (res.success) {
       onClose("PIN changed successfully");
     } else {
-      setError(res.message || "Failed to update PIN");
+      setError(sanitizeBackendMessage(res.message, "Failed to update PIN."));
       setStep("new");
       setNewPin("");
     }

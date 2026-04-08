@@ -5,6 +5,8 @@ import {
   FaTimes, FaInfoCircle, FaTimesCircle
 } from "react-icons/fa";
 import { travelService } from "../services/travelService";
+import { useToast } from "../context/ToastContext";
+import { sanitizeBackendMessage } from "../utils/userMessages";
 
 const STATUS_COLORS = {
   CONFIRMED: { bg: "#dcfce7", color: "#16a34a", text: "Confirmed" },
@@ -16,6 +18,7 @@ const STATUS_COLORS = {
 
 const MyBookingsScreen = () => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [detailModal, setDetailModal] = useState(null);
@@ -86,13 +89,13 @@ const MyBookingsScreen = () => {
         remarks: "Customer requested cancellation"
       });
       if (res.success) {
-        alert("Booking cancelled successfully");
+        showToast("Booking cancelled successfully", "success");
         loadBookings();
       } else {
-        alert(res.message || "Cancellation failed");
+        showToast(sanitizeBackendMessage(res.message, "Cancellation failed"), "error");
       }
     } catch (e) {
-      alert("Cancellation failed");
+      showToast("Cancellation failed", "error");
     }
     setCancelling(false);
     setCancelModal(null);

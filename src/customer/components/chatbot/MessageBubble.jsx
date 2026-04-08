@@ -1,7 +1,13 @@
+import { memo } from "react";
 import QuickActions from "./QuickActions";
 import { BalanceCard, TransactionsCard, OffersCard, ConfirmationCard, EscalateCard } from "./RichCards";
 
-const MessageBubble = ({ message, onAction, onConfirm, onCancel, onLiveChat, onCall, onWhatsApp }) => {
+/**
+ * PERF FIX: Wrapped with React.memo to prevent unnecessary re-renders.
+ * Chatbot can display 20+ messages. Without memoization, every new message
+ * caused ALL existing messages to re-render (new array reference from context).
+ */
+const MessageBubble = memo(({ message, onAction, onConfirm, onCancel, onLiveChat, onCall, onWhatsApp }) => {
   const isBot = message.role === "bot";
 
   return (
@@ -43,6 +49,8 @@ const MessageBubble = ({ message, onAction, onConfirm, onCancel, onLiveChat, onC
       </div>
     </div>
   );
-};
+});
+
+MessageBubble.displayName = "MessageBubble";
 
 export default MessageBubble;

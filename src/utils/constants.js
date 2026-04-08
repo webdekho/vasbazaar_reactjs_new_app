@@ -32,6 +32,9 @@ export const server_api = () => {
      // In native Capacitor app, use the production API URL directly
      if (isCapacitorNative()) return NATIVE_API_URL;
 
-     // Always use the production API URL (localhost and production both)
+     // Use REACT_APP_API_URL from .env if available (for local development)
+     if (process.env.REACT_APP_API_URL) return process.env.REACT_APP_API_URL;
+
+     // Fallback: production API URL
      return 'https://api.vasbazaar.com';
    };

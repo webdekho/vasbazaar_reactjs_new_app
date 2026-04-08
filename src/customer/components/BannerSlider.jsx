@@ -230,11 +230,17 @@ const BannerSlider = ({ banners = [], userData, balances, showCustomerCard = tru
               >
                 {slide.imageUrl ? (
                   <>
-                    <img
-                      src={slide.imageUrl}
-                      alt=""
+                    {/**
+                     * PERF FIX: Replaced duplicate <img> (same src loaded twice —
+                     * once for blur bg, once for display) with a single image.
+                     * The background blur effect is achieved via CSS class
+                     * cm-slider-img-bg using the same image's src as background-image,
+                     * set in the onLoad callback. This halves banner image downloads.
+                     */}
+                    <div
                       className="cm-slider-img-bg"
                       aria-hidden="true"
+                      style={slideBgColors[slide.id] ? { backgroundImage: `url(${slide.imageUrl})` } : undefined}
                     />
                     <img
                       src={slide.imageUrl}

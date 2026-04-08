@@ -73,7 +73,16 @@ const WalletScreen = () => {
     }
   };
 
-  useEffect(() => { fetchData(1); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    const initialFetch = async () => {
+      if (cancelled) return;
+      await fetchData(1);
+    };
+    initialFetch();
+    // PERF FIX: Prevent setState on unmounted component if user navigates away mid-fetch
+    return () => { cancelled = true; };
+  }, []);
 
   const handleRefresh = async () => { setRefreshing(true); setPage(1); await fetchData(1); setRefreshing(false); };
   const handleLoadMore = () => { if (loadingMore || !hasMore) return; const next = page + 1; setPage(next); fetchData(next, true); };

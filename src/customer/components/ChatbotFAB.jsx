@@ -21,15 +21,29 @@ const ChatbotFAB = () => {
       }
     };
 
+    /**
+     * PERF FIX: Debounce the MutationObserver callback.
+     * Previously, recalc fired on EVERY DOM mutation in the entire app
+     * (childList: true, subtree: true on document.body). This caused
+     * layout thrashing (getBoundingClientRect forces reflow) on every
+     * state change anywhere in the component tree. Now batched to 150ms.
+     */
+    let debounceTimer;
+    const debouncedRecalc = () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(recalc, 150);
+    };
+
     recalc();
 
-    const observer = new MutationObserver(recalc);
+    const observer = new MutationObserver(debouncedRecalc);
     observer.observe(document.body, { childList: true, subtree: true });
-    window.addEventListener("resize", recalc);
+    window.addEventListener("resize", debouncedRecalc);
 
     return () => {
+      clearTimeout(debounceTimer);
       observer.disconnect();
-      window.removeEventListener("resize", recalc);
+      window.removeEventListener("resize", debouncedRecalc);
     };
   }, []);
 

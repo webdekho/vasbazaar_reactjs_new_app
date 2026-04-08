@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaSearch, FaDownload, FaSyncAlt, FaClock, FaPlaneDeparture } from "react-icons/fa";
 import { FiShare, FiPlusSquare, FiAlertTriangle, FiClock } from "react-icons/fi";
@@ -303,7 +303,14 @@ const ServicesScreen = () => {
     load();
   }, []);
 
-  const filtered = services.filter((s) => s.name.toLowerCase().includes(query.toLowerCase()));
+  /**
+   * PERF FIX: Memoize filtered services so the filter only runs when
+   * services or query changes, not on every render (e.g., search focus/blur).
+   */
+  const filtered = useMemo(
+    () => services.filter((s) => s.name.toLowerCase().includes(query.toLowerCase())),
+    [services, query]
+  );
 
   if (loading) {
     return (

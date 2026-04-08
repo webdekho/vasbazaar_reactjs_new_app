@@ -1,5 +1,6 @@
 import axios from "axios";
 import { server_api } from "../../utils/constants";
+import { getUserFriendlyMessage } from "../utils/userMessages";
 
 const CUSTOMER_STORAGE_KEYS = {
   sessionToken: "customerSessionToken",
@@ -61,10 +62,7 @@ const parseApiResponse = (response) => {
 };
 
 const getErrorMessage = (error) => {
-  if (error?.response?.headers?.["content-type"]?.includes("text/html")) {
-    return "API returned HTML instead of JSON. Check the customer panel API base URL.";
-  }
-  return error?.response?.data?.message || error?.message || "Unexpected error";
+  return getUserFriendlyMessage(error, "Something went wrong. Please try again.");
 };
 
 const getCustomerToken = () => localStorage.getItem(CUSTOMER_STORAGE_KEYS.sessionToken);
@@ -92,23 +90,24 @@ export const guestGet = async (endpoint, params = {}) => {
   }
 };
 
+/**
+ * PERF FIX: Removed 4 console.log/console.error calls that ran on EVERY
+ * authenticated GET request. On mobile (Capacitor WebView), console calls
+ * are significantly more expensive than on desktop — they serialize objects,
+ * format strings, and bridge to native logging on each call.
+ */
 export const authGet = async (endpoint, params = {}) => {
   try {
     const token = getCustomerToken();
-    console.log(`authGet ${endpoint} - Token exists:`, !!token, "Token length:", token?.length || 0);
     if (!token) {
-      console.log(`authGet ${endpoint} - No token found, returning auth required error`);
       return { success: false, message: "Authentication required. Please login.", data: null, raw: null };
     }
-    console.log(`authGet ${endpoint} - Making request with params:`, params);
     const response = await apiClient.get(endpoint, {
       params,
       headers: { access_token: token },
     });
-    console.log(`authGet ${endpoint} - Response status:`, response?.status);
     return parseApiResponse(response);
   } catch (error) {
-    console.error(`authGet ${endpoint} - Error:`, error?.message, "Status:", error?.response?.status);
     return { success: false, message: getErrorMessage(error), data: null, raw: null };
   }
 };

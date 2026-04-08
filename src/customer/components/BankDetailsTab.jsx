@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { FaPlus, FaCreditCard, FaArrowRight, FaPen, FaTimes, FaCheck, FaSpinner, FaExclamationCircle, FaUniversity } from "react-icons/fa";
 import { walletService } from "../services/walletService";
+import { sanitizeBackendMessage } from "../utils/userMessages";
 
 const maskAccount = (num) => (num ? `****${num.slice(-4)}` : "");
 
@@ -49,7 +50,7 @@ export default function BankDetailsTab() {
       const list = res.data?.records || (Array.isArray(res.data) ? res.data : []);
       setBanks(list);
     } else {
-      setError(res.message || "Failed to load bank accounts");
+      setError(sanitizeBackendMessage(res.message, "Failed to load bank accounts"));
     }
     setLoading(false);
   }, [statusFilter]);
@@ -82,8 +83,9 @@ export default function BankDetailsTab() {
       closeAddModal();
       fetchBanks();
     } else {
-      const msg = res.message || "Failed to save bank account";
-      const isVerifyError = msg.toLowerCase().includes("verification failed") || msg.toLowerCase().includes("verify");
+      const msg = sanitizeBackendMessage(res.message, "Failed to save bank account");
+      const rawMsg = (res.message || "").toLowerCase();
+      const isVerifyError = rawMsg.includes("verification failed") || rawMsg.includes("verify");
       if (isVerifyError && !skipVerification) {
         setVerifyFailed(true);
       }
@@ -131,7 +133,7 @@ export default function BankDetailsTab() {
     if (res.success) {
       setTransferResult({ status: "success", reqId: res.data?.reqId, apiRefId: res.data?.apiRefId });
     } else {
-      setTransferResult({ status: "error", message: res.message || "Transfer failed" });
+      setTransferResult({ status: "error", message: sanitizeBackendMessage(res.message, "Transfer failed") });
     }
   };
 

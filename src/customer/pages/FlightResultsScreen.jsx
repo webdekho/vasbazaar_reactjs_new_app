@@ -4,10 +4,13 @@ import { FaArrowLeft, FaPlaneDeparture, FaClock, FaSuitcase,
   FaFilter, FaTimes,
   FaInfoCircle, FaCheckCircle } from "react-icons/fa";
 import { travelService } from "../services/travelService";
+import { useToast } from "../context/ToastContext";
+import { sanitizeBackendMessage } from "../utils/userMessages";
 
 const FlightResultsScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { showToast } = useToast();
   const { flights = [], searchParams = {}, token = "" } = location.state || {};
 
   const [sortBy, setSortBy] = useState("price");
@@ -123,10 +126,10 @@ const FlightResultsScreen = () => {
           }
         });
       } else {
-        alert(res.message || "Unable to get fare quote. Please try again.");
+        showToast(sanitizeBackendMessage(res.message, "Unable to get fare quote. Please try again."), "error");
       }
     } catch (e) {
-      alert("Failed to get fare quote. Please try again.");
+      showToast("Failed to get fare quote. Please try again.", "error");
     }
     setLoadingQuote(null);
   };

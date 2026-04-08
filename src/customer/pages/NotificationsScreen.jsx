@@ -60,11 +60,15 @@ const NotificationsScreen = () => {
   const [dismissing, setDismissing] = useState(null);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       const res = await notificationService.getNotifications(0);
+      // PERF FIX: Skip setState if component unmounted during fetch
+      if (cancelled) return;
       setLoading(false);
       setRecords(res.data?.records || (Array.isArray(res.data) ? res.data : []));
     })();
+    return () => { cancelled = true; };
   }, []);
 
   const handleDelete = (index) => {

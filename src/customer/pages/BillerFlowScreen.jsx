@@ -17,6 +17,8 @@ import { advertisementService } from "../services/advertisementService";
 import { offerService } from "../services/offerService";
 import { userService } from "../services/userService";
 import BannerSlider from "../components/BannerSlider";
+import { useToast } from "../context/ToastContext";
+import { sanitizeBackendMessage } from "../utils/userMessages";
 
 /* ── Bharat Connect Logo ── */
 const BharatConnectLogo = () => (
@@ -1076,6 +1078,7 @@ const extractOperators = (data) => {
    ══════════════════════════════════════════════ */
 const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate }) => {
   const nav = useNavigate();
+  const { showToast } = useToast();
   const [step, setStep] = useState(0);
   const [banners, setBanners] = useState([]);
   const [billers, setBillers] = useState(passedOperators || []);
@@ -1246,7 +1249,7 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
     if (!response.success) {
       if (pwaWindow) pwaWindow.close();
       setLoading(false);
-      alert(response.message || "Payment could not be processed.");
+      showToast(sanitizeBackendMessage(response.message, "Payment could not be processed."), "error");
       return;
     }
 

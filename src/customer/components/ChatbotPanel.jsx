@@ -5,6 +5,7 @@ import { useChatbot } from "../context/ChatbotContext";
 import { processMessage } from "../services/chatbotService";
 import { rechargeService } from "../services/rechargeService";
 import MessageBubble from "./chatbot/MessageBubble";
+import { sanitizeBackendMessage } from "../utils/userMessages";
 
 const TAWK_TO_ID = "68d37d4a56af9719235895be/1j5t22r24";
 

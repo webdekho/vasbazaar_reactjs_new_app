@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaCopy, FaCheckCircle, FaClock, FaTag, FaGift } from "react-icons/fa";
 import { FiInbox } from "react-icons/fi";
@@ -39,18 +39,23 @@ const CouponListScreen = () => {
 
   useEffect(() => { fetchData(0); }, []);
 
-  const now = Date.now();
-  const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
-
-  // Active: validity not passed yet
-  const active = coupons.filter((c) => !c.validity || new Date(c.validity).getTime() >= now);
-
-  // Expired but still visible: validity passed, but less than 15 days ago
-  const expired = coupons.filter((c) => {
-    if (!c.validity) return false;
-    const validityTime = new Date(c.validity).getTime();
-    return validityTime < now && (now - validityTime) <= FIFTEEN_DAYS_MS;
-  });
+  /**
+   * PERF FIX: Memoize active/expired filtering so it only recalculates
+   * when the coupons array changes, not on every render (e.g., tab switch,
+   * copy action, or pagination state change).
+   */
+  const { active, expired } = useMemo(() => {
+    const now = Date.now();
+    const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
+    return {
+      active: coupons.filter((c) => !c.validity || new Date(c.validity).getTime() >= now),
+      expired: coupons.filter((c) => {
+        if (!c.validity) return false;
+        const validityTime = new Date(c.validity).getTime();
+        return validityTime < now && (now - validityTime) <= FIFTEEN_DAYS_MS;
+      }),
+    };
+  }, [coupons]);
 
   const filtered = tab === "active" ? active : expired;
 
@@ -62,13 +67,14 @@ const CouponListScreen = () => {
 
   const getDaysLeft = (validity) => {
     if (!validity) return null;
-    return Math.ceil((new Date(validity).getTime() - now) / (1000 * 60 * 60 * 24));
+    return Math.ceil((new Date(validity).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
   };
 
   const getDaysUntilRemoval = (validity) => {
     if (!validity) return null;
+    const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
     const expiryTime = new Date(validity).getTime();
-    return Math.ceil((expiryTime + FIFTEEN_DAYS_MS - now) / (1000 * 60 * 60 * 24));
+    return Math.ceil((expiryTime + FIFTEEN_DAYS_MS - Date.now()) / (1000 * 60 * 60 * 24));
   };
 
   return (

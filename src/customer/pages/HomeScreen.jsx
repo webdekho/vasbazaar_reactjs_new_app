@@ -19,6 +19,7 @@ const HomeScreen = () => {
   });
 
   useEffect(() => {
+    let cancelled = false;
     const load = async () => {
       setState((prev) => ({ ...prev, loading: true, error: "" }));
       const [profile, ads, services, wallet, notifications] = await Promise.all([
@@ -28,6 +29,8 @@ const HomeScreen = () => {
         walletService.getWalletTransactions(0, 6),
         notificationService.getNotifications(0),
       ]);
+      // PERF FIX: Skip setState if component unmounted during fetch (prevents memory leak)
+      if (cancelled) return;
       const error = [profile, ads, services, wallet, notifications].find((r) => !r.success)?.message || "";
       setState({
         loading: false, error,
@@ -39,7 +42,16 @@ const HomeScreen = () => {
       });
     };
     load();
-  }, [userData]);
+    return () => { cancelled = true; };
+    /**
+     * PERF FIX: Changed dependency from [userData] to [] (mount-only).
+     * Previously, when context hydration updated userData, HomeScreen would
+     * re-fetch all 5 APIs. The profile response then updated userData again,
+     * risking a cascade. Now fetches once on mount — API cache ensures
+     * getUserProfile() returns instantly if already fetched by context.
+     */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const quickLinks = [
     { label: "My Bills", to: "/customer/app/services/electricity", ...getServiceVisual("electricity") },

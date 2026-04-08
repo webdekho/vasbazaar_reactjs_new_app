@@ -1,4 +1,5 @@
 import { CUSTOMER_STORAGE_KEYS, trimTrailingSlash, resolveApiBase, apiClient } from "./apiClient";
+import { invalidateAll } from "./apiCache";
 
 export const customerStorage = {
   keys: CUSTOMER_STORAGE_KEYS,
@@ -71,5 +72,7 @@ export const customerStorage = {
 
   clear: () => {
     Object.values(CUSTOMER_STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
+    // PERF FIX: Clear API cache on logout to prevent stale data for next user
+    invalidateAll();
   },
 };

@@ -10,10 +10,13 @@ import { ChangePinScreen } from "../components/AppLockGuard";
 import { useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { openQrStickerWindow } from "../utils/qrSticker";
+import { useToast } from "../context/ToastContext";
+import { sanitizeBackendMessage } from "../utils/userMessages";
 
 const ProfileScreen = () => {
   const { userData, logout } = useCustomerModern();
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [copied, setCopied] = useState(false);
   const [showChangePin, setShowChangePin] = useState(false);
   const [pinMsg, setPinMsg] = useState("");
@@ -92,7 +95,7 @@ const ProfileScreen = () => {
             localStorage.setItem("profile_photo", url);
           }
         } else {
-          alert(res.message || "Upload failed. Please try again.");
+          showToast(sanitizeBackendMessage(res.message, "Upload failed. Please try again."), "error");
         }
       }, "image/jpeg", 0.9);
     };

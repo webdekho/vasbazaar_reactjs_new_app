@@ -1,7 +1,17 @@
 import { authGet, authPost, apiClient, parseApiResponse, getErrorMessage, CUSTOMER_STORAGE_KEYS } from "./apiClient";
+import { cachedFetch, invalidate } from "./apiCache";
 
 export const userService = {
-  getUserProfile: () => authGet("/api/customer/user/getByUserId"),
+  /**
+   * PERF FIX: getUserProfile was called from ~6 places simultaneously
+   * (Context hydration, HomeScreen, ProtectedShell, WalletScreen, chatbot, ProfileScreen).
+   * Now cached for 30s with in-flight deduplication — identical concurrent calls
+   * share a single network request.
+   */
+  getUserProfile: () => cachedFetch("getUserProfile", () => authGet("/api/customer/user/getByUserId"), 30000),
+
+  /** Invalidate profile cache after mutations (photo upload, onboarding, profile update) */
+  invalidateProfile: () => invalidate("getUserProfile"),
 
   uploadProfilePhoto: async (file) => {
     try {
@@ -12,7 +22,10 @@ export const userService = {
         headers: { "Content-Type": "multipart/form-data", access_token: token },
         timeout: 15000,
       });
-      return parseApiResponse(response);
+      const result = parseApiResponse(response);
+      // PERF FIX: Invalidate profile cache after photo upload so next fetch gets updated photo
+      if (result.success) invalidate("getUserProfile");
+      return result;
     } catch (error) {
       return { success: false, message: getErrorMessage(error), data: null };
     }

@@ -6,6 +6,8 @@ import {
 } from "react-icons/fa";
 import { FiInbox } from "react-icons/fi";
 import { walletService } from "../services/walletService";
+import { useToast } from "../context/ToastContext";
+import { sanitizeBackendMessage } from "../utils/userMessages";
 
 const statusConfig = {
   active: { label: "Active", color: "#00C853", icon: <FaCheckCircle /> },
@@ -35,6 +37,7 @@ const SkeletonCard = ({ delay }) => (
 const AutoPayScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { showToast } = useToast();
   const [tab, setTab] = useState("active");
   const [mandates, setMandates] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -73,7 +76,7 @@ const AutoPayScreen = () => {
     const res = await walletService.revokeMandate(id);
     setActionLoading(null);
     setConfirmAction(null);
-    if (res.success) { fetchData(1, tab); } else { alert(res.message || "Failed to cancel mandate."); }
+    if (res.success) { fetchData(1, tab); } else { showToast(sanitizeBackendMessage(res.message, "Failed to cancel mandate."), "error"); }
   };
 
   const handlePause = async (id, orderId) => {
@@ -81,7 +84,7 @@ const AutoPayScreen = () => {
     const res = await walletService.stopMandateExecution(id, orderId);
     setActionLoading(null);
     setConfirmAction(null);
-    if (res.success) { fetchData(1, tab); } else { alert(res.message || "Failed to pause mandate."); }
+    if (res.success) { fetchData(1, tab); } else { showToast(sanitizeBackendMessage(res.message, "Failed to pause mandate."), "error"); }
   };
 
   const tabs = ["active", "pending", "stopped", "revoked"];
