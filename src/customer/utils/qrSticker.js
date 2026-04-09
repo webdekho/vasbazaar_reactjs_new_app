@@ -30,6 +30,30 @@ export const getQrStickerLink = (mobile) => `https://web.vasbazaar.com?code=${mo
 export const getQrStickerUrl = (mobile, size = 360) =>
   `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(getQrStickerLink(mobile))}`;
 
+export const getQrStickerFileName = (mobile) => `vasbazaar-qr-${mobile || "code"}.png`;
+
+const QR_STICKER_LOGO_URL = "https://web.vasbazaar.com/images/vasbazaar-light.png";
+
+const loadImage = (src) =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+
+const canvasToBlob = (canvas) =>
+  new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob);
+        return;
+      }
+      reject(new Error("Failed to create QR sticker image."));
+    }, "image/png");
+  });
+
 const escapeHtml = (value = "") =>
   String(value)
     .replace(/&/g, "&amp;")
@@ -945,4 +969,25 @@ export const drawQrStickerCanvas = ({ ctx, width, height, logoImg, qrImg }) => {
 
   ctx.fillStyle = "#475569";
   ctx.fillText("Powered by VasBazaar", width / 2 + 70, height - 40);
+};
+
+export const createQrStickerCanvas = async ({ mobile, width = 960, height = 1600, qrSize = 720 } = {}) => {
+  const [logoImg, qrImg] = await Promise.all([
+    loadImage(QR_STICKER_LOGO_URL),
+    loadImage(getQrStickerUrl(mobile, qrSize)),
+  ]);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+
+  const ctx = canvas.getContext("2d");
+  drawQrStickerCanvas({ ctx, width, height, logoImg, qrImg });
+
+  return canvas;
+};
+
+export const generateQrStickerBlob = async (options = {}) => {
+  const canvas = await createQrStickerCanvas(options);
+  return canvasToBlob(canvas);
 };

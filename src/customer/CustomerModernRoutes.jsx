@@ -48,6 +48,7 @@ const JuspayCallbackScreen = lazy(() => import("./pages/JuspayCallbackScreen"));
 const FailureScreen = lazy(() => import("./pages/FailureScreen"));
 const KycScreen = lazy(() => import("./pages/KycScreen"));
 const KycCallbackScreen = lazy(() => import("./pages/KycCallbackScreen"));
+const QrStickerScreen = lazy(() => import("./pages/QrStickerScreen"));
 
 /** Lightweight loading fallback for lazy-loaded routes */
 const RouteFallback = () => (
@@ -99,6 +100,7 @@ const CustomerModernRoutes = () => {
             <Route path="services/:serviceSlug" element={<Suspense fallback={<RouteFallback />}><ServiceFlowScreen /></Suspense>} />
             <Route path="offers" element={<Suspense fallback={<RouteFallback />}><OfferScreen /></Suspense>} />
             <Route path="payment" element={<Suspense fallback={<RouteFallback />}><PaymentScreen /></Suspense>} />
+            <Route path="qr" element={<Suspense fallback={<RouteFallback />}><QrStickerScreen /></Suspense>} />
             <Route path="payment-callback" element={<Suspense fallback={<RouteFallback />}><JuspayCallbackScreen /></Suspense>} />
             <Route path="success" element={<Suspense fallback={<RouteFallback />}><SuccessScreen /></Suspense>} />
             <Route path="failure" element={<Suspense fallback={<RouteFallback />}><FailureScreen /></Suspense>} />

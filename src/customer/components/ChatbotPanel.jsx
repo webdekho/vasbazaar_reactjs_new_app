@@ -116,7 +116,7 @@ const ChatbotPanel = () => {
             cardData: { id: txnId, amount: data.amount, status: "SUCCESS", operator: data.operator, mobile: data.mobile, date: new Date().toISOString() },
           });
         } else {
-          addBotMessage(`Payment failed: ${res.message || "Unknown error"}. Please try again or use a different payment method.`, {
+          addBotMessage(`Payment failed: ${sanitizeBackendMessage(res.message, "Unknown error")}. Please try again or use a different payment method.`, {
             actions: ["Try Again", "Talk to Agent", "Check Balance"],
           });
         }

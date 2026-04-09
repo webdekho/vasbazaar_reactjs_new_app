@@ -125,9 +125,8 @@ const CouponModal = ({ open, coupons, loading, amount, appliedId, onApply, onClo
                 <div className="off-modal-coupon-left">
                   <div className="off-modal-coupon-icon" style={{ background: meta.gradient }}>{meta.icon}</div>
                   <div>
-                    <div className="off-modal-coupon-code">{c.couponCode || c.couponName}</div>
+                    <div className="off-modal-coupon-code">{c.couponName || c.couponCode || "Coupon"}</div>
                     <div className="off-modal-coupon-save">Save ₹{disc}</div>
-                    {c.couponName && c.couponCode && <div className="off-modal-coupon-name">{c.couponName}</div>}
                   </div>
                 </div>
                 <button type="button" className={`off-modal-coupon-btn${isApplied ? " is-applied" : ""}`} onClick={() => { onApply(c); if (!isApplied) onClose(); }}>

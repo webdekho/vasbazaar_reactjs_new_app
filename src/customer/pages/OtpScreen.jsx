@@ -9,6 +9,7 @@ import { customerStorage } from "../services/storageService";
 import { extractSessionToken } from "../components/serviceUtils";
 import { triggerPWAInstall } from "../hooks/usePWAInstall";
 import { useTheme } from "../context/ThemeContext";
+import { sanitizeBackendMessage } from "../utils/userMessages";
 
 const NAME_PLACEHOLDERS = new Set([
   "NA",
@@ -111,7 +112,7 @@ const OtpScreen = () => {
     if (!response.success) {
       setShake(true);
       setTimeout(() => setShake(false), 500);
-      setStatus({ type: "error", message: response.message });
+      setStatus({ type: "error", message: sanitizeBackendMessage(response.message, "Verification failed. Please try again.") });
       return;
     }
     const apiData = (typeof response.data === "object" && response.data !== null) ? response.data : (response.raw?.data || {});
@@ -169,7 +170,7 @@ const OtpScreen = () => {
     setNameLoading(false);
 
     if (!response.success) {
-      setNameStatus({ type: "error", message: response.message || "Failed to save your name." });
+      setNameStatus({ type: "error", message: sanitizeBackendMessage(response.message, "Failed to save your name.") });
       return;
     }
 
@@ -202,7 +203,7 @@ const OtpScreen = () => {
       setOtp(["", "", "", "", "", ""]);
       setStatus({ type: "success", message: "OTP resent successfully" });
     } else {
-      setStatus({ type: "error", message: response.message });
+      setStatus({ type: "error", message: sanitizeBackendMessage(response.message, "Failed to resend OTP. Please try again.") });
     }
   };
 

@@ -9,7 +9,6 @@ import { userService } from "../services/userService";
 import { ChangePinScreen } from "../components/AppLockGuard";
 import { useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { openQrStickerWindow } from "../utils/qrSticker";
 import { useToast } from "../context/ToastContext";
 import { sanitizeBackendMessage } from "../utils/userMessages";
 
@@ -100,7 +99,7 @@ const ProfileScreen = () => {
       }, "image/jpeg", 0.9);
     };
     img.src = cropSrc;
-  }, [cropSrc, cropPos]);
+  }, [cropSrc, cropPos, showToast]);
 
   const copyReferral = () => {
     navigator.clipboard?.writeText(referral);
@@ -205,7 +204,7 @@ const ProfileScreen = () => {
             <button type="button" className="pf-referral-btn pf-referral-btn--share" onClick={shareReferral}>
               <FaShareAlt size={11} /> Share
             </button>
-            <button type="button" className="pf-referral-btn pf-referral-btn--qr" onClick={() => openQrStickerWindow(mobile, 360)}>
+            <button type="button" className="pf-referral-btn pf-referral-btn--qr" onClick={() => navigate("/customer/app/qr")}>
               <FaQrcode size={11} /> QR
             </button>
           </div>

@@ -23,7 +23,6 @@ import { Capacitor } from "@capacitor/core";
 import { App } from "@capacitor/app";
 import {
   getQrStickerUrl,
-  openQrStickerWindow,
 } from "../utils/qrSticker";
 import { useToast } from "../context/ToastContext";
 
@@ -209,7 +208,8 @@ const ProtectedShell = () => {
   }, [navigate]);
 
   const isServiceFlowPage = location.pathname === "/customer/app/payment";
-  const hideBottomNav = isServiceFlowPage || location.pathname === "/customer/app/offers" || location.pathname === "/customer/app/success";
+  const isQrPage = location.pathname === "/customer/app/qr";
+  const hideBottomNav = isServiceFlowPage || isQrPage || location.pathname === "/customer/app/offers" || location.pathname === "/customer/app/success";
 
   return (
     <div className={`customer-modern-protected${!sidebarOpen ? " cm-sidebar-hidden" : ""}`}>
@@ -235,7 +235,7 @@ const ProtectedShell = () => {
             <div className="cm-muted">{userMobile ? `+91 ${userMobile}` : "Active session"}</div>
           </div>
           <div className="cm-sidebar-qr-actions">
-            <button type="button" className="cm-sidebar-qr-btn" onClick={() => openQrStickerWindow(userMobile, 360)} title="Show QR Code"><FaQrcode /></button>
+            <button type="button" className="cm-sidebar-qr-btn" onClick={() => navigate("/customer/app/qr")} title="Show QR Code"><FaQrcode /></button>
           </div>
         </div>
 
@@ -275,7 +275,7 @@ const ProtectedShell = () => {
       </aside>
 
       <div className="cm-main">
-        {!isServiceFlowPage && (
+        {!isServiceFlowPage && !isQrPage && (
           <header className="cm-topbar">
             <div className="cm-topbar-inner">
               <div className="cm-topbar-left">
@@ -349,13 +349,13 @@ const ProtectedShell = () => {
           </div>
           <div
             className="cm-drawer-qr-wrap"
-            onClick={() => openQrStickerWindow(userMobile, 360)}
+            onClick={() => navigate("/customer/app/qr")}
             role="button"
             tabIndex={0}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                openQrStickerWindow(userMobile, 360);
+                navigate("/customer/app/qr");
               }
             }}
             title="Open QR sticker"

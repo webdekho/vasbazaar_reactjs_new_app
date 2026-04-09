@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { FaCheckCircle, FaTimesCircle, FaClock, FaRedo } from "react-icons/fa";
+import { FaCheckCircle, FaTimesCircle, FaClock } from "react-icons/fa";
 import { isSuccessStatus, isPendingStatus } from "../../shared/constants/juspay";
 import juspayService from "../services/juspayService";
 import { authPost } from "../services/apiClient";
@@ -36,7 +36,7 @@ const JuspayCallbackScreen = () => {
   const [message, setMessage] = useState("Verifying your payment...");
   const [txnId, setTxnId] = useState("");
   const [paymentCtx, setPaymentCtx] = useState(null);
-  const [refundLoading, setRefundLoading] = useState(false);
+  const [refundLoadingType, setRefundLoadingType] = useState("");
   const [refundMessage, setRefundMessage] = useState("");
   const [refundMessageType, setRefundMessageType] = useState("");
   const [refundModalOpen, setRefundModalOpen] = useState(false);
@@ -148,7 +148,7 @@ const JuspayCallbackScreen = () => {
           // Hide technical/internal messages from the user
           const isTechnical = /login failed|ip \d|automatic refund|internal server|exception|stacktrace|null pointer/i.test(rawReason);
           const failReason = isTechnical || !rawReason
-            ? "Payment could not be completed. Please choose a refund option below or retry the transaction."
+            ? "Payment could not be completed. Please choose a refund option below."
             : rawReason;
           setMessage(failReason);
           // Cache failed result
@@ -174,7 +174,7 @@ const JuspayCallbackScreen = () => {
       return;
     }
 
-    setRefundLoading(true);
+    setRefundLoadingType(refundType);
     setRefundMessage("");
     setRefundMessageType("");
 
@@ -201,7 +201,7 @@ const JuspayCallbackScreen = () => {
       setRefundMessage("Unable to submit refund request. Please try again.");
       setRefundModalOpen(true);
     } finally {
-      setRefundLoading(false);
+      setRefundLoadingType("");
     }
   };
 
@@ -213,64 +213,6 @@ const JuspayCallbackScreen = () => {
   };
 
   const cfg = statusConfig[state];
-
-  const [retryLoading, setRetryLoading] = useState(false);
-
-  const handleRetry = async () => {
-    if (!txnId) {
-      navigate("/customer/app/services", { replace: true });
-      return;
-    }
-
-    setRetryLoading(true);
-    try {
-      // Credit the failed amount to wallet first
-      const response = await authPost("/api/customer/plan_recharge/request-refund", {
-        txnId,
-        refundType: "wallet",
-      });
-
-      if (response.success) {
-        // Wallet credited, now navigate to payment page to retry
-        if (paymentCtx) {
-          navigate("/customer/app/payment", {
-            replace: true,
-            state: {
-              type: paymentCtx.type || "recharge",
-              amount: paymentCtx.amount,
-              label: paymentCtx.label,
-              mobile: paymentCtx.mobile,
-              operatorName: paymentCtx.operatorName,
-              operatorId: paymentCtx.operatorId,
-              logo: paymentCtx.logo,
-              couponCode: paymentCtx.couponCode || null,
-              couponName: paymentCtx.couponName || null,
-              discountValue: paymentCtx.discountValue || 0,
-              cashbackValue: paymentCtx.cashbackValue || 0,
-              offerType: paymentCtx.offerType || null,
-              field1: paymentCtx.field1 || paymentCtx.mobile || "",
-              field2: paymentCtx.field2 || null,
-              validity: paymentCtx.validity || null,
-              viewBillResponse: paymentCtx.viewBillResponse || {},
-              serviceId: paymentCtx.serviceId || null,
-            },
-          });
-        } else {
-          navigate("/customer/app/services", { replace: true });
-        }
-      } else {
-        setRefundMessageType("error");
-        setRefundMessage(response.message || "Unable to credit wallet for retry. Please try again.");
-        setRefundModalOpen(true);
-      }
-    } catch {
-      setRefundMessageType("error");
-      setRefundMessage("Unable to credit wallet for retry. Please try again.");
-      setRefundModalOpen(true);
-    } finally {
-      setRetryLoading(false);
-    }
-  };
 
   return (
     <div style={{
@@ -358,56 +300,39 @@ const JuspayCallbackScreen = () => {
 
       {/* Action buttons for failed transactions */}
       {state === "failed" && (
-        <div style={{ display: "flex", gap: 12, flexDirection: "column", alignItems: "center", width: "100%", maxWidth: 360 }}>
-          <button
-            onClick={handleRetry}
-            disabled={retryLoading}
-            style={{
-              padding: "12px 28px", borderRadius: 10, width: "100%",
-              background: "linear-gradient(135deg, #00F5D4, #00BBF9)",
-              border: "none",
-              color: "#061018",
-              cursor: retryLoading ? "not-allowed" : "pointer",
-              opacity: retryLoading ? 0.7 : 1,
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              fontSize: "0.9rem", fontWeight: 700,
-            }}
-          >
-            <FaRedo /> {retryLoading ? "Processing..." : "Retry Transaction"}
-          </button>
-
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, width: "100%", maxWidth: 460 }}>
           <button
             onClick={() => handleRefundRequest("wallet")}
-            disabled={refundLoading}
+            disabled={Boolean(refundLoadingType)}
             style={{
-              padding: "12px 28px", borderRadius: 10, width: "100%",
+              padding: "12px 18px", borderRadius: 10, width: "100%",
               background: "linear-gradient(135deg, #00B894 0%, #00D2A0 100%)",
               border: "none",
               color: "#fff",
-              cursor: refundLoading ? "not-allowed" : "pointer",
-              opacity: refundLoading ? 0.7 : 1,
+              cursor: refundLoadingType ? "not-allowed" : "pointer",
+              opacity: refundLoadingType ? 0.7 : 1,
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
               fontSize: "0.9rem", fontWeight: 700,
             }}
           >
-            {refundLoading ? "Processing..." : "Refund to Wallet (Immediate)"}
+            {refundLoadingType === "wallet" ? "Processing..." : "Refund to Wallet (Immediate)"}
           </button>
 
           <button
             onClick={() => handleRefundRequest("bank")}
-            disabled={refundLoading}
+            disabled={Boolean(refundLoadingType)}
             style={{
-              padding: "12px 28px", borderRadius: 10, width: "100%",
+              padding: "12px 18px", borderRadius: 10, width: "100%",
               background: "linear-gradient(135deg, #4C6FFF 0%, #6C8BFF 100%)",
               border: "none",
               color: "#fff",
-              cursor: refundLoading ? "not-allowed" : "pointer",
-              opacity: refundLoading ? 0.7 : 1,
+              cursor: refundLoadingType ? "not-allowed" : "pointer",
+              opacity: refundLoadingType ? 0.7 : 1,
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
               fontSize: "0.9rem", fontWeight: 700,
             }}
           >
-            {refundLoading ? "Processing..." : "Refund to Original Source (Upto 3 Days)"}
+            {refundLoadingType === "bank" ? "Processing..." : "Refund to Original Source (Upto 3 Days)"}
           </button>
         </div>
       )}

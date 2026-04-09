@@ -4,6 +4,7 @@ export const APP_NAME = 'vasbazaar';
 
 // Allowed API hosts — prevents localStorage tampering from redirecting API calls
 const ALLOWED_API_HOSTS = [
+  'https://api.vasbazaar.com',
   'https://apis.vasbazaar.com',
   'https://apis.uat.vasbazaar.com',
   'https://api.prod.webdekho.in',
@@ -19,7 +20,7 @@ export const getBaseUrl = () => {
       if (isAllowed) return cleaned;
     }
   }
-  return process.env.REACT_APP_API_BASE_URL || 'https://apis.uat.vasbazaar.com:8081';
+  return process.env.REACT_APP_API_BASE_URL || 'https://api.vasbazaar.com';
 };
 
 // Session configuration
