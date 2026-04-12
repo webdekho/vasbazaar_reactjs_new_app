@@ -1,6 +1,6 @@
 import { authGet, authPost, authPut, authDelete } from "./apiClient";
 import { userService } from "./userService";
-import { cachedFetch, invalidate } from "./apiCache";
+import { cachedFetch } from "./apiCache";
 
 export const walletService = {
   getWalletTransactions: (pageNumber = 0, pageSize = 10) =>

@@ -22,6 +22,7 @@ const FALLBACK_AIRPORTS = [
   { airportCode: "GOI", cityName: "Goa", airportName: "Manohar Intl" },
 ];
 
+// eslint-disable-next-line no-unused-vars
 const TRAVEL_CLASS_MAP = { economy: "ECONOMY", premium_economy: "PREMIUM_ECONOMY", business: "BUSINESS", first: "FIRST" };
 
 const TravelScreen = () => {
@@ -38,9 +39,9 @@ const TravelScreen = () => {
     adultCount: "1", childCount: "0", infantCount: "0", travelClass: "economy",
   });
 
-  const [searching, setSearching] = useState(false);
-  const [searchError, setSearchError] = useState("");
-  const [errors, setErrors] = useState({});
+  const [searching, setSearching] = useState(false); // eslint-disable-line no-unused-vars
+  const [searchError, setSearchError] = useState(""); // eslint-disable-line no-unused-vars
+  const [errors, setErrors] = useState({}); // eslint-disable-line no-unused-vars
   const today = new Date().toISOString().split("T")[0];
 
   useEffect(() => {
@@ -55,6 +56,7 @@ const TravelScreen = () => {
     })();
   }, []);
 
+  // eslint-disable-next-line no-unused-vars
   const resolveCode = useCallback((input) => {
     if (!input) return "";
     const t = input.trim();
