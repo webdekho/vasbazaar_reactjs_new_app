@@ -149,7 +149,7 @@ const ProtectedShell = () => {
 
       // Parse URL parameters
       const urlParams = new URL(event.url.replace("vasbazaar://", "https://"));
-      const _path = urlParams.pathname || urlParams.host;
+      const path = urlParams.pathname || urlParams.host; // eslint-disable-line no-unused-vars
 
       // KYC callback
       if (event.url.includes("kyc-callback")) {
