@@ -6,6 +6,7 @@ const ALLOWED_HOSTS = [
   'https://apis.vasbazaar.com',
   'https://apis.uat.vasbazaar.com',
   'https://api.prod.webdekho.in',
+  'http://192.168.1.4:8081',
   '/vb-api',
 ];
 
@@ -21,6 +22,10 @@ const isCapacitorNative = () => {
 
 export const server_api = () => {
 
+     // Local dev (npm start) → localhost backend (overrides any stale localStorage host)
+     // Production build (Vercel `npm run build`) → production URL
+     if (process.env.NODE_ENV === 'development' && !isCapacitorNative()) return 'http://localhost:8081';
+
     const storedUrl = localStorage.getItem('host');
 
      // Validate stored URL against whitelist before using
@@ -32,7 +37,7 @@ export const server_api = () => {
      // In native Capacitor app, use the production API URL directly
      if (isCapacitorNative()) return NATIVE_API_URL;
 
-     // Use REACT_APP_API_URL from .env if available (for local development)
+     // Use REACT_APP_API_URL from .env if explicitly set (e.g., Vercel env var)
      if (process.env.REACT_APP_API_URL) return process.env.REACT_APP_API_URL;
 
      // Fallback: production API URL
