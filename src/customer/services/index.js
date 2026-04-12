@@ -12,3 +12,5 @@ export { complaintService } from "./complaintService";
 export { offerService } from "./offerService";
 export { digiLockerService } from "./digiLockerService";
 export { travelService } from "./travelService";
+export { bbpsComplaintService } from "./bbpsComplaintService";
+export { otaService } from "./otaService";

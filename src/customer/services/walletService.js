@@ -1,4 +1,6 @@
 import { authGet, authPost, authPut, authDelete } from "./apiClient";
+import { userService } from "./userService";
+import { cachedFetch, invalidate } from "./apiCache";
 
 export const walletService = {
   getWalletTransactions: (pageNumber = 0, pageSize = 10) =>
@@ -13,8 +15,9 @@ export const walletService = {
   getReferredUsers: (pageNumber = 0, pageSize = 10) =>
     authGet("/api/customer/user/getReffered_user", { pageNumber, pageSize, isactive: 1 }),
 
+  // Upcoming dues cached for 1 hour
   getUpcomingDues: () =>
-    authGet("/api/customer/schedular/getAllRecharges"),
+    cachedFetch("upcomingDues", () => authGet("/api/customer/schedular/getAllRecharges"), 3600000),
 
   deleteReminder: (id) =>
     authDelete(`/api/customer/schedular/${id}`),
@@ -45,7 +48,8 @@ export const walletService = {
     authPost("/api/customer/wallet_transaction/fund-transfer", payload),
 
   getWalletBalance: async () => {
-    const result = await authGet("/api/customer/user/getByUserId");
+    // Use cached getUserProfile instead of direct API call
+    const result = await userService.getUserProfile();
     if (result.success && result.data) {
       return { ...result, data: { balance: result.data.balance } };
     }

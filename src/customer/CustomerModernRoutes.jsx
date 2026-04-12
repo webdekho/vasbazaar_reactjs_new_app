@@ -5,6 +5,7 @@ import { CustomerModernProvider } from "./context/CustomerModernContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import AuthGuard from "./components/AuthGuard";
 import AppLockGuard from "./components/AppLockGuard";
+import OtaUpdateGate from "./components/OtaUpdateGate";
 import { ChatbotProvider } from "./context/ChatbotContext";
 import { customerStorage } from "./services/storageService";
 import { ToastProvider } from "./context/ToastContext";
@@ -49,6 +50,7 @@ const FailureScreen = lazy(() => import("./pages/FailureScreen"));
 const KycScreen = lazy(() => import("./pages/KycScreen"));
 const KycCallbackScreen = lazy(() => import("./pages/KycCallbackScreen"));
 const QrStickerScreen = lazy(() => import("./pages/QrStickerScreen"));
+const BBPSComplaintListScreen = lazy(() => import("./pages/BBPSComplaintListScreen"));
 
 /** Lightweight loading fallback for lazy-loaded routes */
 const RouteFallback = () => (
@@ -78,6 +80,7 @@ const CustomerModernRoutes = () => {
       <ThemedApp>
       <ToastProvider>
       <CustomerModernProvider>
+        <OtaUpdateGate />
         <Routes>
           <Route path="/" element={<SmartRedirect />} />
           <Route path="/login" element={<LoginScreen />} />
@@ -127,6 +130,7 @@ const CustomerModernRoutes = () => {
             <Route path="my-bookings" element={<Suspense fallback={<RouteFallback />}><MyBookingsScreen /></Suspense>} />
             <Route path="kyc" element={<Suspense fallback={<RouteFallback />}><KycScreen /></Suspense>} />
             <Route path="kyc-callback" element={<Suspense fallback={<RouteFallback />}><KycCallbackScreen /></Suspense>} />
+            <Route path="bbps-complaints" element={<Suspense fallback={<RouteFallback />}><BBPSComplaintListScreen /></Suspense>} />
             <Route path="*" element={<Navigate to="/customer/app/services" replace />} />
           </Route>
           <Route path="*" element={<SmartRedirect />} />

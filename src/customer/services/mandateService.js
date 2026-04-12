@@ -1,8 +1,13 @@
 import forge from "node-forge";
 import { authGet, authPost, getErrorMessage, guestGet } from "./apiClient";
 import { isPwaStandalone } from "./juspayService";
+import { Capacitor } from "@capacitor/core";
+import { Preferences } from "@capacitor/preferences";
 
 const PENDING_MANDATE_KEY = "vb_pending_mandate";
+
+// Deep link scheme for native app mandate callback
+const NATIVE_MANDATE_CALLBACK_SCHEME = "vasbazaar://autopay-callback";
 
 const base64ToArrayBuffer = (base64) => {
   const bin = window.atob(base64);
@@ -78,35 +83,83 @@ const encryptMandatePayload = async (payload) => {
     : encryptWithForge(payload, publicKeyPem);
 };
 
-const getMandateStorage = () => (isPwaStandalone() ? localStorage : sessionStorage);
+/**
+ * Get the appropriate web storage for mandate context.
+ * PWA standalone mode uses localStorage (survives app switches/OS suspension).
+ * Regular browser uses sessionStorage (cleared when tab closes).
+ */
+const getWebStorage = () => (isPwaStandalone() ? localStorage : sessionStorage);
 
+/**
+ * Build the callback URL for mandate provider to redirect to after setup.
+ * For native apps: uses deep link scheme (vasbazaar://autopay-callback)
+ * For web: uses the current origin + the autopay-callback route
+ */
 export const getMandateReturnUrl = () => {
+  // For native apps, use deep link scheme
+  if (Capacitor.isNativePlatform()) {
+    return NATIVE_MANDATE_CALLBACK_SCHEME;
+  }
+
+  // For web, use HTTP URL
   const origin = window.location.origin;
   const path = window.location.pathname;
+  // Detect base path from current URL (e.g. /vasbazaar)
   const match = path.match(/^(\/[^/]+)\/customer\//);
   const basePath = match ? match[1] : "";
   return `${origin}${basePath}/customer/app/autopay-callback`;
 };
 
-export const savePendingMandateContext = (context) => {
-  try {
-    getMandateStorage().setItem(PENDING_MANDATE_KEY, JSON.stringify({ ...context, timestamp: Date.now() }));
-  } catch (error) {
-    console.warn("Failed to save pending mandate context:", error);
+/**
+ * Save mandate context - uses Preferences for native, localStorage for PWA, sessionStorage for browser
+ */
+export const savePendingMandateContext = async (context) => {
+  const data = JSON.stringify({ ...context, timestamp: Date.now() });
+
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await Preferences.set({ key: PENDING_MANDATE_KEY, value: data });
+    } catch (e) {
+      console.warn("Failed to save mandate context to Preferences:", e);
+    }
+  } else {
+    try {
+      getWebStorage().setItem(PENDING_MANDATE_KEY, data);
+    } catch (e) {
+      console.warn("Failed to save pending mandate context:", e);
+    }
   }
 };
 
-export const getPendingMandateContext = () => {
-  try {
-    const storage = getMandateStorage();
-    const raw = storage.getItem(PENDING_MANDATE_KEY);
-    storage.removeItem(PENDING_MANDATE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (Date.now() - parsed.timestamp > 30 * 60 * 1000) return null;
-    return parsed;
-  } catch {
-    return null;
+/**
+ * Retrieve and clear mandate context - uses Preferences for native, localStorage for PWA, sessionStorage for browser
+ */
+export const getPendingMandateContext = async () => {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const { value } = await Preferences.get({ key: PENDING_MANDATE_KEY });
+      await Preferences.remove({ key: PENDING_MANDATE_KEY });
+      if (!value) return null;
+      const ctx = JSON.parse(value);
+      // Expire after 30 minutes
+      if (Date.now() - ctx.timestamp > 30 * 60 * 1000) return null;
+      return ctx;
+    } catch {
+      return null;
+    }
+  } else {
+    try {
+      const storage = getWebStorage();
+      const raw = storage.getItem(PENDING_MANDATE_KEY);
+      storage.removeItem(PENDING_MANDATE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      // Expire after 30 minutes
+      if (Date.now() - parsed.timestamp > 30 * 60 * 1000) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
   }
 };
 

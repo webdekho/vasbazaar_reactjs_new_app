@@ -7,6 +7,7 @@ import {
 } from "react-icons/fa";
 import { travelService } from "../services/travelService";
 import { useTheme } from "../context/ThemeContext";
+import { useToast } from "../context/ToastContext";
 
 const FALLBACK_AIRPORTS = [
   { airportCode: "BOM", cityName: "Mumbai", airportName: "Chhatrapati Shivaji Intl" },
@@ -26,6 +27,7 @@ const TRAVEL_CLASS_MAP = { economy: "ECONOMY", premium_economy: "PREMIUM_ECONOMY
 const TravelScreen = () => {
   const navigate = useNavigate();
   const { theme } = useTheme();
+  const { showToast } = useToast();
   const isLight = theme === "light";
   const [tripType, setTripType] = useState("oneway");
   const [focusedField, setFocusedField] = useState("");
@@ -70,37 +72,7 @@ const TravelScreen = () => {
 
   const handleSearch = async (e) => {
     e.preventDefault();
-    const errs = {};
-    if (!form.fromCity.trim()) errs.fromCity = "Required";
-    if (!form.toCity.trim()) errs.toCity = "Required";
-    if (!form.date) errs.date = "Required";
-    if (tripType === "roundtrip" && !form.returnDate) errs.returnDate = "Required";
-    if (form.fromCity && form.toCity && form.fromCity === form.toCity) errs.toCity = "Must differ";
-    setErrors(errs);
-    setSearchError("");
-    if (Object.keys(errs).length > 0) return;
-
-    setSearching(true);
-    try {
-      const payload = {
-        segments: [{ origin: resolveCode(form.fromCity), destination: resolveCode(form.toCity), departureDate: form.date, returnDate: tripType === "roundtrip" ? form.returnDate : "" }],
-        resultFareType: "REGULARFARE",
-        adultCount: form.adultCount, childCount: form.childCount, infantCount: form.infantCount,
-        journeyType: tripType === "roundtrip" ? "ROUNDTRIP" : "ONEWAY",
-        preferredAirlines: null, travelClass: TRAVEL_CLASS_MAP[form.travelClass] || "ECONOMY", travelStop: "",
-      };
-      const res = await travelService.searchFlights(payload);
-      if (res.success && res.data?.data?.data?.length > 0) {
-        navigate("/customer/app/flight-results", {
-          state: { flights: res.data.data.data, searchParams: { ...payload, adultCount: form.adultCount, childCount: form.childCount, infantCount: form.infantCount }, token: res.data.data.data[0]?.token || "" },
-        });
-      } else {
-        setSearchError(res.data?.data?.message || res.message || "No flights found. Try different dates or routes.");
-      }
-    } catch (e) {
-      setSearchError("Search failed. Please try again.");
-    }
-    setSearching(false);
+    showToast("Coming Soon!", "info");
   };
 
   // Theme-aware colors

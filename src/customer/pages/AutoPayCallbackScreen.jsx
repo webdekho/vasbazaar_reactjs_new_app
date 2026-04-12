@@ -24,7 +24,7 @@ const AutoPayCallbackScreen = () => {
     verifiedRef.current = true;
 
     const verify = async () => {
-      const pendingCtx = getPendingMandateContext();
+      const pendingCtx = await getPendingMandateContext();
       const callbackOrderId = searchParams.get("order_id") || searchParams.get("orderId");
       const mandateOrderId = callbackOrderId || pendingCtx?.orderId || pendingCtx?.mandateCustomerId;
 

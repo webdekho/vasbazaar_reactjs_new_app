@@ -15,6 +15,11 @@
       "src": "/customer/app/payment-callback",
       "methods": ["POST"],
       "dest": "/api/payment-callback"
+    },
+    {
+      "src": "/customer/app/autopay-callback",
+      "methods": ["POST"],
+      "dest": "/api/autopay-callback"
     }
   ],
   "rewrites": [

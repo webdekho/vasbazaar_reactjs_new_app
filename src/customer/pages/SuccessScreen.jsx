@@ -12,6 +12,263 @@ import {
   savePendingMandateContext,
 } from "../services/mandateService";
 
+const ScratchCashbackModal = ({ open, cashbackAmount, onClose }) => {
+  const canvasRef = useRef(null);
+  const surfaceRef = useRef(null);
+  const drawingRef = useRef(false);
+  const [revealed, setRevealed] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    setRevealed(false);
+    setProgress(0);
+    document.body.style.overflow = "hidden";
+
+    const surface = surfaceRef.current;
+    const canvas = canvasRef.current;
+    if (!surface || !canvas) {
+      return () => {
+        document.body.style.overflow = "";
+      };
+    }
+
+    const dpr = window.devicePixelRatio || 1;
+    const rect = surface.getBoundingClientRect();
+    const width = Math.max(280, Math.floor(rect.width));
+    const height = Math.max(220, Math.floor(rect.height));
+
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    /* ── Rich green-gold gradient for cashback ── */
+    const baseGrad = ctx.createLinearGradient(0, 0, width, height);
+    baseGrad.addColorStop(0, "#0d3320");
+    baseGrad.addColorStop(0.3, "#1a5d38");
+    baseGrad.addColorStop(0.5, "#2d7a4a");
+    baseGrad.addColorStop(0.7, "#1a5d38");
+    baseGrad.addColorStop(1, "#0d3320");
+    ctx.fillStyle = baseGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    /* ── Holographic shimmer streaks ── */
+    const shimmerColors = [
+      "rgba(0, 255, 128, 0.15)", "rgba(255, 215, 0, 0.14)", "rgba(0, 200, 100, 0.12)",
+      "rgba(255, 200, 0, 0.1)", "rgba(100, 255, 150, 0.12)", "rgba(255, 180, 50, 0.1)",
+    ];
+    for (let i = 0; i < 12; i++) {
+      const angle = (i * 15 + 10) * Math.PI / 180;
+      const sx = -50 + (i * width / 8);
+      ctx.save();
+      ctx.translate(sx, 0);
+      ctx.rotate(angle);
+      const streak = ctx.createLinearGradient(0, 0, 40, height * 1.5);
+      streak.addColorStop(0, "transparent");
+      streak.addColorStop(0.4, shimmerColors[i % shimmerColors.length]);
+      streak.addColorStop(0.6, shimmerColors[(i + 2) % shimmerColors.length]);
+      streak.addColorStop(1, "transparent");
+      ctx.fillStyle = streak;
+      ctx.fillRect(0, -20, 28, height * 1.5);
+      ctx.restore();
+    }
+
+    /* ── Glowing orbs ── */
+    const drawGlow = (cx, cy, r, color) => {
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      g.addColorStop(0, color);
+      g.addColorStop(1, "transparent");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+    };
+    drawGlow(width * 0.2, height * 0.25, 80, "rgba(0, 255, 128, 0.18)");
+    drawGlow(width * 0.8, height * 0.3, 70, "rgba(255, 215, 0, 0.16)");
+    drawGlow(width * 0.5, height * 0.75, 90, "rgba(0, 200, 100, 0.14)");
+    drawGlow(width * 0.15, height * 0.8, 60, "rgba(255, 200, 0, 0.12)");
+
+    /* ── Sparkle dots ── */
+    const sparkles = [
+      [0.12, 0.18], [0.85, 0.15], [0.92, 0.55], [0.08, 0.72], [0.75, 0.82],
+      [0.45, 0.12], [0.55, 0.88], [0.3, 0.5], [0.7, 0.45], [0.18, 0.42],
+      [0.88, 0.38], [0.42, 0.65], [0.62, 0.2], [0.25, 0.85], [0.78, 0.65],
+    ];
+    sparkles.forEach(([sx, sy]) => {
+      const x = sx * width;
+      const y = sy * height;
+      const size = 1.5 + Math.random() * 2.5;
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.4 + Math.random() * 0.5})`;
+      ctx.beginPath();
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fill();
+      /* cross sparkle */
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.2 + Math.random() * 0.3})`;
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(x - size * 2.5, y);
+      ctx.lineTo(x + size * 2.5, y);
+      ctx.moveTo(x, y - size * 2.5);
+      ctx.lineTo(x, y + size * 2.5);
+      ctx.stroke();
+    });
+
+    /* ── Coin burst (center) ── */
+    const cx = width / 2;
+    const cy = height / 2 - 8;
+    const coinGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 44);
+    coinGrad.addColorStop(0, "rgba(255, 215, 0, 0.4)");
+    coinGrad.addColorStop(0.5, "rgba(255, 200, 0, 0.2)");
+    coinGrad.addColorStop(1, "transparent");
+    ctx.fillStyle = coinGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 44, 0, Math.PI * 2);
+    ctx.fill();
+
+    /* Wallet icon */
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.fillStyle = "rgba(255, 215, 0, 0.8)";
+    ctx.beginPath();
+    ctx.roundRect(-18, -12, 36, 24, 4);
+    ctx.fill();
+    ctx.fillStyle = "rgba(0, 100, 50, 0.9)";
+    ctx.beginPath();
+    ctx.arc(10, 0, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    /* ── Main text ── */
+    ctx.textAlign = "center";
+    ctx.shadowColor = "rgba(255, 215, 0, 0.4)";
+    ctx.shadowBlur = 16;
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = '900 22px "Arial", sans-serif';
+    ctx.fillText("Scratch & Win", width / 2, height / 2 + 38);
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = "transparent";
+
+    ctx.font = '600 12px "Arial", sans-serif';
+    ctx.fillStyle = "rgba(200, 255, 220, 0.7)";
+    ctx.fillText("Your cashback is hidden underneath", width / 2, height / 2 + 60);
+
+    /* ── Border glow ── */
+    ctx.strokeStyle = "rgba(0, 255, 128, 0.18)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(6, 6, width - 12, height - 12);
+
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+
+  const updateRevealProgress = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const { width, height } = canvas;
+    const pixels = ctx.getImageData(0, 0, width, height).data;
+    let transparent = 0;
+    for (let index = 3; index < pixels.length; index += 16) {
+      if (pixels[index] < 30) transparent += 1;
+    }
+    const total = pixels.length / 16;
+    const nextProgress = Math.min(100, Math.round((transparent / total) * 100));
+    setProgress(nextProgress);
+    if (nextProgress >= 42) {
+      ctx.clearRect(0, 0, width, height);
+      setRevealed(true);
+    }
+  };
+
+  const scratchAtPoint = (clientX, clientY) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    const ctx = canvas.getContext("2d");
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.beginPath();
+    ctx.arc(x, y, 26, 0, Math.PI * 2);
+    ctx.fill();
+  };
+
+  const handlePointerDown = (event) => {
+    drawingRef.current = true;
+    scratchAtPoint(event.clientX, event.clientY);
+  };
+
+  const handlePointerMove = (event) => {
+    if (!drawingRef.current || revealed) return;
+    scratchAtPoint(event.clientX, event.clientY);
+  };
+
+  const handlePointerUp = () => {
+    if (!drawingRef.current) return;
+    drawingRef.current = false;
+    updateRevealProgress();
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="sx-scratch-backdrop" onClick={onClose}>
+      <div className="sx-scratch-modal" onClick={(event) => event.stopPropagation()}>
+        <button type="button" className="sx-scratch-close" onClick={onClose} aria-label="Close reward popup">
+          <FaTimes />
+        </button>
+
+        <div className="sx-scratch-head">
+          <div className="sx-scratch-kicker sx-scratch-kicker--cashback"><FaWallet /> Cashback Unlocked</div>
+          <h3 className="sx-scratch-title">Your cashback is waiting underneath</h3>
+          <p className="sx-scratch-subtitle">
+            Scratch the card to reveal the cashback credited to your wallet.
+          </p>
+        </div>
+
+        <div className={`sx-scratch-shell${revealed ? " is-revealed" : ""}`}>
+          <div ref={surfaceRef} className="sx-scratch-surface">
+            <div className="sx-scratch-content sx-scratch-content--cashback">
+              <div className="sx-scratch-chip sx-scratch-chip--cashback"><FaWallet /> Wallet Cashback</div>
+              <div className="sx-scratch-cashback-amount">₹{Number(cashbackAmount).toFixed(2)}</div>
+              <div className="sx-scratch-cashback-label">Credited to Wallet</div>
+            </div>
+
+            {!revealed && (
+              <canvas
+                ref={canvasRef}
+                className="sx-scratch-canvas"
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerLeave={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+              />
+            )}
+          </div>
+
+          <div className="sx-scratch-progress">
+            <span>{revealed ? "Cashback revealed" : "Scratch to reveal"}</span>
+            <strong>{revealed ? "100%" : `${progress}%`}</strong>
+          </div>
+        </div>
+
+        <div className="sx-scratch-actions">
+          <button type="button" className="sx-scratch-btn sx-scratch-btn--primary sx-scratch-btn--cashback" onClick={onClose}>
+            {revealed ? "Continue" : "Skip Reveal"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ScratchRewardModal = ({ open, couponCode, couponName, couponDesc, copied, onCopy, onClose, loading, error }) => {
   const canvasRef = useRef(null);
   const surfaceRef = useRef(null);
@@ -303,6 +560,7 @@ const SuccessScreen = () => {
   const [autopayError, setAutopayError] = useState("");
   const [showScratchReward, setShowScratchReward] = useState(false);
   const [rewardCoupon, setRewardCoupon] = useState(null);
+  const [showScratchCashback, setShowScratchCashback] = useState(false);
   const userMobile = userData?.mobile || userData?.mobileNumber || "";
 
   const txnId = data.txnId || data.statusPayload?.txnId || "--";
@@ -322,6 +580,7 @@ const SuccessScreen = () => {
   const autopayEligible = Boolean(autopayTarget && autopayOperatorId && amount > 0);
   const autopayType = data.type === "bill" ? "bill" : "mobileRecharge";
   const scratchRewardEligible = Boolean((offerType === "coupon" || (!offerType && (couponCode || couponName || couponDesc))) && (couponCode || couponName || couponDesc));
+  const scratchCashbackEligible = Boolean((offerType === "cashback" || (!offerType && !couponCode && !couponName && !couponDesc)) && cashback > 0);
 
   // Show content after celebration animation + save recent service
   useEffect(() => {
@@ -354,6 +613,14 @@ const SuccessScreen = () => {
     }, 2000);
     return () => clearTimeout(timer);
   }, [scratchRewardEligible, couponCode, couponName, couponDesc]);
+
+  useEffect(() => {
+    if (!scratchCashbackEligible) return undefined;
+    const timer = setTimeout(() => {
+      setShowScratchCashback(true);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [scratchCashbackEligible]);
 
   const copyToClipboard = (text, label) => {
     navigator.clipboard?.writeText(text).then(() => {
@@ -435,7 +702,7 @@ const SuccessScreen = () => {
         response?.raw?.data?.rawResponse?.order_id ||
         null;
 
-      savePendingMandateContext({
+      await savePendingMandateContext({
         orderId,
         mandateCustomerId: response?.data?.mandateCustomerId || response?.raw?.data?.mandateCustomerId || null,
         type: autopayType,
@@ -653,6 +920,12 @@ const SuccessScreen = () => {
         onClose={() => setShowScratchReward(false)}
         loading={false}
         error=""
+      />
+
+      <ScratchCashbackModal
+        open={showScratchCashback}
+        cashbackAmount={cashback}
+        onClose={() => setShowScratchCashback(false)}
       />
     </div>
   );

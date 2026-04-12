@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaArrowLeft, FaCalendarAlt, FaFilter, FaCheckCircle, FaClock, FaTimesCircle } from "react-icons/fa";
 import { FiInbox, FiArrowDownLeft, FiArrowUpRight } from "react-icons/fi";
@@ -10,8 +10,7 @@ const normalizeTab = (value) => (tabs.includes(value) ? value : "cashback");
 const CommissionScreen = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialTab = normalizeTab(searchParams.get("tab"));
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [activeTab, setActiveTab] = useState(() => normalizeTab(searchParams.get("tab")));
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
@@ -20,8 +19,13 @@ const CommissionScreen = () => {
   const [toDate, setToDate] = useState("");
   const [showFilter, setShowFilter] = useState(false);
   const [focused, setFocused] = useState("");
+  const lastFetchedTab = useRef(null);
 
-  const fetchData = async (type, pageNum, append = false) => {
+  const fetchData = useCallback(async (type, pageNum, append = false) => {
+    // Prevent duplicate calls for same tab on initial load
+    if (pageNum === 0 && lastFetchedTab.current === type) return;
+    if (pageNum === 0) lastFetchedTab.current = type;
+
     setLoading(true);
     const res = await walletService.getWalletHistory(type, pageNum, 10);
     setLoading(false);
@@ -30,19 +34,29 @@ const CommissionScreen = () => {
       setRecords(append ? (prev) => [...prev, ...list] : list);
       setHasMore(list.length >= 10);
     }
-  };
+  }, []);
 
+  // Single effect to handle tab sync and data fetching
   useEffect(() => {
-    const nextTab = normalizeTab(searchParams.get("tab"));
-    if (nextTab !== activeTab) {
-      setActiveTab(nextTab);
-    }
-    if (searchParams.get("tab") !== nextTab) {
-      setSearchParams({ tab: nextTab }, { replace: true });
-    }
-  }, [searchParams, activeTab, setSearchParams]);
+    const urlTab = normalizeTab(searchParams.get("tab"));
 
-  useEffect(() => { setPage(0); setRecords([]); fetchData(activeTab, 0); }, [activeTab]);
+    // Sync URL if needed (only on mount or if URL is invalid)
+    if (searchParams.get("tab") !== urlTab) {
+      setSearchParams({ tab: urlTab }, { replace: true });
+    }
+
+    // Only fetch if tab changed
+    if (urlTab !== activeTab) {
+      setActiveTab(urlTab);
+      setPage(0);
+      setRecords([]);
+      lastFetchedTab.current = null; // Reset to allow fetch
+      fetchData(urlTab, 0);
+    } else if (lastFetchedTab.current !== activeTab) {
+      // Initial fetch
+      fetchData(activeTab, 0);
+    }
+  }, [searchParams, activeTab, setSearchParams, fetchData]);
 
   const loadMore = () => { const next = page + 1; setPage(next); fetchData(activeTab, next, true); };
 
@@ -83,8 +97,9 @@ const CommissionScreen = () => {
         {tabs.map((t) => (
           <button key={t} type="button" className={`cp-tab${activeTab === t ? " is-active" : ""}`}
             onClick={() => {
-              setActiveTab(t);
-              setSearchParams({ tab: t });
+              if (t === activeTab) return; // Already on this tab
+              lastFetchedTab.current = null; // Reset to allow fetch
+              setSearchParams({ tab: t }); // This will trigger the useEffect
             }}>
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
@@ -144,6 +159,11 @@ const CommissionScreen = () => {
           {filtered.map((item, i) => {
             const isCredit = item.txnMode === 0 || (item.message || "").toLowerCase().includes("credit");
             const st = getStatusCfg(item.status);
+            const operatorName = item.operatorId?.operatorName || "";
+            const displayName = item.userName || item.customerName || "Transaction";
+            const displayDesc = operatorName
+              ? `${operatorName}${item.operatorNo ? ` • ${item.operatorNo}` : ""}`
+              : (item.message || item.description || item.txnId || "—");
             return (
               <div key={item.txnId || i} className="th-card" style={{ animationDelay: `${i * 40}ms` }}>
                 <div className="th-card-row">
@@ -151,8 +171,8 @@ const CommissionScreen = () => {
                     {isCredit ? <FiArrowDownLeft /> : <FiArrowUpRight />}
                   </div>
                   <div className="th-info">
-                    <div className="th-info-name">{item.txnId || "Transaction"}</div>
-                    <div className="th-info-desc">{item.message || item.description || "—"}</div>
+                    <div className="th-info-name">{displayName}</div>
+                    <div className="th-info-desc">{displayDesc}</div>
                     <div className="th-info-date">{item.date} {item.time}</div>
                   </div>
                   <div className="th-right">

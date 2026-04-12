@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaSearch, FaRedo, FaExclamationCircle, FaChevronDown } from "react-icons/fa";
+import { FaArrowLeft, FaSearch, FaExclamationCircle, FaChevronDown } from "react-icons/fa";
 import { FiArrowUpRight, FiArrowDownLeft, FiClock, FiCheckCircle, FiXCircle, FiInbox } from "react-icons/fi";
 import { walletService } from "../services/walletService";
-import { authPost } from "../services/apiClient";
 import { transactionService } from "../services/transactionService";
 import { formatCurrency, matchesTransactionSearch, normalizeTransaction } from "../utils/transactionHistory";
 
@@ -46,35 +45,6 @@ const TransactionMetaItem = ({ label, value, valueClassName = "" }) => (
     <span className={`th-meta-value${valueClassName ? ` ${valueClassName}` : ""}`}>{value || "—"}</span>
   </div>
 );
-
-const hasRefundHandled = (item) => {
-  const refundStatus = Number(item.refundStatus);
-  if (Number.isFinite(refundStatus) && refundStatus > 0) return true;
-
-  const refundText = [
-    item.message,
-    item.remark,
-    item.description,
-    item.discription,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  return [
-    "refund initiated",
-    "refund request",
-    "refund requested",
-    "refund sent",
-    "refund processed",
-    "refunded",
-    "credited to wallet",
-    "wallet refund",
-    "bank refund",
-    "refund to source",
-    "hdfc via email",
-  ].some((phrase) => refundText.includes(phrase));
-};
 
 const getComplaintStatusTone = (status) => {
   const normalized = String(status || "").toLowerCase();
@@ -119,10 +89,6 @@ const TransactionHistoryScreen = () => {
   const [hasMore, setHasMore] = useState(true);
   const [searchFocused, setSearchFocused] = useState(false);
   const [expandedTxn, setExpandedTxn] = useState(null);
-  const [actionLoading, setActionLoading] = useState(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalMessage, setModalMessage] = useState("");
-  const [modalType, setModalType] = useState("");
   const [complaintModalOpen, setComplaintModalOpen] = useState(false);
   const [selectedComplaintTxn, setSelectedComplaintTxn] = useState(null);
   const [complaintChecking, setComplaintChecking] = useState(false);
@@ -172,76 +138,6 @@ const TransactionHistoryScreen = () => {
     const sk = getStatusKey(item.status);
     const complaintStatus = String(item.complaintStatus || "").trim();
     return (sk === "success" || sk === "pending") && !complaintStatus;
-  };
-
-  const canShowActions = (item) => {
-    const sk = getStatusKey(item.status);
-    const txn = normalizeTransaction(item);
-    const isUpiPayment = txn.paymentMode === "UPI" || item.serviceType?.toLowerCase() === "upi" || Boolean(item.upiFrom);
-    return sk === "failed" && isUpiPayment && !hasRefundHandled(item);
-  };
-
-  const handleRetry = async (item) => {
-    setActionLoading("retry");
-    try {
-      const response = await authPost("/api/customer/plan_recharge/request-refund", {
-        txnId: item.txnId,
-        refundType: "wallet",
-      });
-      if (response.success) {
-        setModalType("success");
-        setModalMessage("Amount credited to wallet. Redirecting to payment...");
-        setModalOpen(true);
-        setTimeout(() => {
-          setModalOpen(false);
-          navigate("/customer/app/payment", {
-            replace: true,
-            state: {
-              type: "recharge",
-              amount: item.txnAmt || item.amount,
-              mobile: item.operatorNo,
-            },
-          });
-        }, 1500);
-      } else {
-        setModalType("error");
-        setModalMessage(response.message || "Unable to credit wallet for retry. Please try again.");
-        setModalOpen(true);
-      }
-    } catch {
-      setModalType("error");
-      setModalMessage("Unable to credit wallet for retry. Please try again.");
-      setModalOpen(true);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleRefundToSource = async (item) => {
-    setActionLoading("refund");
-    try {
-      const response = await authPost("/api/customer/plan_recharge/request-refund", {
-        txnId: item.txnId,
-        refundType: "bank",
-      });
-      if (response.success) {
-        setModalType("success");
-        setModalMessage("Refund request submitted. Amount will be refunded to your original payment source within 3 working days.");
-        setModalOpen(true);
-        fetchData(0);
-        setExpandedTxn(null);
-      } else {
-        setModalType("error");
-        setModalMessage(response.message || "Unable to submit refund request. Please try again.");
-        setModalOpen(true);
-      }
-    } catch {
-      setModalType("error");
-      setModalMessage("Unable to submit refund request. Please try again.");
-      setModalOpen(true);
-    } finally {
-      setActionLoading(null);
-    }
   };
 
   const closeComplaintModal = () => {
@@ -389,7 +285,6 @@ const TransactionHistoryScreen = () => {
             const sk = getStatusKey(item.status);
             const cfg = statusConfig[sk];
             const credit = isCredit(item);
-            const showActions = canShowActions(item);
             const showComplaintAction = canRaiseComplaint(item);
             const isExpanded = expandedTxn === item.txnId;
             const detailsVisible = !isMobileView || isExpanded;
@@ -429,9 +324,9 @@ const TransactionHistoryScreen = () => {
               <div
                 key={item.txnId || i}
                 className={`th-card${isMobileView ? " th-card--collapsible" : ""}${detailsVisible ? " is-expanded" : ""}`}
-                style={{ animationDelay: `${i * 40}ms`, cursor: isMobileView || showActions ? "pointer" : "default" }}
+                style={{ animationDelay: `${i * 40}ms`, cursor: isMobileView ? "pointer" : "default" }}
                 onClick={() => {
-                  if (isMobileView || showActions) {
+                  if (isMobileView) {
                     setExpandedTxn(isExpanded ? null : item.txnId);
                   }
                 }}
@@ -546,63 +441,6 @@ const TransactionHistoryScreen = () => {
                       </div>
                     )}
 
-                    {showActions && (
-                      <div style={{
-                        padding: "0 16px 14px",
-                        display: "flex",
-                        gap: 10,
-                        borderTop: "1px solid rgba(255,255,255,0.06)",
-                        paddingTop: 12,
-                        marginTop: 2,
-                      }}>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); handleRetry(item); }}
-                          disabled={actionLoading !== null}
-                          style={{
-                            flex: 1,
-                            padding: "10px 12px",
-                            borderRadius: 10,
-                            border: "none",
-                            background: "linear-gradient(135deg, #00F5D4, #00BBF9)",
-                            color: "#061018",
-                            fontWeight: 700,
-                            fontSize: "0.8rem",
-                            cursor: actionLoading ? "not-allowed" : "pointer",
-                            opacity: actionLoading ? 0.7 : 1,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            gap: 6,
-                          }}
-                        >
-                          <FaRedo size={11} /> {actionLoading === "retry" ? "Processing..." : "Retry Transaction"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); handleRefundToSource(item); }}
-                          disabled={actionLoading !== null}
-                          style={{
-                            flex: 1,
-                            padding: "10px 12px",
-                            borderRadius: 10,
-                            border: "none",
-                            background: "linear-gradient(135deg, #4C6FFF 0%, #6C8BFF 100%)",
-                            color: "#fff",
-                            fontWeight: 700,
-                            fontSize: "0.8rem",
-                            cursor: actionLoading ? "not-allowed" : "pointer",
-                            opacity: actionLoading ? 0.7 : 1,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            gap: 6,
-                          }}
-                        >
-                          {actionLoading === "refund" ? "Processing..." : "Refund to Source"}
-                        </button>
-                      </div>
-                    )}
                   </>
                 )}
               </div>
@@ -619,62 +457,6 @@ const TransactionHistoryScreen = () => {
         </div>
       )}
 
-      {/* Modal for action feedback */}
-      {modalOpen && (
-        <div
-          onClick={() => setModalOpen(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.55)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 999,
-            padding: 20,
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: "100%",
-              maxWidth: 360,
-              background: "var(--cm-card, #161822)",
-              border: `1px solid ${modalType === "success" ? "rgba(56,211,159,0.35)" : "rgba(255,107,107,0.35)"}`,
-              borderRadius: 14,
-              padding: 18,
-              textAlign: "center",
-            }}
-          >
-            <h3 style={{
-              margin: "0 0 8px",
-              fontSize: "1rem",
-              color: modalType === "success" ? "#38D39F" : "#FF6B6B",
-            }}>
-              {modalType === "success" ? "Request Successful" : "Request Failed"}
-            </h3>
-            <p style={{ margin: 0, color: "#C8CEE8", fontSize: "0.9rem", lineHeight: 1.5 }}>
-              {modalMessage}
-            </p>
-            <button
-              type="button"
-              onClick={() => setModalOpen(false)}
-              style={{
-                marginTop: 14,
-                padding: "10px 18px",
-                borderRadius: 10,
-                border: "none",
-                background: "linear-gradient(135deg, #00F5D4, #00BBF9)",
-                color: "#061018",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              OK
-            </button>
-          </div>
-        </div>
-      )}
 
       {complaintModalOpen && (
         <div

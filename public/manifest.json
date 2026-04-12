@@ -44,8 +44,8 @@
       "label": "VasBazaar Mobile"
     }
   ],
-  "start_url": "/vasbazaar/customer/app/services",
-  "scope": "/vasbazaar/",
+  "start_url": "/customer/app/services",
+  "scope": "/",
   "display": "standalone",
   "theme_color": "#0B0B0B",
   "background_color": "#FFFFFF",

@@ -699,6 +699,7 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
       <div className="cm-flow-title-row">
         <button className="cm-back-icon" type="button" onClick={() => navigate("/customer/app/services")}><FaArrowLeft /></button>
         <h1>Contact List</h1>
+        <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
       </div>
 
       {/* Search bar */}

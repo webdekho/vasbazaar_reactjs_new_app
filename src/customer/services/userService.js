@@ -5,10 +5,10 @@ export const userService = {
   /**
    * PERF FIX: getUserProfile was called from ~6 places simultaneously
    * (Context hydration, HomeScreen, ProtectedShell, WalletScreen, chatbot, ProfileScreen).
-   * Now cached for 30s with in-flight deduplication — identical concurrent calls
+   * Now cached for 2 minutes with in-flight deduplication — identical concurrent calls
    * share a single network request.
    */
-  getUserProfile: () => cachedFetch("getUserProfile", () => authGet("/api/customer/user/getByUserId"), 30000),
+  getUserProfile: () => cachedFetch("getUserProfile", () => authGet("/api/customer/user/getByUserId"), 120000),
 
   /** Invalidate profile cache after mutations (photo upload, onboarding, profile update) */
   invalidateProfile: () => invalidate("getUserProfile"),
@@ -32,7 +32,8 @@ export const userService = {
   },
 
   getUserBalance: async () => {
-    const result = await authGet("/api/customer/user/getByUserId");
+    // Use cached getUserProfile instead of direct API call
+    const result = await userService.getUserProfile();
     if (result.success && result.data) {
       // Handle potential nested data structure from API
       const d = result.data?.data || result.data;

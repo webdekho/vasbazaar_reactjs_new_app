@@ -166,6 +166,7 @@ const quickAccessItems = [
   { label: "History", icon: FiClock, to: "/customer/app/history", color: "#007BFF" },
   { label: "Autopay", icon: FaSyncAlt, to: "/customer/app/autopay", color: "#007BFF" },
   { label: "Complaint", icon: FiAlertTriangle, to: "/customer/app/file-complaint", color: "#FF9800" },
+  { label: "Refer & Earn", icon: FiShare, to: "/customer/app/qr", color: "#6366F1" },
 ];
 
 const RECENT_SERVICES_KEY = "vb_recent_services";

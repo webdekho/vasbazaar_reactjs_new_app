@@ -47,5 +47,16 @@
 	<true/>
 	<key>NSContactsUsageDescription</key>
 	<string>VasBazaar needs access to your contacts for mobile recharge and bill payments.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.vasbazaar.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>vasbazaar</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

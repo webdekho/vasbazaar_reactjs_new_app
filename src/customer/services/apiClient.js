@@ -19,12 +19,24 @@ const ALLOWED_HOSTS = [
   "https://apis.vasbazaar.com",
   "https://apis.uat.vasbazaar.com",
   "https://api.prod.webdekho.in",
+  "http://192.168.1.4:8081",
 ];
 
 const isAllowedHost = (url) =>
   url && ALLOWED_HOSTS.some((host) => url.startsWith(host));
 
+const isNative = () => {
+  try {
+    return !!(window?.Capacitor?.isNativePlatform && window.Capacitor.isNativePlatform());
+  } catch { return false; }
+};
+
 const resolveApiBase = () => {
+  // Local dev (npm start, non-native) → localhost backend, ignore any stale localStorage host
+  if (process.env.NODE_ENV === "development" && typeof window !== "undefined" && !isNative()) {
+    return "http://localhost:8081";
+  }
+
   if (typeof window !== "undefined") {
     const customerBase = localStorage.getItem(CUSTOMER_STORAGE_KEYS.apiBaseUrl);
     if (customerBase && isAllowedHost(trimTrailingSlash(customerBase)))

@@ -7,6 +7,7 @@ import {
   FaUserAlt,
   FaWallet,
   FaTv,
+  FaCheck,
 } from "react-icons/fa";
 import { FiCreditCard, FiArrowRight } from "react-icons/fi";
 import { serviceService } from "../services/serviceService";
@@ -66,49 +67,102 @@ const GRADIENTS = [
 ];
 const getGradient = (ch) => GRADIENTS[ch.charCodeAt(0) % GRADIENTS.length];
 
-const BillerList = ({ operators, isLoading: listLoading, onSelect, onBack, serviceName, banners }) => {
+const BillerList = ({ operators, myBillers = [], isLoading: listLoading, onSelect, onBack, serviceName, banners }) => {
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   // eslint-disable-next-line no-unused-vars
   const [activeLetter, setActiveLetter] = useState(null);
   const listRef = useRef(null);
 
-  /* Sort alphabetically then filter */
-  const sorted = useMemo(() =>
-    [...operators].sort((a, b) =>
-      (a.operatorName || a.name || "").localeCompare(b.operatorName || b.name || "")
-    ), [operators]);
+  /* Combine all billers for search filtering */
+  const allBillers = useMemo(() => {
+    const all = [...myBillers, ...operators];
+    // Remove duplicates by id
+    const seen = new Set();
+    return all.filter(op => {
+      if (seen.has(op.id)) return false;
+      seen.add(op.id);
+      return true;
+    });
+  }, [operators, myBillers]);
 
-  const filtered = sorted.filter((op) =>
+  /* Filter by search */
+  const filteredAll = allBillers.filter((op) =>
     (op.operatorName || op.name || "")
       .toLowerCase()
       .includes(search.toLowerCase())
   );
 
-  /* Group by first letter */
-  const grouped = useMemo(() => {
-    const map = {};
-    filtered.forEach((op) => {
-      const letter = (op.operatorName || op.name || "#")[0].toUpperCase();
-      if (!map[letter]) map[letter] = [];
-      map[letter].push(op);
-    });
-    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
-  }, [filtered]);
+  const filteredMyBillers = myBillers.filter((op) =>
+    (op.operatorName || op.name || "")
+      .toLowerCase()
+      .includes(search.toLowerCase())
+  );
 
-  const matchCount = filtered.length;
+  const filteredOperators = operators.filter((op) =>
+    (op.operatorName || op.name || "")
+      .toLowerCase()
+      .includes(search.toLowerCase())
+  );
+
+  /* Group billers by state */
+  const groupedByState = useMemo(() => {
+    const stateMap = {};
+
+    // Helper to get state name
+    const getStateName = (op) => op.state?.name || "Other States";
+
+    // Group my billers by state
+    const myBillersByState = {};
+    filteredMyBillers.forEach((op) => {
+      const stateName = getStateName(op);
+      if (!myBillersByState[stateName]) myBillersByState[stateName] = [];
+      myBillersByState[stateName].push(op);
+    });
+
+    // Group other billers by state
+    const operatorsByState = {};
+    filteredOperators.forEach((op) => {
+      const stateName = getStateName(op);
+      if (!operatorsByState[stateName]) operatorsByState[stateName] = [];
+      operatorsByState[stateName].push(op);
+    });
+
+    // Combine all states
+    const allStates = new Set([...Object.keys(myBillersByState), ...Object.keys(operatorsByState)]);
+
+    // Sort states alphabetically but put "Other States" at the end
+    const sortedStates = [...allStates].sort((a, b) => {
+      if (a === "Other States") return 1;
+      if (b === "Other States") return -1;
+      return a.localeCompare(b);
+    });
+
+    sortedStates.forEach((stateName) => {
+      stateMap[stateName] = {
+        myBillers: (myBillersByState[stateName] || []).sort((a, b) =>
+          (a.operatorName || a.name || "").localeCompare(b.operatorName || b.name || "")
+        ),
+        operators: (operatorsByState[stateName] || []).sort((a, b) =>
+          (a.operatorName || a.name || "").localeCompare(b.operatorName || b.name || "")
+        ),
+      };
+    });
+
+    return stateMap;
+  }, [filteredMyBillers, filteredOperators]);
+
+  const matchCount = filteredAll.length;
 
   return (
     <div className="bf-step bf-step-enter">
       {/* ── Header ── */}
-      <div className="bf-hero-header">
-        <div className="bf-hero-top">
-          <button className="bf-back-btn" type="button" onClick={onBack}>
-            <FaArrowLeft />
-          </button>
-          <h1 className="bf-hero-title">{serviceName} Operators</h1>
-          <BharatConnectLogo />
-        </div>
+      <div className="cm-flow-title-row">
+        <button className="cm-back-icon" type="button" onClick={onBack}>
+          <FaArrowLeft />
+        </button>
+        <h1>{serviceName} Operators</h1>
+        <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
       </div>
 
       {/* Banner */}
@@ -151,7 +205,7 @@ const BillerList = ({ operators, isLoading: listLoading, onSelect, onBack, servi
               </div>
             ))}
           </div>
-        ) : filtered.length === 0 ? (
+        ) : filteredAll.length === 0 ? (
           <div className="bf-empty">
             <div className="bf-empty-circle">
               <FaSearch />
@@ -161,53 +215,195 @@ const BillerList = ({ operators, isLoading: listLoading, onSelect, onBack, servi
           </div>
         ) : (
           <div className="bf-biller-grouped">
-            {grouped.map(([letter, ops]) => (
-              <div key={letter} className="bf-letter-group" id={`bf-grp-${letter}`}>
-                <div className="bf-glass-card">
-                  {ops.map((op, i) => {
-                    const name = op.operatorName || op.name || "?";
-                    const initial = name[0].toUpperCase();
-                    const grad = getGradient(initial);
-                    return (
-                      <button
-                        key={op.id}
-                        type="button"
-                        className="bf-biller-row"
-                        onClick={() => onSelect(op)}
-                        style={{ animationDelay: `${i * 30}ms` }}
-                      >
-                        <div className="bf-biller-avatar" style={{ background: grad }}>
-                          {op.logo ? (
-                            <img
-                              src={op.logo}
-                              alt=""
-                              className="bf-biller-avatar-img"
-                              onError={(e) => {
-                                e.target.style.display = "none";
-                                e.target.nextSibling.style.display = "flex";
-                              }}
-                            />
-                          ) : null}
-                          <span className="bf-biller-avatar-letter" style={{ display: op.logo ? "none" : "flex" }}>
-                            {initial}
-                          </span>
-                        </div>
-                        <div className="bf-biller-info">
-                          <span className="bf-biller-name">{name}</span>
-                          <span className="bf-biller-tag">Bharat BillPay</span>
-                        </div>
-                        <span className="bf-biller-arrow">
-                          <FaChevronRight />
-                        </span>
-                      </button>
-                    );
-                  })}
+            {Object.entries(groupedByState).map(([stateName, { myBillers: stateMyBillers, operators: stateOperators }]) => (
+              <div key={stateName} className="bf-state-group">
+                {/* State Header */}
+                <div className="bf-state-header">
+                  <span className="bf-state-name">{stateName}</span>
                 </div>
+
+                {/* My Billers Section (only if not empty) */}
+                {stateMyBillers.length > 0 && (
+                  <div className="bf-mybiller-section">
+                    <div className="bf-mybiller-label">My Billers</div>
+                    <div className="bf-glass-card">
+                      {stateMyBillers.map((op, i) => {
+                        const name = op.operatorName || op.name || "?";
+                        const initial = name[0].toUpperCase();
+                        const grad = getGradient(initial);
+                        return (
+                          <button
+                            key={op.id}
+                            type="button"
+                            className="bf-biller-row bf-biller-row--mybiller"
+                            onClick={() => onSelect(op)}
+                            style={{ animationDelay: `${i * 30}ms` }}
+                          >
+                            <div className="bf-biller-avatar" style={{ background: grad }}>
+                              {op.logo ? (
+                                <img
+                                  src={op.logo}
+                                  alt=""
+                                  className="bf-biller-avatar-img"
+                                  onError={(e) => {
+                                    e.target.style.display = "none";
+                                    e.target.nextSibling.style.display = "flex";
+                                  }}
+                                />
+                              ) : null}
+                              <span className="bf-biller-avatar-letter" style={{ display: op.logo ? "none" : "flex" }}>
+                                {initial}
+                              </span>
+                            </div>
+                            <div className="bf-biller-info">
+                              <span className="bf-biller-name">{name}</span>
+                              <span className="bf-biller-tag">Bharat BillPay</span>
+                            </div>
+                            <span className="bf-mybiller-badge">★</span>
+                            <span className="bf-biller-arrow">
+                              <FaChevronRight />
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Other Billers Section */}
+                {stateOperators.length > 0 && (
+                  <div className="bf-operators-section">
+                    {stateMyBillers.length > 0 && (
+                      <div className="bf-operators-label">All Billers</div>
+                    )}
+                    <div className="bf-glass-card">
+                      {stateOperators.map((op, i) => {
+                        const name = op.operatorName || op.name || "?";
+                        const initial = name[0].toUpperCase();
+                        const grad = getGradient(initial);
+                        return (
+                          <button
+                            key={op.id}
+                            type="button"
+                            className="bf-biller-row"
+                            onClick={() => onSelect(op)}
+                            style={{ animationDelay: `${i * 30}ms` }}
+                          >
+                            <div className="bf-biller-avatar" style={{ background: grad }}>
+                              {op.logo ? (
+                                <img
+                                  src={op.logo}
+                                  alt=""
+                                  className="bf-biller-avatar-img"
+                                  onError={(e) => {
+                                    e.target.style.display = "none";
+                                    e.target.nextSibling.style.display = "flex";
+                                  }}
+                                />
+                              ) : null}
+                              <span className="bf-biller-avatar-letter" style={{ display: op.logo ? "none" : "flex" }}>
+                                {initial}
+                              </span>
+                            </div>
+                            <div className="bf-biller-info">
+                              <span className="bf-biller-name">{name}</span>
+                              <span className="bf-biller-tag">Bharat BillPay</span>
+                            </div>
+                            <span className="bf-biller-arrow">
+                              <FaChevronRight />
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
+    </div>
+  );
+};
+
+/* ══════════════════════════════════════════════
+   Searchable Select Component
+   ══════════════════════════════════════════════ */
+const SearchableSelect = ({ options, value, onChange, placeholder, label }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const dropdownRef = useRef(null);
+
+  const selectedOption = options.find(opt => opt.value === value);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return options;
+    const q = search.toLowerCase();
+    return options.filter(opt =>
+      opt.label.toLowerCase().includes(q) ||
+      opt.value.toLowerCase().includes(q)
+    );
+  }, [options, search]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+        setSearch("");
+      }
+    };
+    if (isOpen) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen]);
+
+  const handleSelect = (opt) => {
+    onChange(opt.value);
+    setIsOpen(false);
+    setSearch("");
+  };
+
+  return (
+    <div className="bf-searchable-select" ref={dropdownRef}>
+      <button
+        type="button"
+        className="bf-input bf-select bf-searchable-trigger"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        {selectedOption ? selectedOption.label : placeholder || `Select ${label}`}
+      </button>
+      {isOpen && (
+        <div className="bf-searchable-dropdown">
+          <div className="bf-searchable-search">
+            <FaSearch className="bf-searchable-search-icon" />
+            <input
+              type="text"
+              className="bf-searchable-search-input"
+              placeholder="Search..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <div className="bf-searchable-options">
+            {filtered.length === 0 ? (
+              <div className="bf-searchable-empty">No results found</div>
+            ) : (
+              filtered.map((opt, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  className={`bf-searchable-option${opt.value === value ? " is-selected" : ""}`}
+                  onClick={() => handleSelect(opt)}
+                >
+                  {opt.label}
+                  {opt.value === value && <FaCheck className="bf-searchable-check" />}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -233,14 +429,30 @@ const BillerForm = ({ biller, onSubmit, onBack, isLoading }) => {
     loadParams();
   }, [biller.id]);
 
+  // Extract options for select fields from extraParams
+  // API returns: { param1: "0019" (code/value), param2: "VASAI RD. URBAN Subdivision" (display name) }
+  // Display: "param1 - param2" (e.g., "0019 - VASAI RD. URBAN Subdivision")
+  // Value: param1 only (what gets sent to API)
+  const getSelectOptions = useCallback(() => {
+    if (!extraParams.length) return [];
+    return extraParams.map(p => {
+      const val = p.param1 || p.paramName || p.name || p.displayName || "";
+      const displayName = p.param2 || "";
+      const label = displayName ? `${val} - ${displayName}` : val;
+      return { label, value: val };
+    }).filter(opt => opt.label && opt.value);
+  }, [extraParams]);
+
   const inputFields = useMemo(() => {
     if (biller.inputFields && Object.keys(biller.inputFields).length > 0) {
+      const selectOptions = getSelectOptions();
       return Object.entries(biller.inputFields).map(([key, field]) => ({
         key,
         label: field.label || key,
         type: field.type || "text",
         required: field.required !== false,
         placeholder: field.placeholder || `Enter ${field.label || key}`,
+        options: field.type === "select" ? selectOptions : [],
       }));
     }
     if (extraParams.length > 0) {
@@ -250,6 +462,7 @@ const BillerForm = ({ biller, onSubmit, onBack, isLoading }) => {
         type: "text",
         required: true,
         placeholder: p.placeholder || p.fieldName || `Enter field ${i + 1}`,
+        options: [],
       }));
     }
     return [
@@ -259,9 +472,10 @@ const BillerForm = ({ biller, onSubmit, onBack, isLoading }) => {
         type: "text",
         required: true,
         placeholder: "Enter User Name/Phone Number",
+        options: [],
       },
     ];
-  }, [biller.inputFields, extraParams]);
+  }, [biller.inputFields, extraParams, getSelectOptions]);
 
   const handleChange = (key, value) => {
     setFormValues((prev) => ({ ...prev, [key]: value }));
@@ -281,12 +495,12 @@ const BillerForm = ({ biller, onSubmit, onBack, isLoading }) => {
 
   return (
     <div className="bf-step bf-step-enter">
-      <div className="bf-header">
-        <button className="bf-back-btn" type="button" onClick={onBack}>
+      <div className="cm-flow-title-row">
+        <button className="cm-back-icon" type="button" onClick={onBack}>
           <FaArrowLeft />
         </button>
-        <h1 className="bf-title">{biller.operatorName || biller.name}</h1>
-        <BharatConnectLogo />
+        <h1>{biller.operatorName || biller.name}</h1>
+        <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
       </div>
 
       {paramsLoading ? (
@@ -301,15 +515,25 @@ const BillerForm = ({ biller, onSubmit, onBack, isLoading }) => {
               <div className="bf-field" key={field.key}>
                 <label className="bf-label">{field.label}</label>
                 <div className="bf-input-row">
-                  <input
-                    className="bf-input"
-                    type={field.type === "number" ? "tel" : "text"}
-                    placeholder={field.placeholder}
-                    value={formValues[field.key] || ""}
-                    onChange={(e) => handleChange(field.key, e.target.value)}
-                    inputMode={field.type === "number" ? "numeric" : "text"}
-                  />
-                  {idx === 0 && (
+                  {field.type === "select" ? (
+                    <SearchableSelect
+                      options={field.options}
+                      value={formValues[field.key] || ""}
+                      onChange={(val) => handleChange(field.key, val)}
+                      placeholder={`Select ${field.label}`}
+                      label={field.label}
+                    />
+                  ) : (
+                    <input
+                      className="bf-input"
+                      type={field.type === "number" ? "tel" : "text"}
+                      placeholder={field.placeholder}
+                      value={formValues[field.key] || ""}
+                      onChange={(e) => handleChange(field.key, e.target.value)}
+                      inputMode={field.type === "number" ? "numeric" : "text"}
+                    />
+                  )}
+                  {idx === 0 && field.type !== "select" && (
                     <div className="bf-input-icon">
                       <FaUserAlt />
                     </div>
@@ -395,12 +619,12 @@ const BillView = ({ biller, billData, amount, setAmount, onPay, onBack, isExact 
 
   return (
     <div className="bf-step bf-step-enter">
-      <div className="bf-header">
-        <button className="bf-back-btn" type="button" onClick={onBack}>
+      <div className="cm-flow-title-row">
+        <button className="cm-back-icon" type="button" onClick={onBack}>
           <FaArrowLeft />
         </button>
-        <h1 className="bf-title">{biller.operatorName || biller.name}</h1>
-        <BharatConnectLogo />
+        <h1>{biller.operatorName || biller.name}</h1>
+        <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
       </div>
 
       {/* Biller Info */}
@@ -460,6 +684,22 @@ const BillView = ({ biller, billData, amount, setAmount, onPay, onBack, isExact 
               setAmount(e.target.value.replace(/[^0-9.]/g, ""))
             }
           />
+        </div>
+      )}
+
+      {/* Min/Max Amount Limits */}
+      {(biller.minAmount != null || biller.maxAmount != null) && (
+        <div className="bf-amount-limits">
+          {biller.minAmount != null && (
+            <span className="bf-limit-item">
+              <span className="bf-limit-label">Min:</span> ₹{biller.minAmount}
+            </span>
+          )}
+          {biller.maxAmount != null && (
+            <span className="bf-limit-item">
+              <span className="bf-limit-label">Max:</span> ₹{biller.maxAmount}
+            </span>
+          )}
         </div>
       )}
 
@@ -593,12 +833,10 @@ const DTHPlansView = ({ biller, mobile, operators, onSelectPlan, onBack, onChang
 
   return (
     <div className="bf-step bf-step-enter">
-      <div className="bf-hero-header">
-        <div className="bf-hero-top">
-          <button className="bf-back-btn" type="button" onClick={onBack}><FaArrowLeft /></button>
-          <h1 className="bf-hero-title">DTH Plans</h1>
-          <BharatConnectLogo />
-        </div>
+      <div className="cm-flow-title-row">
+        <button className="cm-back-icon" type="button" onClick={onBack}><FaArrowLeft /></button>
+        <h1>DTH Plans</h1>
+        <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
       </div>
 
       {/* Operator info card */}
@@ -799,12 +1037,12 @@ const OffersStep = ({
 
   return (
     <div className="bf-step bf-step-enter">
-      <div className="bf-header">
-        <button className="bf-back-btn" type="button" onClick={onBack}>
+      <div className="cm-flow-title-row">
+        <button className="cm-back-icon" type="button" onClick={onBack}>
           <FaArrowLeft />
         </button>
-        <h1 className="bf-title">Mobile Recharge</h1>
-        <BharatConnectLogo />
+        <h1>Mobile Recharge</h1>
+        <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
       </div>
 
       {confetti && <div className="bf-confetti-burst" />}
@@ -979,12 +1217,12 @@ const PaymentMethodStep = ({
   isLoading,
 }) => (
   <div className="bf-step bf-step-enter">
-    <div className="bf-header">
-      <button className="bf-back-btn" type="button" onClick={onBack}>
+    <div className="cm-flow-title-row">
+      <button className="cm-back-icon" type="button" onClick={onBack}>
         <FaArrowLeft />
       </button>
-      <h1 className="bf-title">Payment</h1>
-      <BharatConnectLogo />
+      <h1>Payment</h1>
+      <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
     </div>
 
     {/* User Info */}
@@ -1065,12 +1303,19 @@ const PaymentMethodStep = ({
   </div>
 );
 
-/* ── Helper to extract operator array from various response shapes ── */
-const extractOperators = (data) => {
-  if (Array.isArray(data)) return data;
-  if (data?.data && Array.isArray(data.data)) return data.data;
-  if (data?.content && Array.isArray(data.content)) return data.content;
-  return [];
+/* ── Helper to extract operator array and mybillers from various response shapes ── */
+const extractOperatorsWithMyBillers = (data) => {
+  // New API format: { mybillers: [...], data: [...] }
+  if (data?.mybillers || data?.data) {
+    return {
+      myBillers: Array.isArray(data.mybillers) ? data.mybillers : [],
+      operators: Array.isArray(data.data) ? data.data : [],
+    };
+  }
+  // Legacy formats
+  if (Array.isArray(data)) return { myBillers: [], operators: data };
+  if (data?.content && Array.isArray(data.content)) return { myBillers: [], operators: data.content };
+  return { myBillers: [], operators: [] };
 };
 
 /* ══════════════════════════════════════════════
@@ -1082,6 +1327,7 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
   const [step, setStep] = useState(0);
   const [banners, setBanners] = useState([]);
   const [billers, setBillers] = useState(passedOperators || []);
+  const [myBillers, setMyBillers] = useState([]);
   const [billersLoading, setBillersLoading] = useState(false);
   const [selectedBiller, setSelectedBiller] = useState(null);
   const [formValues, setFormValues] = useState({});
@@ -1109,8 +1355,9 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
       const resp = await serviceService.getOperatorsByService(serviceData.id);
       setBillersLoading(false);
       if (resp.success) {
-        const ops = extractOperators(resp.data);
-        if (ops.length > 0) setBillers(ops);
+        const { myBillers: fetchedMyBillers, operators } = extractOperatorsWithMyBillers(resp.data);
+        setMyBillers(fetchedMyBillers);
+        if (operators.length > 0) setBillers(operators);
       }
     };
     fetchBillers();
@@ -1151,10 +1398,12 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
     };
 
     if (fetchReq && fetchReq.toLowerCase() !== "not_supported") {
+      // If field2 has city selection, swap: field1=CITY (uppercase), field2="", mn=service number
+      const hasCity = values.field2 && values.field2.trim();
       const resp = await rechargeService.viewBill({
         operatorId: Number(selectedBiller.id),
-        field1: values.field1,
-        field2: values.field2 || null,
+        field1: hasCity ? values.field2.toUpperCase() : values.field1,
+        field2: hasCity ? "" : (values.field2 || null),
         mn: values.field1,
         op: selectedBiller.id,
       });
@@ -1324,6 +1573,7 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
     <BillerList
       key="list"
       operators={billers}
+      myBillers={myBillers}
       isLoading={billersLoading}
       onSelect={handleSelectBiller}
       onBack={goBack}
@@ -1380,6 +1630,7 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
     <BillerList
       key="list"
       operators={billers}
+      myBillers={myBillers}
       isLoading={billersLoading}
       onSelect={handleSelectBiller}
       onBack={goBack}

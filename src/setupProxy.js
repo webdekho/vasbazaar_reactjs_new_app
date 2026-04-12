@@ -16,6 +16,19 @@ module.exports = function (app) {
     });
   });
 
+  // Intercept POST to /customer/app/autopay-callback from mandate provider (HDFC etc)
+  // and redirect to GET with form data as query params so CRA serves index.html
+  app.post("/customer/app/autopay-callback", (req, res) => {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk.toString();
+    });
+    req.on("end", () => {
+      const queryString = body || "";
+      res.redirect(302, `/customer/app/autopay-callback?${queryString}`);
+    });
+  });
+
   // Proxy each backend path with its own middleware instance
   const paths = ["/api", "/login", "/coupon", "/user"];
   paths.forEach((path) => {

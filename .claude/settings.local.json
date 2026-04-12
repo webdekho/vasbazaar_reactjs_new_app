@@ -19,7 +19,14 @@
       "Bash(npx cap sync android)",
       "Bash(adb install:*)",
       "Bash(adb shell am start:*)",
-      "Bash(open:*)"
+      "Bash(open:*)",
+      "Bash(node -e:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs:*)",
+      "Bash(find:*)",
+      "Bash(adb:*)",
+      "Bash(npm i:*)",
+      "Bash(npm search:*)"
     ]
   }
 }

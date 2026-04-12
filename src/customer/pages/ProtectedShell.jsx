@@ -139,22 +139,40 @@ const ProtectedShell = () => {
     return () => { document.body.style.overflow = ""; };
   }, [drawerOpen]);
 
-  // Global deep link listener for KYC callback (Android/iOS)
+  // Global deep link listener for callbacks (Android/iOS)
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
 
     const handleAppUrl = (event) => {
       console.log("Deep link received:", event.url);
-      if (event.url && event.url.startsWith("vasbazaar://kyc-callback")) {
-        // Parse URL parameters
-        const urlParams = new URL(event.url.replace("vasbazaar://", "https://"));
+      if (!event.url || !event.url.startsWith("vasbazaar://")) return;
+
+      // Parse URL parameters
+      const urlParams = new URL(event.url.replace("vasbazaar://", "https://"));
+      const path = urlParams.pathname || urlParams.host;
+
+      // KYC callback
+      if (event.url.includes("kyc-callback")) {
         const gateway = urlParams.searchParams.get("gateway");
         const type = urlParams.searchParams.get("type");
         const client_id = urlParams.searchParams.get("client_id");
         const status = urlParams.searchParams.get("status");
-
-        // Navigate to KYC callback screen with params
         navigate(`/customer/app/kyc-callback?gateway=${gateway}&type=${type}&client_id=${client_id}&status=${status}`);
+        return;
+      }
+
+      // Payment callback (Juspay/HDFC)
+      if (event.url.includes("payment-callback")) {
+        const orderId = urlParams.searchParams.get("order_id") || urlParams.searchParams.get("orderId");
+        navigate(`/customer/app/payment-callback${orderId ? `?order_id=${orderId}` : ""}`);
+        return;
+      }
+
+      // AutoPay/Mandate callback
+      if (event.url.includes("autopay-callback")) {
+        const orderId = urlParams.searchParams.get("order_id") || urlParams.searchParams.get("orderId");
+        navigate(`/customer/app/autopay-callback${orderId ? `?order_id=${orderId}` : ""}`);
+        return;
       }
     };
 

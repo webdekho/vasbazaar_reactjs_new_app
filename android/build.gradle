@@ -35,6 +35,12 @@ subprojects {
                     targetCompatibility JavaVersion.VERSION_17
                 }
             }
+            // Set Kotlin JVM target to 17
+            if (project.plugins.hasPlugin('kotlin-android')) {
+                project.android.kotlinOptions {
+                    jvmTarget = '17'
+                }
+            }
         }
     }
     configurations.all {
