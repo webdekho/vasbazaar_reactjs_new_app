@@ -16551,6 +16551,14 @@
   align-items: flex-start;
   gap: 14px;
   margin-bottom: 18px;
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* PWA standalone mode - extra padding for status bar */
+@media (display-mode: standalone) {
+  .qr-page {
+    padding-top: calc(60px + env(safe-area-inset-top, 20px));
+  }
 }
 
 .qr-page-back {
