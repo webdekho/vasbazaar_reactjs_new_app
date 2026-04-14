@@ -25,12 +25,6 @@ const ALLOWED_HOSTS = [
 const isAllowedHost = (url) =>
   url && ALLOWED_HOSTS.some((host) => url.startsWith(host));
 
-const isNative = () => {
-  try {
-    return !!(window?.Capacitor?.isNativePlatform && window.Capacitor.isNativePlatform());
-  } catch { return false; }
-};
-
 const resolveApiBase = () => {
   if (typeof window !== "undefined") {
     const customerBase = localStorage.getItem(CUSTOMER_STORAGE_KEYS.apiBaseUrl);
