@@ -21,11 +21,6 @@ const isCapacitorNative = () => {
 };
 
 export const server_api = () => {
-
-     // Local dev (npm start) → localhost backend (overrides any stale localStorage host)
-     // Production build (Vercel `npm run build`) → production URL
-     if (process.env.NODE_ENV === 'development' && !isCapacitorNative()) return 'http://localhost:8081';
-
     const storedUrl = localStorage.getItem('host');
 
      // Validate stored URL against whitelist before using

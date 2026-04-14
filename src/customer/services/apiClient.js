@@ -32,11 +32,6 @@ const isNative = () => {
 };
 
 const resolveApiBase = () => {
-  // Local dev (npm start, non-native) → localhost backend, ignore any stale localStorage host
-  if (process.env.NODE_ENV === "development" && typeof window !== "undefined" && !isNative()) {
-    return "http://localhost:8081";
-  }
-
   if (typeof window !== "undefined") {
     const customerBase = localStorage.getItem(CUSTOMER_STORAGE_KEYS.apiBaseUrl);
     if (customerBase && isAllowedHost(trimTrailingSlash(customerBase)))
