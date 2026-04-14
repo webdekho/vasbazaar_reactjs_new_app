@@ -16543,7 +16543,7 @@
   width: 100%;
   max-width: 720px;
   margin: 0 auto;
-  padding: calc(18px + env(safe-area-inset-top, 0px)) 0 28px;
+  padding: calc(56px + env(safe-area-inset-top, 0px)) 16px 28px;
 }
 
 .qr-page-header {
