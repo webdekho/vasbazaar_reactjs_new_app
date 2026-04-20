@@ -148,39 +148,20 @@ export const rechargeWithJuspay = async (payload) => {
 
 /**
  * Check order status after payment redirect.
- * Polls with retry for pending status (webhook may not have arrived yet).
+ * Single call - waits for response without timeout or retry.
+ * Critical: This should only be called ONCE per payment.
  */
-export const checkOrderStatus = async (orderId, retries = 3) => {
-  for (let i = 0; i < retries; i++) {
-    const response = await rechargeService.checkRechargeStatus({
-      txnId: orderId,
-      field1: "",
-      field2: "",
-      validity: 30,
-      recharge: true,
-      viewBillResponse: {},
-    });
+export const checkOrderStatus = async (orderId) => {
+  const response = await rechargeService.checkRechargeStatus({
+    txnId: orderId,
+    field1: "",
+    field2: "",
+    validity: 30,
+    recharge: true,
+    viewBillResponse: {},
+  });
 
-    const status = (
-      response?.data?.status ||
-      response?.data?.txnStatus ||
-      response?.data?.Status ||
-      ""
-    ).toUpperCase();
-
-    // If we got a definitive result, return immediately
-    if (status && status !== "PENDING" && status !== "STARTED" && status !== "AUTHORIZING") {
-      return response;
-    }
-
-    // Wait 3 seconds before retrying for pending status
-    if (i < retries - 1) {
-      await new Promise((r) => setTimeout(r, 3000));
-    }
-  }
-
-  // Return last response (still pending)
-  return { success: true, data: { status: "PENDING" }, message: "Payment is being processed" };
+  return response;
 };
 
 export const juspayService = {

@@ -9,6 +9,10 @@ import { useTheme } from "../context/ThemeContext";
 // Helper to get/set verified order cache in sessionStorage
 const VERIFIED_ORDERS_KEY = "juspay_verified_orders";
 
+// Module-level flag to prevent duplicate verification calls
+let _verificationInProgress = false;
+let _verificationDone = false;
+
 const getVerifiedOrder = (orderId) => {
   try {
     const cache = JSON.parse(sessionStorage.getItem(VERIFIED_ORDERS_KEY) || "{}");
@@ -44,8 +48,12 @@ const JuspayCallbackScreen = () => {
   const isLight = theme === "light";
 
   useEffect(() => {
-    if (hasVerifiedRef.current) return;
-    hasVerifiedRef.current = true;
+    // Use module-level flag to prevent duplicate verification
+    if (_verificationInProgress || _verificationDone) {
+      console.log("Verification already in progress or done, skipping");
+      return;
+    }
+    _verificationInProgress = true;
 
     const verify = async () => {
       // 1. Get order ID from URL params or saved context
@@ -55,35 +63,42 @@ const JuspayCallbackScreen = () => {
 
       if (ctx) setPaymentCtx(ctx);
 
+      // Check if this order was already verified (prevents duplicate calls on refresh)
+      if (orderId) {
+        const cachedResult = getVerifiedOrder(orderId);
+        if (cachedResult) {
+          _verificationDone = true;
+          setState(cachedResult.state);
+          setMessage(cachedResult.message);
+          setTxnId(orderId);
+
+          // If it was successful, navigate to success screen
+          if (cachedResult.state === "success" && cachedResult.successState) {
+            setTimeout(() => {
+              navigate("/customer/app/success", {
+                replace: true,
+                state: cachedResult.successState,
+              });
+            }, 1500);
+          }
+          return;
+        }
+      }
+
+      // If no orderId, DON'T show failed - keep verifying state and wait
       if (!orderId) {
-        setState("failed");
-        setMessage("Payment session expired or invalid. Please check your transaction history.");
+        console.log("No orderId found, waiting for status check to complete elsewhere");
+        // Don't show failed - let the user see verifying state
+        // The PaymentScreen or another component will handle the navigation
         return;
       }
 
       setTxnId(orderId);
 
-      // Check if this order was already verified (prevents duplicate calls on refresh)
-      const cachedResult = getVerifiedOrder(orderId);
-      if (cachedResult) {
-        setState(cachedResult.state);
-        setMessage(cachedResult.message);
-
-        // If it was successful, navigate to success screen
-        if (cachedResult.state === "success" && cachedResult.successState) {
-          setTimeout(() => {
-            navigate("/customer/app/success", {
-              replace: true,
-              state: cachedResult.successState,
-            });
-          }, 1500);
-        }
-        return;
-      }
-
       try {
         // 2. Verify order status with backend (single API call only)
-        const response = await juspayService.checkOrderStatus(orderId, 1);
+        _verificationDone = true;
+        const response = await juspayService.checkOrderStatus(orderId);
         const status = (
           response?.data?.status ||
           response?.data?.txnStatus ||

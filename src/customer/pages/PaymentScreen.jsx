@@ -12,6 +12,16 @@ import juspayService, { isPwaStandalone } from "../services/juspayService";
 const FALLBACK_LOGO = "/assets/images/Brand_favicon.png";
 const handleLogoError = (e) => { e.target.onerror = null; e.target.src = FALLBACK_LOGO; };
 
+// Module-level flags to prevent duplicate calls (persists across component remounts)
+let _statusCheckCalled = false; // Track if status check API was called
+let _navigationDone = false; // Prevent multiple navigations
+
+// Reset all flags for new payment
+const resetPaymentFlags = () => {
+  _statusCheckCalled = false;
+  _navigationDone = false;
+};
+
 const numberToWords = (num) => {
   if (num === 0) return "Zero";
   const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
@@ -76,6 +86,13 @@ const PaymentScreen = () => {
   const handlePaymentCallback = useCallback(async (url) => {
     console.log("Payment callback received:", url);
 
+    // Prevent multiple status checks
+    if (_statusCheckCalled) {
+      console.log("Status check already called, skipping...");
+      return;
+    }
+    _statusCheckCalled = true;
+
     // Close the browser
     try {
       await Browser.close();
@@ -107,6 +124,13 @@ const PaymentScreen = () => {
     try {
       const statusResponse = await juspayService.checkOrderStatus(orderId);
       setLoading(false);
+
+      // Prevent multiple navigations
+      if (_navigationDone) {
+        console.log("Navigation already done, skipping");
+        return;
+      }
+      _navigationDone = true;
 
       const payStatus = (statusResponse.data?.status || "").toUpperCase();
       if (statusResponse.success && (payStatus === "CHARGED" || payStatus === "SUCCESS" || payStatus === "COMPLETED")) {
@@ -141,6 +165,12 @@ const PaymentScreen = () => {
       }
     } catch (e) {
       setLoading(false);
+      // Prevent multiple navigations
+      if (_navigationDone) {
+        console.log("Navigation already done, skipping");
+        return;
+      }
+      _navigationDone = true;
       // Navigate to failure page on error
       navigate("/customer/app/failure", {
         state: {
@@ -187,6 +217,9 @@ const PaymentScreen = () => {
   if (!paymentState.amount) return <Navigate to="/customer/app/services" replace />;
 
   const proceed = async (payType) => {
+    // Reset flags for new payment
+    resetPaymentFlags();
+
     setLoading(true); setStatus("");
 
     // Pre-open window synchronously for PWA standalone (Safari blocks async window.open as popup)
@@ -302,51 +335,27 @@ const PaymentScreen = () => {
     // Backend returns requestId as the txnId in RechargeResult_DTO
     const txnId = response.data?.requestId || response.data?.txnId || response.data?.txnid || response.data?.transactionId || response.raw?.data?.requestId || response.raw?.data?.txnId || `VB${Date.now()}`;
 
-    // First check the recharge response itself — backend returns data.status with actual result
-    const initialStatus = (response.data?.status || "").toUpperCase();
-    const isInitialFailed = ["FAILED", "FAILURE", "REFUND", "REFUNDED", "ERROR"].includes(initialStatus);
-    const isInitialPending = ["PENDING", "PROCESSING", "INITIATED"].includes(initialStatus);
-
-    if (isInitialFailed) {
-      setLoading(false);
-      navigate("/customer/app/failure", {
-        state: {
-          status: "failed",
-          message: response.data?.message || "Recharge could not be completed. If money was deducted from your wallet, it will be refunded.",
-          txnId,
-          orderId: txnId,
-          amount: payload.amount,
-          type: paymentState.type,
-          payType,
-        },
-      });
+    // Prevent multiple status checks - CRITICAL: only ONE call allowed
+    if (_statusCheckCalled) {
+      console.log("Status check already called, skipping");
       return;
     }
+    _statusCheckCalled = true;
 
-    if (isInitialPending) {
-      setLoading(false);
-      navigate("/customer/app/failure", {
-        state: {
-          status: "pending",
-          message: response.data?.message || "Your recharge is being processed. Please check your transaction history for the latest status.",
-          txnId,
-          orderId: txnId,
-          amount: payload.amount,
-          type: paymentState.type,
-          payType,
-        },
-      });
-      return;
-    }
-
-    // If initial status looks successful, verify with check-status
+    // ALWAYS wait for status check to complete before showing any result
     const statusResponse = await rechargeService.checkRechargeStatus({ txnId, field1: payload.field1, field2: payload.field2, validity: payload.validity, recharge: true, viewBillResponse: payload.viewBillResponse });
     setLoading(false);
 
-    const rechargeStatus = (statusResponse.data?.status || statusResponse.raw?.Status || "").toUpperCase();
-    const isSuccess = rechargeStatus === "SUCCESS" || (rechargeStatus === "" && initialStatus === "SUCCESS");
+    // CRITICAL: Only navigate AFTER status check completes, and only ONCE
+    if (_navigationDone) {
+      console.log("Navigation already done, skipping");
+      return;
+    }
+    _navigationDone = true;
 
-    if (isSuccess) {
+    const rechargeStatus = (statusResponse.data?.status || statusResponse.raw?.Status || "").toUpperCase();
+
+    if (rechargeStatus === "SUCCESS") {
       navigate("/customer/app/success", {
         state: buildSuccessState(statusResponse.data || response.data, payType, txnId),
       });
@@ -384,11 +393,25 @@ const PaymentScreen = () => {
       return;
     }
 
+    // Prevent multiple status checks
+    if (_statusCheckCalled) {
+      console.log("Status check already called, skipping...");
+      return;
+    }
+    _statusCheckCalled = true;
+
     setLoading(true);
     try {
       const context = paymentContextRef.current;
       const statusResponse = await juspayService.checkOrderStatus(context.orderId);
       setLoading(false);
+
+      // CRITICAL: Only navigate AFTER status check completes, and only ONCE
+      if (_navigationDone) {
+        console.log("Navigation already done, skipping");
+        return;
+      }
+      _navigationDone = true;
 
       const payStatus = (statusResponse.data?.status || "").toUpperCase();
       if (statusResponse.success && (payStatus === "CHARGED" || payStatus === "SUCCESS" || payStatus === "COMPLETED")) {
@@ -424,6 +447,12 @@ const PaymentScreen = () => {
       }
     } catch (e) {
       setLoading(false);
+      // Prevent multiple navigations
+      if (_navigationDone) {
+        console.log("Navigation already done, skipping");
+        return;
+      }
+      _navigationDone = true;
       navigate("/customer/app/failure", {
         state: {
           status: "failed",
@@ -456,13 +485,8 @@ const PaymentScreen = () => {
       {/* Amount hero */}
       <div className={`xpay-hero${ready ? " xpay-in" : ""}`}>
         <div className="xpay-hero-glow" />
-        <div className="xpay-hero-amount">₹{finalAmount}</div>
-        <div className="xpay-hero-words">{numberToWords(finalAmount)}</div>
-        {discount > 0 && (
-          <div className="xpay-hero-discount">
-            <span className="xpay-hero-original">₹{amount}</span>
-          </div>
-        )}
+        <div className="xpay-hero-amount">₹{amount}</div>
+        <div className="xpay-hero-words">{numberToWords(amount)}</div>
       </div>
 
       {/* Operator info */}
@@ -531,7 +555,7 @@ const PaymentScreen = () => {
           ) : (
             <>
               <FaLock className="xpay-pay-lock" />
-              Pay ₹{finalAmount} via {selectedMethod === "upi" ? "UPI" : "Wallet"}
+              Pay via {selectedMethod === "upi" ? "UPI" : "Wallet"}
             </>
           )}
         </button>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { otaService } from "../services/otaService";
 
 /**
@@ -9,6 +9,7 @@ import { otaService } from "../services/otaService";
  *
  * Native (Android/iOS): FORCE UPDATE - automatically downloads and installs
  * without showing any popup. Android will show system installer dialog.
+ * The download runs in BACKGROUND - independent of component lifecycle.
  *
  * PWA: Shows reload bar when new version available.
  */
@@ -16,6 +17,10 @@ import { otaService } from "../services/otaService";
 // Skip update check for this many ms after the user dismisses a non-force update.
 const SKIP_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
 const PWA_SKIPPED_KEY = "vb_pwa_skipped_version";
+
+// Module-level flag to ensure OTA check only runs ONCE per app session
+let _otaCheckDone = false;
+let _otaUpdatePromise = null; // Store the update promise to keep it alive
 
 const pwaBar = {
   position: "fixed",
@@ -58,24 +63,28 @@ const secondaryBtn = {
 
 const OtaUpdateGate = () => {
   const [pwaUpdate, setPwaUpdate] = useState(false);
-  const ranRef = useRef(false);
 
   // ── Native OTA check (Android/iOS only) — FORCE UPDATE (no UI) ──
+  // Runs completely in BACKGROUND - independent of component lifecycle
   useEffect(() => {
-    if (ranRef.current) return;
-    ranRef.current = true;
+    // Use module-level flag to ensure only ONE call per session
+    if (_otaCheckDone) {
+      console.debug("[OTA] Check already done this session, skipping");
+      return;
+    }
+    _otaCheckDone = true;
 
     if (!otaService.isNative()) return;
 
-    // Check for session token with retry logic
-    const checkWithRetry = async (attempt = 1) => {
-      const maxAttempts = 5;
-      const hasToken = !!localStorage.getItem("customerSessionToken");
-
-      if (!hasToken && attempt < maxAttempts) {
+    // Background update function - runs independently of component
+    const runBackgroundUpdate = async () => {
+      // Wait for auth token with retry
+      let hasToken = false;
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        hasToken = !!localStorage.getItem("customerSessionToken");
+        if (hasToken) break;
         console.debug(`[OTA] Attempt ${attempt}: No auth token yet, retrying in 2s...`);
-        setTimeout(() => checkWithRetry(attempt + 1), 2000);
-        return;
+        await new Promise(r => setTimeout(r, 2000));
       }
 
       if (!hasToken) {
@@ -99,9 +108,9 @@ const OtaUpdateGate = () => {
           return;
         }
 
-        console.debug("[OTA] Update available:", info.latestVersion, "- Starting silent install...");
+        console.debug("[OTA] Update available:", info.latestVersion, "- Starting BACKGROUND install...");
 
-        // FORCE UPDATE: Automatically download and install without any UI
+        // FORCE UPDATE: Download and install in BACKGROUND - no UI dependency
         const updateRes = await otaService.runUpdateFlow({
           onStage: (stage) => console.debug("[OTA] Stage:", stage),
           onProgress: (pct) => console.debug("[OTA] Progress:", pct + "%"),
@@ -113,7 +122,6 @@ const OtaUpdateGate = () => {
         }
 
         if (updateRes.requiresStoreRedirect) {
-          // iOS: Open App Store
           console.debug("[OTA] iOS - Opening App Store...");
           window.open("https://apps.apple.com/app/vasbazaar/id0000000000", "_system");
         }
@@ -124,10 +132,13 @@ const OtaUpdateGate = () => {
       }
     };
 
-    // Start check after 2 seconds to let app initialize
-    const t = setTimeout(() => checkWithRetry(1), 2000);
+    // Start background update after 2 seconds
+    // Store promise at MODULE level so it survives component unmount
+    setTimeout(() => {
+      _otaUpdatePromise = runBackgroundUpdate();
+    }, 2000);
 
-    return () => clearTimeout(t);
+    // NO cleanup - we WANT this to continue running even if component unmounts
   }, []);
 
   // ── PWA version check (non-native) — uses same server API as native ──

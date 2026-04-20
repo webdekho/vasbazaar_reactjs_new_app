@@ -445,15 +445,8 @@ const OfferScreen = () => {
       {createPortal(
         <div className={`off-sticky-footer${theme === "light" ? " theme-light" : ""}`}>
           <div className="off-sticky-footer-inner">
-            {appliedOffer && (
-              <div className="off-footer-summary">
-                {discountAmount > 0 && <div className="off-footer-line"><span>Instant Discount</span><span className="off-footer-green">-₹{discountAmount.toFixed(2)}</span></div>}
-                {cashbackAmount > 0 && <div className="off-footer-line"><span>Cashback (after payment)</span><span className="off-footer-green">₹{cashbackAmount.toFixed(2)}</span></div>}
-                <div className="off-footer-line off-footer-total"><span>You Pay</span><span>₹{payableAmount}</span></div>
-              </div>
-            )}
             <button type="button" className="off-proceed" onClick={handleProceed}>
-              <span>Proceed to Pay ₹{payableAmount}</span>
+              <span>Proceed to Pay</span>
               <FiArrowRight />
             </button>
           </div>
