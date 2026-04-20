@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaCheckCircle, FaTimesCircle, FaClock } from "react-icons/fa";
 import { isSuccessStatus, isPendingStatus } from "../../shared/constants/juspay";
@@ -44,7 +44,6 @@ const JuspayCallbackScreen = () => {
   const [refundMessage, setRefundMessage] = useState("");
   const [refundMessageType, setRefundMessageType] = useState("");
   const [refundModalOpen, setRefundModalOpen] = useState(false);
-  const hasVerifiedRef = useRef(false);
   const isLight = theme === "light";
 
   useEffect(() => {

@@ -20,7 +20,6 @@ const PWA_SKIPPED_KEY = "vb_pwa_skipped_version";
 
 // Module-level flag to ensure OTA check only runs ONCE per app session
 let _otaCheckDone = false;
-let _otaUpdatePromise = null; // Store the update promise to keep it alive
 
 const pwaBar = {
   position: "fixed",
@@ -132,10 +131,9 @@ const OtaUpdateGate = () => {
       }
     };
 
-    // Start background update after 2 seconds
-    // Store promise at MODULE level so it survives component unmount
+    // Start background update after 2 seconds - runs independently
     setTimeout(() => {
-      _otaUpdatePromise = runBackgroundUpdate();
+      runBackgroundUpdate();
     }, 2000);
 
     // NO cleanup - we WANT this to continue running even if component unmounts

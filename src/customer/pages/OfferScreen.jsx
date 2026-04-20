@@ -323,7 +323,6 @@ const OfferScreen = () => {
   // For discount type: reduce amount. For cashback: collect full amount, cashback after success
   const discountAmount = appliedOffer?.offerType === "discount" ? (appliedOffer?.discountValue || 0) : 0;
   const cashbackAmount = appliedOffer?.offerType === "cashback" ? (appliedOffer?.discountValue || 0) : 0;
-  const payableAmount = Math.max(0, amount - discountAmount);
 
   const handleProceed = () => {
     navigate("/customer/app/payment", {
