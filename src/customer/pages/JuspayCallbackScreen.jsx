@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { FaCheckCircle, FaTimesCircle, FaClock } from "react-icons/fa";
+import { FaCheckCircle, FaTimesCircle, FaClock, FaHome, FaRedo, FaHistory } from "react-icons/fa";
 import { isSuccessStatus, isPendingStatus } from "../../shared/constants/juspay";
 import juspayService from "../services/juspayService";
 import { authPost } from "../services/apiClient";
@@ -43,7 +43,6 @@ const JuspayCallbackScreen = () => {
   const [refundLoadingType, setRefundLoadingType] = useState("");
   const [refundMessage, setRefundMessage] = useState("");
   const [refundMessageType, setRefundMessageType] = useState("");
-  const [refundModalOpen, setRefundModalOpen] = useState(false);
   const isLight = theme === "light";
 
   useEffect(() => {
@@ -184,7 +183,6 @@ const JuspayCallbackScreen = () => {
     if (!txnId) {
       setRefundMessageType("error");
       setRefundMessage("Order ID not found. Please try again from transaction history.");
-      setRefundModalOpen(true);
       return;
     }
 
@@ -206,14 +204,13 @@ const JuspayCallbackScreen = () => {
             : "Refund request submitted. Amount will be refunded to your original payment source within 3 working days."
         );
       } else {
+        // Show actual API error message
         setRefundMessageType("error");
         setRefundMessage(response.message || "Unable to submit refund request. Please try again.");
       }
-      setRefundModalOpen(true);
     } catch {
       setRefundMessageType("error");
       setRefundMessage("Unable to submit refund request. Please try again.");
-      setRefundModalOpen(true);
     } finally {
       setRefundLoadingType("");
     }
@@ -314,97 +311,116 @@ const JuspayCallbackScreen = () => {
 
       {/* Action buttons for failed transactions */}
       {state === "failed" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, width: "100%", maxWidth: 460 }}>
-          <button
-            onClick={() => handleRefundRequest("wallet")}
-            disabled={Boolean(refundLoadingType)}
-            style={{
-              padding: "12px 18px", borderRadius: 10, width: "100%",
-              background: "linear-gradient(135deg, #00B894 0%, #00D2A0 100%)",
-              border: "none",
-              color: "#fff",
-              cursor: refundLoadingType ? "not-allowed" : "pointer",
-              opacity: refundLoadingType ? 0.7 : 1,
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              fontSize: "0.9rem", fontWeight: 700,
-            }}
-          >
-            {refundLoadingType === "wallet" ? "Processing..." : "Refund to Wallet (Immediate)"}
-          </button>
+        <div style={{ width: "100%", maxWidth: 460 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+            <button
+              onClick={() => handleRefundRequest("wallet")}
+              disabled={Boolean(refundLoadingType)}
+              style={{
+                padding: "12px 18px", borderRadius: 10, width: "100%",
+                background: "linear-gradient(135deg, #00B894 0%, #00D2A0 100%)",
+                border: "none",
+                color: "#fff",
+                cursor: refundLoadingType ? "not-allowed" : "pointer",
+                opacity: refundLoadingType ? 0.7 : 1,
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                fontSize: "0.9rem", fontWeight: 700,
+              }}
+            >
+              {refundLoadingType === "wallet" ? "Processing..." : "Refund to Wallet (Immediate)"}
+            </button>
 
+            <button
+              onClick={() => handleRefundRequest("bank")}
+              disabled={Boolean(refundLoadingType)}
+              style={{
+                padding: "12px 18px", borderRadius: 10, width: "100%",
+                background: "linear-gradient(135deg, #4C6FFF 0%, #6C8BFF 100%)",
+                border: "none",
+                color: "#fff",
+                cursor: refundLoadingType ? "not-allowed" : "pointer",
+                opacity: refundLoadingType ? 0.7 : 1,
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                fontSize: "0.9rem", fontWeight: 700,
+              }}
+            >
+              {refundLoadingType === "bank" ? "Processing..." : "Refund to Original Source (Upto 3 Days)"}
+            </button>
+          </div>
+
+          {/* Refund status message - shown directly below buttons */}
+          {refundMessage && (
+            <div style={{
+              marginTop: 16,
+              padding: "14px 16px",
+              borderRadius: 12,
+              background: refundMessageType === "success"
+                ? "rgba(0, 200, 83, 0.1)"
+                : "rgba(255, 107, 107, 0.1)",
+              border: `1px solid ${refundMessageType === "success" ? "rgba(0, 200, 83, 0.3)" : "rgba(255, 107, 107, 0.3)"}`,
+            }}>
+              <p style={{
+                margin: 0,
+                fontSize: "0.88rem",
+                lineHeight: 1.5,
+                color: refundMessageType === "success" ? "#00C853" : "#FF6B6B",
+                textAlign: "center",
+              }}>
+                {refundMessage}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Action buttons for pending transactions */}
+      {state === "pending" && (
+        <div style={{ display: "flex", gap: 12, width: "100%", maxWidth: 400, marginTop: 16 }}>
           <button
-            onClick={() => handleRefundRequest("bank")}
-            disabled={Boolean(refundLoadingType)}
+            onClick={() => navigate("/customer/app/services", { replace: true })}
             style={{
-              padding: "12px 18px", borderRadius: 10, width: "100%",
-              background: "linear-gradient(135deg, #4C6FFF 0%, #6C8BFF 100%)",
-              border: "none",
-              color: "#fff",
-              cursor: refundLoadingType ? "not-allowed" : "pointer",
-              opacity: refundLoadingType ? 0.7 : 1,
+              flex: 1, padding: "14px 20px", borderRadius: 12,
+              background: isLight ? "#fff" : "rgba(255,255,255,0.08)",
+              border: isLight ? "1px solid #E5E7EB" : "1px solid rgba(255,255,255,0.12)",
+              color: isLight ? "#1A1A2E" : "#F0F0FF",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              fontSize: "0.9rem", fontWeight: 700,
+              fontSize: "0.95rem", fontWeight: 600, cursor: "pointer",
             }}
           >
-            {refundLoadingType === "bank" ? "Processing..." : "Refund to Original Source (Upto 3 Days)"}
+            <FaHome /> Go To Home
+          </button>
+          <button
+            onClick={() => navigate("/customer/app/transaction-history", { replace: true })}
+            style={{
+              flex: 1, padding: "14px 20px", borderRadius: 12,
+              background: "linear-gradient(135deg, #007BFF 0%, #00BFFF 100%)",
+              border: "none",
+              color: "#fff",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              fontSize: "0.95rem", fontWeight: 600, cursor: "pointer",
+            }}
+          >
+            <FaHistory /> Check Status
           </button>
         </div>
       )}
 
-      {refundModalOpen && (
-        <div
-          onClick={() => setRefundModalOpen(false)}
+      {/* Go To Home button for failed transactions */}
+      {state === "failed" && (
+        <button
+          onClick={() => navigate("/customer/app/services", { replace: true })}
           style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.55)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 999,
-            padding: 20,
+            marginTop: 20, padding: "14px 24px", borderRadius: 12,
+            background: isLight ? "#fff" : "rgba(255,255,255,0.08)",
+            border: isLight ? "1px solid #E5E7EB" : "1px solid rgba(255,255,255,0.12)",
+            color: isLight ? "#1A1A2E" : "#F0F0FF",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+            fontSize: "0.95rem", fontWeight: 600, cursor: "pointer",
+            width: "100%", maxWidth: 400,
           }}
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: "100%",
-              maxWidth: 360,
-              background: isLight ? "#FFFFFF" : "#161822",
-              border: `1px solid ${refundMessageType === "success" ? "rgba(56,211,159,0.35)" : "rgba(255,107,107,0.35)"}`,
-              borderRadius: 14,
-              padding: 18,
-              textAlign: "center",
-            }}
-          >
-            <h3 style={{
-              margin: "0 0 8px",
-              fontSize: "1rem",
-              color: refundMessageType === "success" ? "#38D39F" : "#FF6B6B",
-            }}>
-              {refundMessageType === "success" ? "Refund Request Submitted" : "Refund Request Failed"}
-            </h3>
-            <p style={{ margin: 0, color: isLight ? "#4B5563" : "#C8CEE8", fontSize: "0.9rem", lineHeight: 1.5 }}>
-              {refundMessage}
-            </p>
-            <button
-              type="button"
-              onClick={() => setRefundModalOpen(false)}
-              style={{
-                marginTop: 14,
-                padding: "10px 18px",
-                borderRadius: 10,
-                border: "none",
-                background: "linear-gradient(135deg, #00F5D4, #00BBF9)",
-                color: "#061018",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              OK
-            </button>
-          </div>
-        </div>
+          <FaHome /> Go To Home
+        </button>
       )}
 
       <style>{`@keyframes jcb-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>

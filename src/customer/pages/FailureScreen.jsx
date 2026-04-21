@@ -25,8 +25,8 @@ const FailureScreen = () => {
     : rawMessage;
 
   const config = isPending
-    ? { icon: <FaClock />, color: "#FFB300", bg: "rgba(255,179,0,0.1)", title: "Payment Pending" }
-    : { icon: <FaTimesCircle />, color: "#FF4757", bg: "rgba(255,71,87,0.1)", title: isWalletPay ? "Transaction Failed" : "Payment Failed" };
+    ? { icon: <FaClock />, color: "#FFB300", bg: "linear-gradient(135deg, rgba(255,179,0,0.15) 0%, rgba(255,152,0,0.08) 100%)", title: "Payment Pending" }
+    : { icon: <FaTimesCircle />, color: "#FF4757", bg: "linear-gradient(135deg, rgba(255,71,87,0.15) 0%, rgba(255,71,87,0.08) 100%)", title: isWalletPay ? "Transaction Failed" : "Payment Failed" };
 
   const handleRefundRequest = async (refundType) => {
     if (!txnId) {
@@ -64,320 +64,478 @@ const FailureScreen = () => {
     }
   };
 
+  // Build details array - check all possible field names
+  const details = [];
+  const mobile = state.mobile || state.field1 || state.number || "";
+  const operator = state.operatorName || state.operator || state.label || "";
+  const amount = state.amount || state.txnAmt || "";
+
+  if (mobile) details.push({ label: "Mobile", value: mobile });
+  if (operator) details.push({ label: "Operator", value: operator });
+  if (amount) details.push({ label: "Amount", value: `₹${amount}` });
+  if (txnId) details.push({ label: "Order ID", value: txnId });
+
   return (
-    <div className="failure-screen">
-      {/* Status Icon */}
-      <div className="failure-icon" style={{ background: config.bg, color: config.color }}>
-        {config.icon}
+    <div className="fail-page">
+      {/* Background decoration */}
+      <div className="fail-bg">
+        <div className="fail-bg-circle fail-bg-circle--1" />
+        <div className="fail-bg-circle fail-bg-circle--2" />
       </div>
 
-      {/* Title */}
-      <h1 className="failure-title" style={{ color: config.color }}>{config.title}</h1>
-
-      {/* Amount if available */}
-      {state.amount && (
-        <div className="failure-amount">
-          <span className="failure-amount-label">Amount</span>
-          <span className="failure-amount-value">₹{state.amount}</span>
-        </div>
-      )}
-
-      {/* Message */}
-      <p className="failure-message">{message}</p>
-
-      {!isPending && isWalletPay && (
-        <div className="refund-section">
-          <p className="refund-message" style={{ textAlign: "center" }}>
-            <FaWallet style={{ marginRight: 6, verticalAlign: "middle" }} />
-            The amount of <strong>₹{state.amount || 0}</strong> has been automatically refunded to your wallet. You can retry the transaction using the button below.
-          </p>
-        </div>
-      )}
-
-      {!isPending && !isWalletPay && (
-        <div className="refund-section">
-          <p className="refund-message">
-            If payment was deducted, choose where you want the refund:
-            wallet refund is instant, while bank refund may take up to 3 working days.
-          </p>
-          <div className="refund-actions">
-            <button
-              className="failure-btn failure-btn--refund-wallet"
-              onClick={() => handleRefundRequest("wallet")}
-              disabled={refundLoading}
-            >
-              {refundLoading ? "Processing..." : "Refund to Wallet (Instant)"}
-            </button>
-            <button
-              className="failure-btn failure-btn--refund-bank"
-              onClick={() => handleRefundRequest("bank")}
-              disabled={refundLoading}
-            >
-              {refundLoading ? "Processing..." : "Refund to Bank Account"}
-            </button>
+      {/* Main content */}
+      <div className="fail-content">
+        {/* Status Icon */}
+        <div className="fail-icon-wrap" style={{ background: config.bg }}>
+          <div className="fail-icon" style={{ color: config.color }}>
+            {config.icon}
           </div>
-          {refundMessage && (
-            <p className={`refund-status ${refundMessageType === "success" ? "is-success" : "is-error"}`}>
-              {refundMessage}
-            </p>
-          )}
+          <div className="fail-icon-ring" style={{ borderColor: config.color }} />
         </div>
-      )}
 
-      {/* Order ID if available */}
-      {state.orderId && (
-        <div className="failure-order-id">
-          Order ID: {state.orderId}
-        </div>
-      )}
+        {/* Title */}
+        <h1 className="fail-title" style={{ color: config.color }}>{config.title}</h1>
 
-      {/* Action Buttons */}
-      <div className="failure-actions">
+        {/* Message */}
+        <p className="fail-message">{message}</p>
+
+        {/* Transaction Details Card */}
+        {details.length > 0 && (
+          <div className="fail-details-card">
+            {details.map((item, idx) => (
+              <div key={idx} className="fail-detail-row">
+                <span className="fail-detail-label">{item.label}</span>
+                <span className="fail-detail-value">{item.value}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Wallet auto-refund notice */}
+        {!isPending && isWalletPay && (
+          <div className="fail-notice fail-notice--success">
+            <FaWallet className="fail-notice-icon" />
+            <span>₹{state.amount || 0} has been refunded to your wallet</span>
+          </div>
+        )}
+
+        {/* Refund options for UPI failures */}
+        {!isPending && !isWalletPay && (
+          <div className="fail-refund-section">
+            <p className="fail-refund-title">Request Refund</p>
+            <p className="fail-refund-desc">If payment was deducted, choose your refund option:</p>
+            <div className="fail-refund-btns">
+              <button
+                className="fail-refund-btn fail-refund-btn--wallet"
+                onClick={() => handleRefundRequest("wallet")}
+                disabled={refundLoading}
+              >
+                <FaWallet />
+                <span>{refundLoading ? "Processing..." : "Wallet (Instant)"}</span>
+              </button>
+              <button
+                className="fail-refund-btn fail-refund-btn--bank"
+                onClick={() => handleRefundRequest("bank")}
+                disabled={refundLoading}
+              >
+                <FaHistory />
+                <span>{refundLoading ? "Processing..." : "Bank (1-3 days)"}</span>
+              </button>
+            </div>
+            {refundMessage && (
+              <p className={`fail-refund-status ${refundMessageType === "success" ? "is-success" : "is-error"}`}>
+                {refundMessage}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Action Buttons - Fixed at bottom */}
+      <div className="fail-actions">
         <button
-          className="failure-btn failure-btn--secondary"
+          className="fail-btn fail-btn--secondary"
           onClick={() => navigate("/customer/app/services", { replace: true })}
         >
-          <FaHome /> Go Home
+          <FaHome />
+          <span>Back To Home</span>
         </button>
 
         {isPending ? (
           <button
-            className="failure-btn failure-btn--primary"
+            className="fail-btn fail-btn--primary"
             onClick={() => navigate("/customer/app/transaction-history", { replace: true })}
           >
-            <FaHistory /> Check History
+            <FaHistory />
+            <span>Check Status</span>
           </button>
         ) : (
           <button
-            className="failure-btn failure-btn--primary"
+            className="fail-btn fail-btn--primary"
             onClick={() => navigate(-2)}
           >
-            <FaRedo /> Try Again
+            <FaRedo />
+            <span>Retry</span>
           </button>
         )}
       </div>
 
       <style>{`
-        .failure-screen {
+        .fail-page {
           min-height: 100%;
           display: flex;
           flex-direction: column;
-          align-items: center;
-          justify-content: flex-start;
-          padding: 24px 24px 32px;
-          background: #0B0B10;
-          color: #F0F0FF;
-          text-align: center;
+          background: linear-gradient(180deg, #0D0D12 0%, #121218 100%);
+          position: relative;
+          overflow: hidden;
         }
 
-        .failure-icon {
-          width: 80px;
-          height: 80px;
+        .fail-bg {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          overflow: hidden;
+        }
+
+        .fail-bg-circle {
+          position: absolute;
+          border-radius: 50%;
+          filter: blur(80px);
+          opacity: 0.4;
+        }
+
+        .fail-bg-circle--1 {
+          width: 300px;
+          height: 300px;
+          top: -100px;
+          right: -100px;
+          background: ${isPending ? 'rgba(255,179,0,0.2)' : 'rgba(255,71,87,0.2)'};
+        }
+
+        .fail-bg-circle--2 {
+          width: 200px;
+          height: 200px;
+          bottom: 100px;
+          left: -80px;
+          background: rgba(0,123,255,0.15);
+        }
+
+        .fail-content {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          padding: 40px 20px 20px;
+          position: relative;
+          z-index: 1;
+        }
+
+        .fail-icon-wrap {
+          position: relative;
+          width: 100px;
+          height: 100px;
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 38px;
-          margin-bottom: 16px;
-          animation: failure-bounce 0.5s ease-out;
+          margin-bottom: 20px;
+          animation: fail-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
 
-        @keyframes failure-bounce {
-          0% { transform: scale(0); }
-          50% { transform: scale(1.1); }
-          100% { transform: scale(1); }
+        .fail-icon {
+          font-size: 44px;
+          z-index: 1;
         }
 
-        .failure-title {
-          font-size: 1.35rem;
+        .fail-icon-ring {
+          position: absolute;
+          inset: -4px;
+          border-radius: 50%;
+          border: 2px solid;
+          opacity: 0.3;
+          animation: fail-ring 2s ease-in-out infinite;
+        }
+
+        @keyframes fail-pop {
+          0% { transform: scale(0); opacity: 0; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes fail-ring {
+          0%, 100% { transform: scale(1); opacity: 0.3; }
+          50% { transform: scale(1.1); opacity: 0.1; }
+        }
+
+        .fail-title {
+          font-size: 1.5rem;
           font-weight: 700;
-          margin: 0 0 12px;
+          margin: 0 0 10px;
+          animation: fail-fade 0.4s ease-out 0.1s both;
         }
 
-        .failure-amount {
+        .fail-message {
+          font-size: 0.9rem;
+          color: #9CA3C0;
+          text-align: center;
+          max-width: 320px;
+          line-height: 1.6;
+          margin: 0 0 24px;
+          animation: fail-fade 0.4s ease-out 0.2s both;
+        }
+
+        @keyframes fail-fade {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .fail-details-card {
+          width: 100%;
+          max-width: 360px;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 16px;
+          padding: 4px 0;
+          margin-bottom: 20px;
+          animation: fail-fade 0.4s ease-out 0.3s both;
+        }
+
+        .fail-detail-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 14px 20px;
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .fail-detail-row:last-child {
+          border-bottom: none;
+        }
+
+        .fail-detail-label {
+          font-size: 0.85rem;
+          color: #6B7394;
+        }
+
+        .fail-detail-value {
+          font-size: 0.9rem;
+          font-weight: 600;
+          color: #F0F0FF;
+          text-align: right;
+          max-width: 60%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .fail-notice {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 14px 20px;
+          border-radius: 12px;
+          font-size: 0.88rem;
+          font-weight: 500;
+          margin-bottom: 20px;
+          animation: fail-fade 0.4s ease-out 0.4s both;
+        }
+
+        .fail-notice--success {
+          background: rgba(0,200,83,0.1);
+          border: 1px solid rgba(0,200,83,0.2);
+          color: #00C853;
+        }
+
+        .fail-notice-icon {
+          font-size: 18px;
+        }
+
+        .fail-refund-section {
+          width: 100%;
+          max-width: 360px;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 16px;
+          padding: 20px;
+          text-align: center;
+          margin-bottom: 20px;
+          animation: fail-fade 0.4s ease-out 0.4s both;
+        }
+
+        .fail-refund-title {
+          font-size: 0.95rem;
+          font-weight: 700;
+          color: #F0F0FF;
+          margin: 0 0 6px;
+        }
+
+        .fail-refund-desc {
+          font-size: 0.82rem;
+          color: #9CA3C0;
+          margin: 0 0 16px;
+        }
+
+        .fail-refund-btns {
+          display: flex;
+          gap: 10px;
+        }
+
+        .fail-refund-btn {
+          flex: 1;
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 2px;
-          margin-bottom: 12px;
-          padding: 12px 28px;
-          background: rgba(255,255,255,0.04);
-          border-radius: 12px;
-        }
-
-        .failure-amount-label {
-          font-size: 0.75rem;
-          color: #6B7394;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-
-        .failure-amount-value {
-          font-size: 2rem;
-          font-weight: 700;
-          color: #F0F0FF;
-        }
-
-        .failure-message {
-          font-size: 0.85rem;
-          color: #9CA3C0;
-          max-width: 320px;
-          line-height: 1.5;
-          margin: 0 0 10px;
-        }
-
-        .failure-order-id {
-          font-size: 0.78rem;
-          color: #6B7394;
-          background: rgba(255,255,255,0.04);
-          padding: 8px 16px;
-          border-radius: 8px;
-          margin-bottom: 16px;
-        }
-
-        .refund-section {
-          width: 100%;
-          max-width: 420px;
-          background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 12px;
-          padding: 16px;
-          margin: 0 0 20px;
-        }
-
-        .refund-message {
-          font-size: 0.86rem;
-          color: #C8CEE8;
-          line-height: 1.5;
-          margin: 0 0 12px;
-        }
-
-        .refund-actions {
-          display: flex;
-          gap: 10px;
-          flex-wrap: wrap;
-          justify-content: center;
-        }
-
-        .failure-btn--refund-wallet,
-        .failure-btn--refund-bank {
+          gap: 6px;
+          padding: 14px 12px;
           border: none;
-          color: #fff;
-          min-width: 170px;
-          justify-content: center;
-        }
-
-        .failure-btn--refund-wallet {
-          background: linear-gradient(135deg, #00B894 0%, #00D2A0 100%);
-        }
-
-        .failure-btn--refund-bank {
-          background: linear-gradient(135deg, #4C6FFF 0%, #6C8BFF 100%);
-        }
-
-        .failure-btn:disabled {
-          opacity: 0.7;
-          cursor: not-allowed;
-        }
-
-        .refund-status {
-          margin: 12px 0 0;
-          font-size: 0.84rem;
-          line-height: 1.4;
-        }
-
-        .refund-status.is-success {
-          color: #38D39F;
-        }
-
-        .refund-status.is-error {
-          color: #FF6B6B;
-        }
-
-        .failure-actions {
-          display: flex;
-          gap: 12px;
-          flex-wrap: wrap;
-          justify-content: center;
-        }
-
-        .failure-btn {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 14px 24px;
           border-radius: 12px;
-          font-size: 0.95rem;
+          font-size: 0.82rem;
           font-weight: 600;
+          color: #fff;
           cursor: pointer;
           transition: transform 0.15s, opacity 0.15s;
         }
 
-        .failure-btn:active {
+        .fail-refund-btn:active {
           transform: scale(0.97);
         }
 
-        .failure-btn--secondary {
-          background: rgba(255,255,255,0.06);
-          border: 1px solid rgba(255,255,255,0.1);
+        .fail-refund-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .fail-refund-btn svg {
+          font-size: 18px;
+        }
+
+        .fail-refund-btn--wallet {
+          background: linear-gradient(135deg, #00B894 0%, #00D9A5 100%);
+        }
+
+        .fail-refund-btn--bank {
+          background: linear-gradient(135deg, #4C6FFF 0%, #6B8AFF 100%);
+        }
+
+        .fail-refund-status {
+          margin: 14px 0 0;
+          font-size: 0.84rem;
+          line-height: 1.5;
+        }
+
+        .fail-refund-status.is-success {
+          color: #00C853;
+        }
+
+        .fail-refund-status.is-error {
+          color: #FF6B6B;
+        }
+
+        .fail-actions {
+          display: flex;
+          gap: 12px;
+          padding: 16px 20px calc(90px + env(safe-area-inset-bottom, 0px));
+          background: linear-gradient(180deg, transparent 0%, rgba(13,13,18,0.95) 30%);
+          position: relative;
+          z-index: 2;
+        }
+
+        .fail-btn {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          padding: 16px 20px;
+          border-radius: 14px;
+          font-size: 0.95rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: transform 0.15s, box-shadow 0.15s;
+        }
+
+        .fail-btn:active {
+          transform: scale(0.97);
+        }
+
+        .fail-btn svg {
+          font-size: 16px;
+        }
+
+        .fail-btn--secondary {
+          background: rgba(255,255,255,0.08);
+          border: 1px solid rgba(255,255,255,0.12);
           color: #F0F0FF;
         }
 
-        .failure-btn--primary {
-          background: linear-gradient(135deg, #007BFF 0%, #00D9FF 100%);
+        .fail-btn--primary {
+          background: linear-gradient(135deg, #007BFF 0%, #00BFFF 100%);
           border: none;
           color: #fff;
+          box-shadow: 0 4px 20px rgba(0,123,255,0.3);
         }
 
-        /* Light mode */
-        .theme-light .failure-screen {
-          background: #F5F7FA;
-          color: #1A1A2E;
+        /* Light theme */
+        .theme-light .fail-page {
+          background: linear-gradient(180deg, #F8FAFC 0%, #F1F5F9 100%);
         }
 
-        .failure-amount-value {
-          font-size: 1.8rem;
+        .theme-light .fail-bg-circle--1 {
+          background: ${isPending ? 'rgba(255,179,0,0.15)' : 'rgba(255,71,87,0.15)'};
         }
 
-        .theme-light .failure-amount {
+        .theme-light .fail-bg-circle--2 {
+          background: rgba(0,123,255,0.1);
+        }
+
+        .theme-light .fail-message {
+          color: #64748B;
+        }
+
+        .theme-light .fail-details-card {
           background: #fff;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+          border-color: #E2E8F0;
+          box-shadow: 0 2px 12px rgba(0,0,0,0.04);
         }
 
-        .theme-light .failure-amount-value {
-          color: #1A1A2E;
+        .theme-light .fail-detail-row {
+          border-color: #F1F5F9;
         }
 
-        .theme-light .failure-message {
-          color: #6B7280;
+        .theme-light .fail-detail-label {
+          color: #64748B;
         }
 
-        .theme-light .failure-order-id {
+        .theme-light .fail-detail-value {
+          color: #1E293B;
+        }
+
+        .theme-light .fail-notice--success {
+          background: rgba(0,200,83,0.08);
+          border-color: rgba(0,200,83,0.15);
+        }
+
+        .theme-light .fail-refund-section {
           background: #fff;
-          color: #6B7280;
+          border-color: #E2E8F0;
+          box-shadow: 0 2px 12px rgba(0,0,0,0.04);
         }
 
-        .theme-light .refund-section {
+        .theme-light .fail-refund-title {
+          color: #1E293B;
+        }
+
+        .theme-light .fail-refund-desc {
+          color: #64748B;
+        }
+
+        .theme-light .fail-actions {
+          background: linear-gradient(180deg, transparent 0%, rgba(248,250,252,0.98) 30%);
+        }
+
+        .theme-light .fail-btn--secondary {
           background: #fff;
-          border-color: #E5E7EB;
-        }
-
-        .theme-light .refund-message {
-          color: #4B5563;
-        }
-
-        .theme-light .refund-status.is-success {
-          color: #059669;
-        }
-
-        .theme-light .refund-status.is-error {
-          color: #DC2626;
-        }
-
-        .theme-light .failure-btn--secondary {
-          background: #fff;
-          border-color: #E5E7EB;
-          color: #1A1A2E;
+          border-color: #E2E8F0;
+          color: #1E293B;
         }
       `}</style>
     </div>

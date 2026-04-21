@@ -1,5 +1,15 @@
 export const loader = "LOADER";
 
+// ============================================================
+// API Configuration - Single Source of Truth
+// ============================================================
+// Local dev:  .env.local (not committed) → REACT_APP_API_URL=https://apis.uat.vasbazaar.com:8081
+// Production: .env (committed)           → REACT_APP_API_URL=https://api.vasbazaar.com
+// ============================================================
+
+// Default API URL from environment variable
+const DEFAULT_API_URL = process.env.REACT_APP_API_URL || 'https://api.vasbazaar.com';
+
 // Allowed API hosts — prevents localStorage tampering
 const ALLOWED_HOSTS = [
   'https://api.vasbazaar.com',
@@ -10,31 +20,21 @@ const ALLOWED_HOSTS = [
   '/vb-api',
 ];
 
-// Default production API URL for native apps
-const NATIVE_API_URL = 'https://api.vasbazaar.com';
-
-// Detect if running inside Capacitor native app
-const isCapacitorNative = () => {
-  try {
-    return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-  } catch { return false; }
+// Check if a URL is in the allowed hosts list
+export const isAllowedHost = (url) => {
+  if (!url) return false;
+  return ALLOWED_HOSTS.some(host => url.startsWith(host));
 };
 
+// Get API base URL
+// Priority: localStorage (if valid) → .env → default production
 export const server_api = () => {
-    const storedUrl = localStorage.getItem('host');
+  // Check localStorage for custom host (dev/testing)
+  const storedUrl = localStorage.getItem('host');
+  if (storedUrl && isAllowedHost(storedUrl)) {
+    return storedUrl.replace(/\/+$/, ''); // trim trailing slashes
+  }
 
-     // Validate stored URL against whitelist before using
-     if (storedUrl) {
-       const isAllowed = ALLOWED_HOSTS.some(host => storedUrl.startsWith(host));
-       if (isAllowed) return storedUrl;
-     }
-
-     // In native Capacitor app, use the production API URL directly
-     if (isCapacitorNative()) return NATIVE_API_URL;
-
-     // Use REACT_APP_API_URL from .env if explicitly set (e.g., Vercel env var)
-     if (process.env.REACT_APP_API_URL) return process.env.REACT_APP_API_URL;
-
-     // Fallback: production API URL
-     return 'https://api.vasbazaar.com';
-   };
+  // Use environment variable (from .env.local or .env)
+  return DEFAULT_API_URL;
+};

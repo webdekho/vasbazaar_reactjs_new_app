@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FaArrowLeft, FaCalendarAlt, FaClock, FaExclamationCircle,
-  FaExclamationTriangle, FaChevronRight, FaReceipt, FaTimes
+  FaExclamationTriangle, FaChevronRight, FaReceipt
 } from "react-icons/fa";
 import { walletService } from "../services/walletService";
 import { rechargeService } from "../services/rechargeService";
@@ -76,7 +76,7 @@ const EmptyState = ({ onExplore }) => (
 );
 
 /* ─── Due card ─── */
-const DueCard = ({ item, index, onPay, processing, onDelete, deleting }) => {
+const DueCard = ({ item, index, onPay, processing }) => {
   const st = getStatus(item);
   const operatorName = item.operatorId?.operatorName || item.operator?.name || item.name || "Service Provider";
   const serviceName = item.operatorId?.serviceId?.serviceName || item.service?.serviceName || "Bill Payment";
@@ -89,17 +89,6 @@ const DueCard = ({ item, index, onPay, processing, onDelete, deleting }) => {
     <div className="md-card" style={{ animationDelay: `${index * 60}ms` }}>
       {/* Status accent bar */}
       <div className="md-card-accent" style={{ background: st.color }} />
-
-      {/* Cross button to cancel/remove reminder */}
-      <button
-        className="md-card-close"
-        type="button"
-        title="Remove reminder"
-        disabled={deleting}
-        onClick={() => onDelete(item.id)}
-      >
-        {deleting ? <span className="md-spinner md-spinner--sm" /> : <FaTimes />}
-      </button>
 
       <div className="md-card-body">
         {/* Top: logo + info + amount */}
@@ -172,7 +161,6 @@ const MyDuesScreen = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [processingId, setProcessingId] = useState(null);
-  const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -225,15 +213,6 @@ const MyDuesScreen = () => {
     }
   };
 
-  const handleDelete = async (id) => {
-    setDeletingId(id);
-    const res = await walletService.deleteReminder(id);
-    setDeletingId(null);
-    if (res.success) {
-      setDues((prev) => prev.filter((d) => d.id !== id));
-    }
-  };
-
   const totalDues = dues.length;
   const overdueDues = dues.filter((d) => getStatus(d) === statusConfig.overdue).length;
 
@@ -282,8 +261,6 @@ const MyDuesScreen = () => {
               index={i}
               onPay={handlePay}
               processing={processingId === item.id}
-              onDelete={handleDelete}
-              deleting={deletingId === item.id}
             />
           ))}
         </div>

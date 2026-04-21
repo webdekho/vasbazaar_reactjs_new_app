@@ -127,6 +127,20 @@ export const authPost = async (endpoint, payload) => {
     });
     return parseApiResponse(response);
   } catch (error) {
+    // Extract message from error response if available (e.g., 400 errors)
+    const errorData = error?.response?.data;
+    // Check multiple possible message fields
+    const apiMessage =
+      errorData?.message ||
+      errorData?.error ||
+      errorData?.errorMessage ||
+      errorData?.msg ||
+      errorData?.reason ||
+      errorData?.detail;
+
+    if (apiMessage && typeof apiMessage === "string") {
+      return { success: false, message: apiMessage, data: errorData, raw: errorData };
+    }
     return { success: false, message: getErrorMessage(error), data: null, raw: null };
   }
 };

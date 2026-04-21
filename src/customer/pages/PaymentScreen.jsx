@@ -148,6 +148,8 @@ const PaymentScreen = () => {
             amount: context.amount,
             type: context.type,
             payType: "upi",
+            mobile: context.mobile || context.field1,
+            operatorName: context.operatorName,
           },
         });
       } else {
@@ -160,6 +162,8 @@ const PaymentScreen = () => {
             amount: context.amount,
             type: context.type,
             payType: "upi",
+            mobile: context.mobile || context.field1,
+            operatorName: context.operatorName,
           },
         });
       }
@@ -369,6 +373,8 @@ const PaymentScreen = () => {
           amount: payload.amount,
           type: paymentState.type,
           payType,
+          mobile: paymentState.mobile || paymentState.field1,
+          operatorName: paymentState.operatorName || paymentState.label,
         },
       });
     } else {
@@ -381,6 +387,8 @@ const PaymentScreen = () => {
           amount: payload.amount,
           type: paymentState.type,
           payType,
+          mobile: paymentState.mobile || paymentState.field1,
+          operatorName: paymentState.operatorName || paymentState.label,
         },
       });
     }
@@ -429,6 +437,8 @@ const PaymentScreen = () => {
             amount: context.amount,
             type: context.type,
             payType: "upi",
+            mobile: context.mobile || context.field1,
+            operatorName: context.operatorName,
           },
         });
       } else {
@@ -442,6 +452,8 @@ const PaymentScreen = () => {
             amount: context.amount,
             type: context.type,
             payType: "upi",
+            mobile: context.mobile || context.field1,
+            operatorName: context.operatorName,
           },
         });
       }
@@ -482,26 +494,25 @@ const PaymentScreen = () => {
         <img src="/images/bbps.svg" alt="Bharat Connect" className="xpay-bc-logo" />
       </div>
 
-      {/* Amount hero */}
-      <div className={`xpay-hero${ready ? " xpay-in" : ""}`}>
-        <div className="xpay-hero-glow" />
-        <div className="xpay-hero-amount">₹{amount}</div>
-        <div className="xpay-hero-words">{numberToWords(amount)}</div>
-      </div>
-
       {/* Operator info */}
-      <div className={`xpay-op${ready ? " xpay-in xpay-d1" : ""}`}>
+      <div className={`xpay-op${ready ? " xpay-in" : ""}`}>
         <img src={logo || FALLBACK_LOGO} alt="" className="xpay-op-logo" onError={handleLogoError} />
         <div className="xpay-op-info">
           <div className="xpay-op-name">{opName}</div>
           <div className="xpay-op-detail">{mobile ? `+91 ${mobile}` : ""}{mobile && label ? " · " : ""}{label}</div>
         </div>
-        {/* Coupon badge removed — coupon eligibility confirmed only after success */}
+      </div>
+
+      {/* Amount section */}
+      <div className={`xpay-hero${ready ? " xpay-in xpay-d1" : ""}`}>
+        <div className="xpay-hero-glow" />
+        <h2 className="xpay-hero-label">Transaction Amount</h2>
+        <div className="xpay-hero-amount">₹{amount}</div>
+        <div className="xpay-hero-words">{numberToWords(amount)}</div>
       </div>
 
       {/* Payment methods */}
       <div className={`xpay-methods${ready ? " xpay-in xpay-d2" : ""}`}>
-        <h2 className="xpay-methods-label">Select Payment Method</h2>
 
         {/* UPI */}
         <div className={`xpay-method${selectedMethod === "upi" ? " is-active" : ""}`} onClick={() => setSelectedMethod("upi")}>
