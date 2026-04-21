@@ -127,6 +127,16 @@ const TransactionHistoryScreen = () => {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (complaintModalOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [complaintModalOpen]);
+
   const loadMore = () => { const next = page + 1; setPage(next); fetchData(next, true); };
 
   const query = search.trim().toLowerCase();
@@ -461,33 +471,41 @@ const TransactionHistoryScreen = () => {
       {complaintModalOpen && (
         <div
           onClick={closeComplaintModal}
+          onTouchMove={(e) => e.stopPropagation()}
           style={{
             position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.55)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-            padding: 20,
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "transparent",
+            zIndex: 9999,
+            padding: "12px 12px 90px",
+            overflowY: "auto",
+            touchAction: "none",
           }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
             style={{
               width: "100%",
-              maxWidth: 420,
+              maxWidth: 400,
+              margin: "0 auto",
+              WebkitOverflowScrolling: "touch",
+              touchAction: "pan-y",
               background: "var(--cm-card, #161822)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              borderRadius: 16,
-              padding: 18,
+              border: "1px solid rgba(255,255,255,0.15)",
+              borderRadius: 14,
+              padding: 14,
+              boxShadow: "0 4px 24px rgba(0,0,0,0.4)",
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
               <div>
-                <h3 style={{ margin: 0, color: "var(--cm-ink)", fontSize: "1rem" }}>Complaint Support</h3>
-                <p style={{ margin: "4px 0 0", color: "var(--cm-muted)", fontSize: "0.82rem" }}>
-                  We will check the provider status first, then you can escalate if needed.
+                <h3 style={{ margin: 0, color: "var(--cm-ink)", fontSize: "0.92rem" }}>Complaint Support</h3>
+                <p style={{ margin: "2px 0 0", color: "var(--cm-muted)", fontSize: "0.72rem" }}>
+                  Check status and escalate if needed
                 </p>
               </div>
               <button
@@ -498,8 +516,10 @@ const TransactionHistoryScreen = () => {
                   border: "none",
                   background: "transparent",
                   color: "var(--cm-muted)",
-                  fontSize: "1.2rem",
+                  fontSize: "1.1rem",
                   cursor: complaintChecking || complaintSubmitting ? "not-allowed" : "pointer",
+                  padding: 0,
+                  lineHeight: 1,
                 }}
               >
                 &times;
@@ -508,44 +528,44 @@ const TransactionHistoryScreen = () => {
 
             <div
               style={{
-                marginTop: 16,
-                padding: 14,
-                borderRadius: 12,
+                marginTop: 12,
+                padding: 10,
+                borderRadius: 10,
                 background: "rgba(255,255,255,0.03)",
                 border: "1px solid rgba(255,255,255,0.06)",
                 display: "grid",
-                gap: 8,
+                gap: 4,
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                <span style={{ color: "var(--cm-muted)", fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>Transaction ID</span>
-                <span style={{ color: "var(--cm-ink)", fontWeight: 700, fontSize: "0.86rem" }}>{selectedComplaintTxn?.txnId || "—"}</span>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <span style={{ color: "var(--cm-muted)", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Txn ID</span>
+                <span style={{ color: "var(--cm-ink)", fontWeight: 700, fontSize: "0.8rem" }}>{selectedComplaintTxn?.txnId || "—"}</span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                <span style={{ color: "var(--cm-muted)", fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>Mobile</span>
-                <span style={{ color: "var(--cm-ink)", fontWeight: 700, fontSize: "0.86rem" }}>{normalizeTransaction(selectedComplaintTxn || {}).mobile || "—"}</span>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <span style={{ color: "var(--cm-muted)", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Mobile</span>
+                <span style={{ color: "var(--cm-ink)", fontWeight: 700, fontSize: "0.8rem" }}>{normalizeTransaction(selectedComplaintTxn || {}).mobile || "—"}</span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                <span style={{ color: "var(--cm-muted)", fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>Amount</span>
-                <span style={{ color: "var(--cm-ink)", fontWeight: 700, fontSize: "0.86rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <span style={{ color: "var(--cm-muted)", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Amount</span>
+                <span style={{ color: "var(--cm-ink)", fontWeight: 700, fontSize: "0.8rem" }}>
                   {formatCurrency(normalizeTransaction(selectedComplaintTxn || {}).amount ?? selectedComplaintTxn?.txnAmt ?? selectedComplaintTxn?.amount)}
                 </span>
               </div>
             </div>
 
             {complaintChecking ? (
-              <div style={{ marginTop: 18, textAlign: "center", color: "var(--cm-muted)", fontSize: "0.9rem" }}>
+              <div style={{ marginTop: 14, textAlign: "center", color: "var(--cm-muted)", fontSize: "0.82rem" }}>
                 <span className="md-spinner" style={{ marginRight: 8, verticalAlign: "middle" }} />
-                Checking latest status from provider...
+                Checking status...
               </div>
             ) : (
               <>
                 {complaintResult && (
                   <div
                     style={{
-                      marginTop: 18,
-                      padding: 14,
-                      borderRadius: 12,
+                      marginTop: 10,
+                      padding: 10,
+                      borderRadius: 8,
                       background: getComplaintStatusTone(complaintResult.status).bg,
                       border: `1px solid ${getComplaintStatusTone(complaintResult.status).border}`,
                     }}
@@ -554,20 +574,20 @@ const TransactionHistoryScreen = () => {
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
-                        gap: 8,
-                        padding: "6px 10px",
+                        gap: 5,
+                        padding: "4px 7px",
                         borderRadius: 999,
-                        background: "rgba(255,255,255,0.45)",
+                        background: "rgba(255,255,255,0.5)",
                         color: getComplaintStatusTone(complaintResult.status).color,
-                        fontSize: "0.76rem",
+                        fontSize: "0.68rem",
                         fontWeight: 800,
-                        letterSpacing: "0.06em",
+                        letterSpacing: "0.04em",
                         textTransform: "uppercase",
                       }}
                     >
-                      Updated Status: {complaintResult.status}
+                      Status: {complaintResult.status}
                     </div>
-                    <p style={{ margin: "12px 0 0", color: "var(--cm-ink)", fontSize: "0.9rem", lineHeight: 1.5 }}>
+                    <p style={{ margin: "6px 0 0", color: "var(--cm-ink)", fontSize: "0.8rem", lineHeight: 1.35 }}>
                       {complaintResult.message}
                     </p>
                   </div>
@@ -579,10 +599,10 @@ const TransactionHistoryScreen = () => {
                       htmlFor="txn-complaint-description"
                       style={{
                         display: "block",
-                        marginTop: 16,
-                        marginBottom: 8,
+                        marginTop: 12,
+                        marginBottom: 6,
                         color: "var(--cm-muted)",
-                        fontSize: "0.82rem",
+                        fontSize: "0.78rem",
                         fontWeight: 600,
                       }}
                     >
@@ -592,65 +612,67 @@ const TransactionHistoryScreen = () => {
                       id="txn-complaint-description"
                       value={complaintDescription}
                       onChange={(e) => setComplaintDescription(e.target.value)}
-                      placeholder="If you still want to escalate, describe the issue here. This is optional."
-                      rows={4}
+                      placeholder="Describe issue here (optional)"
+                      rows={2}
                       style={{
                         width: "100%",
-                        resize: "vertical",
-                        minHeight: 100,
-                        borderRadius: 12,
-                        padding: 12,
+                        resize: "none",
+                        minHeight: 60,
+                        borderRadius: 10,
+                        padding: 10,
                         border: "1px solid rgba(255,255,255,0.08)",
                         background: "rgba(255,255,255,0.03)",
                         color: "var(--cm-ink)",
-                        fontSize: "0.9rem",
+                        fontSize: "0.85rem",
                         outline: "none",
                       }}
                     />
                   </>
                 )}
-
-                <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-                  <button
-                    type="button"
-                    onClick={closeComplaintModal}
-                    disabled={complaintSubmitting}
-                    style={{
-                      flex: 1,
-                      padding: "11px 14px",
-                      borderRadius: 10,
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      background: "transparent",
-                      color: "var(--cm-ink)",
-                      fontWeight: 700,
-                      cursor: complaintSubmitting ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    Close
-                  </button>
-                  {complaintResult?.canEscalate && (
-                    <button
-                      type="button"
-                      onClick={handleComplaintSubmit}
-                      disabled={complaintSubmitting}
-                      style={{
-                        flex: 1,
-                        padding: "11px 14px",
-                        borderRadius: 10,
-                        border: "none",
-                        background: "linear-gradient(135deg, #FF8A00 0%, #FF5A3D 100%)",
-                        color: "#fff",
-                        fontWeight: 700,
-                        cursor: complaintSubmitting ? "not-allowed" : "pointer",
-                        opacity: complaintSubmitting ? 0.8 : 1,
-                      }}
-                    >
-                      {complaintSubmitting ? "Submitting..." : "Escalate Complaint"}
-                    </button>
-                  )}
-                </div>
               </>
             )}
+
+            <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+              <button
+                type="button"
+                onClick={closeComplaintModal}
+                disabled={complaintSubmitting}
+                style={{
+                  flex: 1,
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  background: "transparent",
+                  color: "var(--cm-ink)",
+                  fontWeight: 700,
+                  fontSize: "0.85rem",
+                  cursor: complaintSubmitting ? "not-allowed" : "pointer",
+                }}
+              >
+                Close
+              </button>
+              {complaintResult?.canEscalate && !complaintChecking && (
+                <button
+                  type="button"
+                  onClick={handleComplaintSubmit}
+                  disabled={complaintSubmitting}
+                  style={{
+                    flex: 1,
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    border: "none",
+                    background: "linear-gradient(135deg, #FF8A00 0%, #FF5A3D 100%)",
+                    color: "#fff",
+                    fontWeight: 700,
+                    fontSize: "0.85rem",
+                    cursor: complaintSubmitting ? "not-allowed" : "pointer",
+                    opacity: complaintSubmitting ? 0.8 : 1,
+                  }}
+                >
+                  {complaintSubmitting ? "Submitting..." : "Escalate"}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -1,40 +1,22 @@
 export const loader = "LOADER";
 
-// ============================================================
-// API Configuration - Single Source of Truth
-// ============================================================
-// Local dev:  .env.local (not committed) → REACT_APP_API_URL=https://apis.uat.vasbazaar.com:8081
-// Production: .env (committed)           → REACT_APP_API_URL=https://api.vasbazaar.com
-// ============================================================
+// Default production API URL for native apps
+const NATIVE_API_URL = 'https://api.vasbazaar.com';
 
-// Default API URL from environment variable
-const DEFAULT_API_URL = process.env.REACT_APP_API_URL || 'https://api.vasbazaar.com';
-
-// Allowed API hosts — prevents localStorage tampering
-const ALLOWED_HOSTS = [
-  'https://api.vasbazaar.com',
-  'https://apis.vasbazaar.com',
-  'https://apis.uat.vasbazaar.com',
-  'https://api.prod.webdekho.in',
-  'http://192.168.1.4:8081',
-  '/vb-api',
-];
-
-// Check if a URL is in the allowed hosts list
-export const isAllowedHost = (url) => {
-  if (!url) return false;
-  return ALLOWED_HOSTS.some(host => url.startsWith(host));
+// Detect if running inside Capacitor native app
+const isCapacitorNative = () => {
+  try {
+    return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  } catch { return false; }
 };
 
-// Get API base URL
-// Priority: localStorage (if valid) → .env → default production
+// Get API base URL from .env
+// Local: .env.local (REACT_APP_API_URL=http://localhost:8081)
+// Prod:  .env (REACT_APP_API_URL=https://api.vasbazaar.com)
 export const server_api = () => {
-  // Check localStorage for custom host (dev/testing)
-  const storedUrl = localStorage.getItem('host');
-  if (storedUrl && isAllowedHost(storedUrl)) {
-    return storedUrl.replace(/\/+$/, ''); // trim trailing slashes
-  }
+  // Native app always uses production
+  if (isCapacitorNative()) return NATIVE_API_URL;
 
-  // Use environment variable (from .env.local or .env)
-  return DEFAULT_API_URL;
+  // Use .env value
+  return process.env.REACT_APP_API_URL || NATIVE_API_URL;
 };

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { FaCheckCircle, FaTimesCircle, FaClock, FaHome, FaRedo, FaHistory } from "react-icons/fa";
+import { FaCheckCircle, FaTimesCircle, FaClock, FaHome, FaHistory } from "react-icons/fa";
 import { isSuccessStatus, isPendingStatus } from "../../shared/constants/juspay";
 import juspayService from "../services/juspayService";
 import { authPost } from "../services/apiClient";

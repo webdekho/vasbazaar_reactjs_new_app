@@ -230,8 +230,8 @@ async function sendReport(payload, attempt = 0) {
   if (!token) return;
 
   try {
-    const { resolveApiBase } = await import("./apiClient");
-    const baseUrl = resolveApiBase();
+    const { server_api } = await import("../../utils/constants");
+    const baseUrl = server_api();
     const response = await fetch(`${baseUrl}${REPORT_ENDPOINT}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", access_token: token },

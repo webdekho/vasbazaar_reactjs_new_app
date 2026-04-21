@@ -8,39 +8,11 @@ const CUSTOMER_STORAGE_KEYS = {
   tempToken: "customerTempToken",
   referralCode: "customerReferralCode",
   devOtp: "customerDevOtp",
-  apiBaseUrl: "customerApiBaseUrl",
 };
 
-const trimTrailingSlash = (value) => value.replace(/\/+$/, "");
-
-// Allowed API hosts — prevents localStorage tampering
-const ALLOWED_HOSTS = [
-  "https://api.vasbazaar.com",
-  "https://apis.vasbazaar.com",
-  "https://apis.uat.vasbazaar.com",
-  "https://api.prod.webdekho.in",
-  "http://192.168.1.4:8081",
-];
-
-const isAllowedHost = (url) =>
-  url && ALLOWED_HOSTS.some((host) => url.startsWith(host));
-
-const resolveApiBase = () => {
-  if (typeof window !== "undefined") {
-    const customerBase = localStorage.getItem(CUSTOMER_STORAGE_KEYS.apiBaseUrl);
-    if (customerBase && isAllowedHost(trimTrailingSlash(customerBase)))
-      return trimTrailingSlash(customerBase);
-
-    const sharedHost = localStorage.getItem("host");
-    if (sharedHost && isAllowedHost(trimTrailingSlash(sharedHost)))
-      return trimTrailingSlash(sharedHost);
-  }
-
-  return trimTrailingSlash(server_api());
-};
-
+// API base URL comes from .env via server_api()
 const apiClient = axios.create({
-  baseURL: resolveApiBase(),
+  baseURL: server_api(),
   headers: { "Content-Type": "application/json" },
 });
 
@@ -210,4 +182,4 @@ apiClient.interceptors.response.use(
   }
 );
 
-export { apiClient, parseApiResponse, getErrorMessage, CUSTOMER_STORAGE_KEYS, trimTrailingSlash, resolveApiBase };
+export { apiClient, parseApiResponse, getErrorMessage, CUSTOMER_STORAGE_KEYS };

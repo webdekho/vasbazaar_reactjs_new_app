@@ -1,4 +1,5 @@
-import { CUSTOMER_STORAGE_KEYS, trimTrailingSlash, resolveApiBase, apiClient } from "./apiClient";
+import { CUSTOMER_STORAGE_KEYS } from "./apiClient";
+import { server_api } from "../../utils/constants";
 import { invalidateAll } from "./apiCache";
 
 export const customerStorage = {
@@ -6,24 +7,13 @@ export const customerStorage = {
 
   getSessionToken: () => localStorage.getItem(CUSTOMER_STORAGE_KEYS.sessionToken),
 
-  getApiBaseUrl: () => localStorage.getItem(CUSTOMER_STORAGE_KEYS.apiBaseUrl) || resolveApiBase(),
+  getApiBaseUrl: () => server_api(),
 
   getDevOtp: () => localStorage.getItem(CUSTOMER_STORAGE_KEYS.devOtp),
 
   getUserData: () => {
     const value = localStorage.getItem(CUSTOMER_STORAGE_KEYS.userData);
     return value ? JSON.parse(value) : null;
-  },
-
-  setApiBaseUrl: (value) => {
-    if (value) {
-      const normalizedValue = trimTrailingSlash(value);
-      localStorage.setItem(CUSTOMER_STORAGE_KEYS.apiBaseUrl, normalizedValue);
-      apiClient.defaults.baseURL = normalizedValue;
-      return;
-    }
-    localStorage.removeItem(CUSTOMER_STORAGE_KEYS.apiBaseUrl);
-    apiClient.defaults.baseURL = resolveApiBase();
   },
 
   setAuthSession: ({ sessionToken, userData, tempToken }) => {
