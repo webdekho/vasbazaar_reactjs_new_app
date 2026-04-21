@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { Share } from "@capacitor/share";
+import { Filesystem, Directory } from "@capacitor/filesystem";
 import { FaArrowLeft, FaDownload, FaShareAlt, FaSpinner } from "react-icons/fa";
 import {
   generateQrStickerBlob,
@@ -11,13 +12,28 @@ import {
 import { useCustomerModern } from "../context/CustomerModernContext";
 import { useToast } from "../context/ToastContext";
 
-const blobToDataUrl = (blob) =>
+const blobToBase64 = (blob) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result);
+    reader.onloadend = () => {
+      const dataUrl = reader.result;
+      // Extract base64 data without the data URL prefix
+      const base64 = dataUrl.split(",")[1];
+      resolve(base64);
+    };
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
+
+const writeFileToDevice = async (blob, fileName) => {
+  const base64Data = await blobToBase64(blob);
+  const result = await Filesystem.writeFile({
+    path: fileName,
+    data: base64Data,
+    directory: Directory.Cache,
+  });
+  return result.uri;
+};
 
 const downloadBlob = (blob, fileName) => {
   const url = URL.createObjectURL(blob);
@@ -65,7 +81,7 @@ const QrStickerScreen = () => {
       } catch (error) {
         console.error("Failed to generate QR sticker:", error);
         if (isMounted) {
-          showToast("QR card generate nahi ho paya. Please try again.", "error");
+          showToast("Failed to generate QR card. Please try again.", "error");
         }
       } finally {
         if (isMounted) {
@@ -98,33 +114,29 @@ const QrStickerScreen = () => {
     setAction("download");
     try {
       if (Capacitor.isNativePlatform()) {
-        const file = new File([stickerBlob], fileName, { type: "image/png" });
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            title: "Save VasBazaar QR Card",
-            text: "Save this full VasBazaar QR card image.",
-            files: [file],
-          });
-          showToast("Save/share sheet open ho gaya.", "success");
-          return;
-        }
+        // Write the file to cache directory first
+        const fileUri = await writeFileToDevice(stickerBlob, fileName);
 
-        const dataUrl = await blobToDataUrl(stickerBlob);
+        // Share the file so user can save it
         await Share.share({
           title: "Save VasBazaar QR Card",
           text: "Save this full VasBazaar QR card image.",
-          url: dataUrl,
+          url: fileUri,
           dialogTitle: "Save VasBazaar QR Card",
         });
-        showToast("Save/share sheet open ho gaya.", "success");
+        showToast("Save/share sheet opened successfully.", "success");
         return;
       }
 
       downloadBlob(stickerBlob, fileName);
-      showToast("QR card download start ho gaya.", "success");
+      showToast("QR card download started.", "success");
     } catch (error) {
       console.error("QR download failed:", error);
-      showToast("Download complete nahi ho paya. Please try again.", "error");
+      // User cancelled the share sheet - not an error
+      if (error?.message?.includes("cancel") || error?.message?.includes("Cancel")) {
+        return;
+      }
+      showToast("Download failed. Please try again.", "error");
     } finally {
       setAction("");
     }
@@ -135,25 +147,28 @@ const QrStickerScreen = () => {
 
     setAction("share");
     try {
-      const file = new File([stickerBlob], fileName, { type: "image/png" });
       const shareText = `Scan this VasBazaar QR card to get started.\n${shareLink}`;
 
+      if (Capacitor.isNativePlatform()) {
+        // Write the file to cache directory first
+        const fileUri = await writeFileToDevice(stickerBlob, fileName);
+
+        await Share.share({
+          title: "VasBazaar QR Card",
+          text: shareText,
+          url: fileUri,
+          dialogTitle: "Share VasBazaar QR Card",
+        });
+        return;
+      }
+
+      // Web fallback with Web Share API
+      const file = new File([stickerBlob], fileName, { type: "image/png" });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           title: "VasBazaar QR Card",
           text: shareText,
           files: [file],
-        });
-        return;
-      }
-
-      if (Capacitor.isNativePlatform()) {
-        const dataUrl = await blobToDataUrl(stickerBlob);
-        await Share.share({
-          title: "VasBazaar QR Card",
-          text: shareText,
-          url: dataUrl,
-          dialogTitle: "Share VasBazaar QR Card",
         });
         return;
       }
@@ -170,7 +185,11 @@ const QrStickerScreen = () => {
       window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank");
     } catch (error) {
       console.error("QR share failed:", error);
-      showToast("Share complete nahi ho paya. Please try again.", "error");
+      // User cancelled the share sheet - not an error
+      if (error?.message?.includes("cancel") || error?.message?.includes("Cancel")) {
+        return;
+      }
+      showToast("Share failed. Please try again.", "error");
     } finally {
       setAction("");
     }
@@ -184,7 +203,7 @@ const QrStickerScreen = () => {
         </button>
         <div>
           <h1 className="qr-page-title">Scan, Download & Share</h1>
-          <p className="qr-page-subtitle">Full QR card image yahin se download aur share hogi.</p>
+          <p className="qr-page-subtitle">Download and share full QR card image from here.</p>
         </div>
       </div>
 
@@ -192,7 +211,7 @@ const QrStickerScreen = () => {
         {loading ? (
           <div className="qr-page-loading">
             <FaSpinner className="qr-page-loading-icon" />
-            <span>QR card generate ho rahi hai...</span>
+            <span>Generating QR card...</span>
           </div>
         ) : (
           <img src={previewUrl} alt="VasBazaar QR Card" className="qr-page-preview" />
