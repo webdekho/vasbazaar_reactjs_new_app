@@ -13,7 +13,7 @@ const LOCK_KEYS = {
   biometricEnabled: "vb_biometric_enabled",
 };
 
-const INACTIVITY_TIMEOUT = 10 * 60 * 1000; // 10 minutes
+const INACTIVITY_TIMEOUT = 60 * 60 * 1000; // 1 hour
 
 // Check if Web Authentication API (biometric) is available
 const isBiometricAvailable = async () => {
