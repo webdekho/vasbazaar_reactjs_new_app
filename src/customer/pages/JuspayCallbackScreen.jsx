@@ -43,6 +43,7 @@ const JuspayCallbackScreen = () => {
   const [refundLoadingType, setRefundLoadingType] = useState("");
   const [refundMessage, setRefundMessage] = useState("");
   const [refundMessageType, setRefundMessageType] = useState("");
+  const [isPaid, setIsPaid] = useState(true); // Default to true for backward compatibility
   const isLight = theme === "light";
 
   useEffect(() => {
@@ -69,6 +70,7 @@ const JuspayCallbackScreen = () => {
           setState(cachedResult.state);
           setMessage(cachedResult.message);
           setTxnId(orderId);
+          if (cachedResult.isPaid !== undefined) setIsPaid(cachedResult.isPaid);
 
           // If it was successful, navigate to success screen
           if (cachedResult.state === "success" && cachedResult.successState) {
@@ -149,6 +151,10 @@ const JuspayCallbackScreen = () => {
           setVerifiedOrder(orderId, { state: "pending", message: pendingMsg });
         } else {
           setState("failed");
+          // Check if payment was actually made (is_paid flag from API)
+          const paidStatus = response?.data?.is_paid ?? response?.data?.isPaid ?? false;
+          setIsPaid(paidStatus);
+
           const rawReason =
             response?.data?.failureReason ||
             response?.data?.failure_reason ||
@@ -161,11 +167,11 @@ const JuspayCallbackScreen = () => {
           // Hide technical/internal messages from the user
           const isTechnical = /login failed|ip \d|automatic refund|internal server|exception|stacktrace|null pointer/i.test(rawReason);
           const failReason = isTechnical || !rawReason
-            ? "Payment could not be completed. Please choose a refund option below."
+            ? (paidStatus ? "Payment could not be completed. Please choose a refund option below." : "Payment was not completed. No amount was deducted from your account.")
             : rawReason;
           setMessage(failReason);
           // Cache failed result
-          setVerifiedOrder(orderId, { state: "failed", message: failReason });
+          setVerifiedOrder(orderId, { state: "failed", message: failReason, isPaid: paidStatus });
         }
       } catch (err) {
         setState("failed");
@@ -309,8 +315,8 @@ const JuspayCallbackScreen = () => {
         </div>
       )}
 
-      {/* Action buttons for failed transactions */}
-      {state === "failed" && (
+      {/* Action buttons for failed transactions - only show refund options if payment was made */}
+      {state === "failed" && isPaid && (
         <div style={{ width: "100%", maxWidth: 460 }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
             <button
