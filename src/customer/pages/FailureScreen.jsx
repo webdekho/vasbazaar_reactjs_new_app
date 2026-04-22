@@ -7,12 +7,13 @@ const FailureScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const state = location.state || {};
-  const [refundLoading, setRefundLoading] = useState(false);
+  const [refundLoading, setRefundLoading] = useState(null); // "wallet" | "bank" | null
   const [refundMessage, setRefundMessage] = useState("");
   const [refundMessageType, setRefundMessageType] = useState("");
 
   const isPending = state.status === "pending";
   const isWalletPay = state.payType === "wallet";
+  const isPaid = state.isPaid === true || state.is_paid === true;
   const txnId = state.txnId || state.orderId || "";
   const rawMessage = state.message || "";
   const isTechnical = /login failed|ip \d|automatic refund|internal server|exception|stacktrace|null pointer/i.test(rawMessage);
@@ -21,7 +22,9 @@ const FailureScreen = () => {
       ? "Your payment is being processed. Please check your transaction history for the latest status."
       : isWalletPay
         ? "Transaction failed. The amount has been automatically refunded to your wallet."
-        : "Payment could not be completed. Please choose a refund option below or retry the transaction.")
+        : isPaid
+          ? "Payment could not be completed. Please choose a refund option below or retry the transaction."
+          : "UPI Transaction Failed")
     : rawMessage;
 
   const config = isPending
@@ -35,7 +38,7 @@ const FailureScreen = () => {
       return;
     }
 
-    setRefundLoading(true);
+    setRefundLoading(refundType);
     setRefundMessage("");
     setRefundMessageType("");
 
@@ -60,7 +63,7 @@ const FailureScreen = () => {
       setRefundMessageType("error");
       setRefundMessage("Unable to submit refund request. Please try again.");
     } finally {
-      setRefundLoading(false);
+      setRefundLoading(null);
     }
   };
 
@@ -119,8 +122,8 @@ const FailureScreen = () => {
           </div>
         )}
 
-        {/* Refund options for UPI failures */}
-        {!isPending && !isWalletPay && (
+        {/* Refund options for UPI failures - only show if payment was deducted */}
+        {!isPending && !isWalletPay && isPaid && (
           <div className="fail-refund-section">
             <p className="fail-refund-title">Request Refund</p>
             <p className="fail-refund-desc">If payment was deducted, choose your refund option:</p>
@@ -128,18 +131,18 @@ const FailureScreen = () => {
               <button
                 className="fail-refund-btn fail-refund-btn--wallet"
                 onClick={() => handleRefundRequest("wallet")}
-                disabled={refundLoading}
+                disabled={refundLoading !== null}
               >
                 <FaWallet />
-                <span>{refundLoading ? "Processing..." : "Wallet (Instant)"}</span>
+                <span>{refundLoading === "wallet" ? "Processing..." : "Wallet (Instant)"}</span>
               </button>
               <button
                 className="fail-refund-btn fail-refund-btn--bank"
                 onClick={() => handleRefundRequest("bank")}
-                disabled={refundLoading}
+                disabled={refundLoading !== null}
               >
                 <FaHistory />
-                <span>{refundLoading ? "Processing..." : "Bank (1-3 days)"}</span>
+                <span>{refundLoading === "bank" ? "Processing..." : "Bank (1-3 days)"}</span>
               </button>
             </div>
             {refundMessage && (
