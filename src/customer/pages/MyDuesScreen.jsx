@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FaArrowLeft, FaCalendarAlt, FaClock, FaExclamationCircle,
-  FaExclamationTriangle, FaChevronRight, FaReceipt
+  FaExclamationTriangle, FaChevronRight, FaReceipt, FaTrashAlt
 } from "react-icons/fa";
 import { walletService } from "../services/walletService";
 import { rechargeService } from "../services/rechargeService";
+import { invalidate } from "../services/apiCache";
 
 const statusConfig = {
   pending: { label: "Pending", icon: <FaClock />, color: "#FF9800" },
@@ -76,7 +77,7 @@ const EmptyState = ({ onExplore }) => (
 );
 
 /* ─── Due card ─── */
-const DueCard = ({ item, index, onPay, processing }) => {
+const DueCard = ({ item, index, onPay, onDelete, processing, deleting }) => {
   const st = getStatus(item);
   const operatorName = item.operatorId?.operatorName || item.operator?.name || item.name || "Service Provider";
   const serviceName = item.operatorId?.serviceId?.serviceName || item.service?.serviceName || "Bill Payment";
@@ -136,19 +137,30 @@ const DueCard = ({ item, index, onPay, processing }) => {
           )}
         </div>
 
-        {/* Bottom: transact button */}
-        <button
-          className="md-pay-btn"
-          type="button"
-          disabled={processing}
-          onClick={() => onPay(item)}
-        >
-          {processing ? (
-            <span className="md-pay-loading"><span className="md-spinner" /> Processing...</span>
-          ) : (
-            <>Transact Now <FaChevronRight /></>
-          )}
-        </button>
+        {/* Bottom: transact button + delete */}
+        <div className="md-card-actions">
+          <button
+            className="md-pay-btn"
+            type="button"
+            disabled={processing || deleting}
+            onClick={() => onPay(item)}
+          >
+            {processing ? (
+              <span className="md-pay-loading"><span className="md-spinner" /> Processing...</span>
+            ) : (
+              <>Transact Now <FaChevronRight /></>
+            )}
+          </button>
+          <button
+            className="md-delete-btn"
+            type="button"
+            disabled={processing || deleting}
+            onClick={() => onDelete(item)}
+            title="Delete this due"
+          >
+            {deleting ? <span className="md-spinner" /> : <FaTrashAlt />}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -161,6 +173,7 @@ const MyDuesScreen = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [processingId, setProcessingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -213,6 +226,27 @@ const MyDuesScreen = () => {
     }
   };
 
+  const handleDelete = async (item) => {
+    const id = item.id;
+    if (!id) return;
+
+    // Confirm before delete
+    if (!window.confirm("Are you sure you want to delete this due?")) return;
+
+    setDeletingId(id);
+    const res = await walletService.deleteReminder(id);
+    setDeletingId(null);
+
+    if (res.success) {
+      // Remove from list
+      setDues((prev) => prev.filter((d) => d.id !== id));
+      // Clear cache so next visit fetches fresh data
+      invalidate("upcomingDues");
+    } else {
+      alert(res.message || "Failed to delete. Please try again.");
+    }
+  };
+
   const totalDues = dues.length;
   const overdueDues = dues.filter((d) => getStatus(d) === statusConfig.overdue).length;
 
@@ -260,7 +294,9 @@ const MyDuesScreen = () => {
               item={item}
               index={i}
               onPay={handlePay}
+              onDelete={handleDelete}
               processing={processingId === item.id}
+              deleting={deletingId === item.id}
             />
           ))}
         </div>

@@ -16,7 +16,7 @@
   padding: 24px;
   position: relative;
   overflow: hidden;
-  background: #0B0B0B;
+  background: linear-gradient(165deg, #0f0f1a 0%, #1a1a2e 40%, #16213e 100%);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif;
 }
 
@@ -30,35 +30,34 @@
 .cm-auth-orb {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
+  filter: blur(120px);
   animation: cm-float 8s ease-in-out infinite;
 }
 
 .cm-auth-orb--1 {
-  width: 400px;
-  height: 400px;
-  background: radial-gradient(circle, rgba(64, 224, 208, 0.25), transparent 70%);
-  top: -10%;
-  right: -5%;
+  width: 450px;
+  height: 450px;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.5), transparent 70%);
+  bottom: -20%;
+  left: -10%;
   animation-delay: 0s;
 }
 
 .cm-auth-orb--2 {
-  width: 350px;
-  height: 350px;
-  background: radial-gradient(circle, rgba(0, 123, 255, 0.2), transparent 70%);
-  bottom: -8%;
-  left: -5%;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.5), transparent 70%);
+  bottom: -15%;
+  right: -10%;
   animation-delay: -3s;
 }
 
 .cm-auth-orb--3 {
-  width: 250px;
-  height: 250px;
-  background: radial-gradient(circle, rgba(64, 224, 208, 0.12), transparent 70%);
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.35), transparent 70%);
+  bottom: 5%;
+  left: 30%;
   animation-delay: -5s;
 }
 
@@ -586,7 +585,8 @@
   z-index: 1;
 }
 
-.cm-auth-footer p { margin: 0; font-size: 0.78rem; color: #6B6B6B; }
+.cm-auth-footer p { margin: 0; font-size: 0.82rem; color: rgba(255, 255, 255, 0.5); }
+.cm-auth-footer-link { color: #F59E0B; cursor: pointer; }
 
 @media (max-width: 480px) {
   .cm-auth-screen { padding: 16px; }
@@ -4377,6 +4377,55 @@
   cursor: not-allowed;
 }
 
+/* Card actions row */
+.md-card-actions {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.md-card-actions .md-pay-btn {
+  flex: 1;
+}
+
+.md-delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  min-width: 46px;
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  background: rgba(255, 59, 48, 0.12);
+  color: #FF3B30;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.md-delete-btn:hover:not(:disabled) {
+  background: rgba(255, 59, 48, 0.2);
+  transform: scale(1.05);
+}
+
+.md-delete-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.md-delete-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.theme-light .md-delete-btn {
+  background: rgba(255, 59, 48, 0.1);
+}
+
+.theme-light .md-delete-btn:hover:not(:disabled) {
+  background: rgba(255, 59, 48, 0.18);
+}
+
 /* Card close (cross) button */
 .md-card {
   position: relative;
@@ -6918,7 +6967,8 @@
 .theme-light .cm-auth-field label { color: #374151; }
 .theme-light .cm-auth-input { background: #F9FAFB; border-color: #E5E7EB; color: #1A1A2E; }
 .theme-light .cm-auth-prefix { color: #6B7280; }
-.theme-light .cm-auth-footer p { color: #9CA3AF; }
+.theme-light .cm-auth-footer p { color: #6B7280; }
+.theme-light .cm-auth-footer-link { color: #D97706; }
 .theme-light .cm-auth-logo-img { filter: none; }
 
 /* Top bar */
