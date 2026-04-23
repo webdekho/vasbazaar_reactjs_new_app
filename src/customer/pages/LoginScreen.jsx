@@ -137,7 +137,7 @@ const LoginScreen = () => {
           </form>
 
           <div className="cm-auth-footer">
-            <p>By continuing, you agree to our Terms of Service</p>
+            <p>By continuing, you agree to our <span className="cm-auth-footer-link">Terms of Service</span></p>
           </div>
         </div>
       </div>

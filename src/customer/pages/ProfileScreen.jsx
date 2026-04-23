@@ -2,6 +2,7 @@ import {
   FaPhone, FaEnvelope, FaIdBadge, FaCopy,
   FaShareAlt, FaWallet, FaCamera, FaSignOutAlt, FaUserCircle,
   FaCheck, FaTimes, FaCrop, FaQrcode, FaShieldAlt, FaExclamationTriangle,
+  FaCheckCircle,
 } from "react-icons/fa";
 import { FiChevronRight, FiShield, FiGift, FiHelpCircle } from "react-icons/fi";
 import { useCustomerModern } from "../context/CustomerModernContext";
@@ -162,7 +163,10 @@ const ProfileScreen = () => {
             <FaCamera size={12} color="#fff" />
           </div>
         </div>
-        <h2 className="pf-name">{name}</h2>
+        <h2 className="pf-name">
+          {name}
+          {isKycVerified && <FaCheckCircle className="pf-verified-badge" />}
+        </h2>
         <p className="pf-mobile">{mobile ? `+91 ${mobile}` : ""}</p>
       </div>
 

@@ -9263,7 +9263,8 @@
   box-shadow: 0 2px 8px rgba(64, 224, 208, 0.3);
 }
 
-.pf-name { color: #FFFFFF; margin: 12px 0 2px; font-size: 20px; font-weight: 700; }
+.pf-name { color: #FFFFFF; margin: 12px 0 2px; font-size: 20px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.pf-verified-badge { color: #1DA1F2; font-size: 18px; flex-shrink: 0; }
 .pf-mobile { color: #6B6B6B; font-size: 14px; margin: 0; }
 
 .pf-stats-row {
