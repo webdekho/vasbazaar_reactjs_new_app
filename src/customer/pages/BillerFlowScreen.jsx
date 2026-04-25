@@ -575,11 +575,12 @@ const BillerForm = ({ biller, onSubmit, onBack, isLoading }) => {
 /* ══════════════════════════════════════════════
    Step 3: Bill View
    ══════════════════════════════════════════════ */
-const BillView = ({ biller, billData, amount, setAmount, onPay, onBack, isExact }) => {
+const BillView = ({ biller, billData, amount, setAmount, onPay, onBack, isExact, consumerNumber, billFetchFailed }) => {
   const [showSTBConfirm, setShowSTBConfirm] = useState(false);
   const isDTH = !!biller.isDTH;
 
   const labelMap = {
+    consumerNumber: "Consumer Number",
     customername: "Customer Name",
     dueDate: "Due Date",
     billAmount: "Bill Amount",
@@ -596,12 +597,17 @@ const BillView = ({ biller, billData, amount, setAmount, onPay, onBack, isExact 
     "AddInfo",
   ];
 
-  const displayEntries = Object.entries(billData || {}).filter(
+  const baseEntries = Object.entries(billData || {}).filter(
     ([key, value]) =>
       value != null &&
       String(value).trim() !== "" &&
       !hiddenKeys.includes(key)
   );
+  const displayEntries = consumerNumber
+    ? [["consumerNumber", consumerNumber], ...baseEntries]
+    : baseEntries;
+
+  const showAmountInput = !isExact || billFetchFailed;
 
   const handlePayClick = () => {
     if (isDTH) {
@@ -617,7 +623,7 @@ const BillView = ({ biller, billData, amount, setAmount, onPay, onBack, isExact 
         <button className="cm-back-icon" type="button" onClick={onBack}>
           <FaArrowLeft />
         </button>
-        <h1>{biller.operatorName || biller.name}</h1>
+        <div style={{ flex: 1 }} />
         <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
       </div>
 
@@ -647,6 +653,17 @@ const BillView = ({ biller, billData, amount, setAmount, onPay, onBack, isExact 
         </span>
       </div>
 
+      {/* Bill fetch failure notice */}
+      {billFetchFailed && (
+        <div className="bf-fetch-error" role="alert">
+          <span className="bf-fetch-error-icon" aria-hidden="true">⚠</span>
+          <div className="bf-fetch-error-text">
+            <strong>Bill could not be fetched</strong>
+            <span>Due to a technical reason we couldn't fetch your bill. Please enter the amount manually below and continue.</span>
+          </div>
+        </div>
+      )}
+
       {/* Bill Details Grid */}
       <div className="bf-card bf-details-card">
         <div className="bf-details-grid">
@@ -663,8 +680,8 @@ const BillView = ({ biller, billData, amount, setAmount, onPay, onBack, isExact 
         </div>
       </div>
 
-      {/* Amount Input (if not exact) */}
-      {!isExact && (
+      {/* Amount Input (when bill is not exact OR fetch failed) */}
+      {showAmountInput && (
         <div className="bf-card bf-amount-card">
           <label className="bf-label">Amount</label>
           <input
@@ -677,22 +694,6 @@ const BillView = ({ biller, billData, amount, setAmount, onPay, onBack, isExact 
               setAmount(e.target.value.replace(/[^0-9.]/g, ""))
             }
           />
-        </div>
-      )}
-
-      {/* Min/Max Amount Limits */}
-      {(biller.minAmount != null || biller.maxAmount != null) && (
-        <div className="bf-amount-limits">
-          {biller.minAmount != null && (
-            <span className="bf-limit-item">
-              <span className="bf-limit-label">Min:</span> ₹{biller.minAmount}
-            </span>
-          )}
-          {biller.maxAmount != null && (
-            <span className="bf-limit-item">
-              <span className="bf-limit-label">Max:</span> ₹{biller.maxAmount}
-            </span>
-          )}
         </div>
       )}
 
@@ -1329,6 +1330,7 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
   const [customerName, setCustomerName] = useState("No Name");
   const [mobile, setMobile] = useState("");
   const [isExact, setIsExact] = useState(false);
+  const [billFetchFailed, setBillFetchFailed] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
   const [loading, setLoading] = useState(false);
   const [couponData, setCouponData] = useState({});
@@ -1432,6 +1434,7 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
       billnumber: "NA",
       billdate: "NA",
     };
+    let fetchFailed = false;
 
     if (fetchReq && fetchReq.toLowerCase() !== "not_supported") {
       // If field2 has city selection, swap: field1=CITY (uppercase), field2="", mn=service number
@@ -1443,29 +1446,32 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
         mn: values.field1,
         op: selectedBiller.id,
       });
-      if (resp.success && resp.data) {
-        const d = Array.isArray(resp.data?.data)
-          ? resp.data.data[0]
-          : resp.data;
-        if (d) {
-          bill = {
-            dueDate: d.dueDate || "NA",
-            billAmount: d.billAmount || 0,
-            customername: d.customername || "No Name",
-            billnumber: d.billnumber || "NA",
-            billdate: d.billdate || "NA",
-            billperiod: d.billperiod || "",
-          };
-        }
+      const respData = resp?.success && resp.data
+        ? (Array.isArray(resp.data?.data) ? resp.data.data[0] : resp.data)
+        : null;
+
+      if (respData) {
+        bill = {
+          dueDate: respData.dueDate || "NA",
+          billAmount: respData.billAmount || 0,
+          customername: respData.customername || "No Name",
+          billnumber: respData.billnumber || "NA",
+          billdate: respData.billdate || "NA",
+          billperiod: respData.billperiod || "",
+        };
+      } else {
+        fetchFailed = true;
       }
     }
 
+    setBillFetchFailed(fetchFailed);
     setBillData(bill);
     // Fallback to prefill amount (from Upcoming Dues) when live bill fetch returns 0.
     setAmount(String(bill.billAmount || prefill?.amount || "0"));
     setCustomerName(bill.customername || "No Name");
     setIsExact(
-      selectedBiller.amountExactness === "Exact" && bill.billAmount > 0
+      !fetchFailed &&
+        selectedBiller.amountExactness === "Exact" && bill.billAmount > 0
     );
     setLoading(false);
     setStep(2);
@@ -1693,6 +1699,8 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
         onPay={handlePayBill}
         onBack={goBack}
         isExact={isExact}
+        consumerNumber={formValues?.field1}
+        billFetchFailed={billFetchFailed}
       />
     ),
     selectedBiller && (
