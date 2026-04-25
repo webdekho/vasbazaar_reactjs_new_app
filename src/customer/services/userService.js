@@ -1,4 +1,4 @@
-import { authGet, authPost, apiClient, parseApiResponse, getErrorMessage, CUSTOMER_STORAGE_KEYS } from "./apiClient";
+import { authGet, authPost, authPut, apiClient, parseApiResponse, getErrorMessage, CUSTOMER_STORAGE_KEYS } from "./apiClient";
 import { cachedFetch, invalidate } from "./apiCache";
 
 export const userService = {
@@ -73,4 +73,10 @@ export const userService = {
 
   updateUserProfile: (profileData) =>
     authPost("/user/update-profile", profileData),
+
+  updateEmail: async (email) => {
+    const result = await authPut("/api/customer/user/updateEmail", { email });
+    if (result.success) invalidate("getUserProfile");
+    return result;
+  },
 };

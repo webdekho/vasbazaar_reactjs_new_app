@@ -6,8 +6,7 @@ import { processMessage } from "../services/chatbotService";
 import { rechargeService } from "../services/rechargeService";
 import MessageBubble from "./chatbot/MessageBubble";
 import { sanitizeBackendMessage } from "../utils/userMessages";
-
-const TAWK_TO_ID = "68d37d4a56af9719235895be/1j5t22r24";
+import { openTawkChat } from "../utils/tawk";
 
 const ChatbotPanel = () => {
   const navigate = useNavigate();
@@ -78,15 +77,6 @@ const ChatbotPanel = () => {
     if (action === "__LIVE_CHAT__") openTawkChat();
     else if (action === "__CALL__") window.open("tel:+918655681213");
     else if (action === "__WHATSAPP__") window.open("https://wa.me/918655681213", "_blank");
-  };
-
-  const openTawkChat = () => {
-    if (window.Tawk_API?.maximize) { window.Tawk_API.maximize(); return; }
-    const s = document.createElement("script");
-    s.src = `https://embed.tawk.to/${TAWK_TO_ID}`;
-    s.async = true;
-    s.onload = () => setTimeout(() => window.Tawk_API?.maximize?.(), 1000);
-    document.head.appendChild(s);
   };
 
   const handleConfirm = async (data) => {

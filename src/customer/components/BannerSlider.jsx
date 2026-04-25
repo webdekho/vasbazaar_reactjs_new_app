@@ -1,5 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { FaTimes, FaChevronLeft, FaChevronRight, FaUserCircle } from "react-icons/fa";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { FaTimes, FaChevronLeft, FaChevronRight, FaUserCircle, FaCheck } from "react-icons/fa";
+import ProfileAvatar from "./ProfileAvatar";
+import ProfilePhotoPreview from "./ProfilePhotoPreview";
+import { getProfilePhotoCandidates } from "../utils/profileAvatar";
 
 // Extract dominant color from image edges using canvas
 const getDominantColor = (imgEl) => {
@@ -24,6 +28,7 @@ const maskMobile = (mobile) => {
 };
 
 const BannerSlider = ({ banners = [], userData, balances, showCustomerCard = true }) => {
+  const navigate = useNavigate();
   const [current, setCurrent] = useState(0);
   const [slideBgColors, setSlideBgColors] = useState({});
   const [popupSlide, setPopupSlide] = useState(null);
@@ -32,6 +37,19 @@ const BannerSlider = ({ banners = [], userData, balances, showCustomerCard = tru
   const touchDelta = useRef(0);
   const autoTimer = useRef(null);
   const isSwiping = useRef(false);
+
+  const handleStatClick = (path) => (e) => {
+    if (isSwiping.current) return;
+    e.stopPropagation();
+    navigate(path);
+  };
+
+  const handleStatKeyDown = (path) => (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      navigate(path);
+    }
+  };
 
   // Build slides: customer card first, then banners
   const bannerSlides = banners.length > 0
@@ -157,7 +175,32 @@ const BannerSlider = ({ banners = [], userData, balances, showCustomerCard = tru
 
   const name = userData?.name || userData?.firstName || "Customer";
   const mobile = userData?.mobile || userData?.mobileNumber || "";
-  const profilePhoto = userData?.profile || userData?.profilePhoto || localStorage.getItem("profile_photo") || "";
+  const isKycDone = userData?.verified_status === 1 || userData?.verified_status === "1" || userData?.kyc_verified === true;
+  const photoCandidates = getProfilePhotoCandidates(userData);
+  const [photoPreviewOpen, setPhotoPreviewOpen] = useState(false);
+
+  // Auto-scroll the welcome name only when its content overflows the wrapper width.
+  const nameWrapRef = useRef(null);
+  const nameTextRef = useRef(null);
+  const [isNameOverflowing, setIsNameOverflowing] = useState(false);
+
+  useLayoutEffect(() => {
+    const wrap = nameWrapRef.current;
+    const text = nameTextRef.current;
+    if (!wrap || !text) return undefined;
+    const check = () => {
+      const overflow = text.scrollWidth > wrap.clientWidth + 1;
+      setIsNameOverflowing((prev) => (prev === overflow ? prev : overflow));
+    };
+    check();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(check) : null;
+    if (ro) { ro.observe(wrap); ro.observe(text); }
+    window.addEventListener("resize", check);
+    return () => {
+      if (ro) ro.disconnect();
+      window.removeEventListener("resize", check);
+    };
+  }, [name]);
 
   return (
     <>
@@ -178,38 +221,90 @@ const BannerSlider = ({ banners = [], userData, balances, showCustomerCard = tru
                     <div className="cmc-header">
                       <div>
                         <div className="cmc-greeting">Welcome back</div>
-                        <div className="cmc-name">{name}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <div className="cmc-name" ref={nameWrapRef}>
+                            <div className={`cmc-name-track${isNameOverflowing ? " cmc-name-track--scroll" : ""}`}>
+                              <span className="cmc-name-text" ref={nameTextRef}>{name}</span>
+                              {isNameOverflowing && <span className="cmc-name-text" aria-hidden="true">{name}</span>}
+                            </div>
+                          </div>
+                          {isKycDone && (
+                            <span className="pf-verified-badge pf-verified-badge--sm" aria-label="Verified">
+                              <FaCheck />
+                            </span>
+                          )}
+                        </div>
                         <div className="cmc-mobile-badge">
                           <span className="cmc-mobile-dot" />
                           {maskMobile(mobile)}
                         </div>
                       </div>
-                      {profilePhoto && profilePhoto.startsWith("http") ? (
-                        <img src={profilePhoto} alt="" className="cmc-photo" />
-                      ) : (
-                        <div className="cmc-avatar">
-                          <FaUserCircle />
-                        </div>
-                      )}
+                      <div
+                        className="cmc-photo-tap"
+                        role="button"
+                        tabIndex={0}
+                        aria-label="View profile photo"
+                        onClick={(e) => {
+                          if (isSwiping.current) return;
+                          e.stopPropagation();
+                          if (photoCandidates.length > 0) setPhotoPreviewOpen(true);
+                        }}
+                        onKeyDown={(e) => {
+                          if ((e.key === "Enter" || e.key === " ") && photoCandidates.length > 0) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setPhotoPreviewOpen(true);
+                          }
+                        }}
+                        style={{ cursor: photoCandidates.length > 0 ? "zoom-in" : "default", borderRadius: "50%", overflow: "hidden", display: "inline-flex" }}
+                      >
+                        <ProfileAvatar
+                          candidates={photoCandidates}
+                          className="cmc-photo"
+                          alt={name}
+                          emptyFallback={<div className="cmc-avatar"><FaUserCircle /></div>}
+                        />
+                      </div>
                     </div>
 
                     {/* Stats row */}
                     <div className="cmc-stats-row">
-                      <div className="cmc-stat-pill">
+                      <div
+                        className="cmc-stat-pill cmc-stat-pill--clickable"
+                        role="button"
+                        tabIndex={0}
+                        onClick={handleStatClick("/customer/app/wallet")}
+                        onKeyDown={handleStatKeyDown("/customer/app/wallet")}
+                        aria-label="Open wallet"
+                      >
                         <div className="cmc-stat-label">Balance</div>
                         <div className="cmc-stat-value">
                           <span className="cmc-rupee">&#8377;</span>{balances?.wallet || "0.00"}
                         </div>
                       </div>
                       <div className="cmc-stat-divider" />
-                      <div className="cmc-stat-pill">
+                      <div
+                        className="cmc-stat-pill cmc-stat-pill--clickable"
+                        role="button"
+                        tabIndex={0}
+                        onClick={handleStatClick("/customer/app/commission?tab=cashback")}
+                        onKeyDown={handleStatKeyDown("/customer/app/commission?tab=cashback")}
+                        aria-label="Open cashback"
+                      >
                         <div className="cmc-stat-label">Cashback</div>
                         <div className="cmc-stat-value">
                           <span className="cmc-rupee">&#8377;</span>{balances?.cashback || "0.00"}
                         </div>
                       </div>
                       <div className="cmc-stat-divider" />
-                      <div className="cmc-stat-pill">
+                      <div
+                        className="cmc-stat-pill cmc-stat-pill--clickable"
+                        role="button"
+                        tabIndex={0}
+                        onClick={handleStatClick("/customer/app/commission?tab=incentive")}
+                        onKeyDown={handleStatKeyDown("/customer/app/commission?tab=incentive")}
+                        aria-label="Open incentives"
+                      >
                         <div className="cmc-stat-label">Incentives</div>
                         <div className="cmc-stat-value">
                           <span className="cmc-rupee">&#8377;</span>{balances?.incentive || "0.00"}
@@ -305,6 +400,13 @@ const BannerSlider = ({ banners = [], userData, balances, showCustomerCard = tru
           </div>
         </div>
       )}
+
+      <ProfilePhotoPreview
+        open={photoPreviewOpen}
+        candidates={photoCandidates}
+        name={name}
+        onClose={() => setPhotoPreviewOpen(false)}
+      />
     </>
   );
 };

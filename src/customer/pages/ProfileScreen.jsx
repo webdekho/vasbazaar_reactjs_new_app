@@ -1,106 +1,108 @@
 import {
-  FaPhone, FaEnvelope, FaIdBadge, FaCopy,
+  FaPhone, FaEnvelope, FaCopy,
   FaShareAlt, FaWallet, FaCamera, FaSignOutAlt, FaUserCircle,
-  FaCheck, FaTimes, FaCrop, FaQrcode, FaShieldAlt, FaExclamationTriangle,
-  FaCheckCircle,
+  FaCheck, FaQrcode, FaShieldAlt, FaExclamationTriangle,
+  FaSun, FaMoon,
 } from "react-icons/fa";
 import { FiChevronRight, FiShield, FiGift, FiHelpCircle } from "react-icons/fi";
 import { useCustomerModern } from "../context/CustomerModernContext";
+import { useTheme } from "../context/ThemeContext";
 import { userService } from "../services/userService";
 import { ChangePinScreen } from "../components/AppLockGuard";
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../context/ToastContext";
 import { sanitizeBackendMessage } from "../utils/userMessages";
+import { captureProfilePhotoDataUrl, fileToDataUrl, shouldUseNativeCamera } from "../utils/profilePhoto";
+import { getProfilePhotoCandidates, saveProfilePhoto } from "../utils/profileAvatar";
+import ProfileAvatar from "../components/ProfileAvatar";
+import ProfilePhotoCropper from "../components/ProfilePhotoCropper";
+import ProfilePhotoPreview from "../components/ProfilePhotoPreview";
 
 const ProfileScreen = () => {
-  const { userData, logout } = useCustomerModern();
+  const { userData, logout, setAuthSession } = useCustomerModern();
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === "dark";
   const [copied, setCopied] = useState(false);
   const [showChangePin, setShowChangePin] = useState(false);
   const [pinMsg, setPinMsg] = useState("");
   const fileInputRef = useRef(null);
 
   const [uploading, setUploading] = useState(false);
-  const [cropModal, setCropModal] = useState(false);
   const [cropSrc, setCropSrc] = useState(null);
-  const [cropPos, setCropPos] = useState({ x: 0, y: 0, scale: 1 });
-  const imgRef = useRef(null);
-  const cropFileRef = useRef(null);
+  const [photoPreviewOpen, setPhotoPreviewOpen] = useState(false);
+  const [emailEditOpen, setEmailEditOpen] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailError, setEmailError] = useState("");
+  // Bump this to force <ProfileAvatar /> to re-read storage after a new photo is saved.
+  const [photoVersion, setPhotoVersion] = useState(0);
 
   const name = userData?.name || userData?.firstName || userData?.userName || userData?.user_name || userData?.customerName || "Customer";
   const mobile = userData?.mobile || userData?.mobileNumber || "--";
-  const email = userData?.email || "Not provided";
+  const email = userData?.email || "";
   const referral = userData?.mobile || userData?.mobileNumber || userData?.referalCode || userData?.referralCode || userData?.refferalCode || userData?.refferal_code || "--";
-  const userType = userData?.userType || "customer";
-  const rawPhoto = userData?.profile || userData?.profilePhoto || userData?.photo || localStorage.getItem("profile_photo") || "";
-  const [localPhoto, setLocalPhoto] = useState(null);
-  const profilePhoto = localPhoto || (rawPhoto && rawPhoto.startsWith("http") ? rawPhoto : null);
   const balance = userData?.balance || userData?.walletBalance || "0.00";
   const cashback = userData?.cashback || userData?.totalCashback || "0";
-  const referralCount = userData?.referralCount || userData?.totalReferrals || "0";
+  // The profile API returns this as `referralUsers` / `referral_users`; accept any
+  // of the legacy variants before falling back to "0".
+  const referralCount = userData?.referralUsers
+    ?? userData?.referral_users
+    ?? userData?.referralCount
+    ?? userData?.totalReferrals
+    ?? "0";
   const isKycVerified = userData?.verified_status === 1 || userData?.verified_status === "1" || userData?.kyc_verified === true;
 
-  // Debug: Log verified_status
-  console.log("Profile - userData:", userData);
-  console.log("Profile - verified_status:", userData?.verified_status, "type:", typeof userData?.verified_status);
-  console.log("Profile - isKycVerified:", isKycVerified);
+  // photoVersion state bumps trigger a re-render which re-reads localStorage here.
+  const _photoVersionRead = photoVersion; // eslint-disable-line no-unused-vars
+  const photoCandidates = getProfilePhotoCandidates(userData);
 
-  const handleFileSelect = (e) => {
+  const handleProfilePhotoClick = async () => {
+    if (!shouldUseNativeCamera()) {
+      fileInputRef.current?.click();
+      return;
+    }
+    try {
+      const imageSrc = await captureProfilePhotoDataUrl();
+      if (imageSrc) setCropSrc(imageSrc);
+    } catch (error) {
+      if (!String(error?.message || error).toLowerCase().includes("cancel")) {
+        showToast("Photo select nahi ho paya. Please try again.", "error");
+      }
+    }
+  };
+
+  const handleFileSelect = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
-    cropFileRef.current = file;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setCropSrc(ev.target.result);
-      setCropPos({ x: 0, y: 0, scale: 1 });
-      setCropModal(true);
-    };
-    reader.readAsDataURL(file);
+    const imageSrc = await fileToDataUrl(file);
+    setCropSrc(imageSrc);
   };
 
-  const handleCropConfirm = useCallback(async () => {
-    if (!cropSrc) return;
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = async () => {
-      const size = Math.min(img.width, img.height);
-      const canvas = document.createElement("canvas");
-      canvas.width = 400;
-      canvas.height = 400;
-      const ctx = canvas.getContext("2d");
-      ctx.beginPath();
-      ctx.arc(200, 200, 200, 0, Math.PI * 2);
-      ctx.closePath();
-      ctx.clip();
-      const sx = (img.width - size) / 2 + (cropPos.x * size / 200);
-      const sy = (img.height - size) / 2 + (cropPos.y * size / 200);
-      const sSize = size / cropPos.scale;
-      ctx.drawImage(img, sx, sy, sSize, sSize, 0, 0, 400, 400);
-      canvas.toBlob(async (blob) => {
-        if (!blob) return;
-        setCropModal(false);
-        setUploading(true);
-        const previewUrl = URL.createObjectURL(blob);
-        setLocalPhoto(previewUrl);
-        const croppedFile = new File([blob], `profile_${Date.now()}.jpg`, { type: "image/jpeg" });
-        const res = await userService.uploadProfilePhoto(croppedFile);
-        setUploading(false);
-        if (res.success) {
-          const url = res.data?.profile_photo || res.data?.photo_url || res.data?.profile || previewUrl;
-          if (url && url.startsWith("http")) {
-            setLocalPhoto(url);
-            localStorage.setItem("profile_photo", url);
-          }
-        } else {
-          showToast(sanitizeBackendMessage(res.message, "Upload failed. Please try again."), "error");
-        }
-      }, "image/jpeg", 0.9);
-    };
-    img.src = cropSrc;
-  }, [cropSrc, cropPos, showToast]);
+  const handleCropConfirm = async ({ dataUrl, file }) => {
+    setCropSrc(null);
+    // Persist the cropped image locally first so it's visible immediately and
+    // survives refresh even if the upload fails or the device is offline.
+    saveProfilePhoto({ dataUrl });
+    setPhotoVersion((v) => v + 1);
+
+    setUploading(true);
+    const res = await userService.uploadProfilePhoto(file);
+    setUploading(false);
+
+    if (res.success) {
+      const serverUrl = res.data?.profile_photo || res.data?.photo_url || res.data?.profile;
+      if (serverUrl) {
+        saveProfilePhoto({ serverUrl });
+        setPhotoVersion((v) => v + 1);
+      }
+    } else {
+      showToast(sanitizeBackendMessage(res.message, "Upload failed. Please try again."), "error");
+    }
+  };
 
   const copyReferral = () => {
     navigator.clipboard?.writeText(referral);
@@ -116,16 +118,46 @@ const ProfileScreen = () => {
     }
   };
 
+  const openEmailEditor = () => {
+    setEmailInput(email || "");
+    setEmailError("");
+    setEmailEditOpen(true);
+  };
+
+  const saveEmail = async () => {
+    const trimmed = emailInput.trim();
+    if (!/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(trimmed)) {
+      setEmailError("Enter a valid email address");
+      return;
+    }
+    setEmailSaving(true);
+    const res = await userService.updateEmail(trimmed);
+    setEmailSaving(false);
+    if (!res.success) {
+      setEmailError(sanitizeBackendMessage(res.message, "Failed to save email. Please try again."));
+      return;
+    }
+    const savedEmail = res.data?.email || trimmed;
+    setAuthSession({ userData: { email: savedEmail } });
+    setEmailEditOpen(false);
+    showToast("Email saved.", "success");
+  };
+
   const fields = [
     { icon: <FaPhone />, label: "Mobile", value: mobile ? `+91 ${mobile}` : "--" },
-    { icon: <FaEnvelope />, label: "Email", value: email },
-    { icon: <FaIdBadge />, label: "User Type", value: userType.charAt(0).toUpperCase() + userType.slice(1) },
+    {
+      icon: <FaEnvelope />,
+      label: "Email",
+      value: email || "Tap to add email",
+      onClick: openEmailEditor,
+      isPlaceholder: !email,
+    },
   ];
 
   const stats = [
-    { label: "Balance", value: `₹${balance}`, color: "#00C853" },
-    { label: "Cashback", value: `₹${cashback}`, color: "#FF9800" },
-    { label: "Referrals", value: referralCount, color: "#40E0D0" },
+    { label: "Balance", value: `₹${balance}`, color: "#00C853", onClick: () => navigate("/customer/app/wallet") },
+    { label: "Cashback", value: `₹${cashback}`, color: "#FF9800", onClick: () => navigate("/customer/app/commission?tab=cashback") },
+    { label: "Referrals", value: referralCount, color: "#40E0D0", onClick: () => navigate("/customer/app/referrals") },
   ];
 
   const actions = [
@@ -138,6 +170,14 @@ const ProfileScreen = () => {
       badgeColor: isKycVerified ? "#00C853" : "#FF9800",
     },
     { icon: <FiShield />, label: "Change PIN", onClick: () => setShowChangePin(true) },
+    {
+      icon: isDark ? <FaSun /> : <FaMoon />,
+      label: "Appearance",
+      onClick: toggleTheme,
+      badge: isDark ? "Dark" : "Light",
+      badgeColor: isDark ? "#374151" : "#E5E7EB",
+      badgeTextColor: isDark ? "#FFFFFF" : "#111827",
+    },
     { icon: <FiHelpCircle />, label: "Help & Support", onClick: () => navigate("/customer/app/help") },
     { icon: <FaSignOutAlt />, label: "Logout", onClick: logout, danger: true },
   ];
@@ -149,23 +189,44 @@ const ProfileScreen = () => {
       {/* Header */}
       <div className="pf-header">
         <div className="pf-avatar-wrap">
-          {profilePhoto ? (
-            <img src={profilePhoto} alt={name} className="pf-avatar-img" onError={() => { setLocalPhoto(null); localStorage.removeItem("profile_photo"); }} />
-          ) : (
-            <div className="pf-avatar-fallback">
-              <FaUserCircle size={48} color="rgba(64, 224, 208, 0.6)" />
-            </div>
-          )}
+          <div
+            className="pf-avatar-tap"
+            role="button"
+            tabIndex={0}
+            onClick={() => { if (photoCandidates.length > 0) setPhotoPreviewOpen(true); }}
+            onKeyDown={(e) => {
+              if ((e.key === "Enter" || e.key === " ") && photoCandidates.length > 0) {
+                e.preventDefault();
+                setPhotoPreviewOpen(true);
+              }
+            }}
+            style={{ cursor: photoCandidates.length > 0 ? "zoom-in" : "default", width: "100%", height: "100%", borderRadius: "50%", overflow: "hidden" }}
+          >
+            <ProfileAvatar
+              candidates={photoCandidates}
+              className="pf-avatar-img"
+              alt={name}
+              emptyFallback={(
+                <div className="pf-avatar-fallback">
+                  <FaUserCircle size={48} color="rgba(64, 224, 208, 0.6)" />
+                </div>
+              )}
+            />
+          </div>
           {uploading && (
             <div className="pf-avatar-uploading"><span className="cm-contact-loading" /></div>
           )}
-          <div className="pf-avatar-edit" onClick={() => fileInputRef.current?.click()}>
+          <div className="pf-avatar-edit" onClick={(e) => { e.stopPropagation(); handleProfilePhotoClick(); }}>
             <FaCamera size={12} color="#fff" />
           </div>
         </div>
         <h2 className="pf-name">
           {name}
-          {isKycVerified && <FaCheckCircle className="pf-verified-badge" />}
+          {isKycVerified && (
+            <span className="pf-verified-badge" aria-label="Verified">
+              <FaCheck />
+            </span>
+          )}
         </h2>
         <p className="pf-mobile">{mobile ? `+91 ${mobile}` : ""}</p>
       </div>
@@ -173,7 +234,17 @@ const ProfileScreen = () => {
       {/* Stats */}
       <div className="pf-stats-row">
         {stats.map((s) => (
-          <div key={s.label} className="pf-stat-card">
+          <div
+            key={s.label}
+            className={`pf-stat-card${s.onClick ? " pf-stat-card--clickable" : ""}`}
+            role={s.onClick ? "button" : undefined}
+            tabIndex={s.onClick ? 0 : undefined}
+            onClick={s.onClick}
+            onKeyDown={(e) => {
+              if (!s.onClick) return;
+              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); s.onClick(); }
+            }}
+          >
             <div className="pf-stat-value" style={{ color: s.color }}>{s.value}</div>
             <div className="pf-stat-label">{s.label}</div>
           </div>
@@ -183,12 +254,26 @@ const ProfileScreen = () => {
       {/* Info fields */}
       <div className="pf-card">
         {fields.map((f, i) => (
-          <div key={f.label} className="pf-field" style={{ borderBottom: i < fields.length - 1 ? "1px solid #2A2A2A" : "none" }}>
+          <div
+            key={f.label}
+            className={`pf-field${f.onClick ? " pf-field--clickable" : ""}`}
+            style={{ borderBottom: i < fields.length - 1 ? "1px solid #2A2A2A" : "none", cursor: f.onClick ? "pointer" : "default" }}
+            role={f.onClick ? "button" : undefined}
+            tabIndex={f.onClick ? 0 : undefined}
+            onClick={f.onClick}
+            onKeyDown={(e) => {
+              if (!f.onClick) return;
+              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); f.onClick(); }
+            }}
+          >
             <div className="pf-field-icon">{f.icon}</div>
             <div className="pf-field-info">
               <div className="pf-field-label">{f.label}</div>
-              <div className="pf-field-value">{f.value}</div>
+              <div className="pf-field-value" style={f.isPlaceholder ? { color: "#40E0D0", fontWeight: 600 } : undefined}>
+                {f.value}
+              </div>
             </div>
+            {f.onClick && <FiChevronRight size={16} color="#6B6B6B" />}
           </div>
         ))}
       </div>
@@ -219,10 +304,10 @@ const ProfileScreen = () => {
       <div className="pf-card">
         {actions.map((a, i) => (
           <div key={a.label} className={`pf-action${a.danger ? " pf-action--danger" : ""}`} onClick={a.onClick} style={{ borderBottom: i < actions.length - 1 ? "1px solid #2A2A2A" : "none" }}>
-            <div className={`pf-action-icon${a.danger ? " pf-action-icon--danger" : ""}${a.badge && !isKycVerified ? " pf-action-icon--warn" : ""}`}>{a.icon}</div>
+            <div className={`pf-action-icon${a.danger ? " pf-action-icon--danger" : ""}${a.label === "KYC Status" && !isKycVerified ? " pf-action-icon--warn" : ""}`}>{a.icon}</div>
             <span className="pf-action-label">{a.label}</span>
             {a.badge && (
-              <span className="pf-action-badge" style={{ background: a.badgeColor, color: "#fff" }}>
+              <span className="pf-action-badge" style={{ background: a.badgeColor, color: a.badgeTextColor || "#fff" }}>
                 {a.badge}
               </span>
             )}
@@ -231,27 +316,50 @@ const ProfileScreen = () => {
         ))}
       </div>
 
-      {/* Crop Modal */}
-      {cropModal && (
-        <div className="pf-crop-overlay">
-          <div className="pf-crop-modal">
-            <div className="pf-crop-header">
-              <h3><FaCrop /> Crop Photo</h3>
-              <button type="button" className="pf-crop-close" onClick={() => setCropModal(false)}><FaTimes /></button>
+      <ProfilePhotoCropper
+        open={!!cropSrc}
+        imageSrc={cropSrc}
+        onCancel={() => setCropSrc(null)}
+        onConfirm={handleCropConfirm}
+      />
+
+      <ProfilePhotoPreview
+        open={photoPreviewOpen}
+        candidates={photoCandidates}
+        name={name}
+        onClose={() => setPhotoPreviewOpen(false)}
+      />
+
+      {emailEditOpen && (
+        <div className="pf-email-overlay" onClick={() => !emailSaving && setEmailEditOpen(false)}>
+          <div className="pf-email-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="pf-email-header">
+              <FaEnvelope />
+              <h3>{email ? "Update Email" : "Add Email"}</h3>
             </div>
-            <div className="pf-crop-preview">
-              <div className="pf-crop-circle">
-                <img ref={imgRef} src={cropSrc} alt="Crop preview" className="pf-crop-img" style={{ transform: `scale(${cropPos.scale}) translate(${cropPos.x}px, ${cropPos.y}px)` }} draggable={false} />
-              </div>
-              <p className="pf-crop-hint">Pinch or use slider to zoom</p>
-            </div>
-            <div className="pf-crop-controls">
-              <span className="pf-crop-zoom-label">Zoom</span>
-              <input type="range" min="1" max="3" step="0.05" value={cropPos.scale} onChange={(e) => setCropPos((p) => ({ ...p, scale: parseFloat(e.target.value) }))} className="pf-crop-slider" />
-            </div>
-            <div className="pf-crop-actions">
-              <button type="button" className="pf-crop-cancel" onClick={() => setCropModal(false)}>Cancel</button>
-              <button type="button" className="pf-crop-confirm" onClick={handleCropConfirm}><FaCheck /> Upload Photo</button>
+            <p className="pf-email-sub">
+              We'll use this email for receipts, alerts, and account recovery.
+            </p>
+            <input
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              autoFocus
+              className="pf-email-input"
+              placeholder="name@example.com"
+              value={emailInput}
+              onChange={(e) => { setEmailInput(e.target.value); if (emailError) setEmailError(""); }}
+              onKeyDown={(e) => { if (e.key === "Enter") saveEmail(); }}
+              disabled={emailSaving}
+            />
+            {emailError && <div className="pf-email-error">{emailError}</div>}
+            <div className="pf-email-actions">
+              <button type="button" className="pf-email-btn pf-email-btn--cancel" onClick={() => setEmailEditOpen(false)} disabled={emailSaving}>
+                Cancel
+              </button>
+              <button type="button" className="pf-email-btn pf-email-btn--save" onClick={saveEmail} disabled={emailSaving}>
+                {emailSaving ? "Saving..." : "Save"}
+              </button>
             </div>
           </div>
         </div>

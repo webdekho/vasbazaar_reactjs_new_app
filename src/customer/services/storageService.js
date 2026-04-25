@@ -1,4 +1,4 @@
-import { CUSTOMER_STORAGE_KEYS } from "./apiClient";
+import { CUSTOMER_STORAGE_KEYS, CUSTOMER_STORAGE_PERSISTENT_KEYS } from "./apiClient";
 import { server_api } from "../../utils/constants";
 import { invalidateAll } from "./apiCache";
 
@@ -60,8 +60,43 @@ export const customerStorage = {
 
   getReferralCode: () => localStorage.getItem(CUSTOMER_STORAGE_KEYS.referralCode),
 
+  setFirstLoginComplete: () => {
+    localStorage.setItem(CUSTOMER_STORAGE_KEYS.firstLoginComplete, "1");
+  },
+
+  hasCompletedFirstLogin: () => localStorage.getItem(CUSTOMER_STORAGE_KEYS.firstLoginComplete) === "1",
+
+  // My Dues — per-user dismissed reminders. Key shape: `${mobile}|${operatorId}`.
+  // Value = ISO timestamp of the dismissed item's submittedDate. The reminder
+  // re-appears only when a newer submittedDate arrives (user re-sets it).
+  getDismissedDues: () => {
+    try {
+      const raw = localStorage.getItem(CUSTOMER_STORAGE_KEYS.dismissedDues);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  },
+
+  dismissDue: (key, submittedDateIso) => {
+    if (!key) return;
+    const map = (() => {
+      try {
+        const raw = localStorage.getItem(CUSTOMER_STORAGE_KEYS.dismissedDues);
+        return raw ? JSON.parse(raw) : {};
+      } catch {
+        return {};
+      }
+    })();
+    map[key] = submittedDateIso || new Date().toISOString();
+    localStorage.setItem(CUSTOMER_STORAGE_KEYS.dismissedDues, JSON.stringify(map));
+  },
+
   clear: () => {
-    Object.values(CUSTOMER_STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
+    Object.values(CUSTOMER_STORAGE_KEYS).forEach((key) => {
+      if (CUSTOMER_STORAGE_PERSISTENT_KEYS.has(key)) return;
+      localStorage.removeItem(key);
+    });
     // PERF FIX: Clear API cache on logout to prevent stale data for next user
     invalidateAll();
   },

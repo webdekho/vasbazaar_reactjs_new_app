@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { FaChevronRight, FaGift } from "react-icons/fa";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { FaChevronRight, FaBolt, FaShieldAlt } from "react-icons/fa";
 import { FiPhoneCall, FiCreditCard, FiGift } from "react-icons/fi";
 import { authService } from "../services/authService";
 import { customerStorage } from "../services/storageService";
@@ -13,7 +13,6 @@ const LoginScreen = () => {
   const [searchParams] = useSearchParams();
   const urlCode = searchParams.get("code") || "";
   const [mobileNumber, setMobileNumber] = useState("");
-  const [referralCode, setReferralCode] = useState(urlCode || customerStorage.getReferralCode() || "");
   const [status, setStatus] = useState(() => {
     const reason = sessionStorage.getItem("vb_logout_reason");
     if (reason) { sessionStorage.removeItem("vb_logout_reason"); return { type: "error", message: reason }; }
@@ -37,14 +36,22 @@ const LoginScreen = () => {
       return;
     }
     setLoading(true);
-    const response = await authService.sendOtp({ mobileNumber, referralCode });
+    // If a referral URL code is present, send it up-front; otherwise defer collection to ReferralScreen.
+    const initialReferral = urlCode || customerStorage.getReferralCode() || "";
+    const response = await authService.sendOtp({ mobileNumber, referralCode: initialReferral });
     setLoading(false);
     if (!response.success) { setStatus({ type: "error", message: response.message }); return; }
     const tempToken = extractSessionToken(response.data) || response.raw?.token || response.raw?.data?.token;
     if (tempToken) customerStorage.setTempToken(tempToken);
     customerStorage.setDevOtp(response.raw?.devOtp || null);
-    customerStorage.setReferralCode(referralCode);
+    if (urlCode) customerStorage.setReferralCode(urlCode);
     setStatus({ type: "success", message: response.message || "OTP sent successfully." });
+
+    // First-time on this device (and no referral URL code): collect referral on next page.
+    if (!urlCode && !customerStorage.hasCompletedFirstLogin()) {
+      navigate(`/customer/referral?mobile=${mobileNumber}`);
+      return;
+    }
     navigate(`/customer/verify-otp?mobile=${mobileNumber}`);
   };
 
@@ -68,8 +75,10 @@ const LoginScreen = () => {
               <img src={theme === "light" ? "https://webdekho.in/images/vasbazaar1.png" : "https://webdekho.in/images/vasbazaar.png"} alt="VasBazaar" className="cm-auth-logo-img" />
             </div>
             <div className="cm-auth-badge-row">
-              <span className="cm-auth-chip"><FiCreditCard /> Bills</span>
               <span className="cm-auth-chip"><FiPhoneCall /> Recharge</span>
+              <span className="cm-auth-chip"><FiCreditCard /> Bills</span>
+              <span className="cm-auth-chip"><FaBolt /> Electricity</span>
+              <span className="cm-auth-chip"><FaShieldAlt /> LIC</span>
               <span className="cm-auth-chip cm-auth-chip--accent"><FiGift /> Rewards</span>
             </div>
           </div>
@@ -102,24 +111,6 @@ const LoginScreen = () => {
               </div>
             </div>
 
-            {!urlCode && (
-              <div className={`cm-auth-field${focused === "referral" ? " is-focused" : ""}`}>
-                <label htmlFor="referral">
-                  <FaGift className="cm-auth-field-icon" />
-                  Referral Code / Referrer Mobile Number
-                </label>
-                <input
-                  id="referral"
-                  className="cm-auth-input cm-auth-input--full"
-                  placeholder="Optional referral code or mobile number"
-                  value={referralCode}
-                  onChange={(e) => setReferralCode(e.target.value)}
-                  onFocus={() => setFocused("referral")}
-                  onBlur={() => setFocused("")}
-                />
-              </div>
-            )}
-
             {status && (
               <div className={`cm-auth-alert cm-auth-alert--${status.type}`}>
                 <span className="cm-auth-alert-dot" />
@@ -137,7 +128,7 @@ const LoginScreen = () => {
           </form>
 
           <div className="cm-auth-footer">
-            <p>By continuing, you agree to our <span className="cm-auth-footer-link">Terms of Service</span></p>
+            <p>By continuing, you agree to our <Link to="/customer/terms" className="cm-auth-footer-link">Terms of Service</Link></p>
           </div>
         </div>
       </div>

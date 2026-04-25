@@ -6,7 +6,10 @@ export const walletService = {
   getWalletTransactions: (pageNumber = 0, pageSize = 10) =>
     authGet("/api/customer/wallet_transaction/getAll", { pageNumber, pageSize }),
 
-  getWalletHistory: (type, pageNumber = 0, pageSize = 10) =>
+  // Default pageSize lowered to 5 — Rewards/Cashback screens are mostly
+  // previewed at a glance; anything beyond the first 5 is loaded on demand
+  // via a "View More" button so initial paint stays fast.
+  getWalletHistory: (type, pageNumber = 0, pageSize = 5) =>
     authGet("/api/customer/wallet_transaction/getHistory", { type, pageNumber, pageSize }),
 
   getTransactionHistory: (pageNumber = 0) =>

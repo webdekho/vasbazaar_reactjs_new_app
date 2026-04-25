@@ -2,42 +2,11 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FaArrowLeft, FaPhone, FaWhatsapp, FaEnvelope, FaComments,
-  FaChevronDown, FaChevronRight, FaExclamationCircle, FaHeadset, FaHeart
+  FaChevronDown, FaChevronRight, FaExclamationCircle, FaHeadset, FaHeart, FaRobot
 } from "react-icons/fa";
 import { useTheme } from "../context/ThemeContext";
-
-const TAWK_TO_ID = "68d37d4a56af9719235895be/1j5t22r24";
-
-const openTawkChat = () => {
-  if (window.Tawk_API) {
-    window.Tawk_API.showWidget();
-    window.Tawk_API.maximize();
-  } else {
-    // Load Tawk.to script if not loaded
-    window.Tawk_API = window.Tawk_API || {};
-    window.Tawk_LoadStart = new Date();
-    const script = document.createElement("script");
-    script.async = true;
-    script.src = `https://embed.tawk.to/${TAWK_TO_ID}`;
-    script.charset = "UTF-8";
-    script.setAttribute("crossorigin", "*");
-    document.head.appendChild(script);
-    script.onload = () => {
-      setTimeout(() => {
-        if (window.Tawk_API && window.Tawk_API.maximize) {
-          window.Tawk_API.maximize();
-        }
-      }, 1500);
-    };
-  }
-};
-
-const contactCards = [
-  { icon: <FaPhone />, label: "Call Support", sub: "+91 8655681213", action: () => window.open("tel:+918655681213"), color: "#00C853" },
-  { icon: <FaWhatsapp />, label: "WhatsApp Chat", sub: "Quick assistance", action: () => window.open("https://wa.me/918655681213", "_blank"), color: "#25D366" },
-  { icon: <FaEnvelope />, label: "Email Support", sub: "support@vasbazaar.com", action: () => window.open("mailto:support@vasbazaar.com"), color: "#FF9800" },
-  { icon: <FaComments />, label: "Live Chat", sub: "Chat with our agents", action: openTawkChat, color: "#007BFF" },
-];
+import { useChatbot } from "../context/ChatbotContext";
+import { openTawkChat } from "../utils/tawk";
 
 const faqs = [
   { q: "How to book gas?", a: "Go to Services > Gas Booking and select your provider to book a gas cylinder." },
@@ -53,7 +22,16 @@ const faqs = [
 const HelpScreen = () => {
   const navigate = useNavigate();
   const { theme } = useTheme();
+  const { openPanel: openChatbotPanel } = useChatbot();
   const [expanded, setExpanded] = useState(null);
+
+  const contactCards = [
+    { icon: <FaPhone />, label: "Call Support", sub: "+91 8655681213", action: () => window.open("tel:+918655681213"), color: "#00C853" },
+    { icon: <FaWhatsapp />, label: "WhatsApp Chat", sub: "Quick assistance", action: () => window.open("https://wa.me/918655681213", "_blank"), color: "#25D366" },
+    { icon: <FaEnvelope />, label: "Email Support", sub: "support@vasbazaar.com", action: () => window.open("mailto:support@vasbazaar.com"), color: "#FF9800" },
+    { icon: <FaComments />, label: "Live Chat", sub: "Chat with our agents", action: openTawkChat, color: "#007BFF" },
+    { icon: <FaRobot />, label: "AI Chat", sub: "Ask our VasBazaar assistant", action: openChatbotPanel, color: "#9333EA" },
+  ];
 
   return (
     <div className="hp-page">

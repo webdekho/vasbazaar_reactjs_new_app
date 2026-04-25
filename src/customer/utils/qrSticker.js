@@ -812,26 +812,42 @@ export const drawQrStickerCanvas = ({ ctx, width, height, logoImg, qrImg }) => {
     ctx.drawImage(logoImg, (width - logoWidth) / 2, 58, logoWidth, logoHeight);
   }
 
+  const rewardPillW = 430;
+  const rewardPillH = 78;
+  const rewardPillX = (width - rewardPillW) / 2;
+  const rewardPillY = 180;
+  const rewardGrad = ctx.createLinearGradient(rewardPillX, rewardPillY, rewardPillX + rewardPillW, rewardPillY);
+  rewardGrad.addColorStop(0, "#0f172a");
+  rewardGrad.addColorStop(0.52, "#2563eb");
+  rewardGrad.addColorStop(1, "#14b8a6");
+  chip(ctx, rewardPillX, rewardPillY, rewardPillW, rewardPillH, 39, rewardGrad);
+
+  ctx.fillStyle = "#475569";
+  ctx.beginPath();
+  ctx.arc(rewardPillX + 52, rewardPillY + rewardPillH / 2, 9, 0, Math.PI * 2);
+  ctx.fillStyle = "#5eead4";
+  ctx.fill();
+
   ctx.textAlign = "center";
-  ctx.fillStyle = "#0f172a";
-  ctx.font = "bold 64px Arial";
-  ctx.fillText("Scan & Discover", width / 2, 220);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 44px Arial";
+  ctx.fillText("Earn Reward", width / 2 + 18, rewardPillY + 52);
 
   ctx.fillStyle = "#475569";
   ctx.font = "26px Arial";
-  ctx.fillText("Your gateway to instant recharges,", width / 2, 278);
-  ctx.fillText("bill payments & rewards.", width / 2, 312);
+  ctx.fillText("Share this QR and unlock rewards", width / 2, 304);
+  ctx.fillText("on every successful referral.", width / 2, 338);
 
-  chip(ctx, 70, 360, width - 140, 540, 40, "rgba(248,251,255,0.98)", "rgba(14,165,233,0.12)");
+  chip(ctx, 34, 370, width - 68, 560, 42, "rgba(248,251,255,0.98)", "rgba(14,165,233,0.12)");
 
-  chip(ctx, 108, 400, width - 216, 380, 32, "#ffffff");
+  chip(ctx, 62, 410, width - 124, 410, 34, "#ffffff");
 
   const cornerSize = 40;
   const cornerThickness = 5;
-  const fx = 108;
-  const fy = 400;
-  const fw = width - 216;
-  const fh = 380;
+  const fx = 62;
+  const fy = 410;
+  const fw = width - 124;
+  const fh = 410;
   ctx.strokeStyle = "#6366f1";
   ctx.lineWidth = cornerThickness;
   ctx.lineCap = "round";
@@ -869,7 +885,7 @@ export const drawQrStickerCanvas = ({ ctx, width, height, logoImg, qrImg }) => {
   ctx.stroke();
 
   if (qrImg) {
-    const qrSize = Math.min(fw - 80, fh - 80);
+    const qrSize = Math.min(430, fw - 170, fh - 70);
     const qrX = fx + (fw - qrSize) / 2;
     const qrY = fy + (fh - qrSize) / 2;
     ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
@@ -878,7 +894,7 @@ export const drawQrStickerCanvas = ({ ctx, width, height, logoImg, qrImg }) => {
   const badgeW = 380;
   const badgeH = 52;
   const badgeX = (width - badgeW) / 2;
-  const badgeY = 816;
+  const badgeY = 848;
   const badgeGrad = ctx.createLinearGradient(badgeX, badgeY, badgeX + badgeW, badgeY);
   badgeGrad.addColorStop(0, "#6366f1");
   badgeGrad.addColorStop(1, "#8b5cf6");
@@ -894,30 +910,30 @@ export const drawQrStickerCanvas = ({ ctx, width, height, logoImg, qrImg }) => {
   ctx.textAlign = "center";
   ctx.fillText("SCAN TO GET STARTED", width / 2 + 10, badgeY + 34);
 
-  const divGrad = ctx.createLinearGradient(70, 0, width - 70, 0);
+  const divGrad = ctx.createLinearGradient(34, 0, width - 34, 0);
   divGrad.addColorStop(0, "rgba(99, 102, 241, 0)");
   divGrad.addColorStop(0.5, "rgba(99, 102, 241, 0.3)");
   divGrad.addColorStop(1, "rgba(99, 102, 241, 0)");
   ctx.fillStyle = divGrad;
-  ctx.fillRect(70, 900, width - 140, 2);
+  ctx.fillRect(34, 958, width - 68, 2);
 
-  chip(ctx, 70, 922, width - 140, 620, 36, "#ffffff", "rgba(14,165,233,0.12)");
+  chip(ctx, 34, 982, width - 68, 540, 36, "#ffffff", "rgba(14,165,233,0.12)");
 
-  const accentGrad = ctx.createLinearGradient(100, 958, 100, 994);
+  const accentGrad = ctx.createLinearGradient(64, 1016, 64, 1052);
   accentGrad.addColorStop(0, "#6366f1");
   accentGrad.addColorStop(1, "#0ea5e9");
-  chip(ctx, 100, 958, 6, 36, 3, accentGrad);
+  chip(ctx, 64, 1016, 6, 36, 3, accentGrad);
 
   ctx.fillStyle = "#0f172a";
   ctx.font = "bold 30px Arial";
   ctx.textAlign = "left";
-  ctx.fillText("Why VasBazaar?", 120, 988);
+  ctx.fillText("Why VasBazaar?", 84, 1046);
 
-  const cardWidth = 410;
-  const cardHeight = 170;
-  const startX = 100;
-  const startY = 1030;
-  const gap = 16;
+  const cardGap = 20;
+  const startX = 64;
+  const startY = 1088;
+  const cardWidth = (width - startX * 2 - cardGap) / 2;
+  const cardHeight = 158;
 
   const gradients = [
     ["#f97316", "#fb923c"],
@@ -929,10 +945,13 @@ export const drawQrStickerCanvas = ({ ctx, width, height, logoImg, qrImg }) => {
   qrStickerBenefits.forEach((benefit, index) => {
     const row = Math.floor(index / 2);
     const col = index % 2;
-    const cardX = startX + col * (cardWidth + gap);
-    const cardY = startY + row * (cardHeight + gap);
+    const cardX = startX + col * (cardWidth + cardGap);
+    const cardY = startY + row * (cardHeight + cardGap);
 
-    chip(ctx, cardX, cardY, cardWidth, cardHeight, 28, "#ffffff", "rgba(14,165,233,0.08)");
+    const cardGrad = ctx.createLinearGradient(cardX, cardY, cardX + cardWidth, cardY + cardHeight);
+    cardGrad.addColorStop(0, "#ffffff");
+    cardGrad.addColorStop(1, "rgba(248,250,252,0.95)");
+    chip(ctx, cardX, cardY, cardWidth, cardHeight, 26, cardGrad, "rgba(99,102,241,0.10)");
 
     const iconGrad = ctx.createLinearGradient(cardX + 18, cardY + 18, cardX + 78, cardY + 78);
     iconGrad.addColorStop(0, gradients[index][0]);
@@ -959,16 +978,7 @@ export const drawQrStickerCanvas = ({ ctx, width, height, logoImg, qrImg }) => {
   ctx.fillStyle = "#475569";
   ctx.font = "600 16px Arial";
   ctx.textAlign = "center";
-  ctx.fillText("www.vasbazaar.com", width / 2 - 60, height - 40);
-
-  // Footer dot
-  ctx.fillStyle = "#6366f1";
-  ctx.beginPath();
-  ctx.arc(width / 2, height - 44, 3, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = "#475569";
-  ctx.fillText("Powered by VasBazaar", width / 2 + 70, height - 40);
+  ctx.fillText("www.vasbazaar.com", width / 2, height - 40);
 };
 
 export const createQrStickerCanvas = async ({ mobile, width = 960, height = 1600, qrSize = 720 } = {}) => {

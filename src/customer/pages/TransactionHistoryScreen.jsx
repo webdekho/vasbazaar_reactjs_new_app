@@ -300,31 +300,36 @@ const TransactionHistoryScreen = () => {
             const detailsVisible = !isMobileView || isExpanded;
             const txn = normalizeTransaction(item);
             const complaintTone = getComplaintStatusTone(item.complaintStatus);
+            const showOfferDetails = sk === "success" && txn.offerMethod !== "none";
             const metaContent = (
               <>
                 <TransactionMetaItem label="Transaction ID" value={item.txnId} />
                 <TransactionMetaItem label="Service" value={txn.service} />
                 <TransactionMetaItem label="Operator" value={txn.operator} />
                 <TransactionMetaItem label="Payment Mode" value={txn.paymentMode} />
-                <TransactionMetaItem
-                  label="Offer Method"
-                  value={txn.offerMethodLabel}
-                  valueClassName={`th-meta-value--offer th-meta-value--offer-${txn.offerMethod}`}
-                />
-                {txn.offerMethod === "discount" && (
+                {showOfferDetails && (
                   <>
-                    <TransactionMetaItem label="Discount" value={formatCurrency(txn.discountAmount)} />
-                    <TransactionMetaItem label="Paid Amount" value={formatCurrency(txn.paidAmount ?? txn.amount)} />
-                  </>
-                )}
-                {txn.offerMethod === "cashback" && (
-                  <TransactionMetaItem label="Cashback Amount" value={formatCurrency(txn.cashbackAmount)} />
-                )}
-                {txn.offerMethod === "coupon" && (
-                  <>
-                    <TransactionMetaItem label="Coupon Name" value={txn.couponName} />
-                    <TransactionMetaItem label="Coupon Code" value={txn.couponCode} />
-                    <TransactionMetaItem label="Coupon Validity" value={txn.couponValidity} />
+                    <TransactionMetaItem
+                      label="Offer Method"
+                      value={txn.offerMethodLabel}
+                      valueClassName={`th-meta-value--offer th-meta-value--offer-${txn.offerMethod}`}
+                    />
+                    {txn.offerMethod === "discount" && (
+                      <>
+                        <TransactionMetaItem label="Discount" value={formatCurrency(txn.discountAmount)} />
+                        <TransactionMetaItem label="Paid Amount" value={formatCurrency(txn.paidAmount ?? txn.amount)} />
+                      </>
+                    )}
+                    {txn.offerMethod === "cashback" && (
+                      <TransactionMetaItem label="Cashback Amount" value={formatCurrency(txn.cashbackAmount)} />
+                    )}
+                    {txn.offerMethod === "coupon" && (
+                      <>
+                        <TransactionMetaItem label="Coupon Name" value={txn.couponName} />
+                        <TransactionMetaItem label="Coupon Code" value={txn.couponCode} />
+                        <TransactionMetaItem label="Coupon Validity" value={txn.couponValidity} />
+                      </>
+                    )}
                   </>
                 )}
               </>

@@ -1,29 +1,32 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-  FaBars, FaTimes, FaChevronRight, FaChevronDown, FaGift, FaRegBell, FaSignOutAlt,
+  FaBars, FaTimes, FaChevronRight, FaGift, FaRegBell, FaSignOutAlt,
   FaUserCircle, FaWallet, FaHistory, FaQuestionCircle, FaExclamationTriangle,
   FaHome, FaSearch, FaClock, FaUsers, FaSyncAlt, FaTag,
   FaExclamationCircle, FaCamera, FaQrcode, FaPlaneDeparture,
-  FaMobileAlt, FaTv, FaPhoneAlt, FaBolt, FaFireAlt, FaTint, FaBroadcastTower,
-  FaShieldAlt
+  FaShieldAlt, FaDownload, FaShareAlt, FaCheck, FaHeadset
 } from "react-icons/fa";
-import { HiMiniSquares2X2 } from "react-icons/hi2";
 import { useCustomerModern } from "../context/CustomerModernContext";
 import { userService } from "../services/userService";
-import { FaSun, FaMoon } from "react-icons/fa";
-import { useTheme } from "../context/ThemeContext";
+import { notificationService } from "../services/notificationService";
 import AppBrand from "../components/AppBrand";
 import { APP_VERSION } from "../../shared/constants/app";
 import PWAInstallPrompt from "../components/PWAInstallPrompt";
 import ChatbotPanel from "../components/ChatbotPanel";
-import { useChatbot } from "../context/ChatbotContext";
-import { IoChatbubbleEllipses } from "react-icons/io5";
 import { Capacitor } from "@capacitor/core";
 import { App } from "@capacitor/app";
+import { Share } from "@capacitor/share";
 import {
+  getQrStickerLink,
   getQrStickerUrl,
 } from "../utils/qrSticker";
+import { captureProfilePhotoDataUrl, fileToDataUrl, shouldUseNativeCamera } from "../utils/profilePhoto";
+import { getProfilePhotoCandidates, saveProfilePhoto } from "../utils/profileAvatar";
+import ProfileAvatar from "../components/ProfileAvatar";
+import ProfilePhotoCropper from "../components/ProfilePhotoCropper";
+import ProfilePhotoPreview from "../components/ProfilePhotoPreview";
+import { openTawkChat } from "../utils/tawk";
 import { useToast } from "../context/ToastContext";
 
 const bottomNavItems = [
@@ -31,17 +34,7 @@ const bottomNavItems = [
   { to: "/customer/app/wallet", label: "Wallet", icon: <FaWallet /> },
   { to: "/customer/app/services", label: "Services", icon: <img src="https://webdekho.in/images/b.png" alt="" style={{ width: 24, height: 24, objectFit: "contain", filter: "brightness(0) invert(1)" }} />, isCenter: true },
   { to: "/customer/app/coupons", label: "Coupons", icon: <FaGift /> },
-  { key: "chatbot", label: "AI Chat", icon: <IoChatbubbleEllipses />, isChatbot: true },
-];
-
-const serviceSubItems = [
-  { to: "/customer/app/services/prepaid", label: "Prepaid", icon: <FaMobileAlt /> },
-  { to: "/customer/app/services/postpaid", label: "Postpaid", icon: <FaPhoneAlt /> },
-  { to: "/customer/app/services/dth", label: "DTH", icon: <FaTv /> },
-  { to: "/customer/app/services/landline", label: "Landline", icon: <FaBroadcastTower /> },
-  { to: "/customer/app/services/electricity", label: "Electricity", icon: <FaBolt /> },
-  { to: "/customer/app/services/gas", label: "Gas", icon: <FaFireAlt /> },
-  { to: "/customer/app/services/water", label: "Water", icon: <FaTint /> },
+  { key: "live-chat", label: "Live Chat", icon: <FaHeadset />, isLiveChat: true },
 ];
 
 const drawerMenuItems = [
@@ -63,18 +56,19 @@ const drawerMenuItems = [
 
 const ProtectedShell = () => {
   const { logout, userData } = useCustomerModern();
-  const { theme, toggleTheme } = useTheme();
-  const { isOpen: isChatbotOpen, togglePanel: toggleChatbot } = useChatbot();
   const location = useLocation();
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [servicesOpen, setServicesOpen] = useState(false);
   const [balances, setBalances] = useState({ balance: 0, cashback: 0, incentive: 0, referralBonus: 0, referralUsers: 0 });
-  const [profilePhoto, setProfilePhoto] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [uploading, setUploading] = useState(false);
+  const [cropSrc, setCropSrc] = useState(null);
+  const [photoPreviewOpen, setPhotoPreviewOpen] = useState(false);
+  // Bump to force <ProfileAvatar /> to re-read storage after a new photo lands.
+  const [photoVersion, setPhotoVersion] = useState(0);
   const [showKycPopup, setShowKycPopup] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -97,17 +91,6 @@ const ProtectedShell = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userData, isKycDone]); // removed location.pathname — only run on mount/login
 
-  // Load profile photo from localStorage on mount (only valid URLs)
-  useEffect(() => {
-    const stored = localStorage.getItem("profile_photo");
-    if (stored && stored.startsWith("http")) {
-      setProfilePhoto(stored);
-    } else if (stored) {
-      // Clear invalid cached photo
-      localStorage.removeItem("profile_photo");
-    }
-  }, []);
-
   const fetchBalances = useCallback(async () => {
     const res = await userService.getUserProfile();
     if (res.success && res.data) {
@@ -118,16 +101,31 @@ const ProtectedShell = () => {
         referralBonus: Number(res.data.referralBonus || res.data.referal_bonus || 0),
         referralUsers: Number(res.data.referralUsers || res.data.referral_users || 0),
       });
-      // Update profile photo from API if available (must be valid URL)
       const photo = res.data.profile || res.data.profilePhoto || res.data.photo;
-      if (photo && photo.startsWith("http")) {
-        setProfilePhoto(photo);
-        localStorage.setItem("profile_photo", photo);
+      if (photo && /^https?:\/\//i.test(photo)) {
+        saveProfilePhoto({ serverUrl: photo });
+        setPhotoVersion((v) => v + 1);
       }
     }
   }, []);
 
   useEffect(() => { fetchBalances(); }, [fetchBalances]);
+
+  // Unread notification count — a notification disappears after `dismissNotification`
+  // so anything still in the list is treated as unread. Bell icon renders only when
+  // this is > 0. Refetches whenever the user navigates (covers the return-from-
+  // notifications-screen case where the list may now be empty after Clear All).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const res = await notificationService.getNotifications(0);
+      if (cancelled) return;
+      const list = res?.data?.records || (Array.isArray(res?.data) ? res.data : []);
+      setUnreadCount(list.length || 0);
+    })();
+    return () => { cancelled = true; };
+  }, [location.pathname]);
+
   /**
    * PERF FIX: Removed duplicate balance fetch on drawer open.
    * Previously, opening the drawer triggered another getUserProfile() call.
@@ -183,36 +181,58 @@ const ProtectedShell = () => {
     };
   }, [navigate]);
 
-  // Profile photo upload with canvas crop (1:1 square)
+  const handleProfilePhotoClick = async () => {
+    if (!shouldUseNativeCamera()) {
+      fileInputRef.current?.click();
+      return;
+    }
+    try {
+      const imageSrc = await captureProfilePhotoDataUrl();
+      if (imageSrc) setCropSrc(imageSrc);
+    } catch (error) {
+      if (!String(error?.message || error).toLowerCase().includes("cancel")) {
+        showToast("Photo select nahi ho paya. Please try again.", "error");
+      }
+    }
+  };
+
   const handlePhotoSelect = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
-    // Crop to square using canvas
-    const img = new Image();
-    img.onload = async () => {
-      const size = Math.min(img.width, img.height);
-      const canvas = document.createElement("canvas");
-      canvas.width = 400;
-      canvas.height = 400;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, (img.width - size) / 2, (img.height - size) / 2, size, size, 0, 0, 400, 400);
-      canvas.toBlob(async (blob) => {
-        if (!blob) return;
-        const croppedFile = new File([blob], `profile_${Date.now()}.jpg`, { type: "image/jpeg" });
-        setUploading(true);
-        const res = await userService.uploadProfilePhoto(croppedFile);
-        setUploading(false);
-        if (res.success) {
-          const url = res.data?.profile_photo || res.data?.photo_url || res.data?.profile || URL.createObjectURL(blob);
-          setProfilePhoto(url);
-          localStorage.setItem("profile_photo", url);
-        } else {
-          showToast("Upload failed. Please try again.", "error");
-        }
-      }, "image/jpeg", 0.9);
-    };
-    img.src = URL.createObjectURL(file);
+    const imageSrc = await fileToDataUrl(file);
+    setCropSrc(imageSrc);
+  };
+
+  const handleCropConfirm = async ({ dataUrl, file }) => {
+    setCropSrc(null);
+    // Save the cropped image locally so it renders immediately and persists
+    // across refreshes, even if the server upload fails or is offline.
+    saveProfilePhoto({ dataUrl });
+    setPhotoVersion((v) => v + 1);
+
+    setUploading(true);
+    const res = await userService.uploadProfilePhoto(file);
+    setUploading(false);
+
+    if (res.success) {
+      const serverUrl = res.data?.profile_photo || res.data?.photo_url || res.data?.profile;
+      if (serverUrl) {
+        saveProfilePhoto({ serverUrl });
+        setPhotoVersion((v) => v + 1);
+      }
+    } else {
+      showToast("Upload failed. Please try again.", "error");
+    }
+  };
+
+  // `photoVersion` state bumps cause a re-render which re-reads localStorage here.
+  // The variable itself isn't referenced — the state change alone drives the refresh.
+  const photoCandidates = getProfilePhotoCandidates(userData); // eslint-disable-line no-unused-vars
+  const _photoVersionRead = photoVersion; // eslint-disable-line no-unused-vars
+
+  const openPhotoPreview = () => {
+    if (photoCandidates.length > 0) setPhotoPreviewOpen(true);
   };
 
   /**
@@ -224,6 +244,46 @@ const ProtectedShell = () => {
     setDrawerOpen(false);
     navigate(to);
   }, [navigate]);
+
+  const handleQrDownload = useCallback((event) => {
+    event?.stopPropagation();
+    handleDrawerNav("/customer/app/qr");
+  }, [handleDrawerNav]);
+
+  const handleShareAndEarn = useCallback(async (event) => {
+    event?.stopPropagation();
+
+    const shareUrl = getQrStickerLink(userMobile);
+    const shareText = `Join VasBazaar with my referral link and start earning rewards.\n${shareUrl}`;
+
+    try {
+      if (Capacitor.isNativePlatform()) {
+        await Share.share({
+          title: "Share & Earn with VasBazaar",
+          text: shareText,
+          url: shareUrl,
+          dialogTitle: "Share & Earn",
+        });
+        return;
+      }
+
+      if (navigator.share) {
+        await navigator.share({
+          title: "Share & Earn with VasBazaar",
+          text: shareText,
+          url: shareUrl,
+        });
+        return;
+      }
+
+      await navigator.clipboard?.writeText(shareUrl);
+      showToast("Referral link copied.", "success");
+    } catch (error) {
+      if (error?.name !== "AbortError") {
+        showToast("Unable to share right now.", "error");
+      }
+    }
+  }, [showToast, userMobile]);
 
   const isServiceFlowPage = location.pathname === "/customer/app/payment";
   const isQrPage = location.pathname === "/customer/app/qr";
@@ -240,16 +300,38 @@ const ProtectedShell = () => {
 
         {/* Profile card */}
         <div className="cm-sidebar-profile">
-          <div className="cm-drawer-photo-wrap" onClick={() => fileInputRef.current?.click()}>
-            {profilePhoto ? (
-              <img src={profilePhoto} alt="" className="cm-drawer-avatar-img" onError={() => { setProfilePhoto(null); localStorage.removeItem("profile_photo"); }} />
-            ) : (
-              <div className="cm-drawer-avatar-fallback"><FaUserCircle /></div>
-            )}
-            <span className="cm-drawer-photo-edit">{uploading ? "..." : <FaCamera />}</span>
+          <div className="cm-drawer-photo-wrap" onClick={openPhotoPreview} role="button" tabIndex={0}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPhotoPreview(); } }}
+          >
+            <ProfileAvatar
+              candidates={photoCandidates}
+              className="cm-drawer-avatar-img"
+              alt={userName}
+              emptyFallback={<div className="cm-drawer-avatar-fallback"><FaUserCircle /></div>}
+            />
+            <span
+              className="cm-drawer-photo-edit"
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); handleProfilePhotoClick(); }}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); handleProfilePhotoClick(); } }}
+              title="Change photo"
+            >
+              {uploading ? "..." : <FaCamera />}
+            </span>
           </div>
-          <div style={{ flex: 1 }}>
-            <strong>{userName}</strong>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <strong className="cm-sidebar-profile-name">
+              {userName}
+              {isKycDone && (
+                <>
+                  {" "}
+                  <span className="pf-verified-badge pf-verified-badge--sm pf-verified-badge--inline" aria-label="Verified">
+                    <FaCheck />
+                  </span>
+                </>
+              )}
+            </strong>
             <div className="cm-muted">{userMobile ? `+91 ${userMobile}` : "Active session"}</div>
           </div>
           <div className="cm-sidebar-qr-actions">
@@ -262,9 +344,8 @@ const ProtectedShell = () => {
           <h3 className="cm-drawer-section-title">My Wallet</h3>
           <div className="cm-drawer-wallets">
             <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/wallet")}><div className="cm-dwc-icon"><FaWallet /></div><strong>₹{balances.balance.toFixed(2)}</strong><span>Wallet Balance</span></div>
-            <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/commission?tab=bonus")}><div className="cm-dwc-icon"><FaUsers /></div><strong>₹{balances.referralBonus.toFixed(2)}</strong><span>Referral Bonus</span></div>
+            <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/commission?tab=rewards")}><div className="cm-dwc-icon"><FaUsers /></div><strong>₹{(balances.referralBonus + balances.incentive).toFixed(2)}</strong><span>Reward Reports</span></div>
             <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/commission?tab=cashback")}><div className="cm-dwc-icon"><FaGift /></div><strong>₹{balances.cashback.toFixed(2)}</strong><span>Lifetime Cashback</span></div>
-            <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/commission?tab=incentive")}><div className="cm-dwc-icon"><HiMiniSquares2X2 /></div><strong>₹{balances.incentive.toFixed(2)}</strong><span>Lifetime Incentive</span></div>
             <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/referrals")}><div className="cm-dwc-icon"><FaUsers /></div><strong>{balances.referralUsers}</strong><span>Referral Users</span></div>
           </div>
         </div>
@@ -302,11 +383,20 @@ const ProtectedShell = () => {
                 <div className="cm-topbar-brand"><AppBrand /></div>
               </div>
               <div className="cm-topbar-actions">
-                <button className="cm-icon-button cm-theme-toggle" type="button" onClick={toggleTheme} aria-label="Toggle theme">
-                  {theme === "dark" ? <FaSun /> : <FaMoon />}
-                </button>
-                <Link className="cm-icon-button" to="/customer/app/notifications"><FaRegBell /></Link>
-                <Link className="cm-icon-button" to="/customer/app/profile"><FaUserCircle /></Link>
+                {unreadCount > 0 && (
+                  <Link className="cm-icon-button cm-icon-button--bell" to="/customer/app/notifications" aria-label={`${unreadCount} unread notifications`}>
+                    <FaRegBell />
+                    <span className="cm-icon-button-badge">{unreadCount > 9 ? "9+" : unreadCount}</span>
+                  </Link>
+                )}
+                <Link className="cm-icon-button cm-icon-button--avatar" to="/customer/app/profile" aria-label="Profile">
+                  <ProfileAvatar
+                    candidates={photoCandidates}
+                    className="cm-topbar-avatar-img"
+                    alt={userName}
+                    emptyFallback={<FaUserCircle />}
+                  />
+                </Link>
               </div>
             </div>
           </header>
@@ -317,12 +407,11 @@ const ProtectedShell = () => {
           <nav className="cm-btm-nav">
             <div className="cm-btm-nav-inner">
               {bottomNavItems.map((item) => {
-                if (item.isChatbot) {
+                if (item.isLiveChat) {
                   return (
-                    <button key="chatbot" type="button" className={`cm-btm-nav-item${isChatbotOpen ? " is-active" : ""}`} onClick={toggleChatbot}>
+                    <button key="live-chat" type="button" className="cm-btm-nav-item" onClick={openTawkChat}>
                       <span className="cm-btm-nav-icon">{item.icon}</span>
                       <span className="cm-btm-nav-label">{item.label}</span>
-                      {isChatbotOpen && <span className="cm-btm-nav-indicator" />}
                     </button>
                   );
                 }
@@ -351,17 +440,39 @@ const ProtectedShell = () => {
         <div className="cm-drawer-header-dark">
           <div className="cm-drawer-version">App Version : v{APP_VERSION}</div>
           <div className="cm-drawer-profile-row">
-            <div className="cm-drawer-photo-wrap" onClick={() => fileInputRef.current?.click()}>
-              {profilePhoto ? (
-                <img src={profilePhoto} alt="" className="cm-drawer-avatar-img" onError={() => { setProfilePhoto(null); localStorage.removeItem("profile_photo"); }} />
-              ) : (
-                <div className="cm-drawer-avatar-fallback"><FaUserCircle /></div>
-              )}
-              <span className="cm-drawer-photo-edit">{uploading ? "..." : <FaCamera />}</span>
+            <div className="cm-drawer-photo-wrap" onClick={openPhotoPreview} role="button" tabIndex={0}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPhotoPreview(); } }}
+            >
+              <ProfileAvatar
+                candidates={photoCandidates}
+                className="cm-drawer-avatar-img"
+                alt={userName}
+                emptyFallback={<div className="cm-drawer-avatar-fallback"><FaUserCircle /></div>}
+              />
+              <span
+                className="cm-drawer-photo-edit"
+                role="button"
+                tabIndex={0}
+                onClick={(e) => { e.stopPropagation(); handleProfilePhotoClick(); }}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); handleProfilePhotoClick(); } }}
+                title="Change photo"
+              >
+                {uploading ? "..." : <FaCamera />}
+              </span>
               <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handlePhotoSelect} />
             </div>
-            <div>
-              <div className="cm-drawer-name">{userName}</div>
+            <div style={{ minWidth: 0 }}>
+              <div className="cm-drawer-name">
+                {userName}
+                {isKycDone && (
+                  <>
+                    {" "}
+                    <span className="pf-verified-badge pf-verified-badge--sm pf-verified-badge--inline" aria-label="Verified">
+                      <FaCheck />
+                    </span>
+                  </>
+                )}
+              </div>
               <div className="cm-drawer-mobile">{userMobile ? `+91 ${userMobile}` : ""}</div>
             </div>
           </div>
@@ -381,6 +492,16 @@ const ProtectedShell = () => {
             {/* PERF FIX: Lazy-load QR code image — drawer is closed by default, no need to fetch immediately */}
             <img src={qrUrl} alt="QR Code" className="cm-drawer-qr-img" loading="lazy" />
           </div>
+          <div className="cm-drawer-qr-cta-row">
+            <button type="button" className="cm-drawer-qr-cta cm-drawer-qr-cta--download" onClick={handleQrDownload}>
+              <FaDownload />
+              <span>Download</span>
+            </button>
+            <button type="button" className="cm-drawer-qr-cta cm-drawer-qr-cta--share" onClick={handleShareAndEarn}>
+              <FaShareAlt />
+              <span>Share & Earn</span>
+            </button>
+          </div>
         </div>
 
         {/* My Wallet */}
@@ -388,31 +509,10 @@ const ProtectedShell = () => {
           <h3 className="cm-drawer-section-title">My Wallet</h3>
           <div className="cm-drawer-wallets">
             <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/wallet")}><div className="cm-dwc-icon"><FaWallet /></div><strong>₹{balances.balance.toFixed(2)}</strong><span>Wallet Balance</span></div>
-            <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/commission?tab=bonus")}><div className="cm-dwc-icon"><FaUsers /></div><strong>₹{balances.referralBonus.toFixed(2)}</strong><span>Referral Bonus</span></div>
+            <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/commission?tab=rewards")}><div className="cm-dwc-icon"><FaUsers /></div><strong>₹{(balances.referralBonus + balances.incentive).toFixed(2)}</strong><span>Reward Reports</span></div>
             <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/commission?tab=cashback")}><div className="cm-dwc-icon"><FaGift /></div><strong>₹{balances.cashback.toFixed(2)}</strong><span>Lifetime Cashback</span></div>
-            <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/commission?tab=incentive")}><div className="cm-dwc-icon"><HiMiniSquares2X2 /></div><strong>₹{balances.incentive.toFixed(2)}</strong><span>Lifetime Incentive</span></div>
             <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/referrals")}><div className="cm-dwc-icon"><FaUsers /></div><strong>{balances.referralUsers}</strong><span>Referral Users</span></div>
           </div>
-        </div>
-
-        {/* Recharge & Bill Pay services — collapsible */}
-        <div className="cm-drawer-section">
-          <button type="button" className="cm-drawer-section-toggle" onClick={() => setServicesOpen((p) => !p)}
-            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit" }}>
-            <h3 className="cm-drawer-section-title" style={{ margin: 0 }}>Recharge & Bill Pay</h3>
-            {servicesOpen ? <FaChevronDown style={{ fontSize: 12, opacity: 0.5 }} /> : <FaChevronRight style={{ fontSize: 12, opacity: 0.5 }} />}
-          </button>
-          {servicesOpen && (
-            <nav className="cm-drawer-menu" style={{ marginTop: 8 }}>
-              {serviceSubItems.map((item) => (
-                <button key={item.label} type="button" className="cm-drawer-link" onClick={() => handleDrawerNav(item.to)}>
-                  <span className="cm-drawer-link-icon">{item.icon}</span>
-                  <span>{item.label}</span>
-                  <FaChevronRight className="cm-drawer-link-arrow" />
-                </button>
-              ))}
-            </nav>
-          )}
         </div>
 
         {/* Menu — using buttons instead of NavLink to avoid highlight bug */}
@@ -459,6 +559,22 @@ const ProtectedShell = () => {
           </div>
         </div>
       )}
+
+      {/* Shared profile-photo cropper */}
+      <ProfilePhotoCropper
+        open={!!cropSrc}
+        imageSrc={cropSrc}
+        onCancel={() => setCropSrc(null)}
+        onConfirm={handleCropConfirm}
+      />
+
+      {/* Tap-to-zoom profile-photo preview */}
+      <ProfilePhotoPreview
+        open={photoPreviewOpen}
+        candidates={photoCandidates}
+        name={userName}
+        onClose={() => setPhotoPreviewOpen(false)}
+      />
 
       {/* Chatbot Panel — toggled from bottom nav */}
       <ChatbotPanel />

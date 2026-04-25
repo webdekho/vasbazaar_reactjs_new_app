@@ -2,11 +2,58 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FaArrowLeft, FaCalendarAlt, FaClock, FaExclamationCircle,
-  FaExclamationTriangle, FaChevronRight, FaReceipt, FaTrashAlt
+  FaExclamationTriangle, FaChevronRight, FaTrashAlt
 } from "react-icons/fa";
 import { walletService } from "../services/walletService";
 import { rechargeService } from "../services/rechargeService";
 import { invalidate } from "../services/apiCache";
+import { customerStorage } from "../services/storageService";
+
+// Build a stable key per reminder (same mobile on same operator = same reminder).
+const dismissKeyFor = (item) => {
+  const mobile = item?.mobile || item?.param || "";
+  const operatorId = item?.operatorId?.id || item?.operator?.id || "";
+  return `${mobile}|${operatorId}`;
+};
+
+// Hide dues whose fromDate is more than STALE_DAYS in the past.
+// Keeps overdue items visible up to 10 days for the user to act on.
+const STALE_DAYS = 10;
+const filterStale = (list) => {
+  const cutoff = new Date();
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - STALE_DAYS);
+  return list.filter((item) => {
+    if (!item?.fromDate) return true;
+    return new Date(item.fromDate).getTime() >= cutoff.getTime();
+  });
+};
+
+// Sort ascending by fromDate; overdue items (past dates) land on top naturally.
+// Items without a fromDate go to the end.
+const sortByDueDate = (list) => {
+  return [...list].sort((a, b) => {
+    const aTime = a?.fromDate ? new Date(a.fromDate).getTime() : Number.POSITIVE_INFINITY;
+    const bTime = b?.fromDate ? new Date(b.fromDate).getTime() : Number.POSITIVE_INFINITY;
+    return aTime - bTime;
+  });
+};
+
+// Keep only items that were not dismissed, OR whose submittedDate is newer
+// than the dismissed timestamp (meaning the user re-set the reminder).
+const filterDismissed = (list) => {
+  const dismissed = customerStorage.getDismissedDues();
+  if (!dismissed || Object.keys(dismissed).length === 0) return list;
+  return list.filter((item) => {
+    const key = dismissKeyFor(item);
+    const dismissedAt = dismissed[key];
+    if (!dismissedAt) return true;
+    const itemDate = item?.submittedDate ? new Date(item.submittedDate) : null;
+    const dismissedDate = new Date(dismissedAt);
+    if (!itemDate || Number.isNaN(itemDate.getTime())) return false;
+    return itemDate.getTime() > dismissedDate.getTime();
+  });
+};
 
 const statusConfig = {
   pending: { label: "Pending", icon: <FaClock />, color: "#FF9800" },
@@ -95,13 +142,16 @@ const DueCard = ({ item, index, onPay, onDelete, processing, deleting }) => {
         {/* Top: logo + info + amount */}
         <div className="md-card-top">
           <div className="md-card-logo-wrap">
-            {logo ? (
-              <img src={logo} alt="" className="md-card-logo" />
-            ) : (
-              <div className="md-card-logo-fallback" style={{ color: st.color }}>
-                <FaReceipt />
-              </div>
-            )}
+            <img
+              src={logo || "/favicon.png"}
+              alt=""
+              className="md-card-logo"
+              onError={(e) => {
+                if (e.currentTarget.dataset.fallback === "1") return;
+                e.currentTarget.dataset.fallback = "1";
+                e.currentTarget.src = "/favicon.png";
+              }}
+            />
           </div>
           <div className="md-card-info">
             <div className="md-card-provider">{operatorName}</div>
@@ -181,7 +231,7 @@ const MyDuesScreen = () => {
       setLoading(false);
       if (!res.success) { setError(res.message || "Failed to load dues."); return; }
       const data = Array.isArray(res.data) ? res.data : (res.data?.records || []);
-      setDues(data);
+      setDues(sortByDueDate(filterStale(filterDismissed(data))));
     })();
   }, []);
 
@@ -238,6 +288,9 @@ const MyDuesScreen = () => {
     setDeletingId(null);
 
     if (res.success) {
+      // Persist dismissal keyed by {mobile|operatorId} so the reminder stays hidden
+      // on refresh — until user submits a newer recharge (newer submittedDate).
+      customerStorage.dismissDue(dismissKeyFor(item), item.submittedDate);
       // Remove from list
       setDues((prev) => prev.filter((d) => d.id !== id));
       // Clear cache so next visit fetches fresh data

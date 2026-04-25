@@ -105,6 +105,11 @@ const inferOfferMethod = (item) => {
 };
 
 const computeOfferValue = (item, method, baseAmount, paidAmount) => {
+  if ((method === "discount" || method === "cashback") && baseAmount !== null && paidAmount !== null) {
+    const responseDifference = Number(Math.abs(baseAmount - paidAmount).toFixed(2));
+    if (responseDifference > 0) return responseDifference;
+  }
+
   const directValue = toFiniteNumber(
     firstPresent(
       method === "discount" ? item.discountValue : item.cashbackValue,
@@ -136,10 +141,6 @@ const computeOfferValue = (item, method, baseAmount, paidAmount) => {
     }
   }
 
-  if (method === "discount" && baseAmount !== null && paidAmount !== null && baseAmount > paidAmount) {
-    return Number((baseAmount - paidAmount).toFixed(2));
-  }
-
   return null;
 };
 
@@ -164,8 +165,8 @@ export const normalizeTransaction = (item = {}) => {
 
   const paymentMode = inferPaymentMode(item);
 
-  const baseAmount = toFiniteNumber(firstPresent(item.amount, item.totalAmount, item.billAmount));
-  const paidAmount = toFiniteNumber(firstPresent(item.txnAmt, item.amount, item.payableAmount));
+  const baseAmount = toFiniteNumber(firstPresent(item.txnAmt, item.totalAmount, item.billAmount, item.amount));
+  const paidAmount = toFiniteNumber(firstPresent(item.amount, item.payableAmount, item.txnAmt));
   const offerMethod = inferOfferMethod(item);
   const offerValue = computeOfferValue(item, offerMethod, baseAmount, paidAmount);
 
@@ -174,7 +175,7 @@ export const normalizeTransaction = (item = {}) => {
     operator: String(operator),
     paymentMode,
     mobile: String(firstPresent(item.operatorNo, item.mobile, item.field1, item.customerMobile) || ""),
-    amount: paidAmount,
+    amount: baseAmount,
     baseAmount,
     paidAmount: offerMethod === "discount"
       ? paidAmount ?? (baseAmount !== null && offerValue !== null ? Number((baseAmount - offerValue).toFixed(2)) : null)

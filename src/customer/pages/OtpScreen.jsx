@@ -7,6 +7,7 @@ import { authService } from "../services/authService";
 import { userService } from "../services/userService";
 import { customerStorage } from "../services/storageService";
 import { extractSessionToken } from "../components/serviceUtils";
+import { saveProfilePhoto } from "../utils/profileAvatar";
 import { triggerPWAInstall } from "../hooks/usePWAInstall";
 import { useTheme } from "../context/ThemeContext";
 import { sanitizeBackendMessage } from "../utils/userMessages";
@@ -91,6 +92,7 @@ const OtpScreen = () => {
 
   const finishLogin = (sessionToken, userData) => {
     setAuthSession({ sessionToken, userData, tempToken: null });
+    customerStorage.setFirstLoginComplete();
     triggerPWAInstall();
     navigate("/customer/app/services", { replace: true });
   };
@@ -120,7 +122,7 @@ const OtpScreen = () => {
     const sessionToken = apiData.token || extractSessionToken(response.data) || token;
     customerStorage.setDevOtp(null);
     if (apiData.profile) {
-      localStorage.setItem("profile_photo", apiData.profile);
+      saveProfilePhoto({ serverUrl: apiData.profile });
     }
     // Try all possible name fields from both data and raw response
     const extractedName = apiData.name || apiData.firstName || apiData.userName || apiData.user_name || apiData.customerName

@@ -1,19 +1,32 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaSearch, FaDownload, FaSyncAlt, FaClock, FaPlaneDeparture } from "react-icons/fa";
-import { FiShare, FiPlusSquare, FiAlertTriangle, FiClock } from "react-icons/fi";
+import { FiShare, FiPlusSquare, FiAlertTriangle, FiClock, FiShield, FiChevronRight } from "react-icons/fi";
 import { HiOutlineCurrencyRupee, HiMiniSquares2X2 } from "react-icons/hi2";
-import { FaCalendarAlt, FaChevronRight, FaReceipt } from "react-icons/fa";
+import { FaCalendarAlt, FaChevronRight } from "react-icons/fa";
 import { serviceService } from "../services/serviceService";
 import { advertisementService } from "../services/advertisementService";
 import { userService } from "../services/userService";
 import { walletService } from "../services/walletService";
+import { rechargeService } from "../services/rechargeService";
 import { useCustomerModern } from "../context/CustomerModernContext";
 import { usePWAInstall } from "../hooks/usePWAInstall";
 import DataState from "../components/DataState";
 import ServiceIcon from "../components/ServiceIcon";
 import BannerSlider from "../components/BannerSlider";
 import { normalizeService, toSerializableService, getServiceVisual } from "../components/serviceUtils";
+
+// Biller logo fallback — used when no logo URL is supplied or the supplied
+// URL fails to load. The favicon ships with the app so we never end up
+// showing a broken-image glyph.
+const FAVICON_SRC = "/favicon.png";
+const handleBillerLogoError = (e) => {
+  if (e.currentTarget.dataset.fallback === "1") return;
+  e.currentTarget.dataset.fallback = "1";
+  e.currentTarget.src = FAVICON_SRC;
+};
+
+const formatServiceLabel = (label) => String(label || "").replace(/\//g, "/\u200B");
 
 const skeletonStyle = {
   background: "linear-gradient(90deg, var(--cm-bg-secondary, #121212) 25%, var(--cm-line, #2A2A2A) 50%, var(--cm-bg-secondary, #121212) 75%)",
@@ -119,7 +132,64 @@ const InstallAppBanner = () => {
 
 const UpcomingDuesSection = ({ dues }) => {
   const navigate = useNavigate();
+  const [processingId, setProcessingId] = useState(null);
   if (!dues || dues.length === 0) return null;
+
+  const staleCutoff = (() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - 10);
+    return d.getTime();
+  })();
+
+  const sortedDues = dues
+    .filter((item) => !item?.fromDate || new Date(item.fromDate).getTime() >= staleCutoff)
+    .sort((a, b) => {
+      const aTime = a?.fromDate ? new Date(a.fromDate).getTime() : Number.POSITIVE_INFINITY;
+      const bTime = b?.fromDate ? new Date(b.fromDate).getTime() : Number.POSITIVE_INFINITY;
+      return aTime - bTime;
+    });
+
+  if (sortedDues.length === 0) return null;
+
+  const handlePay = async (item) => {
+    const mobile = item.mobile || item.param;
+    if (!mobile) return;
+    setProcessingId(item.id);
+    const serviceName = item.operatorId?.serviceId?.serviceName || item.service?.serviceName || "prepaid";
+    const slug = serviceName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const isPrepaid = slug === "prepaid" || slug === "postpaid";
+
+    if (isPrepaid) {
+      const res = await rechargeService.fetchOperatorCircle(mobile);
+      setProcessingId(null);
+      navigate(`/customer/app/services/${slug}`, {
+        state: {
+          service: item.operatorId?.serviceId || item.service,
+          prefill: {
+            mobile,
+            contactName: item.name || "",
+            operatorData: res.success ? res.data : null,
+            operatorId: item.operatorId?.id,
+          },
+        },
+      });
+    } else {
+      setProcessingId(null);
+      navigate(`/customer/app/services/${slug}`, {
+        state: {
+          service: item.operatorId?.serviceId || item.service,
+          prefill: {
+            mobile,
+            operatorId: item.operatorId?.id,
+            operatorName: item.operatorId?.operatorName,
+            operatorCode: item.operatorId?.operatorCode,
+            amount: item.amount,
+          },
+        },
+      });
+    }
+  };
 
   return (
     <div className="cm-upcoming-dues">
@@ -130,17 +200,22 @@ const UpcomingDuesSection = ({ dues }) => {
         </button>
       </div>
       <div className="cm-upcoming-dues-list">
-        {dues.slice(0, 3).map((item, i) => {
+        {sortedDues.slice(0, 3).map((item, i) => {
           const name = item.operatorId?.operatorName || item.operator?.name || item.name || "Provider";
           const logo = item.operatorId?.logo || item.operator?.logo;
           const number = item.mobile || item.param || "";
           const amount = item.amount || item.txnAmt;
           const dueDate = item.fromDate ? new Date(item.fromDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : null;
+          const isProcessing = processingId === item.id;
 
           return (
             <div key={item.id || i} className="cm-upcoming-due-item" onClick={() => navigate("/customer/app/my-dues")}>
               <div className="cm-upcoming-due-logo">
-                {logo ? <img src={logo} alt="" /> : <FaReceipt />}
+                <img
+                  src={logo || FAVICON_SRC}
+                  alt=""
+                  onError={handleBillerLogoError}
+                />
               </div>
               <div className="cm-upcoming-due-info">
                 <div className="cm-upcoming-due-name">{name}</div>
@@ -149,7 +224,17 @@ const UpcomingDuesSection = ({ dues }) => {
                 </div>
                 {dueDate && <div className="cm-upcoming-due-date"><FaCalendarAlt /> Due {dueDate}</div>}
               </div>
-              {amount && <div className="cm-upcoming-due-amount">&#8377;{parseFloat(amount).toFixed(0)}</div>}
+              <div className="cm-upcoming-due-right">
+                {amount && <div className="cm-upcoming-due-amount">&#8377;{parseFloat(amount).toFixed(0)}</div>}
+                <button
+                  className="cm-upcoming-due-pay"
+                  type="button"
+                  disabled={isProcessing}
+                  onClick={(e) => { e.stopPropagation(); handlePay(item); }}
+                >
+                  {isProcessing ? "..." : <>Pay <FaChevronRight /></>}
+                </button>
+              </div>
             </div>
           );
         })}
@@ -231,7 +316,7 @@ const QuickAccessCard = ({ services = [] }) => {
                 &times;
               </button>
             </div>
-            <span className="cm-svc-label">{svc.name}</span>
+            <span className="cm-svc-label">{formatServiceLabel(svc.name)}</span>
           </button>
           );
         })}
@@ -254,7 +339,7 @@ const QuickAccessCard = ({ services = [] }) => {
             <div style={{ width: 52, height: 52, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
               <ServiceIcon icon={item.icon} iconUrl={item.iconUrl} accentColor={item.color} highlightColor={item.color} />
             </div>
-            <span className="cm-svc-label">{item.label}</span>
+            <span className="cm-svc-label">{formatServiceLabel(item.label)}</span>
           </button>
         ))}
       </div>
@@ -262,9 +347,32 @@ const QuickAccessCard = ({ services = [] }) => {
   );
 };
 
+const KycBanner = ({ onClick }) => (
+  <div className="cm-kyc-banner" role="alert">
+    <div className="cm-kyc-banner-icon" aria-hidden="true">
+      <FiAlertTriangle />
+    </div>
+    <div className="cm-kyc-banner-body">
+      <div className="cm-kyc-banner-title">KYC Pending</div>
+      <div className="cm-kyc-banner-desc">Complete KYC to unlock wallet, payouts &amp; higher limits.</div>
+    </div>
+    <button type="button" className="cm-kyc-banner-btn" onClick={onClick} aria-label="Complete KYC">
+      <FiShield />
+      <span>Complete KYC</span>
+      <FiChevronRight />
+    </button>
+  </div>
+);
+
 const ServicesScreen = () => {
   const navigate = useNavigate();
   const { userData } = useCustomerModern();
+  const isKycVerified =
+    userData?.verified_status === 1 ||
+    userData?.verified_status === "1" ||
+    userData?.kyc_verified === true ||
+    userData?.kycVerified === true;
+  const showKycBanner = !!userData && !isKycVerified;
   const [services, setServices] = useState([]);
   const [banners, setBanners] = useState([]);
   const [balances, setBalances] = useState({ cashback: "0.00", incentive: "0.00", wallet: "0.00" });
@@ -273,6 +381,10 @@ const ServicesScreen = () => {
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
+  // Flattened {operator, service} pairs across every service. Loaded lazily on
+  // first typed character so users who never search don't pay the fan-out.
+  const [allOperators, setAllOperators] = useState([]);
+  const operatorsLoadedRef = useRef(false);
 
   useEffect(() => {
     const load = async () => {
@@ -313,6 +425,58 @@ const ServicesScreen = () => {
     [services, query]
   );
 
+  // Lazy-load operators the first time the user types. Fan out one request
+  // per service and flatten — each call is cached (1h) so repeat searches
+  // after navigation are instant. Bill services only; prepaid/postpaid are
+  // mobile-number driven, not biller-name driven.
+  useEffect(() => {
+    if (!query || operatorsLoadedRef.current || services.length === 0) return;
+    operatorsLoadedRef.current = true;
+    const billServices = services.filter((s) => {
+      const slug = (s.slug || "").toLowerCase();
+      return slug !== "prepaid" && slug !== "postpaid";
+    });
+    Promise.all(
+      billServices.map(async (s) => {
+        const resp = await serviceService.getOperatorsByService(s.id);
+        if (!resp?.success) return [];
+        const raw = resp.data;
+        const list = Array.isArray(raw) ? raw
+          : Array.isArray(raw?.data) ? raw.data
+          : Array.isArray(raw?.content) ? raw.content
+          : [];
+        return list.map((op) => ({ ...op, _service: s }));
+      })
+    ).then((batches) => setAllOperators(batches.flat()));
+  }, [query, services]);
+
+  const filteredBillers = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return allOperators.filter((op) => {
+      const name = (op.operatorName || op.name || "").toLowerCase();
+      const code = (op.operatorCode || op.opCode || "").toLowerCase();
+      return name.includes(q) || code.includes(q);
+    }).slice(0, 20);
+  }, [allOperators, query]);
+
+  // Click a biller result → jump straight into BillerFlowScreen with the
+  // biller pre-selected (prefill handling lives in BillerFlowScreen).
+  const handleBillerClick = (biller) => {
+    const service = biller._service;
+    if (!service) return;
+    navigate(`/customer/app/services/${service.slug}`, {
+      state: {
+        service: toSerializableService(service),
+        prefill: {
+          operatorId: biller.id,
+          operatorName: biller.operatorName || biller.name,
+          operatorCode: biller.operatorCode || biller.opCode,
+        },
+      },
+    });
+  };
+
   if (loading) {
     return (
       <div className="cm-services-page">
@@ -335,6 +499,13 @@ const ServicesScreen = () => {
       <div className={`cm-services-page${query ? " is-searching" : ""}`}>
         {/* Install App banner */}
         {!query && <InstallAppBanner />}
+
+        {/* KYC pending notice — above the customer card */}
+        {!query && showKycBanner && (
+          <KycBanner
+            onClick={() => navigate("/customer/app/kyc", { state: { returnTo: "/customer/app" } })}
+          />
+        )}
 
         {/* Combined customer card + banner slider */}
         {!query && <BannerSlider banners={banners} userData={userData} balances={balances} />}
@@ -363,9 +534,46 @@ const ServicesScreen = () => {
         {/* Upcoming Dues */}
         {!query && <UpcomingDuesSection dues={upcomingDues} />}
 
+        {/* Biller search results (only while searching). Clicking one jumps
+            into that biller's flow with the operator pre-selected. */}
+        {query && filteredBillers.length > 0 && (
+          <div className="cm-biller-results">
+            <div className="cm-quick-access-title">Billers</div>
+            <div className="cm-biller-list">
+              {filteredBillers.map((biller, i) => {
+                const name = biller.operatorName || biller.name || "Biller";
+                const logo = biller.logo;
+                const svcName = biller._service?.name || "";
+                return (
+                  <button
+                    key={`${biller._service?.id}-${biller.id}`}
+                    type="button"
+                    className="cm-biller-row"
+                    style={{ animationDelay: `${i * 25}ms` }}
+                    onClick={() => handleBillerClick(biller)}
+                  >
+                    <div className="cm-biller-logo">
+                      <img
+                        src={logo || FAVICON_SRC}
+                        alt=""
+                        onError={handleBillerLogoError}
+                      />
+                    </div>
+                    <div className="cm-biller-info">
+                      <div className="cm-biller-name">{name}</div>
+                      <div className="cm-biller-sub">{svcName}</div>
+                    </div>
+                    <FaChevronRight className="cm-biller-arrow" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Service icons grid - 4 per row */}
         <div id="services-grid-section" className={`cm-quick-access${query ? " is-searching" : ""}`}>
-          {!query && <div className="cm-quick-access-title">Services</div>}
+          <div className="cm-quick-access-title">Services</div>
         <div className="cm-services-grid-4" style={{ padding: "0 4px 8px", border: "none", boxShadow: "none", background: "transparent" }}>
           {filtered.length === 0 ? (
             <div className="cm-empty" style={{ gridColumn: "1 / -1", textAlign: "center", padding: 32 }}>No services matched your search.</div>
@@ -383,7 +591,7 @@ const ServicesScreen = () => {
                 <div style={{ width: 52, height: 52, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
                   <ServiceIcon icon={service.icon} iconUrl={service.iconUrl} accentColor={service.accentColor} highlightColor={service.highlightColor} />
                 </div>
-                <span className="cm-svc-label">{service.name}</span>
+                <span className="cm-svc-label">{formatServiceLabel(service.name)}</span>
               </button>
             ))
           )}

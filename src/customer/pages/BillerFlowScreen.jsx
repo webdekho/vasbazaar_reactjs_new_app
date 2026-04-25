@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   FaArrowLeft,
   FaSearch,
@@ -66,6 +66,16 @@ const GRADIENTS = [
   "linear-gradient(135deg, #fddb92, #d1fdff)",
 ];
 const getGradient = (ch) => GRADIENTS[ch.charCodeAt(0) % GRADIENTS.length];
+
+// Favicon used whenever a biller has no logo or its logo URL is broken.
+const FAVICON_SRC = "/favicon.png";
+// Shared onError handler: swap a failed biller logo to the favicon. Guards
+// against an infinite-loop if the favicon itself somehow fails.
+const handleBillerLogoError = (e) => {
+  if (e.currentTarget.dataset.fallback === "1") return;
+  e.currentTarget.dataset.fallback = "1";
+  e.currentTarget.src = FAVICON_SRC;
+};
 
 const BillerList = ({ operators, myBillers = [], isLoading: listLoading, onSelect, onBack, serviceName, banners }) => {
   const [search, setSearch] = useState("");
@@ -240,20 +250,12 @@ const BillerList = ({ operators, myBillers = [], isLoading: listLoading, onSelec
                             style={{ animationDelay: `${i * 30}ms` }}
                           >
                             <div className="bf-biller-avatar" style={{ background: grad }}>
-                              {op.logo ? (
-                                <img
-                                  src={op.logo}
-                                  alt=""
-                                  className="bf-biller-avatar-img"
-                                  onError={(e) => {
-                                    e.target.style.display = "none";
-                                    e.target.nextSibling.style.display = "flex";
-                                  }}
-                                />
-                              ) : null}
-                              <span className="bf-biller-avatar-letter" style={{ display: op.logo ? "none" : "flex" }}>
-                                {initial}
-                              </span>
+                              <img
+                                src={op.logo || FAVICON_SRC}
+                                alt=""
+                                className="bf-biller-avatar-img"
+                                onError={handleBillerLogoError}
+                              />
                             </div>
                             <div className="bf-biller-info">
                               <span className="bf-biller-name">{name}</span>
@@ -290,20 +292,12 @@ const BillerList = ({ operators, myBillers = [], isLoading: listLoading, onSelec
                             style={{ animationDelay: `${i * 30}ms` }}
                           >
                             <div className="bf-biller-avatar" style={{ background: grad }}>
-                              {op.logo ? (
-                                <img
-                                  src={op.logo}
-                                  alt=""
-                                  className="bf-biller-avatar-img"
-                                  onError={(e) => {
-                                    e.target.style.display = "none";
-                                    e.target.nextSibling.style.display = "flex";
-                                  }}
-                                />
-                              ) : null}
-                              <span className="bf-biller-avatar-letter" style={{ display: op.logo ? "none" : "flex" }}>
-                                {initial}
-                              </span>
+                              <img
+                                src={op.logo || FAVICON_SRC}
+                                alt=""
+                                className="bf-biller-avatar-img"
+                                onError={handleBillerLogoError}
+                              />
                             </div>
                             <div className="bf-biller-info">
                               <span className="bf-biller-name">{name}</span>
@@ -630,13 +624,12 @@ const BillView = ({ biller, billData, amount, setAmount, onPay, onBack, isExact 
       {/* Biller Info */}
       <div className="bf-card bf-biller-info-card">
         <div className="bf-biller-info-row">
-          {biller.logo ? (
-            <img src={biller.logo} alt="" className="bf-biller-info-logo" />
-          ) : (
-            <div className="bf-biller-info-logo bf-logo-placeholder">
-              {(biller.operatorName || "B")[0]}
-            </div>
-          )}
+          <img
+            src={biller.logo || FAVICON_SRC}
+            alt=""
+            className="bf-biller-info-logo"
+            onError={handleBillerLogoError}
+          />
           <div>
             <div className="bf-biller-info-name">
               {biller.operatorName || biller.name}
@@ -1050,13 +1043,12 @@ const OffersStep = ({
       {/* User Info */}
       <div className="bf-card bf-user-card">
         <div className="bf-user-avatar">
-          {biller.logo ? (
-            <img src={biller.logo} alt="" className="bf-user-avatar-img" />
-          ) : (
-            <div className="bf-user-avatar-placeholder">
-              {(customerName || "N")[0].toUpperCase()}
-            </div>
-          )}
+          <img
+            src={biller.logo || FAVICON_SRC}
+            alt=""
+            className="bf-user-avatar-img"
+            onError={handleBillerLogoError}
+          />
         </div>
         <div className="bf-user-info">
           <div className="bf-user-name">
@@ -1228,13 +1220,12 @@ const PaymentMethodStep = ({
     {/* User Info */}
     <div className="bf-card bf-user-card">
       <div className="bf-user-avatar">
-        {biller.logo ? (
-          <img src={biller.logo} alt="" className="bf-user-avatar-img" />
-        ) : (
-          <div className="bf-user-avatar-placeholder">
-            {(customerName || "N")[0].toUpperCase()}
-          </div>
-        )}
+        <img
+          src={biller.logo || FAVICON_SRC}
+          alt=""
+          className="bf-user-avatar-img"
+          onError={handleBillerLogoError}
+        />
       </div>
       <div className="bf-user-info">
         <div className="bf-user-name">
@@ -1323,6 +1314,8 @@ const extractOperatorsWithMyBillers = (data) => {
    ══════════════════════════════════════════════ */
 const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate }) => {
   const nav = useNavigate();
+  const location = useLocation();
+  const prefill = location.state?.prefill;
   const { showToast } = useToast();
   const [step, setStep] = useState(0);
   const [banners, setBanners] = useState([]);
@@ -1339,6 +1332,8 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
   const [walletBalance, setWalletBalance] = useState(0);
   const [loading, setLoading] = useState(false);
   const [couponData, setCouponData] = useState({});
+  const autoPrefillRunRef = useRef(false);
+  const [autoSubmitPending, setAutoSubmitPending] = useState(null);
 
   /* Fetch billers directly using the same API as old project */
   useEffect(() => {
@@ -1374,6 +1369,47 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
     setSelectedBiller({ ...biller, isDTH });
     setStep(1);
   };
+
+  /* Auto-select biller from Upcoming Dues prefill, skipping the biller list. */
+  useEffect(() => {
+    if (autoPrefillRunRef.current) return;
+    if (!prefill?.operatorId) return;
+    if (billersLoading) return;
+
+    const target = String(prefill.operatorId);
+    const combined = [...myBillers, ...billers];
+    let match = combined.find((b) => String(b.id) === target);
+    if (!match && prefill.operatorCode) {
+      match = combined.find((b) =>
+        (b.operatorCode || b.opCode) === prefill.operatorCode
+      );
+    }
+    // Fall back to a synthetic biller from prefill so we can still fetch the bill.
+    if (!match) {
+      match = {
+        id: prefill.operatorId,
+        operatorName: prefill.operatorName,
+        operatorCode: prefill.operatorCode,
+      };
+    }
+
+    autoPrefillRunRef.current = true;
+    setSelectedBiller({ ...match, isDTH });
+    if (prefill.mobile) {
+      setAutoSubmitPending({ field1: prefill.mobile, field2: "" });
+    } else {
+      setStep(1);
+    }
+  }, [prefill, billers, myBillers, billersLoading, isDTH]);
+
+  /* Trigger the bill fetch once the biller is committed to state. */
+  useEffect(() => {
+    if (!autoSubmitPending || !selectedBiller) return;
+    const values = autoSubmitPending;
+    setAutoSubmitPending(null);
+    handleFormSubmit(values);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSubmitPending, selectedBiller]);
 
   /* Step 2 → 3: Submit form, fetch bill (or show DTH plans) */
   const handleFormSubmit = async (values) => {
@@ -1425,7 +1461,8 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
     }
 
     setBillData(bill);
-    setAmount(String(bill.billAmount || "0"));
+    // Fallback to prefill amount (from Upcoming Dues) when live bill fetch returns 0.
+    setAmount(String(bill.billAmount || prefill?.amount || "0"));
     setCustomerName(bill.customername || "No Name");
     setIsExact(
       selectedBiller.amountExactness === "Exact" && bill.billAmount > 0

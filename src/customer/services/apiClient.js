@@ -8,7 +8,14 @@ const CUSTOMER_STORAGE_KEYS = {
   tempToken: "customerTempToken",
   referralCode: "customerReferralCode",
   devOtp: "customerDevOtp",
+  firstLoginComplete: "customerFirstLoginComplete",
+  dismissedDues: "customerDismissedDues",
 };
+
+// Keys that must survive logout (persist across user sessions on the device).
+const CUSTOMER_STORAGE_PERSISTENT_KEYS = new Set([
+  CUSTOMER_STORAGE_KEYS.firstLoginComplete,
+]);
 
 // API base URL comes from .env via server_api()
 const apiClient = axios.create({
@@ -182,4 +189,4 @@ apiClient.interceptors.response.use(
   }
 );
 
-export { apiClient, parseApiResponse, getErrorMessage, CUSTOMER_STORAGE_KEYS };
+export { apiClient, parseApiResponse, getErrorMessage, CUSTOMER_STORAGE_KEYS, CUSTOMER_STORAGE_PERSISTENT_KEYS };

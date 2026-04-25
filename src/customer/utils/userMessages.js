@@ -60,16 +60,19 @@ export const getUserFriendlyMessage = (error, fallback) => {
   // String input — sanitize directly
   if (typeof error === "string") return sanitizeBackendMessage(error, fallback);
 
-  // Axios error with HTTP status
-  const status = error?.response?.status;
-  if (status && HTTP_MESSAGES[status]) return HTTP_MESSAGES[status];
-
-  // Axios error with backend message — sanitize it
+  // Prefer the backend-supplied message when it's present and safe.
+  // Reason: status-code mappings below are generic ("Something doesn't look
+  // right" for 400) and hide specific causes like "Invalid OTP" that the
+  // backend returns on /login/verifyOTP.
   const backendMsg = error?.response?.data?.message;
   if (backendMsg) {
     const sanitized = sanitizeBackendMessage(backendMsg, null);
     if (sanitized) return sanitized;
   }
+
+  // No usable backend message — fall back to HTTP status mapping.
+  const status = error?.response?.status;
+  if (status && HTTP_MESSAGES[status]) return HTTP_MESSAGES[status];
 
   // Raw error.message — check patterns
   const rawMsg = error?.message || "";

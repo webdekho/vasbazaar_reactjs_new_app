@@ -12,6 +12,7 @@ import { ToastProvider } from "./context/ToastContext";
 
 // Eager imports: auth screens + main landing page (always needed on startup)
 import LoginScreen from "./pages/LoginScreen";
+import ReferralScreen from "./pages/ReferralScreen";
 import OtpScreen from "./pages/OtpScreen";
 import ProtectedShell from "./pages/ProtectedShell";
 import ServicesScreen from "./pages/ServicesScreen";
@@ -51,6 +52,7 @@ const KycScreen = lazy(() => import("./pages/KycScreen"));
 const KycCallbackScreen = lazy(() => import("./pages/KycCallbackScreen"));
 const QrStickerScreen = lazy(() => import("./pages/QrStickerScreen"));
 const BBPSComplaintListScreen = lazy(() => import("./pages/BBPSComplaintListScreen"));
+const TermsScreen = lazy(() => import("./pages/TermsScreen"));
 
 /** Lightweight loading fallback for lazy-loaded routes */
 const RouteFallback = () => (
@@ -84,7 +86,9 @@ const CustomerModernRoutes = () => {
         <Routes>
           <Route path="/" element={<SmartRedirect />} />
           <Route path="/login" element={<LoginScreen />} />
+          <Route path="/referral" element={<ReferralScreen />} />
           <Route path="/verify-otp" element={<OtpScreen />} />
+          <Route path="/terms" element={<Suspense fallback={<RouteFallback />}><TermsScreen /></Suspense>} />
           <Route
             path="/app"
             element={

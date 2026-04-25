@@ -47,6 +47,12 @@
 	<true/>
 	<key>NSContactsUsageDescription</key>
 	<string>VasBazaar needs access to your contacts for mobile recharge and bill payments.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>VasBazaar needs access to your camera to take a profile photo.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>VasBazaar needs access to your photos to set your profile picture.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>VasBazaar needs permission to save images to your photo library.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
