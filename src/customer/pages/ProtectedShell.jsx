@@ -332,7 +332,7 @@ const ProtectedShell = () => {
                 </>
               )}
             </strong>
-            <div className="cm-muted">{userMobile ? `+91 ${userMobile}` : "Active session"}</div>
+            <div className="cm-muted">{userMobile || "Active session"}</div>
           </div>
           <div className="cm-sidebar-qr-actions">
             <button type="button" className="cm-sidebar-qr-btn" onClick={() => navigate("/customer/app/qr")} title="Show QR Code"><FaQrcode /></button>
@@ -473,7 +473,7 @@ const ProtectedShell = () => {
                   </>
                 )}
               </div>
-              <div className="cm-drawer-mobile">{userMobile ? `+91 ${userMobile}` : ""}</div>
+              <div className="cm-drawer-mobile">{userMobile || ""}</div>
             </div>
           </div>
           <div

@@ -575,7 +575,7 @@ const BillerForm = ({ biller, onSubmit, onBack, isLoading }) => {
 /* ══════════════════════════════════════════════
    Step 3: Bill View
    ══════════════════════════════════════════════ */
-const BillView = ({ biller, billData, amount, setAmount, onPay, onBack, isExact, consumerNumber, billFetchFailed }) => {
+const BillView = ({ biller, billData, amount, setAmount, onPay, onBack, isExact, consumerNumber, billFetchFailed, billFetchMessage }) => {
   const [showSTBConfirm, setShowSTBConfirm] = useState(false);
   const isDTH = !!biller.isDTH;
 
@@ -653,13 +653,18 @@ const BillView = ({ biller, billData, amount, setAmount, onPay, onBack, isExact,
         </span>
       </div>
 
-      {/* Bill fetch failure notice */}
+      {/* Bill fetch failure notice — prefer the message returned by the biller /
+          Bharat Connect API. Generic copy is only used when no message arrived. */}
       {billFetchFailed && (
         <div className="bf-fetch-error" role="alert">
           <span className="bf-fetch-error-icon" aria-hidden="true">⚠</span>
           <div className="bf-fetch-error-text">
             <strong>Bill could not be fetched</strong>
-            <span>Due to a technical reason we couldn't fetch your bill. Please enter the amount manually below and continue.</span>
+            <span>
+              {billFetchMessage
+                ? `${billFetchMessage} Please enter the amount manually below and continue.`
+                : "Due to a technical reason we couldn't fetch your bill. Please enter the amount manually below and continue."}
+            </span>
           </div>
         </div>
       )}
@@ -1331,6 +1336,11 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
   const [mobile, setMobile] = useState("");
   const [isExact, setIsExact] = useState(false);
   const [billFetchFailed, setBillFetchFailed] = useState(false);
+  // Reason text returned by the biller / Bharat Connect when a bill fetch fails.
+  // We surface this verbatim in the warning notice so the user knows the actual
+  // cause; the generic "technical reason" copy is only used when the response
+  // didn't carry any message at all.
+  const [billFetchMessage, setBillFetchMessage] = useState("");
   const [walletBalance, setWalletBalance] = useState(0);
   const [loading, setLoading] = useState(false);
   const [couponData, setCouponData] = useState({});
@@ -1462,6 +1472,17 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
       } else {
         fetchFailed = true;
       }
+
+      // Capture whatever message the upstream returned — biller server,
+      // Bharat Connect, or our own apiClient. Take the first non-empty one.
+      const apiMsg =
+        resp?.data?.message ||
+        resp?.data?.error ||
+        resp?.data?.errorMessage ||
+        resp?.data?.statusMessage ||
+        resp?.message ||
+        "";
+      setBillFetchMessage(typeof apiMsg === "string" ? apiMsg.trim() : "");
     }
 
     setBillFetchFailed(fetchFailed);
@@ -1701,6 +1722,7 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
         isExact={isExact}
         consumerNumber={formValues?.field1}
         billFetchFailed={billFetchFailed}
+        billFetchMessage={billFetchMessage}
       />
     ),
     selectedBiller && (

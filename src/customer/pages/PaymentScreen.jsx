@@ -499,7 +499,7 @@ const PaymentScreen = () => {
         <img src={logo || FALLBACK_LOGO} alt="" className="xpay-op-logo" onError={handleLogoError} />
         <div className="xpay-op-info">
           <div className="xpay-op-name">{opName}</div>
-          <div className="xpay-op-detail">{mobile ? `+91 ${mobile}` : ""}{mobile && label ? " · " : ""}{label}</div>
+          <div className="xpay-op-detail">{mobile || ""}{mobile && label ? " · " : ""}{label}</div>
         </div>
       </div>
 

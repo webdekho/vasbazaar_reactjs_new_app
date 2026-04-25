@@ -217,7 +217,7 @@ const RechargePlansView = ({ contactName, mobile, operatorData: initialOperatorD
         <div className="cm-operator-info">
           {opLogo ? <img src={opLogo} alt="" className="cm-operator-logo" onError={handleLogoError} /> : <div className="cm-contact-avatar cm-contact-avatar--my">{(opName[0] || "O").toUpperCase()}</div>}
           <div>
-            <div className="cm-contact-name">{contactName && !/^\+?\d[\d\s-]{6,}$/.test(contactName.trim()) ? `${contactName} · ${mobile}` : `+91 ${mobile.replace(/(\d{5})(\d{5})/, "$1 $2")}`}</div>
+            <div className="cm-contact-name">{contactName && !/^\+?\d[\d\s-]{6,}$/.test(contactName.trim()) ? `${contactName} · ${mobile}` : mobile.replace(/(\d{5})(\d{5})/, "$1 $2")}</div>
             <div className="cm-contact-number">{opName} - {circleName}</div>
           </div>
         </div>
@@ -379,7 +379,7 @@ const MobileNumberSheet = ({ open, operator, isPostpaid, navigate, serviceData, 
               )}
               <div>
                 <div className="cm-contact-name">{opName}</div>
-                {step !== "mobile" && <div className="cm-contact-number">+91 {mobile}</div>}
+                {step !== "mobile" && <div className="cm-contact-number">{mobile}</div>}
               </div>
             </div>
           </div>
@@ -387,7 +387,6 @@ const MobileNumberSheet = ({ open, operator, isPostpaid, navigate, serviceData, 
           {step === "mobile" && (
             <>
               <div className="cm-mobile-input-row">
-                <span className="cm-mobile-prefix">+91</span>
                 <input
                   className="cm-mobile-input"
                   placeholder="Enter 10-digit number"
@@ -671,7 +670,7 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
     if (digits.length >= 10) {
       const normalized = normalizeMobile(digits);
       if (isValidMobile(normalized)) {
-        return [{ id: "direct-number", name: normalized.replace(/(\d{5})(\d{5})/, "+91 $1 $2"), number: normalized, isNew: true }];
+        return [{ id: "direct-number", name: normalized.replace(/(\d{5})(\d{5})/, "$1 $2"), number: normalized, isNew: true }];
       }
     }
 
@@ -683,7 +682,7 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
 
     // If partial number typed (4+ digits) and no match, show option to proceed
     if (!result.length && digits.length >= 4) {
-      result.push({ id: "direct-number", name: `+91 ${digits}`, number: digits, isNew: true });
+      result.push({ id: "direct-number", name: digits, number: digits, isNew: true });
     }
     return result;
   }, [allContacts, search]);
@@ -719,7 +718,7 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
             <div className="cm-contact-avatar cm-contact-avatar--my-num">M</div>
             <div className="cm-contact-info">
               <div className="cm-contact-name" style={{ fontSize: 16, fontWeight: 700 }}>My Number</div>
-              <div className="cm-contact-number">+91 {normalizeMobile(userData.mobile).replace(/(\d{5})(\d{5})/, "$1 $2")}</div>
+              <div className="cm-contact-number">{normalizeMobile(userData.mobile).replace(/(\d{5})(\d{5})/, "$1 $2")}</div>
             </div>
           </div>
           {loadingNumber === normalizeMobile(userData.mobile) ? (
@@ -742,7 +741,7 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
                 <div className="cm-contact-avatar" style={c.isNew ? { background: "linear-gradient(135deg, #00C853, #40E0D0)" } : undefined}>{c.isNew ? "+" : initial}</div>
                 <div className="cm-contact-info">
                   <div className="cm-contact-name">{c.name}</div>
-                  <div className="cm-contact-number">{num ? `+91 ${num.replace(/(\d{5})(\d{5})/, "$1 $2")}` : "No number"}</div>
+                  <div className="cm-contact-number">{num ? num.replace(/(\d{5})(\d{5})/, "$1 $2") : "No number"}</div>
                 </div>
                 {loadingNumber === num ? <span className="cm-contact-loading" /> : <FaChevronRight className="cm-contact-arrow" />}
               </button>
@@ -762,7 +761,7 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
                   <div className="cm-contact-avatar">{initial}</div>
                   <div className="cm-contact-info">
                     <div className="cm-contact-name">{c.name}</div>
-                    <div className="cm-contact-number">{num ? `+91 ${num.replace(/(\d{5})(\d{5})/, "$1 $2")}` : "No number"}</div>
+                    <div className="cm-contact-number">{num ? num.replace(/(\d{5})(\d{5})/, "$1 $2") : "No number"}</div>
                   </div>
                   {loadingNumber === num ? <span className="cm-contact-loading" /> : <FaChevronRight className="cm-contact-arrow" />}
                 </button>
@@ -932,7 +931,7 @@ const PostpaidFlow = ({ serviceData, operators, navigate }) => {
                 <div className="cm-contact-avatar cm-contact-avatar--my" style={{ width: 36, height: 36, fontSize: 14 }}>M</div>
                 <div className="cm-contact-info">
                   <div className="cm-contact-name">My Number</div>
-                  <div className="cm-contact-number">+91 {normalizeMobile(userData.mobile)}</div>
+                  <div className="cm-contact-number">{normalizeMobile(userData.mobile)}</div>
                 </div>
                 <FaChevronRight style={{ color: "var(--cm-disabled, #6B6B6B)", fontSize: 12 }} />
               </button>
@@ -940,7 +939,6 @@ const PostpaidFlow = ({ serviceData, operators, navigate }) => {
 
             <div className="pp-input-with-contact" style={{ marginTop: 16 }}>
               <div className="cm-mobile-input-row" style={{ flex: 1 }}>
-                <span className="cm-mobile-prefix">+91</span>
                 <input className="cm-mobile-input" placeholder="Enter 10-digit number" inputMode="numeric" maxLength={10} value={mobile} autoFocus onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "")); setError(""); }} onKeyDown={(e) => e.key === "Enter" && handleMobileSubmit()} />
               </div>
               <button type="button" className="pp-contact-btn" onClick={handlePickContact} title="Pick from contacts">
@@ -961,7 +959,7 @@ const PostpaidFlow = ({ serviceData, operators, navigate }) => {
         <div className="pp-step-content pp-animate">
           {/* Mobile info */}
           <div className="pp-mobile-bar">
-            <span>+91 {mobile}</span>
+            <span>{mobile}</span>
             <button type="button" className="pp-edit-btn" onClick={() => setStep("mobile")}>Edit</button>
           </div>
 
@@ -1004,7 +1002,7 @@ const PostpaidFlow = ({ serviceData, operators, navigate }) => {
             {selectedOp?.logo ? <img src={selectedOp.logo} alt="" className="cm-operator-logo" onError={handleLogoError} /> : <div className="cm-operator-list-avatar">{(opName[0] || "O").toUpperCase()}</div>}
             <div>
               <div className="cm-contact-name">{opName}</div>
-              <div className="cm-contact-number">+91 {mobile}</div>
+              <div className="cm-contact-number">{mobile}</div>
             </div>
           </div>
 

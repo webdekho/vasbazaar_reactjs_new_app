@@ -95,7 +95,6 @@ const LoginScreen = () => {
                 Mobile Number
               </label>
               <div className="cm-auth-input-wrap">
-                <span className="cm-auth-prefix">+91</span>
                 <input
                   id="mobile"
                   className="cm-auth-input"

@@ -239,7 +239,7 @@ const OtpScreen = () => {
             <p>
               {pendingSession
                 ? "Please enter your name to finish your first-time signup."
-                : <>We sent a 6-digit code to <strong>+91 {mobile || "your number"}</strong></>}
+                : <>We sent a 6-digit code to <strong>{mobile || "your number"}</strong></>}
             </p>
           </div>
 

@@ -144,7 +144,7 @@ const ProfileScreen = () => {
   };
 
   const fields = [
-    { icon: <FaPhone />, label: "Mobile", value: mobile ? `+91 ${mobile}` : "--" },
+    { icon: <FaPhone />, label: "Mobile", value: mobile || "--" },
     {
       icon: <FaEnvelope />,
       label: "Email",
@@ -228,7 +228,7 @@ const ProfileScreen = () => {
             </span>
           )}
         </h2>
-        <p className="pf-mobile">{mobile ? `+91 ${mobile}` : ""}</p>
+        <p className="pf-mobile">{mobile || ""}</p>
       </div>
 
       {/* Stats */}
