@@ -10527,7 +10527,7 @@
 .cm-quick-access-label { font-size: 10px; font-weight: 700; color: #B0B0B0; text-align: center; }
 
 /* Upcoming Dues — align with Quick Access & Services */
-.cm-upcoming-dues { padding: 0 16px; }
+.cm-upcoming-dues { padding: 0; }
 .cm-upcoming-dues-header { padding: 12px 14px 8px; }
 .cm-upcoming-dues-name { font-size: 13px; font-weight: 700; color: #FFFFFF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cm-upcoming-due-num { font-size: 11px; color: #6B6B6B; margin-top: 1px; }
