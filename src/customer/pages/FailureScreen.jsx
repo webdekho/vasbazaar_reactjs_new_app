@@ -1,35 +1,74 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { FaTimesCircle, FaClock, FaHome, FaRedo, FaHistory, FaWallet } from "react-icons/fa";
+import { FaTimesCircle, FaClock, FaHome, FaRedo, FaWallet, FaSyncAlt, FaCopy, FaUniversity } from "react-icons/fa";
+import { FiArrowRight } from "react-icons/fi";
 import { authPost } from "../services/apiClient";
+import { rechargeService } from "../services/rechargeService";
+
+const MAX_POLL_ATTEMPTS = 5;
+const POLL_INTERVAL_MS = 60000;
+
+const formatDateTime = () => {
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  const ss = String(d.getSeconds()).padStart(2, "0");
+  return `${dd}/${mm}/${yyyy}, ${hh}:${mi}:${ss}`;
+};
 
 const FailureScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const state = location.state || {};
-  const [refundLoading, setRefundLoading] = useState(null); // "wallet" | "bank" | null
+
+  const [refundLoading, setRefundLoading] = useState(null);
   const [refundMessage, setRefundMessage] = useState("");
   const [refundMessageType, setRefundMessageType] = useState("");
+  const [copied, setCopied] = useState("");
 
-  const isPending = state.status === "pending";
+  const initialStatus = state.status === "pending" ? "pending" : "failed";
+  const [currentStatus, setCurrentStatus] = useState(initialStatus);
+  const [currentMessage, setCurrentMessage] = useState(state.message || "");
+  const [poll, setPoll] = useState({ active: false, attempt: 0, nextInSec: 0, error: "" });
+  const pollTimerRef = useRef(null);
+  const tickTimerRef = useRef(null);
+  const inFlightRef = useRef(false);
+  const isMountedRef = useRef(true);
+  const dateTime = useRef(formatDateTime()).current;
+
+  const isPending = currentStatus === "pending";
   const isWalletPay = state.payType === "wallet";
   const isPaid = state.isPaid === true || state.is_paid === true;
+  const isBill = state.type === "bill";
+  const productLabel = isBill ? "Bill payment" : "Recharge";
   const txnId = state.txnId || state.orderId || "";
-  const rawMessage = state.message || "";
-  const isTechnical = /login failed|ip \d|automatic refund|internal server|exception|stacktrace|null pointer/i.test(rawMessage);
-  const message = isTechnical || !rawMessage
-    ? (isPending
-      ? "Your payment is being processed. Please check your transaction history for the latest status."
-      : isWalletPay
-        ? "Transaction failed. The amount has been automatically refunded to your wallet."
-        : isPaid
-          ? "Payment could not be completed. Please choose a refund option below or retry the transaction."
-          : "UPI Transaction Failed")
-    : rawMessage;
+  const refId = state.refId || state.statusPayload?.refId || txnId;
+  const amountNum = Number(state.amount || state.txnAmt || 0);
+  const mobile = state.mobile || state.field1 || state.number || "";
+  const operator = state.operatorName || state.operator || state.label || "";
+  const paymentType = (state.payType || state.paymentType || "").toString().toUpperCase();
 
-  const config = isPending
-    ? { icon: <FaClock />, color: "#FFB300", bg: "linear-gradient(135deg, rgba(255,179,0,0.15) 0%, rgba(255,152,0,0.08) 100%)", title: "Payment Pending" }
-    : { icon: <FaTimesCircle />, color: "#FF4757", bg: "linear-gradient(135deg, rgba(255,71,87,0.15) 0%, rgba(255,71,87,0.08) 100%)", title: isWalletPay ? "Transaction Failed" : "Payment Failed" };
+  const rawMessage = currentMessage || "";
+  const isTechnical = /login failed|ip \d|automatic refund|internal server|exception|stacktrace|null pointer/i.test(rawMessage);
+  const normalizedRaw = rawMessage && !isTechnical
+    ? rawMessage.replace(/\brecharge\b/gi, (m) => (isBill ? (m === m.toUpperCase() ? "BILL PAYMENT" : m[0] === m[0].toUpperCase() ? "Bill payment" : "bill payment") : m))
+    : "";
+  const message = normalizedRaw || (
+    isPending
+      ? `${productLabel} is in process.`
+      : isWalletPay
+        ? `${productLabel} failed. Amount auto-refunded to your wallet.`
+        : isPaid
+          ? `${productLabel} could not be completed. Choose a refund option below.`
+          : `${productLabel} failed.`
+  );
+
+  const eyebrow = isPending ? "Payment Pending" : "Payment Failed";
+  const statusLabel = isPending ? "Pending" : "Failed";
+  const statusModifier = isPending ? "sx2-page--pending" : "sx2-page--failure";
 
   const handleRefundRequest = async (refundType) => {
     if (!txnId) {
@@ -37,510 +76,305 @@ const FailureScreen = () => {
       setRefundMessage("Transaction ID not found. Please contact support.");
       return;
     }
-
     setRefundLoading(refundType);
     setRefundMessage("");
     setRefundMessageType("");
-
     try {
-      const response = await authPost("/api/customer/plan_recharge/request-refund", {
-        txnId,
-        refundType,
-      });
-
+      const response = await authPost("/api/customer/plan_recharge/request-refund", { txnId, refundType });
       if (response.success) {
         setRefundMessageType("success");
         setRefundMessage(
           refundType === "wallet"
-            ? "Your wallet refund request has been submitted successfully."
-            : "Your bank refund request has been submitted successfully. It may take up to 3 working days."
+            ? "Wallet refund request submitted successfully."
+            : "Bank refund request submitted. May take up to 3 working days."
         );
       } else {
         setRefundMessageType("error");
-        setRefundMessage(response.message || "Unable to submit refund request. Please try again.");
+        setRefundMessage(response.message || "Unable to submit refund request.");
       }
     } catch {
       setRefundMessageType("error");
-      setRefundMessage("Unable to submit refund request. Please try again.");
+      setRefundMessage("Unable to submit refund request.");
     } finally {
       setRefundLoading(null);
     }
   };
 
-  // Build details array - check all possible field names
-  const details = [];
-  const mobile = state.mobile || state.field1 || state.number || "";
-  const operator = state.operatorName || state.operator || state.label || "";
-  const amount = state.amount || state.txnAmt || "";
+  const clearTimers = () => {
+    if (pollTimerRef.current) { clearTimeout(pollTimerRef.current); pollTimerRef.current = null; }
+    if (tickTimerRef.current) { clearInterval(tickTimerRef.current); tickTimerRef.current = null; }
+  };
 
-  if (mobile) details.push({ label: "Mobile", value: mobile });
-  if (operator) details.push({ label: "Operator", value: operator });
-  if (amount) details.push({ label: "Amount", value: `₹${amount}` });
-  if (txnId) details.push({ label: "Order ID", value: txnId });
+  const scheduleNextCheck = (attempt, delayMs) => {
+    const startedAt = Date.now();
+    setPoll({ active: true, attempt, nextInSec: Math.ceil(delayMs / 1000), error: "" });
+    if (tickTimerRef.current) clearInterval(tickTimerRef.current);
+    tickTimerRef.current = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((delayMs - (Date.now() - startedAt)) / 1000));
+      setPoll((p) => ({ ...p, nextInSec: remaining }));
+      if (remaining === 0 && tickTimerRef.current) {
+        clearInterval(tickTimerRef.current);
+        tickTimerRef.current = null;
+      }
+    }, 1000);
+    pollTimerRef.current = setTimeout(() => performStatusCheck(attempt + 1), delayMs);
+  };
+
+  const performStatusCheck = async (attempt) => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    if (tickTimerRef.current) { clearInterval(tickTimerRef.current); tickTimerRef.current = null; }
+    setPoll({ active: true, attempt, nextInSec: 0, error: "" });
+
+    const field1 = state.field1 || state.mobile || state.number || "";
+    const payload = {
+      txnId,
+      field1,
+      field2: state.field2 || null,
+      validity: state.validity || null,
+      recharge: !isBill,
+      viewBillResponse: state.viewBillResponse || {},
+    };
+
+    try {
+      const resp = await rechargeService.checkRechargeStatus(payload);
+      if (!isMountedRef.current) return;
+      const apiStatus = String(resp?.data?.status || resp?.raw?.Status || resp?.data?.Status || "").toUpperCase();
+
+      if (apiStatus === "SUCCESS" || apiStatus === "COMPLETED" || apiStatus === "CHARGED") {
+        clearTimers();
+        navigate("/customer/app/success", {
+          replace: true,
+          state: {
+            type: state.type,
+            amount: state.amount,
+            label: state.operatorName || state.label,
+            txnId,
+            statusPayload: resp.data || {},
+            paymentType: state.payType || "web",
+            mobile: state.mobile || field1,
+            field1,
+            operatorName: state.operatorName || state.label || "",
+            logo: state.logo || "",
+          },
+        });
+        return;
+      }
+
+      if (apiStatus === "FAILED" || apiStatus === "FAILURE" || apiStatus === "REFUNDED" || apiStatus === "CANCELLED") {
+        clearTimers();
+        setCurrentStatus("failed");
+        setCurrentMessage(resp?.data?.message || `${productLabel} could not be completed.`);
+        setPoll({ active: false, attempt, nextInSec: 0, error: "" });
+        return;
+      }
+
+      if (attempt >= MAX_POLL_ATTEMPTS) {
+        setPoll({ active: false, attempt, nextInSec: 0, error: "" });
+        return;
+      }
+      scheduleNextCheck(attempt, POLL_INTERVAL_MS);
+    } catch (e) {
+      if (!isMountedRef.current) return;
+      if (attempt >= MAX_POLL_ATTEMPTS) {
+        setPoll({ active: false, attempt, nextInSec: 0, error: "Could not reach server." });
+        return;
+      }
+      scheduleNextCheck(attempt, POLL_INTERVAL_MS);
+    } finally {
+      inFlightRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    if (initialStatus === "pending" && txnId) {
+      scheduleNextCheck(0, POLL_INTERVAL_MS);
+    }
+    return () => {
+      isMountedRef.current = false;
+      clearTimers();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleCheckNow = () => {
+    if (!txnId) return;
+    clearTimers();
+    performStatusCheck(Math.min(poll.attempt + 1, MAX_POLL_ATTEMPTS));
+  };
+
+  const copyToClipboard = (text, label) => {
+    if (!text) return;
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopied(label);
+      setTimeout(() => setCopied(""), 1500);
+    });
+  };
+
+  const showRefundSection = !isPending && !isWalletPay && isPaid;
+  const showWalletRefundNotice = !isPending && isWalletPay;
 
   return (
-    <div className="fail-page">
-      {/* Background decoration */}
-      <div className="fail-bg">
-        <div className="fail-bg-circle fail-bg-circle--1" />
-        <div className="fail-bg-circle fail-bg-circle--2" />
+    <div className={`sx2-page ${statusModifier}`}>
+      <div className="sx2-mesh" aria-hidden>
+        <div className="sx2-mesh-blob sx2-mesh-blob--a" />
+        <div className="sx2-mesh-blob sx2-mesh-blob--b" />
+        <div className="sx2-mesh-blob sx2-mesh-blob--c" />
+        <div className="sx2-grain" />
       </div>
 
-      {/* Main content */}
-      <div className="fail-content">
-        {/* Status Icon */}
-        <div className="fail-icon-wrap" style={{ background: config.bg }}>
-          <div className="fail-icon" style={{ color: config.color }}>
-            {config.icon}
+      <header className="sx2-hero">
+        <div className="sx2-badge">
+          <span className="sx2-badge-glow" aria-hidden />
+          <div className="sx2-status-icon" aria-hidden>
+            {isPending ? <FaClock /> : <FaTimesCircle />}
           </div>
-          <div className="fail-icon-ring" style={{ borderColor: config.color }} />
         </div>
-
-        {/* Title */}
-        <h1 className="fail-title" style={{ color: config.color }}>{config.title}</h1>
-
-        {/* Message */}
-        <p className="fail-message">{message}</p>
-
-        {/* Transaction Details Card */}
-        {details.length > 0 && (
-          <div className="fail-details-card">
-            {details.map((item, idx) => (
-              <div key={idx} className="fail-detail-row">
-                <span className="fail-detail-label">{item.label}</span>
-                <span className="fail-detail-value">{item.value}</span>
-              </div>
-            ))}
-          </div>
+        <p className="sx2-eyebrow">{eyebrow}</p>
+        {amountNum > 0 && <h1 className="sx2-amount">₹{amountNum.toFixed(2)}</h1>}
+        {(operator || mobile) && (
+          <p className="sx2-paid-to">
+            {isBill ? "Bill for " : "Recharge for "}
+            <strong>{operator || "Service"}</strong>
+            {mobile ? <> · {mobile}</> : null}
+          </p>
         )}
+      </header>
 
-        {/* Wallet auto-refund notice */}
-        {!isPending && isWalletPay && (
-          <div className="fail-notice fail-notice--success">
-            <FaWallet className="fail-notice-icon" />
-            <span>₹{state.amount || 0} has been refunded to your wallet</span>
+      <p className="sx2-subtext">{message}</p>
+
+      <section className="sx2-ticket">
+        <div className="sx2-ticket-top">
+          <div className="sx2-ticket-status">
+            <span className="sx2-ticket-dot" aria-hidden /> {statusLabel}
           </div>
-        )}
-
-        {/* Refund options for UPI failures - only show if payment was deducted */}
-        {!isPending && !isWalletPay && isPaid && (
-          <div className="fail-refund-section">
-            <p className="fail-refund-title">Request Refund</p>
-            <p className="fail-refund-desc">If payment was deducted, choose your refund option:</p>
-            <div className="fail-refund-btns">
-              <button
-                className="fail-refund-btn fail-refund-btn--wallet"
-                onClick={() => handleRefundRequest("wallet")}
-                disabled={refundLoading !== null}
-              >
-                <FaWallet />
-                <span>{refundLoading === "wallet" ? "Processing..." : "Wallet (Instant)"}</span>
-              </button>
-              <button
-                className="fail-refund-btn fail-refund-btn--bank"
-                onClick={() => handleRefundRequest("bank")}
-                disabled={refundLoading !== null}
-              >
-                <FaHistory />
-                <span>{refundLoading === "bank" ? "Processing..." : "Bank (1-3 days)"}</span>
-              </button>
+          <div className="sx2-ticket-time">{dateTime}</div>
+        </div>
+        <div className="sx2-perforation" aria-hidden />
+        <dl className="sx2-rows">
+          {txnId && (
+            <div className="sx2-row">
+              <dt>Transaction ID</dt>
+              <dd>
+                <span className="sx2-mono">{txnId}</span>
+                <button type="button" className="sx2-chip-btn" aria-label="Copy transaction id" onClick={() => copyToClipboard(txnId, "txn")}>
+                  <FaCopy />
+                </button>
+              </dd>
             </div>
-            {refundMessage && (
-              <p className={`fail-refund-status ${refundMessageType === "success" ? "is-success" : "is-error"}`}>
-                {refundMessage}
-              </p>
-            )}
+          )}
+          {refId && refId !== txnId && (
+            <div className="sx2-row">
+              <dt>Reference ID</dt>
+              <dd>
+                <span className="sx2-mono">{refId}</span>
+                <button type="button" className="sx2-chip-btn" aria-label="Copy reference id" onClick={() => copyToClipboard(refId, "ref")}>
+                  <FaCopy />
+                </button>
+              </dd>
+            </div>
+          )}
+          {paymentType && (
+            <div className="sx2-row">
+              <dt>Payment Method</dt>
+              <dd>{paymentType}</dd>
+            </div>
+          )}
+          {mobile && (
+            <div className="sx2-row">
+              <dt>{isBill ? "Account / Bill No" : "Mobile Number"}</dt>
+              <dd>{mobile}</dd>
+            </div>
+          )}
+        </dl>
+      </section>
+
+      {isPending && txnId && (
+        <section className="sx2-poll">
+          <div className="sx2-poll-row">
+            <div className="sx2-poll-ic">
+              <FaSyncAlt className={poll.active && poll.nextInSec === 0 ? "sx-spin" : ""} />
+            </div>
+            <div className="sx2-poll-text">
+              {poll.active && poll.nextInSec === 0
+                ? `Checking status… (${Math.min(poll.attempt, MAX_POLL_ATTEMPTS)}/${MAX_POLL_ATTEMPTS})`
+                : poll.active
+                  ? `Auto check in ${poll.nextInSec}s · Attempt ${Math.min(poll.attempt + 1, MAX_POLL_ATTEMPTS)}/${MAX_POLL_ATTEMPTS}`
+                  : poll.attempt >= MAX_POLL_ATTEMPTS
+                    ? `Status not confirmed after ${MAX_POLL_ATTEMPTS} checks.`
+                    : "Tap Check Now to verify status."}
+            </div>
+            <button
+              type="button"
+              className="sx2-poll-btn"
+              onClick={handleCheckNow}
+              disabled={poll.active}
+            >
+              Check Now
+            </button>
           </div>
-        )}
-      </div>
+          {poll.error && <div className="sx2-poll-error">{poll.error}</div>}
+        </section>
+      )}
 
-      {/* Action Buttons - Fixed at bottom */}
-      <div className="fail-actions">
-        <button
-          className="fail-btn fail-btn--secondary"
-          onClick={() => navigate("/customer/app/services", { replace: true })}
-        >
-          <FaHome />
-          <span>Back To Home</span>
+      {showWalletRefundNotice && (
+        <section className="sx2-notice sx2-notice--success">
+          <FaWallet />
+          <span>₹{amountNum.toFixed(2)} refunded to your wallet</span>
+        </section>
+      )}
+
+      {showRefundSection && (
+        <section className="sx2-refund">
+          <div className="sx2-refund-head">
+            <div className="sx2-refund-title">Request Refund</div>
+            <div className="sx2-refund-desc">If payment was deducted, choose your refund option.</div>
+          </div>
+          <div className="sx2-refund-btns">
+            <button
+              type="button"
+              className="sx2-refund-btn sx2-refund-btn--wallet"
+              onClick={() => handleRefundRequest("wallet")}
+              disabled={refundLoading !== null}
+            >
+              <FaWallet />
+              <span>{refundLoading === "wallet" ? "Processing…" : "Wallet (Instant)"}</span>
+            </button>
+            <button
+              type="button"
+              className="sx2-refund-btn sx2-refund-btn--bank"
+              onClick={() => handleRefundRequest("bank")}
+              disabled={refundLoading !== null}
+            >
+              <FaUniversity />
+              <span>{refundLoading === "bank" ? "Processing…" : "Bank (1–3 days)"}</span>
+            </button>
+          </div>
+          {refundMessage && (
+            <p className={`sx2-refund-status ${refundMessageType === "success" ? "is-success" : "is-error"}`}>
+              {refundMessage}
+            </p>
+          )}
+        </section>
+      )}
+
+      <div className="sx2-actionbar">
+        <button type="button" className="sx2-act sx2-act--ghost" onClick={() => navigate("/customer/app/services", { replace: true })}>
+          <FaHome /> Home
         </button>
-
         {isPending ? (
-          <button
-            className="fail-btn fail-btn--primary"
-            onClick={() => navigate("/customer/app/transaction-history", { replace: true })}
-          >
-            <FaHistory />
-            <span>Check Status</span>
+          <button type="button" className="sx2-act sx2-act--primary" onClick={handleCheckNow} disabled={poll.active}>
+            <FaSyncAlt className={poll.active ? "sx-spin" : ""} /> Refresh
           </button>
         ) : (
-          <button
-            className="fail-btn fail-btn--primary"
-            onClick={() => navigate(-2)}
-          >
-            <FaRedo />
-            <span>Retry</span>
+          <button type="button" className="sx2-act sx2-act--primary" onClick={() => navigate(-2)}>
+            <FaRedo /> Retry <FiArrowRight />
           </button>
         )}
       </div>
 
-      <style>{`
-        .fail-page {
-          min-height: 100%;
-          display: flex;
-          flex-direction: column;
-          background: linear-gradient(180deg, #0D0D12 0%, #121218 100%);
-          position: relative;
-          overflow: hidden;
-        }
-
-        .fail-bg {
-          position: absolute;
-          inset: 0;
-          pointer-events: none;
-          overflow: hidden;
-        }
-
-        .fail-bg-circle {
-          position: absolute;
-          border-radius: 50%;
-          filter: blur(80px);
-          opacity: 0.4;
-        }
-
-        .fail-bg-circle--1 {
-          width: 300px;
-          height: 300px;
-          top: -100px;
-          right: -100px;
-          background: ${isPending ? 'rgba(255,179,0,0.2)' : 'rgba(255,71,87,0.2)'};
-        }
-
-        .fail-bg-circle--2 {
-          width: 200px;
-          height: 200px;
-          bottom: 100px;
-          left: -80px;
-          background: rgba(0,123,255,0.15);
-        }
-
-        .fail-content {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          padding: 40px 20px 20px;
-          position: relative;
-          z-index: 1;
-        }
-
-        .fail-icon-wrap {
-          position: relative;
-          width: 100px;
-          height: 100px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin-bottom: 20px;
-          animation: fail-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-
-        .fail-icon {
-          font-size: 44px;
-          z-index: 1;
-        }
-
-        .fail-icon-ring {
-          position: absolute;
-          inset: -4px;
-          border-radius: 50%;
-          border: 2px solid;
-          opacity: 0.3;
-          animation: fail-ring 2s ease-in-out infinite;
-        }
-
-        @keyframes fail-pop {
-          0% { transform: scale(0); opacity: 0; }
-          100% { transform: scale(1); opacity: 1; }
-        }
-
-        @keyframes fail-ring {
-          0%, 100% { transform: scale(1); opacity: 0.3; }
-          50% { transform: scale(1.1); opacity: 0.1; }
-        }
-
-        .fail-title {
-          font-size: 1.5rem;
-          font-weight: 700;
-          margin: 0 0 10px;
-          animation: fail-fade 0.4s ease-out 0.1s both;
-        }
-
-        .fail-message {
-          font-size: 0.9rem;
-          color: #9CA3C0;
-          text-align: center;
-          max-width: 320px;
-          line-height: 1.6;
-          margin: 0 0 24px;
-          animation: fail-fade 0.4s ease-out 0.2s both;
-        }
-
-        @keyframes fail-fade {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-
-        .fail-details-card {
-          width: 100%;
-          max-width: 360px;
-          background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 16px;
-          padding: 4px 0;
-          margin-bottom: 20px;
-          animation: fail-fade 0.4s ease-out 0.3s both;
-        }
-
-        .fail-detail-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 14px 20px;
-          border-bottom: 1px solid rgba(255,255,255,0.06);
-        }
-
-        .fail-detail-row:last-child {
-          border-bottom: none;
-        }
-
-        .fail-detail-label {
-          font-size: 0.85rem;
-          color: #6B7394;
-        }
-
-        .fail-detail-value {
-          font-size: 0.9rem;
-          font-weight: 600;
-          color: #F0F0FF;
-          text-align: right;
-          max-width: 60%;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        .fail-notice {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 14px 20px;
-          border-radius: 12px;
-          font-size: 0.88rem;
-          font-weight: 500;
-          margin-bottom: 20px;
-          animation: fail-fade 0.4s ease-out 0.4s both;
-        }
-
-        .fail-notice--success {
-          background: rgba(0,200,83,0.1);
-          border: 1px solid rgba(0,200,83,0.2);
-          color: #00C853;
-        }
-
-        .fail-notice-icon {
-          font-size: 18px;
-        }
-
-        .fail-refund-section {
-          width: 100%;
-          max-width: 360px;
-          background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 16px;
-          padding: 20px;
-          text-align: center;
-          margin-bottom: 20px;
-          animation: fail-fade 0.4s ease-out 0.4s both;
-        }
-
-        .fail-refund-title {
-          font-size: 0.95rem;
-          font-weight: 700;
-          color: #F0F0FF;
-          margin: 0 0 6px;
-        }
-
-        .fail-refund-desc {
-          font-size: 0.82rem;
-          color: #9CA3C0;
-          margin: 0 0 16px;
-        }
-
-        .fail-refund-btns {
-          display: flex;
-          gap: 10px;
-        }
-
-        .fail-refund-btn {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 6px;
-          padding: 14px 12px;
-          border: none;
-          border-radius: 12px;
-          font-size: 0.82rem;
-          font-weight: 600;
-          color: #fff;
-          cursor: pointer;
-          transition: transform 0.15s, opacity 0.15s;
-        }
-
-        .fail-refund-btn:active {
-          transform: scale(0.97);
-        }
-
-        .fail-refund-btn:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-
-        .fail-refund-btn svg {
-          font-size: 18px;
-        }
-
-        .fail-refund-btn--wallet {
-          background: linear-gradient(135deg, #00B894 0%, #00D9A5 100%);
-        }
-
-        .fail-refund-btn--bank {
-          background: linear-gradient(135deg, #4C6FFF 0%, #6B8AFF 100%);
-        }
-
-        .fail-refund-status {
-          margin: 14px 0 0;
-          font-size: 0.84rem;
-          line-height: 1.5;
-        }
-
-        .fail-refund-status.is-success {
-          color: #00C853;
-        }
-
-        .fail-refund-status.is-error {
-          color: #FF6B6B;
-        }
-
-        .fail-actions {
-          display: flex;
-          gap: 12px;
-          padding: 16px 20px calc(90px + env(safe-area-inset-bottom, 0px));
-          background: linear-gradient(180deg, transparent 0%, rgba(13,13,18,0.95) 30%);
-          position: relative;
-          z-index: 2;
-        }
-
-        .fail-btn {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          padding: 16px 20px;
-          border-radius: 14px;
-          font-size: 0.95rem;
-          font-weight: 600;
-          cursor: pointer;
-          transition: transform 0.15s, box-shadow 0.15s;
-        }
-
-        .fail-btn:active {
-          transform: scale(0.97);
-        }
-
-        .fail-btn svg {
-          font-size: 16px;
-        }
-
-        .fail-btn--secondary {
-          background: rgba(255,255,255,0.08);
-          border: 1px solid rgba(255,255,255,0.12);
-          color: #F0F0FF;
-        }
-
-        .fail-btn--primary {
-          background: linear-gradient(135deg, #007BFF 0%, #00BFFF 100%);
-          border: none;
-          color: #fff;
-          box-shadow: 0 4px 20px rgba(0,123,255,0.3);
-        }
-
-        /* Light theme */
-        .theme-light .fail-page {
-          background: linear-gradient(180deg, #F8FAFC 0%, #F1F5F9 100%);
-        }
-
-        .theme-light .fail-bg-circle--1 {
-          background: ${isPending ? 'rgba(255,179,0,0.15)' : 'rgba(255,71,87,0.15)'};
-        }
-
-        .theme-light .fail-bg-circle--2 {
-          background: rgba(0,123,255,0.1);
-        }
-
-        .theme-light .fail-message {
-          color: #64748B;
-        }
-
-        .theme-light .fail-details-card {
-          background: #fff;
-          border-color: #E2E8F0;
-          box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-        }
-
-        .theme-light .fail-detail-row {
-          border-color: #F1F5F9;
-        }
-
-        .theme-light .fail-detail-label {
-          color: #64748B;
-        }
-
-        .theme-light .fail-detail-value {
-          color: #1E293B;
-        }
-
-        .theme-light .fail-notice--success {
-          background: rgba(0,200,83,0.08);
-          border-color: rgba(0,200,83,0.15);
-        }
-
-        .theme-light .fail-refund-section {
-          background: #fff;
-          border-color: #E2E8F0;
-          box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-        }
-
-        .theme-light .fail-refund-title {
-          color: #1E293B;
-        }
-
-        .theme-light .fail-refund-desc {
-          color: #64748B;
-        }
-
-        .theme-light .fail-actions {
-          background: linear-gradient(180deg, transparent 0%, rgba(248,250,252,0.98) 30%);
-        }
-
-        .theme-light .fail-btn--secondary {
-          background: #fff;
-          border-color: #E2E8F0;
-          color: #1E293B;
-        }
-      `}</style>
+      {copied && <div className="sx2-toast">Copied!</div>}
     </div>
   );
 };

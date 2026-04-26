@@ -174,15 +174,35 @@ const TransactionHistoryScreen = () => {
       });
 
       const data = response?.data || {};
-      const resolvedStatus = String(data.complaintStatus || data.status || item.status || "").toUpperCase();
+      const txnStatusFromApi = String(data.status || "").toUpperCase();
+      const complaintStatusFromApi = String(data.complaintStatus || "").toUpperCase();
+      const resolvedStatus = complaintStatusFromApi || txnStatusFromApi || String(item.status || "").toUpperCase();
       const alreadyProcessing = resolvedStatus === "PROCESSING";
+      const isTerminal = ["SUCCESS", "FAILED", "FAILURE", "REFUNDED", "CANCELLED", "HOLD"].includes(txnStatusFromApi);
 
       setComplaintResult({
         status: resolvedStatus || "UNKNOWN",
         message: data.message || response.message || "Status checked successfully.",
-        canEscalate: !alreadyProcessing,
+        canEscalate: !alreadyProcessing && !isTerminal,
         isSubmitted: false,
       });
+
+      // Update the affected row in-place so the badge reflects the latest status
+      // without waiting for the page-0 refetch (which may not include this row
+      // and won't change list ordering).
+      if (txnStatusFromApi || complaintStatusFromApi) {
+        setRecords((prev) =>
+          prev.map((record) =>
+            record.txnId === item.txnId
+              ? {
+                  ...record,
+                  ...(txnStatusFromApi ? { status: txnStatusFromApi } : {}),
+                  ...(complaintStatusFromApi ? { complaintStatus: complaintStatusFromApi } : {}),
+                }
+              : record
+          )
+        );
+      }
 
       fetchData(0);
     } catch (error) {

@@ -299,7 +299,8 @@ const ProtectedShell = () => {
 
   const isServiceFlowPage = location.pathname === "/customer/app/payment";
   const isQrPage = location.pathname === "/customer/app/qr";
-  const hideBottomNav = isServiceFlowPage || isQrPage || location.pathname === "/customer/app/offers" || location.pathname === "/customer/app/success";
+  const isServiceSlugPage = /^\/customer\/app\/services\/[^/]+/.test(location.pathname);
+  const hideBottomNav = isServiceFlowPage || isQrPage || isServiceSlugPage || location.pathname === "/customer/app/offers" || location.pathname === "/customer/app/success";
 
   return (
     <div className={`customer-modern-protected${!sidebarOpen ? " cm-sidebar-hidden" : ""}`}>
@@ -395,17 +396,17 @@ const ProtectedShell = () => {
                 <div className="cm-topbar-brand"><AppBrand /></div>
               </div>
               <div className="cm-topbar-actions">
-                <Link
-                  className={`cm-icon-button cm-icon-button--bell${unreadCount > 0 ? " has-unread" : ""}`}
-                  to="/customer/app/notifications"
-                  aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : "Notifications"}
-                >
-                  <span className="cm-icon-button-glow" aria-hidden="true" />
-                  <FaRegBell />
-                  {unreadCount > 0 && (
+                {unreadCount > 0 && (
+                  <Link
+                    className="cm-icon-button cm-icon-button--bell has-unread"
+                    to="/customer/app/notifications"
+                    aria-label={`${unreadCount} unread notifications`}
+                  >
+                    <span className="cm-icon-button-glow" aria-hidden="true" />
+                    <FaRegBell />
                     <span className="cm-icon-button-badge">{unreadCount > 9 ? "9+" : unreadCount}</span>
-                  )}
-                </Link>
+                  </Link>
+                )}
                 <Link className="cm-icon-button cm-icon-button--avatar" to="/customer/app/profile" aria-label="Profile">
                   <span className="cm-icon-button-ring" aria-hidden="true" />
                   <ProfileAvatar

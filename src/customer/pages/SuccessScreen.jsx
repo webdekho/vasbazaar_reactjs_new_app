@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { FaCheck, FaShareAlt, FaCopy, FaReceipt, FaWallet, FaGift, FaPercent, FaTag, FaUsers, FaSyncAlt, FaTimes } from "react-icons/fa";
+import { FaShareAlt, FaCopy, FaWallet, FaGift, FaPercent, FaTag, FaUsers, FaSyncAlt, FaTimes } from "react-icons/fa";
 import { FiArrowRight } from "react-icons/fi";
 import { useCustomerModern } from "../context/CustomerModernContext";
 import { useState, useEffect, useRef } from "react";
@@ -11,8 +11,9 @@ import {
   getMandateReturnUrl,
   savePendingMandateContext,
 } from "../services/mandateService";
+import { playSuccessSound } from "../services/audioService";
 
-const ScratchCashbackModal = ({ open, cashbackAmount, onClose }) => {
+const ScratchCashbackModal = ({ open, cashbackAmount, onClose, onRevealed }) => {
   const canvasRef = useRef(null);
   const surfaceRef = useRef(null);
   const drawingRef = useRef(false);
@@ -183,6 +184,7 @@ const ScratchCashbackModal = ({ open, cashbackAmount, onClose }) => {
     if (nextProgress >= 42) {
       ctx.clearRect(0, 0, width, height);
       setRevealed(true);
+      onRevealed?.();
     }
   };
 
@@ -259,7 +261,7 @@ const ScratchCashbackModal = ({ open, cashbackAmount, onClose }) => {
           </div>
         </div>
 
-        <div className="sx-scratch-actions">
+        <div className="sx-scratch-actions sx-scratch-actions--single">
           <button type="button" className="sx-scratch-btn sx-scratch-btn--primary sx-scratch-btn--cashback" onClick={onClose}>
             {revealed ? "Continue" : "Skip Reveal"}
           </button>
@@ -555,12 +557,12 @@ const SuccessScreen = () => {
   const data = location.state || {};
   const { userData } = useCustomerModern();
   const [copied, setCopied] = useState("");
-  const [showContent, setShowContent] = useState(false);
   const [isEnablingAutoPay, setIsEnablingAutoPay] = useState(false);
   const [autopayError, setAutopayError] = useState("");
   const [showScratchReward, setShowScratchReward] = useState(false);
   const [rewardCoupon, setRewardCoupon] = useState(null);
   const [showScratchCashback, setShowScratchCashback] = useState(false);
+  const [cashbackRevealed, setCashbackRevealed] = useState(false);
   const userMobile = userData?.mobile || userData?.mobileNumber || "";
 
   const txnId = data.txnId || data.statusPayload?.txnId || "--";
@@ -582,20 +584,26 @@ const SuccessScreen = () => {
   const scratchRewardEligible = Boolean((offerType === "coupon" || (!offerType && (couponCode || couponName || couponDesc))) && (couponCode || couponName || couponDesc));
   const scratchCashbackEligible = Boolean((offerType === "cashback" || (!offerType && !couponCode && !couponName && !couponDesc)) && cashback > 0);
 
-  // Show content after celebration animation + save recent service
   useEffect(() => {
-    const t = setTimeout(() => setShowContent(true), 800);
-    // Save the service to recent quick access
     if (data.label || data.operatorName) {
       const slug = (data.label || data.operatorName || "").toLowerCase().replace(/[^a-z0-9]+/g, "-");
       addRecentService({
         slug,
         name: data.label || data.operatorName || "Service",
         iconUrl: data.logo || null,
-        accentColor: "#40E0D0",
+        accentColor: "#00E5A0",
       });
     }
-    return () => clearTimeout(t);
+
+    // Play success sonic at full volume. On native (Capacitor iOS/Android)
+    // this routes through NativeAudio + AVAudioSession.playback so it plays
+    // even when the silent switch is on.
+    let handle;
+    playSuccessSound().then((h) => { handle = h; }).catch(() => {});
+
+    return () => {
+      if (handle?.stop) handle.stop();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -726,170 +734,170 @@ const SuccessScreen = () => {
     }
   };
 
-  const COLORS = ["#40E0D0", "#007BFF", "#00C853", "#FFD700", "#FF6B6B", "#A78BFA", "#FF9800", "#06B6D4", "#F472B6", "#34D399"];
+  const COLORS = ["#00E5A0", "#3B82F6", "#A855F7", "#FFD700", "#FF6B6B", "#06B6D4"];
+  const serviceName = data.label || data.operatorName || "Service";
+
+  const rewardChip = (() => {
+    if (offerType === "cashback" && cashback > 0) {
+      if (!cashbackRevealed) return null;
+      return { kicker: "Cashback Credited", value: `₹${Number(cashback).toFixed(2)} added to Wallet`, icon: <FaWallet /> };
+    }
+    if (offerType === "discount" && discount > 0) {
+      return { kicker: "Instant Discount", value: `₹${discount.toFixed(2)} saved on this order`, icon: <FaPercent /> };
+    }
+    if (couponCode && !offerType && !cashback && !discount) {
+      return { kicker: "Coupon Applied", value: `${couponCode}${couponName ? ` · ${couponName}` : ""}`, icon: <FaTag /> };
+    }
+    if (!offerType && cashback > 0) {
+      if (!cashbackRevealed) return null;
+      return { kicker: "Cashback Credited", value: `₹${Number(cashback).toFixed(2)} added to Wallet`, icon: <FaGift /> };
+    }
+    return null;
+  })();
+
+  const handleRefer = () => {
+    const msg = `Earn cashback on every recharge & bill payment! Join VasBazaar using my referral code: ${userMobile}\n\nhttps://web.vasbazaar.com?code=${userMobile}`;
+    if (navigator.share) { navigator.share({ title: "Join VasBazaar", text: msg }).catch(() => {}); }
+    else { navigator.clipboard?.writeText(msg); setCopied("refer"); setTimeout(() => setCopied(""), 1500); }
+  };
 
   return (
-    <div className="sx-page">
-      {/* ── Celebration Layer ── */}
-      <div className="sx-celebration">
-        {/* Confetti explosion */}
-        <div className="sx-confetti">
-          {Array.from({ length: 100 }).map((_, i) => (
-            <div key={i} className="sx-conf-piece" style={{
-              left: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 0.8}s`,
-              animationDuration: `${2 + Math.random() * 2}s`,
-              width: `${4 + Math.random() * 10}px`,
-              height: `${4 + Math.random() * 10}px`,
-              borderRadius: i % 4 === 0 ? "50%" : i % 4 === 1 ? "2px" : "1px",
-              background: COLORS[i % COLORS.length],
-            }} />
-          ))}
-        </div>
+    <div className="sx2-page">
+      <div className="sx2-mesh" aria-hidden>
+        <div className="sx2-mesh-blob sx2-mesh-blob--a" />
+        <div className="sx2-mesh-blob sx2-mesh-blob--b" />
+        <div className="sx2-mesh-blob sx2-mesh-blob--c" />
+        <div className="sx2-grain" />
+      </div>
 
-        {/* Burst rings */}
-        <div className="sx-rings">
-          <div className="sx-ring sx-ring--1" />
-          <div className="sx-ring sx-ring--2" />
-          <div className="sx-ring sx-ring--3" />
-        </div>
-
-        {/* Sparkle stars */}
-        {Array.from({ length: 16 }).map((_, i) => (
-          <div key={`star-${i}`} className="sx-star" style={{
-            top: `${10 + Math.random() * 50}%`,
-            left: `${5 + Math.random() * 90}%`,
-            animationDelay: `${0.2 + Math.random()}s`,
-            fontSize: `${14 + Math.random() * 18}px`,
-            color: COLORS[i % COLORS.length],
-          }}>✦</div>
+      <div className="sx2-confetti" aria-hidden>
+        {Array.from({ length: 60 }).map((_, i) => (
+          <span key={i} className="sx2-conf" style={{
+            left: `${Math.random() * 100}%`,
+            width: `${5 + Math.random() * 8}px`,
+            height: `${8 + Math.random() * 12}px`,
+            background: COLORS[i % COLORS.length],
+            animationDelay: `${Math.random() * 0.6}s`,
+            animationDuration: `${2.4 + Math.random() * 1.6}s`,
+            transform: `rotate(${Math.random() * 360}deg)`,
+            borderRadius: i % 3 === 0 ? "50%" : "2px",
+          }} />
         ))}
       </div>
 
-      {/* ── Success Icon with pulse ── */}
-      <div className="sx-icon-wrap">
-        <div className="sx-icon-pulse" />
-        <div className="sx-icon-pulse sx-icon-pulse--2" />
-        <div className="sx-icon">
-          <FaCheck />
+      <header className="sx2-hero">
+        <div className="sx2-badge">
+          <span className="sx2-badge-glow" aria-hidden />
+          <svg className="sx2-check" viewBox="0 0 64 64" aria-hidden>
+            <defs>
+              <linearGradient id="sx2-grad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#00E5A0" />
+                <stop offset="100%" stopColor="#00B8D9" />
+              </linearGradient>
+            </defs>
+            <circle className="sx2-check-ring" cx="32" cy="32" r="28" />
+            <path className="sx2-check-path" d="M20 33 L29 42 L46 24" />
+          </svg>
         </div>
-      </div>
+        <p className="sx2-eyebrow">Payment Successful</p>
+        <h1 className="sx2-amount">₹{amount.toFixed(2)}</h1>
+        <p className="sx2-paid-to">
+          Paid to <strong>{serviceName}</strong>
+          {autopayTarget ? <> · {autopayTarget}</> : null}
+        </p>
+      </header>
 
-      {/* ── Title ── */}
-      <h1 className="sx-title">Transaction Successful!</h1>
-      <p className="sx-subtitle">Your transaction has been completed</p>
-
-      {/* ── Amount ── */}
-      <div className={`sx-amount-card${showContent ? " sx-in" : ""}`}>
-        <div className="sx-amount-glow" />
-        <div className="sx-amount-value">₹{amount.toFixed(2)}</div>
-
-        {/* Show what was applied — cashback, discount, or coupon */}
-        {offerType === "cashback" && cashback > 0 && (
-          <div className="sx-offer-pill sx-offer-pill--cashback">
-            <FaGift /> ₹{Number(cashback).toFixed(2)} Cashback Credited to Wallet
+      {rewardChip && (
+        <div className="sx2-reward">
+          <div className="sx2-reward-icon">{rewardChip.icon}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="sx2-reward-kicker">{rewardChip.kicker}</div>
+            <div className="sx2-reward-value">{rewardChip.value}</div>
           </div>
-        )}
-        {offerType === "discount" && discount > 0 && (
-          <div className="sx-offer-pill sx-offer-pill--discount">
-            <FaPercent /> ₹{discount.toFixed(2)} Instant Discount Applied
-          </div>
-        )}
-        {couponCode && !offerType && !cashback && !discount && (
-          <div className="sx-offer-pill sx-offer-pill--coupon">
-            <FaTag /> Coupon: {couponCode}{couponName ? ` — ${couponName}` : ""}
-          </div>
-        )}
-        {!offerType && cashback > 0 && (
-          <div className="sx-offer-pill sx-offer-pill--cashback">
-            <FaWallet /> ₹{Number(cashback).toFixed(2)} Cashback Credited
-          </div>
-        )}
-      </div>
-
-      {/* ── Transaction Details Card ── */}
-      <div className={`sx-details${showContent ? " sx-in sx-d1" : ""}`}>
-        <div className="sx-details-header">
-          <FaReceipt className="sx-details-icon" />
-          <span>Transaction Details</span>
-          <span className="sx-status-badge"><FaCheck /> SUCCESS</span>
-        </div>
-
-        <div className="sx-detail-row">
-          <span className="sx-detail-label">Transaction ID</span>
-          <span className="sx-detail-value">
-            {txnId}
-            <button type="button" className="sx-copy" onClick={() => copyToClipboard(txnId, "txn")}><FaCopy /></button>
-          </span>
-        </div>
-
-        <div className="sx-detail-row">
-          <span className="sx-detail-label">Reference ID</span>
-          <span className="sx-detail-value">
-            {refId}
-            <button type="button" className="sx-copy" onClick={() => copyToClipboard(refId, "ref")}><FaCopy /></button>
-          </span>
-        </div>
-
-        <div className="sx-detail-row">
-          <span className="sx-detail-label">Payment Method</span>
-          <span className="sx-detail-value">{paymentType}</span>
-        </div>
-
-        {autopayTarget && (
-          <div className="sx-detail-row">
-            <span className="sx-detail-label">{data.type === "bill" ? "Account / Bill No" : "Mobile Number"}</span>
-            <span className="sx-detail-value">{autopayTarget}</span>
-          </div>
-        )}
-
-        <div className="sx-detail-row">
-          <span className="sx-detail-label">Date & Time</span>
-          <span className="sx-detail-value">{dateTime}</span>
-        </div>
-      </div>
-
-      {autopayEligible && (
-        <div className={`sx-autopay-card${showContent ? " sx-in sx-d2" : ""}`}>
-          <div className="sx-autopay-head">
-            <div className="sx-autopay-icon"><FaSyncAlt /></div>
-            <div>
-              <div className="sx-autopay-title">Enable AutoPay</div>
-              <div className="sx-autopay-subtitle">Turn this {data.type === "bill" ? "bill payment" : "recharge"} into a recurring payment.</div>
-            </div>
-          </div>
-          <div className="sx-autopay-copy">
-            {data.type === "bill"
-              ? "Never miss the due date. Set up a mandate once and let VasBazaar handle the next cycle."
-              : "Set up recurring recharge for this number so the next cycle is handled automatically."}
-          </div>
-          <button type="button" className="sx-autopay-btn" onClick={handleEnableAutoPay} disabled={isEnablingAutoPay}>
-            <FaSyncAlt className={isEnablingAutoPay ? "sx-spin" : ""} /> {isEnablingAutoPay ? "Setting up AutoPay..." : "Enable AutoPay"}
-          </button>
+          <div className="sx2-reward-shine" aria-hidden />
         </div>
       )}
 
-      {/* ── Actions ── */}
-      <div className={`sx-actions${showContent ? " sx-in sx-d3" : ""}`}>
-        <button type="button" className="sx-btn sx-btn--share" onClick={handleShare}>
+      <section className="sx2-ticket">
+        <div className="sx2-ticket-top">
+          <div className="sx2-ticket-status">
+            <span className="sx2-ticket-dot" aria-hidden /> Completed
+          </div>
+          <div className="sx2-ticket-time">{dateTime}</div>
+        </div>
+        <div className="sx2-perforation" aria-hidden />
+        <dl className="sx2-rows">
+          <div className="sx2-row">
+            <dt>Transaction ID</dt>
+            <dd>
+              <span className="sx2-mono">{txnId}</span>
+              <button type="button" className="sx2-chip-btn" aria-label="Copy transaction id" onClick={() => copyToClipboard(txnId, "txn")}>
+                <FaCopy />
+              </button>
+            </dd>
+          </div>
+          <div className="sx2-row">
+            <dt>Reference ID</dt>
+            <dd>
+              <span className="sx2-mono">{refId}</span>
+              <button type="button" className="sx2-chip-btn" aria-label="Copy reference id" onClick={() => copyToClipboard(refId, "ref")}>
+                <FaCopy />
+              </button>
+            </dd>
+          </div>
+          <div className="sx2-row">
+            <dt>Payment Method</dt>
+            <dd>{paymentType}</dd>
+          </div>
+          {autopayTarget && (
+            <div className="sx2-row">
+              <dt>{data.type === "bill" ? "Account / Bill No" : "Mobile Number"}</dt>
+              <dd>{autopayTarget}</dd>
+            </div>
+          )}
+        </dl>
+      </section>
+
+      {autopayEligible && (
+        <section className="sx2-autopay">
+          <div className="sx2-autopay-row">
+            <div className="sx2-autopay-ic"><FaSyncAlt /></div>
+            <div style={{ flex: 1 }}>
+              <div className="sx2-autopay-t">Enable AutoPay</div>
+              <div className="sx2-autopay-st">Recurring {data.type === "bill" ? "bill payment" : "recharge"} for {autopayTarget}</div>
+            </div>
+          </div>
+          <p className="sx2-autopay-body">
+            {data.type === "bill"
+              ? "Never miss the due date. Set up a mandate once and let VasBazaar handle the next cycle."
+              : "Set up recurring recharge so the next cycle is handled automatically."}
+          </p>
+          <button type="button" className="sx2-autopay-cta" onClick={handleEnableAutoPay} disabled={isEnablingAutoPay}>
+            <FaSyncAlt className={isEnablingAutoPay ? "sx-spin" : ""} />
+            {isEnablingAutoPay ? "Setting up AutoPay..." : "Enable AutoPay"}
+          </button>
+        </section>
+      )}
+
+      <button type="button" className="sx2-refer" onClick={handleRefer}>
+        <span className="sx2-refer-glyph"><FaUsers /></span>
+        <span className="sx2-refer-body">
+          <strong>Refer & Earn Cashback</strong>
+          <small>Friends get rewards. So do you.</small>
+        </span>
+        <FiArrowRight />
+      </button>
+
+      <div className="sx2-actionbar">
+        <button type="button" className="sx2-act sx2-act--ghost" onClick={handleShare}>
           <FaShareAlt /> Share
         </button>
-        <button type="button" className="sx-btn sx-btn--home" onClick={() => navigate("/customer/app/services")}>
-          Home <FiArrowRight />
+        <button type="button" className="sx2-act sx2-act--primary" onClick={() => navigate("/customer/app/services")}>
+          Done <FiArrowRight />
         </button>
       </div>
 
-      {/* ── Refer Button ── */}
-      <button type="button" className={`sx-refer-btn${showContent ? " sx-in sx-d3" : ""}`} onClick={() => {
-        const msg = `Earn cashback on every recharge & bill payment! Join VasBazaar using my referral code: ${userMobile}\n\nhttps://web.vasbazaar.com?code=${userMobile}`;
-        if (navigator.share) { navigator.share({ title: "Join VasBazaar", text: msg }).catch(() => {}); }
-        else { navigator.clipboard?.writeText(msg); setCopied("refer"); setTimeout(() => setCopied(""), 1500); }
-      }}>
-        <FaUsers /> Refer & Earn Cashback
-      </button>
-
-      {/* Copied toast */}
-      {copied && <div className="sx-toast">{copied === "refer" ? "Referral link copied!" : "Copied!"}</div>}
+      {copied && <div className="sx2-toast">{copied === "refer" ? "Referral link copied!" : "Copied!"}</div>}
 
       {(isEnablingAutoPay || autopayError) && (
         <div className="sx-modal-backdrop" onClick={() => { if (!isEnablingAutoPay) setAutopayError(""); }}>
@@ -925,6 +933,7 @@ const SuccessScreen = () => {
       <ScratchCashbackModal
         open={showScratchCashback}
         cashbackAmount={cashback}
+        onRevealed={() => setCashbackRevealed(true)}
         onClose={() => setShowScratchCashback(false)}
       />
     </div>

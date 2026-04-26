@@ -396,7 +396,7 @@ const JuspayCallbackScreen = () => {
             <FaHome /> Go To Home
           </button>
           <button
-            onClick={() => navigate("/customer/app/transaction-history", { replace: true })}
+            onClick={() => navigate("/customer/app/history", { replace: true })}
             style={{
               flex: 1, padding: "14px 20px", borderRadius: 12,
               background: "linear-gradient(135deg, #007BFF 0%, #00BFFF 100%)",
