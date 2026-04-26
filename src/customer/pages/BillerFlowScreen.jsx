@@ -21,15 +21,6 @@ import BannerSlider from "../components/BannerSlider";
 import { useToast } from "../context/ToastContext";
 import { sanitizeBackendMessage } from "../utils/userMessages";
 
-/* ── Bharat Connect Logo ── */
-const BharatConnectLogo = () => (
-  <img
-    src="/images/bbps.svg"
-    alt="Bharat Connect"
-    className="bf-bharat-logo"
-  />
-);
-
 /* ── Step Indicator ── */
 // eslint-disable-next-line no-unused-vars
 const StepIndicator = ({ current, total }) => (
@@ -77,6 +68,18 @@ const handleBillerLogoError = (e) => {
   e.currentTarget.src = FAVICON_SRC;
 };
 
+// Pull the human-readable bit out of a bill-fetch error. Upstream sometimes
+// wraps the vendor's JSON inside a longer string; keep just the Message.
+const extractReadableBillError = (raw) => {
+  if (typeof raw !== "string") return "";
+  const text = raw.trim();
+  if (!text) return "";
+  const jsonMatch = text.match(/"(?:Message|message|statusMessage|errorMessage)"\s*:\s*"([^"]+)"/);
+  if (jsonMatch && jsonMatch[1]) return jsonMatch[1].trim();
+  const stripped = text.replace(/\{[\s\S]*\}/g, "").trim();
+  return stripped || text;
+};
+
 const BillerList = ({ operators, myBillers = [], isLoading: listLoading, onSelect, onBack, serviceName, banners }) => {
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
@@ -116,11 +119,12 @@ const BillerList = ({ operators, myBillers = [], isLoading: listLoading, onSelec
   );
 
   /* Group billers by state */
+  const fallbackGroupName = `${serviceName} Operators`;
   const groupedByState = useMemo(() => {
     const stateMap = {};
 
     // Helper to get state name
-    const getStateName = (op) => op.state?.name || "Other States";
+    const getStateName = (op) => op.state?.name || fallbackGroupName;
 
     // Group my billers by state
     const myBillersByState = {};
@@ -141,10 +145,10 @@ const BillerList = ({ operators, myBillers = [], isLoading: listLoading, onSelec
     // Combine all states
     const allStates = new Set([...Object.keys(myBillersByState), ...Object.keys(operatorsByState)]);
 
-    // Sort states alphabetically but put "Other States" at the end
+    // Sort states alphabetically but put the fallback group at the end
     const sortedStates = [...allStates].sort((a, b) => {
-      if (a === "Other States") return 1;
-      if (b === "Other States") return -1;
+      if (a === fallbackGroupName) return 1;
+      if (b === fallbackGroupName) return -1;
       return a.localeCompare(b);
     });
 
@@ -160,7 +164,7 @@ const BillerList = ({ operators, myBillers = [], isLoading: listLoading, onSelec
     });
 
     return stateMap;
-  }, [filteredMyBillers, filteredOperators]);
+  }, [filteredMyBillers, filteredOperators, fallbackGroupName]);
 
   const matchCount = filteredAll.length;
 
@@ -488,74 +492,94 @@ const BillerForm = ({ biller, onSubmit, onBack, isLoading }) => {
   };
 
   return (
-    <div className="bf-step bf-step-enter">
-      <div className="cm-flow-title-row">
+    <div className="bf-step bf-step-enter bf-step--ce">
+      {/* Cutting-edge header — back, biller logo, biller name. The logo helps
+          users recognise which provider they're paying at a glance. */}
+      <div className="cm-flow-title-row bf-header--ce">
         <button className="cm-back-icon" type="button" onClick={onBack}>
           <FaArrowLeft />
         </button>
-        <h1>{biller.operatorName || biller.name}</h1>
-        <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
+        <div className="bf-header-ce-logo" aria-hidden="true">
+          <img
+            src={biller.logo || FAVICON_SRC}
+            alt=""
+            onError={handleBillerLogoError}
+          />
+        </div>
+        <div className="bf-header-ce-titlewrap">
+          <h1 className="bf-header-ce-title">{biller.operatorName || biller.name}</h1>
+          <span className="bf-header-ce-sub">Bharat Connect · Secure billing</span>
+        </div>
       </div>
 
       {paramsLoading ? (
-        <div className="bf-card">
+        <div className="bf-card bf-form-card--ce">
           <div className="bf-skeleton-block" />
           <div className="bf-skeleton-block bf-skeleton-block--short" />
         </div>
       ) : (
         <>
-          <div className="bf-card bf-form-card">
-            {inputFields.map((field, idx) => (
-              <div className="bf-field" key={field.key}>
-                <label className="bf-label">{field.label}</label>
-                <div className="bf-input-row">
-                  {field.type === "select" ? (
-                    <SearchableSelect
-                      options={field.options}
-                      value={formValues[field.key] || ""}
-                      onChange={(val) => handleChange(field.key, val)}
-                      placeholder={`Select ${field.label}`}
-                      label={field.label}
-                    />
-                  ) : (
-                    <input
-                      className="bf-input"
-                      type={field.type === "number" ? "tel" : "text"}
-                      placeholder={field.placeholder}
-                      value={formValues[field.key] || ""}
-                      onChange={(e) => handleChange(field.key, e.target.value)}
-                      inputMode={field.type === "number" ? "numeric" : "text"}
-                    />
-                  )}
-                  {idx === 0 && field.type !== "select" && (
-                    <div className="bf-input-icon">
+          <div className="bf-card bf-form-card bf-form-card--ce">
+            {inputFields.map((field, idx) => {
+              const fieldId = `bf-ce-${field.key}`;
+              if (field.type === "select") {
+                return (
+                  <div className="bf-field bf-field--ce" key={field.key}>
+                    <label className="bf-label--ce-static">{field.label}</label>
+                    <div className="bf-input-row">
+                      <SearchableSelect
+                        options={field.options}
+                        value={formValues[field.key] || ""}
+                        onChange={(val) => handleChange(field.key, val)}
+                        placeholder={`Select ${field.label}`}
+                        label={field.label}
+                      />
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div className="bf-field bf-field--ce bf-field--ce-floating" key={field.key}>
+                  <input
+                    id={fieldId}
+                    className="bf-input bf-input--ce"
+                    type={field.type === "number" ? "tel" : "text"}
+                    placeholder=" "
+                    value={formValues[field.key] || ""}
+                    onChange={(e) => handleChange(field.key, e.target.value)}
+                    inputMode={field.type === "number" ? "numeric" : "text"}
+                  />
+                  <label htmlFor={fieldId} className="bf-label--ce-floating">
+                    {field.label}
+                  </label>
+                  {idx === 0 && (
+                    <div className="bf-input-icon bf-input-icon--ce" aria-hidden="true">
                       <FaUserAlt />
                     </div>
                   )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {error && <div className="bf-error">{error}</div>}
           </div>
 
-          <div className="bf-card bf-info-card">
-            <div className="bf-info-row">
-              <BharatConnectLogo />
-              <p className="bf-info-text">
-                By proceeding further, you allow vasbazaar to fetch your current
-                and future bills and remind you.
-              </p>
-            </div>
+          <div className="bf-info-card--ce">
+            <span className="bf-info-icon--ce" aria-hidden="true">
+              <FiCreditCard />
+            </span>
+            <p className="bf-info-text--ce">
+              By proceeding, you allow VasBazaar to fetch your current &amp; future bills and gently remind you on time.
+            </p>
           </div>
 
           {biller.isDTH && (
-            <div className="bf-notice-bar">
+            <div className="bf-notice-bar bf-notice-bar--ce">
               Keep Set top box on while recharging.
             </div>
           )}
 
           <button
-            className={`bf-primary-btn${isLoading ? " is-loading" : ""}`}
+            className={`bf-primary-btn bf-primary-btn--ce${isLoading ? " is-loading" : ""}`}
             type="button"
             onClick={handleSubmit}
             disabled={isLoading}
@@ -563,7 +587,10 @@ const BillerForm = ({ biller, onSubmit, onBack, isLoading }) => {
             {isLoading ? (
               <span className="bf-btn-loader" />
             ) : (
-              "Confirm"
+              <>
+                <span className="bf-primary-btn-ce-label">Confirm</span>
+                <FiArrowRight />
+              </>
             )}
           </button>
         </>
@@ -580,14 +607,14 @@ const BillView = ({ biller, billData, amount, setAmount, onPay, onBack, isExact,
   const isDTH = !!biller.isDTH;
 
   const labelMap = {
-    consumerNumber: "Consumer Number",
-    customername: "Customer Name",
+    consumerNumber: "Consumer No.",
     dueDate: "Due Date",
-    billAmount: "Bill Amount",
     billnumber: "Bill Number",
     billdate: "Bill Date",
     billperiod: "Bill Period",
   };
+  // Keys to skip in the details grid: hero now shows customer name + amount,
+  // raw biller flags are internal-only.
   const hiddenKeys = [
     "statusMessage",
     "acceptPayment",
@@ -595,6 +622,8 @@ const BillView = ({ biller, billData, amount, setAmount, onPay, onBack, isExact,
     "paymentAmountExactness",
     "maxBillAmount",
     "AddInfo",
+    "customername",
+    "billAmount",
   ];
 
   const baseEntries = Object.entries(billData || {}).filter(
@@ -608,6 +637,11 @@ const BillView = ({ biller, billData, amount, setAmount, onPay, onBack, isExact,
     : baseEntries;
 
   const showAmountInput = !isExact || billFetchFailed;
+  const customerName = (billData?.customername && String(billData.customername).trim())
+    ? String(billData.customername).trim()
+    : "";
+  const payableAmount = parseFloat(amount || "0");
+  const dueDate = billData?.dueDate && billData.dueDate !== "NA" ? billData.dueDate : "";
 
   const handlePayClick = () => {
     if (isDTH) {
@@ -627,30 +661,40 @@ const BillView = ({ biller, billData, amount, setAmount, onPay, onBack, isExact,
         <img src="https://webdekho.in/images/bbps.svg" alt="Bharat Connect" className="cm-bc-title-logo cm-bc-title-logo--lg" />
       </div>
 
-      {/* Biller Info */}
-      <div className="bf-card bf-biller-info-card">
-        <div className="bf-biller-info-row">
+      {/* ── Hero Card: biller + customer + amount ── */}
+      <div className="bf-hero-card">
+        <div className="bf-hero-glow" aria-hidden="true" />
+        <div className="bf-hero-biller">
           <img
             src={biller.logo || FAVICON_SRC}
             alt=""
-            className="bf-biller-info-logo"
+            className="bf-hero-logo"
             onError={handleBillerLogoError}
           />
-          <div>
-            <div className="bf-biller-info-name">
-              {biller.operatorName || biller.name}
-            </div>
-            <div className="bf-biller-info-sub">Bharat Billpay</div>
+          <div className="bf-hero-biller-meta">
+            <div className="bf-hero-biller-name">{biller.operatorName || biller.name}</div>
+            <div className="bf-hero-biller-sub">Bharat Billpay</div>
           </div>
         </div>
-      </div>
 
-      {/* Amount to Pay */}
-      <div className="bf-amount-display">
-        <span className="bf-amount-label">Amount to pay</span>
-        <span className="bf-amount-value">
-          ₹{parseFloat(amount || "0").toFixed(2)}
-        </span>
+        {customerName && (
+          <div className="bf-hero-customer">
+            <span className="bf-hero-customer-label">Account Holder</span>
+            <h2 className="bf-hero-customer-name">{customerName}</h2>
+          </div>
+        )}
+
+        <div className="bf-hero-amount-strip">
+          <div className="bf-hero-amount-row">
+            <span className="bf-hero-amount-tag">Total Payable</span>
+            <span className="bf-hero-amount-value">
+              ₹{payableAmount.toFixed(2)}
+            </span>
+          </div>
+          {dueDate && !billFetchFailed && (
+            <div className="bf-hero-amount-due">Due by {dueDate}</div>
+          )}
+        </div>
       </div>
 
       {/* Bill fetch failure notice — prefer the message returned by the biller /
@@ -669,21 +713,22 @@ const BillView = ({ biller, billData, amount, setAmount, onPay, onBack, isExact,
         </div>
       )}
 
-      {/* Bill Details Grid */}
-      <div className="bf-card bf-details-card">
-        <div className="bf-details-grid">
-          {displayEntries.map(([key, value]) => (
-            <div className="bf-detail-item" key={key}>
-              <span className="bf-detail-label">
-                {labelMap[key] || key.replace(/_/g, " ")}
-              </span>
-              <strong className="bf-detail-value">
-                {key === "billAmount" ? `${value}` : String(value ?? "NA")}
-              </strong>
-            </div>
-          ))}
+      {/* Bill Details — chip layout */}
+      {displayEntries.length > 0 && (
+        <div className="bf-card bf-details-card">
+          <div className="bf-details-heading">Bill Details</div>
+          <div className="bf-details-grid">
+            {displayEntries.map(([key, value]) => (
+              <div className="bf-detail-item" key={key}>
+                <span className="bf-detail-label">
+                  {labelMap[key] || key.replace(/_/g, " ")}
+                </span>
+                <strong className="bf-detail-value">{String(value ?? "NA")}</strong>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Amount Input (when bill is not exact OR fetch failed) */}
       {showAmountInput && (
@@ -1443,6 +1488,7 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
       customername: "No Name",
       billnumber: "NA",
       billdate: "NA",
+      billperiod: "NA",
     };
     let fetchFailed = false;
 
@@ -1467,7 +1513,7 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
           customername: respData.customername || "No Name",
           billnumber: respData.billnumber || "NA",
           billdate: respData.billdate || "NA",
-          billperiod: respData.billperiod || "",
+          billperiod: respData.billperiod || "NA",
         };
       } else {
         fetchFailed = true;
@@ -1482,7 +1528,7 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
         resp?.data?.statusMessage ||
         resp?.message ||
         "";
-      setBillFetchMessage(typeof apiMsg === "string" ? apiMsg.trim() : "");
+      setBillFetchMessage(extractReadableBillError(apiMsg));
     }
 
     setBillFetchFailed(fetchFailed);

@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.vasbazaar.app",
+      "sha256_cert_fingerprints": [
+        "CE:F5:4B:96:DB:73:2B:3E:5F:41:D0:8F:3E:5B:53:06:E9:0C:A1:F4:79:15:BF:10:5A:1A:A1:17:28:4D:9C:D1"
+      ]
+    }
+  }
+]

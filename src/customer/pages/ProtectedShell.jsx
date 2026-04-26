@@ -143,7 +143,19 @@ const ProtectedShell = () => {
 
     const handleAppUrl = (event) => {
       console.log("Deep link received:", event.url);
-      if (!event.url || !event.url.startsWith("vasbazaar://")) return;
+      if (!event.url) return;
+
+      // HTTPS universal link — route directly into the app
+      if (event.url.startsWith("https://app.vasbazaar.com/")) {
+        const incoming = new URL(event.url);
+        if (incoming.pathname.startsWith("/customer/app/marketplace")) {
+          navigate(`${incoming.pathname}${incoming.search || ""}`);
+          return;
+        }
+        // Fall through for other https paths handled below by hostname checks
+      }
+
+      if (!event.url.startsWith("vasbazaar://")) return;
 
       // Parse URL parameters
       const urlParams = new URL(event.url.replace("vasbazaar://", "https://"));
@@ -344,8 +356,8 @@ const ProtectedShell = () => {
           <h3 className="cm-drawer-section-title">My Wallet</h3>
           <div className="cm-drawer-wallets">
             <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/wallet")}><div className="cm-dwc-icon"><FaWallet /></div><strong>₹{balances.balance.toFixed(2)}</strong><span>Wallet Balance</span></div>
-            <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/commission?tab=rewards")}><div className="cm-dwc-icon"><FaUsers /></div><strong>₹{(balances.referralBonus + balances.incentive).toFixed(2)}</strong><span>Reward Reports</span></div>
             <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/commission?tab=cashback")}><div className="cm-dwc-icon"><FaGift /></div><strong>₹{balances.cashback.toFixed(2)}</strong><span>Lifetime Cashback</span></div>
+            <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/commission?tab=rewards")}><div className="cm-dwc-icon"><FaUsers /></div><strong>₹{(balances.referralBonus + balances.incentive).toFixed(2)}</strong><span>Lifetime Rewards</span></div>
             <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/referrals")}><div className="cm-dwc-icon"><FaUsers /></div><strong>{balances.referralUsers}</strong><span>Referral Users</span></div>
           </div>
         </div>
@@ -383,19 +395,26 @@ const ProtectedShell = () => {
                 <div className="cm-topbar-brand"><AppBrand /></div>
               </div>
               <div className="cm-topbar-actions">
-                {unreadCount > 0 && (
-                  <Link className="cm-icon-button cm-icon-button--bell" to="/customer/app/notifications" aria-label={`${unreadCount} unread notifications`}>
-                    <FaRegBell />
+                <Link
+                  className={`cm-icon-button cm-icon-button--bell${unreadCount > 0 ? " has-unread" : ""}`}
+                  to="/customer/app/notifications"
+                  aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : "Notifications"}
+                >
+                  <span className="cm-icon-button-glow" aria-hidden="true" />
+                  <FaRegBell />
+                  {unreadCount > 0 && (
                     <span className="cm-icon-button-badge">{unreadCount > 9 ? "9+" : unreadCount}</span>
-                  </Link>
-                )}
+                  )}
+                </Link>
                 <Link className="cm-icon-button cm-icon-button--avatar" to="/customer/app/profile" aria-label="Profile">
+                  <span className="cm-icon-button-ring" aria-hidden="true" />
                   <ProfileAvatar
                     candidates={photoCandidates}
                     className="cm-topbar-avatar-img"
                     alt={userName}
                     emptyFallback={<FaUserCircle />}
                   />
+                  <span className="cm-icon-button-status" aria-hidden="true" />
                 </Link>
               </div>
             </div>
@@ -509,8 +528,8 @@ const ProtectedShell = () => {
           <h3 className="cm-drawer-section-title">My Wallet</h3>
           <div className="cm-drawer-wallets">
             <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/wallet")}><div className="cm-dwc-icon"><FaWallet /></div><strong>₹{balances.balance.toFixed(2)}</strong><span>Wallet Balance</span></div>
-            <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/commission?tab=rewards")}><div className="cm-dwc-icon"><FaUsers /></div><strong>₹{(balances.referralBonus + balances.incentive).toFixed(2)}</strong><span>Reward Reports</span></div>
             <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/commission?tab=cashback")}><div className="cm-dwc-icon"><FaGift /></div><strong>₹{balances.cashback.toFixed(2)}</strong><span>Lifetime Cashback</span></div>
+            <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/commission?tab=rewards")}><div className="cm-dwc-icon"><FaUsers /></div><strong>₹{(balances.referralBonus + balances.incentive).toFixed(2)}</strong><span>Lifetime Rewards</span></div>
             <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/referrals")}><div className="cm-dwc-icon"><FaUsers /></div><strong>{balances.referralUsers}</strong><span>Referral Users</span></div>
           </div>
         </div>

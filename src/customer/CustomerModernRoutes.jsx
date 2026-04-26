@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import "./customerModern.css";
 import { CustomerModernProvider } from "./context/CustomerModernContext";
+import { MarketplaceCartProvider } from "./context/MarketplaceCartContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import AuthGuard from "./components/AuthGuard";
 import AppLockGuard from "./components/AppLockGuard";
@@ -54,6 +55,17 @@ const QrStickerScreen = lazy(() => import("./pages/QrStickerScreen"));
 const BBPSComplaintListScreen = lazy(() => import("./pages/BBPSComplaintListScreen"));
 const TermsScreen = lazy(() => import("./pages/TermsScreen"));
 
+// Marketplace
+const MarketplaceHomeScreen = lazy(() => import("./pages/marketplace/MarketplaceHomeScreen"));
+const StoreDetailScreen = lazy(() => import("./pages/marketplace/StoreDetailScreen"));
+const MarketplaceCartScreen = lazy(() => import("./pages/marketplace/CartScreen"));
+const StoreOnboardingScreen = lazy(() => import("./pages/marketplace/StoreOnboardingScreen"));
+const MyStoreManageScreen = lazy(() => import("./pages/marketplace/MyStoreManageScreen"));
+const MyMarketplaceOrdersScreen = lazy(() => import("./pages/marketplace/MyOrdersScreen"));
+const MarketplaceOrderDetailScreen = lazy(() => import("./pages/marketplace/OrderDetailScreen"));
+const StoreOrdersScreen = lazy(() => import("./pages/marketplace/StoreOrdersScreen"));
+const MarketplacePaymentCallbackScreen = lazy(() => import("./pages/marketplace/MarketplacePaymentCallbackScreen"));
+
 /** Lightweight loading fallback for lazy-loaded routes */
 const RouteFallback = () => (
   <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "60vh" }}>
@@ -82,6 +94,7 @@ const CustomerModernRoutes = () => {
       <ThemedApp>
       <ToastProvider>
       <CustomerModernProvider>
+      <MarketplaceCartProvider>
         <OtaUpdateGate />
         <Routes>
           <Route path="/" element={<SmartRedirect />} />
@@ -135,10 +148,21 @@ const CustomerModernRoutes = () => {
             <Route path="kyc" element={<Suspense fallback={<RouteFallback />}><KycScreen /></Suspense>} />
             <Route path="kyc-callback" element={<Suspense fallback={<RouteFallback />}><KycCallbackScreen /></Suspense>} />
             <Route path="bbps-complaints" element={<Suspense fallback={<RouteFallback />}><BBPSComplaintListScreen /></Suspense>} />
+            {/* Marketplace */}
+            <Route path="marketplace" element={<Suspense fallback={<RouteFallback />}><MarketplaceHomeScreen /></Suspense>} />
+            <Route path="marketplace/store/:storeId" element={<Suspense fallback={<RouteFallback />}><StoreDetailScreen /></Suspense>} />
+            <Route path="marketplace/cart" element={<Suspense fallback={<RouteFallback />}><MarketplaceCartScreen /></Suspense>} />
+            <Route path="marketplace/onboard" element={<Suspense fallback={<RouteFallback />}><StoreOnboardingScreen /></Suspense>} />
+            <Route path="marketplace/my-store" element={<Suspense fallback={<RouteFallback />}><MyStoreManageScreen /></Suspense>} />
+            <Route path="marketplace/my-orders" element={<Suspense fallback={<RouteFallback />}><MyMarketplaceOrdersScreen /></Suspense>} />
+            <Route path="marketplace/orders/:orderId" element={<Suspense fallback={<RouteFallback />}><MarketplaceOrderDetailScreen /></Suspense>} />
+            <Route path="marketplace/store-orders" element={<Suspense fallback={<RouteFallback />}><StoreOrdersScreen /></Suspense>} />
+            <Route path="marketplace/payment-callback" element={<Suspense fallback={<RouteFallback />}><MarketplacePaymentCallbackScreen /></Suspense>} />
             <Route path="*" element={<Navigate to="/customer/app/services" replace />} />
           </Route>
           <Route path="*" element={<SmartRedirect />} />
         </Routes>
+      </MarketplaceCartProvider>
       </CustomerModernProvider>
       </ToastProvider>
       </ThemedApp>

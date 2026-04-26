@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaEnvelope, FaMapMarkerAlt, FaCalendarAlt, FaPhoneAlt, FaUsers, FaChevronDown } from "react-icons/fa";
+import { FaArrowLeft, FaEnvelope, FaMapMarkerAlt, FaCalendarAlt, FaPhoneAlt, FaUsers, FaChevronDown, FaCalculator } from "react-icons/fa";
 import { FiInbox } from "react-icons/fi";
 import { walletService } from "../services/walletService";
 
@@ -22,6 +22,11 @@ const ReferralListScreen = () => {
   const [hasMore, setHasMore] = useState(true);
   const [totalRecords, setTotalRecords] = useState(0);
   const [expandedId, setExpandedId] = useState(null);
+  // Per-user stats cache — keyed by user id. We never auto-fetch; values land
+  // here only after the user clicks Calculate, matching the explicit-action
+  // requirement so the screen costs nothing to open.
+  const [statsById, setStatsById] = useState({});
+  const [statsLoadingId, setStatsLoadingId] = useState(null);
 
   const fetchData = async (pageNum = 0, append = false) => {
     if (!append) setLoading(true);
@@ -35,6 +40,27 @@ const ReferralListScreen = () => {
   };
 
   useEffect(() => { fetchData(0); }, []);
+
+  const handleCalculate = async (userId, e) => {
+    e?.stopPropagation();
+    if (!userId) return;
+    setStatsLoadingId(userId);
+    const res = await walletService.getReferralStats(userId);
+    setStatsLoadingId(null);
+    if (res?.success && res.data) {
+      // Backend wraps payload under `data`; the apiClient already unwraps once
+      // but some shapes still nest. Accept both.
+      const stats = res.data?.data || res.data;
+      setStatsById((prev) => ({ ...prev, [userId]: stats }));
+    } else {
+      setStatsById((prev) => ({ ...prev, [userId]: { error: res?.message || "Failed to calculate." } }));
+    }
+  };
+
+  const fmtMoney = (n) => {
+    const v = Number(n || 0);
+    return Number.isFinite(v) ? v.toFixed(2) : "0.00";
+  };
 
   return (
     <div className="rf-page">
@@ -107,6 +133,49 @@ const ReferralListScreen = () => {
                     {user.joinedDate && (
                       <div className="wt-detail-row"><span className="wt-detail-label"><FaCalendarAlt style={{ fontSize: "0.6rem" }} /> Joined</span><span className="wt-detail-value">{user.joinedDate}</span></div>
                     )}
+
+                    {/* Calculate panel — fetches stats only on explicit click. */}
+                    {(() => {
+                      const stats = statsById[user.id];
+                      const isLoading = statsLoadingId === user.id;
+                      if (stats && !stats.error) {
+                        return (
+                          <div className="rf-stats-panel">
+                            <div className="wt-detail-row"><span className="wt-detail-label">Transactions by user</span><span className="wt-detail-value">{stats.transactionCount || 0} · ₹{fmtMoney(stats.transactionAmount)}</span></div>
+                            <div className="wt-detail-row"><span className="wt-detail-label">Bonus you earned</span><span className="wt-detail-value rf-stats-positive">+ ₹{fmtMoney(stats.bonusEarnedByYou)}</span></div>
+                            <div className="wt-detail-row"><span className="wt-detail-label">Cashback they earned</span><span className="wt-detail-value">₹{fmtMoney(stats.cashbackEarnedByReferee)}</span></div>
+                            <button
+                              type="button"
+                              className="rf-recalc-btn"
+                              onClick={(e) => handleCalculate(user.id, e)}
+                              disabled={isLoading}
+                            >
+                              {isLoading ? "Recalculating..." : "Recalculate"}
+                            </button>
+                          </div>
+                        );
+                      }
+                      if (stats?.error) {
+                        return (
+                          <div className="rf-stats-panel">
+                            <div className="rf-stats-error">{stats.error}</div>
+                            <button type="button" className="rf-recalc-btn" onClick={(e) => handleCalculate(user.id, e)} disabled={isLoading}>
+                              {isLoading ? "Calculating..." : "Try Again"}
+                            </button>
+                          </div>
+                        );
+                      }
+                      return (
+                        <button
+                          type="button"
+                          className="rf-calculate-btn"
+                          onClick={(e) => handleCalculate(user.id, e)}
+                          disabled={isLoading}
+                        >
+                          {isLoading ? <><span className="md-spinner" /> Calculating...</> : <><FaCalculator /> Calculate Earnings</>}
+                        </button>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

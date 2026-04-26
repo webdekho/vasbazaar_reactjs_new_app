@@ -8,6 +8,13 @@
         { "key": "X-Frame-Options", "value": "DENY" },
         { "key": "X-XSS-Protection", "value": "1; mode=block" }
       ]
+    },
+    {
+      "source": "/.well-known/assetlinks.json",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json" },
+        { "key": "Cache-Control", "value": "public, max-age=3600" }
+      ]
     }
   ],
   "routes": [
@@ -53,6 +60,6 @@
     { "source": "/customer/app/services/assets/(.*)", "destination": "/assets/$1" },
     { "source": "/customer/assets/(.*)", "destination": "/assets/$1" },
     { "source": "/customer/(.*)", "destination": "/index.html" },
-    { "source": "/((?!static|favicon|icon|manifest|sw|screenshot|assets|vb-api|api|login|coupon|user).*)", "destination": "/index.html" }
+    { "source": "/((?!\\.well-known|static|favicon|icon|manifest|sw|screenshot|assets|vb-api|api|login|coupon|user).*)", "destination": "/index.html" }
   ]
 }

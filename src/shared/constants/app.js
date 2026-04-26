@@ -1,5 +1,5 @@
 // App-wide constants — keep in sync with backend
-export const APP_VERSION = '1.0';
+export const APP_VERSION = '1.2.4';
 export const APP_NAME = 'vasbazaar';
 
 // Allowed API hosts — prevents localStorage tampering from redirecting API calls

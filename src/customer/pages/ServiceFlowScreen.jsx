@@ -112,11 +112,17 @@ const OperatorChangeSheet = ({ open, operators, currentOpCode, onSelect, onClose
 /* ══════════════════════════════════════════════
    Recharge Plans View
    ══════════════════════════════════════════════ */
-const RechargePlansView = ({ contactName, mobile, operatorData: initialOperatorData, operators, serviceData, navigate, onBack }) => {
+const RechargePlansView = ({ contactName, mobile, operatorData: initialOperatorData, operators, serviceData, navigate, onBack, initialAmount }) => {
   const [plans, setPlans] = useState({});
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("All Plans");
-  const [search, setSearch] = useState("");
+  // Seed the search box with the previously-paid amount when arriving from
+  // My Dues / Upcoming Dues so the matching plan(s) surface to the top
+  // immediately. User can clear or change it like any normal search.
+  const [search, setSearch] = useState(() => {
+    const n = Number(initialAmount);
+    return Number.isFinite(n) && n > 0 ? String(Math.round(n)) : "";
+  });
   const [operatorData, setOperatorData] = useState(initialOperatorData);
   const [showOperatorSheet, setShowOperatorSheet] = useState(false);
 
@@ -689,7 +695,7 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
 
   /* ── Plans view ── */
   if (planView) {
-    return <RechargePlansView contactName={planView.contactName} mobile={planView.mobile} operatorData={planView.operatorData} operators={operators} serviceData={serviceData} navigate={navigate} onBack={() => setPlanView(null)} />;
+    return <RechargePlansView contactName={planView.contactName} mobile={planView.mobile} operatorData={planView.operatorData} operators={operators} serviceData={serviceData} navigate={navigate} onBack={() => setPlanView(null)} initialAmount={prefill?.amount} />;
   }
 
   return (

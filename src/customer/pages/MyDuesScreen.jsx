@@ -244,7 +244,10 @@ const MyDuesScreen = () => {
     const isPrepaid = slug === "prepaid" || slug === "postpaid";
 
     if (isPrepaid) {
-      // For mobile recharge: detect operator and skip to plans/amount page
+      // For mobile recharge: detect operator and skip to plans/amount page.
+      // Carry the previously-paid amount so the plans view can pre-filter by
+      // it — matching plans land at the top, and the user can confirm in one
+      // tap instead of scrolling the catalogue.
       const res = await rechargeService.fetchOperatorCircle(mobile);
       setProcessingId(null);
       navigate(`/customer/app/services/${slug}`, {
@@ -255,6 +258,7 @@ const MyDuesScreen = () => {
             contactName: item.name || "",
             operatorData: res.success ? res.data : null,
             operatorId: item.operatorId?.id,
+            amount: item.amount || item.txnAmt,
           }
         }
       });

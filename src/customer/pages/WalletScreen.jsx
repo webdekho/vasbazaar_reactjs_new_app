@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { FaWallet, FaSearch, FaSyncAlt, FaCheckCircle, FaClock, FaTimesCircle, FaChevronDown } from "react-icons/fa";
+import { FaWallet, FaSearch, FaSyncAlt, FaCheckCircle, FaClock, FaTimesCircle, FaChevronDown, FaPauseCircle } from "react-icons/fa";
 import { FiArrowDownLeft, FiArrowUpRight, FiGift, FiDollarSign, FiInbox } from "react-icons/fi";
 import { userService } from "../services/userService";
 import { walletService } from "../services/walletService";
@@ -8,7 +8,8 @@ import BankDetailsTab from "../components/BankDetailsTab";
 const getStatusConfig = (status) => {
   const s = (status || "").toLowerCase();
   if (s.includes("success")) return { icon: <FaCheckCircle />, color: "#00C853", label: "Success" };
-  if (s.includes("pending")) return { icon: <FaClock />, color: "#FF9800", label: "Pending" };
+  if (s.includes("hold")) return { icon: <FaPauseCircle />, color: "#FFFFFF", label: "Hold" };
+  if (s.includes("pending")) return { icon: <FaClock />, color: "#FACC15", label: "Pending" };
   return { icon: <FaTimesCircle />, color: "#FF3B30", label: "Failed" };
 };
 

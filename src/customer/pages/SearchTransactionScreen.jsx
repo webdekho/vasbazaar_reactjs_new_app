@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaSearch, FaHashtag, FaPhoneAlt, FaCalendarAlt, FaCheckCircle, FaClock, FaTimesCircle } from "react-icons/fa";
+import { FaArrowLeft, FaSearch, FaHashtag, FaPhoneAlt, FaCalendarAlt, FaCheckCircle, FaClock, FaTimesCircle, FaPauseCircle } from "react-icons/fa";
 import { FiInbox } from "react-icons/fi";
 import { walletService } from "../services/walletService";
 import { formatCurrency, matchesTransactionSearch, normalizeTransaction } from "../utils/transactionHistory";
@@ -8,7 +8,8 @@ import { formatCurrency, matchesTransactionSearch, normalizeTransaction } from "
 const statusCfg = (s) => {
   const v = (s || "").toLowerCase();
   if (v.includes("success")) return { color: "#00C853", label: "Success", icon: <FaCheckCircle /> };
-  if (v.includes("pending")) return { color: "#FF9800", label: "Pending", icon: <FaClock /> };
+  if (v.includes("hold")) return { color: "#FFFFFF", label: "Hold", icon: <FaPauseCircle /> };
+  if (v.includes("pending")) return { color: "#FACC15", label: "Pending", icon: <FaClock /> };
   return { color: "#FF3B30", label: "Failed", icon: <FaTimesCircle /> };
 };
 
@@ -19,13 +20,27 @@ const TransactionMetaItem = ({ label, value, valueClassName = "" }) => (
   </div>
 );
 
+const toInputDate = (d) => {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+const getDefaultDateRange = () => {
+  const today = new Date();
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(today.getDate() - 7);
+  return { from: toInputDate(sevenDaysAgo), to: toInputDate(today) };
+};
+
 const SearchTransactionScreen = () => {
   const navigate = useNavigate();
   const [mode, setMode] = useState("txn");
   const [txnId, setTxnId] = useState("");
   const [mobile, setMobile] = useState("");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [fromDate, setFromDate] = useState(() => getDefaultDateRange().from);
+  const [toDate, setToDate] = useState(() => getDefaultDateRange().to);
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");

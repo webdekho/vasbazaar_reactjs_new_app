@@ -138,15 +138,24 @@ const OtpScreen = () => {
     const normalizedNameKey = normalizedName.toUpperCase();
     const nameDigits = normalizedName.replace(/\D/g, "");
     const mobileDigits = String(userData.mobile || "").replace(/\D/g, "");
-    const needsNameOnboarding =
-      !normalizedName
-      || NAME_PLACEHOLDERS.has(normalizedNameKey)
-      || (nameDigits.length >= 10 && mobileDigits && nameDigits === mobileDigits);
+    // Treat anything that isn't a real human name as missing: empty, known placeholders,
+    // a copy of the mobile number, or only one short word (e.g. "a"). The first-time-
+    // login flag also forces the form so brand-new signups always set their name even
+    // if the backend somehow returned a stub value.
+    const isRealFullName =
+      normalizedName
+      && !NAME_PLACEHOLDERS.has(normalizedNameKey)
+      && !(nameDigits.length >= 10 && mobileDigits && nameDigits === mobileDigits)
+      && /\s/.test(normalizedName)               // must have at least 2 words
+      && /^[A-Za-z][A-Za-z .'-]{2,}$/.test(normalizedName); // letters-only shape, min 3 chars
+    const isFirstTimeDevice = !customerStorage.hasCompletedFirstLogin();
+    const needsNameOnboarding = !isRealFullName || isFirstTimeDevice;
 
     if (needsNameOnboarding) {
       setStatus(null);
       setNameStatus(null);
-      setName("");
+      // Pre-fill any reasonable existing name so the user just confirms / edits.
+      setName(isRealFullName ? normalizedName : "");
       setPendingSession({ sessionToken, userData: { ...userData, name: "" } });
       return;
     }
@@ -159,8 +168,17 @@ const OtpScreen = () => {
     if (!pendingSession) return;
 
     const trimmedName = name.trim().replace(/\s+/g, " ");
-    if (trimmedName.length < 2) {
+    // Require at least two words (first + last), letters/spaces/.'- only, min 3 chars total.
+    if (trimmedName.length < 3) {
       setNameStatus({ type: "error", message: "Please enter your full name." });
+      return;
+    }
+    if (!/\s/.test(trimmedName)) {
+      setNameStatus({ type: "error", message: "Please enter both first and last name." });
+      return;
+    }
+    if (!/^[A-Za-z][A-Za-z .'-]{2,}$/.test(trimmedName)) {
+      setNameStatus({ type: "error", message: "Name can contain only letters and spaces." });
       return;
     }
 
@@ -222,11 +240,13 @@ const OtpScreen = () => {
         <div className="cm-auth-glass-card">
           <div className="cm-auth-particles"><span /><span /><span /><span /><span /></div>
 
-          <div className="cm-auth-header">
-            <button className="cm-auth-back" type="button" onClick={() => navigate("/customer/login")}>
-              <FaArrowLeft /> Back
-            </button>
-          </div>
+          {!pendingSession && (
+            <div className="cm-auth-header">
+              <button className="cm-auth-back" type="button" onClick={() => navigate("/customer/login")}>
+                <FaArrowLeft /> Back
+              </button>
+            </div>
+          )}
 
           <div className="cm-auth-header">
             <div className="cm-auth-logo">
@@ -235,10 +255,10 @@ const OtpScreen = () => {
           </div>
 
           <div className="cm-auth-hero-text">
-            <h1>{pendingSession ? "Please enter your name" : "Verify OTP"}</h1>
+            <h1>{pendingSession ? "What's your name?" : "Verify OTP"}</h1>
             <p>
               {pendingSession
-                ? "Please enter your name to finish your first-time signup."
+                ? "Tell us your full name (first + last) so we can personalise your account."
                 : <>We sent a 6-digit code to <strong>{mobile || "your number"}</strong></>}
             </p>
           </div>
@@ -253,12 +273,14 @@ const OtpScreen = () => {
                 <input
                   id="onboarding-name"
                   className="cm-auth-input cm-auth-input--full"
-                  placeholder="Please enter your name"
+                  placeholder="e.g. Shahid Saleem"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => setName(e.target.value.replace(/[^A-Za-z .'-]/g, ""))}
                   onFocus={() => setFocused("name")}
                   onBlur={() => setFocused("")}
                   autoComplete="name"
+                  required
+                  minLength={3}
                 />
               </div>
 

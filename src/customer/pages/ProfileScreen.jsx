@@ -46,6 +46,9 @@ const ProfileScreen = () => {
   const referral = userData?.mobile || userData?.mobileNumber || userData?.referalCode || userData?.referralCode || userData?.refferalCode || userData?.refferal_code || "--";
   const balance = userData?.balance || userData?.walletBalance || "0.00";
   const cashback = userData?.cashback || userData?.totalCashback || "0";
+  const referralBonus = Number(userData?.referralBonus ?? userData?.referal_bonus ?? userData?.referral_bonus ?? 0);
+  const incentive = Number(userData?.incentive ?? userData?.lifeTimeIncentive ?? 0);
+  const lifetimeRewards = (referralBonus + incentive).toFixed(2);
   // The profile API returns this as `referralUsers` / `referral_users`; accept any
   // of the legacy variants before falling back to "0".
   const referralCount = userData?.referralUsers
@@ -148,16 +151,17 @@ const ProfileScreen = () => {
     {
       icon: <FaEnvelope />,
       label: "Email",
-      value: email || "Tap to add email",
+      value: email || "Don't miss cashback! Add your email now ⚡",
       onClick: openEmailEditor,
       isPlaceholder: !email,
     },
   ];
 
   const stats = [
-    { label: "Balance", value: `₹${balance}`, color: "#00C853", onClick: () => navigate("/customer/app/wallet") },
-    { label: "Cashback", value: `₹${cashback}`, color: "#FF9800", onClick: () => navigate("/customer/app/commission?tab=cashback") },
-    { label: "Referrals", value: referralCount, color: "#40E0D0", onClick: () => navigate("/customer/app/referrals") },
+    { label: "Wallet Balance", value: `₹${balance}`, color: "#00C853", onClick: () => navigate("/customer/app/wallet") },
+    { label: "Lifetime Cashback", value: `₹${cashback}`, color: "#FF9800", onClick: () => navigate("/customer/app/commission?tab=cashback") },
+    { label: "Lifetime Rewards", value: `₹${lifetimeRewards}`, color: "#9C27B0", onClick: () => navigate("/customer/app/commission?tab=rewards") },
+    { label: "Referral Users", value: referralCount, color: "#40E0D0", onClick: () => navigate("/customer/app/referrals") },
   ];
 
   const actions = [

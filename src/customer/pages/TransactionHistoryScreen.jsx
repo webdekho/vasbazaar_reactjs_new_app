@@ -1,26 +1,30 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaSearch, FaExclamationCircle, FaChevronDown } from "react-icons/fa";
-import { FiArrowUpRight, FiArrowDownLeft, FiClock, FiCheckCircle, FiXCircle, FiInbox } from "react-icons/fi";
+import { FiArrowUpRight, FiArrowDownLeft, FiClock, FiCheckCircle, FiXCircle, FiInbox, FiPauseCircle } from "react-icons/fi";
 import { walletService } from "../services/walletService";
 import { transactionService } from "../services/transactionService";
 import { formatCurrency, matchesTransactionSearch, normalizeTransaction } from "../utils/transactionHistory";
 
 const statusConfig = {
   success: { color: "#00C853", label: "Success", icon: <FiCheckCircle size={11} /> },
-  pending: { color: "#FF9800", label: "Pending", icon: <FiClock size={11} /> },
+  pending: { color: "#FACC15", label: "Pending", icon: <FiClock size={11} /> },
   failed:  { color: "#FF3B30", label: "Failed",  icon: <FiXCircle size={11} /> },
+  hold:    { color: "#FFFFFF", label: "Hold",    icon: <FiPauseCircle size={11} /> },
 };
 
 const getStatusKey = (status) => {
   const s = (status || "").toLowerCase();
   if (s.includes("success")) return "success";
+  if (s.includes("hold")) return "hold";
   if (s.includes("pending")) return "pending";
   return "failed";
 };
 
 const isCredit = (item) => {
-  const desc = (item.description || item.discription || item.serviceType || "").toLowerCase();
+  if (item.txnMode === 0 || item.txnMode === "0") return true;
+  if (item.txnMode === 1 || item.txnMode === "1") return false;
+  const desc = (item.message || item.description || item.discription || item.serviceType || "").toLowerCase();
   const type = (item.txnType || item.type || "").toLowerCase();
   return type.includes("credit") || type.includes("cr") || desc.includes("credit") || desc.includes("received") || desc.includes("refund") || desc.includes("cashback");
 };
@@ -355,7 +359,7 @@ const TransactionHistoryScreen = () => {
                   {/* Info */}
                   <div className="th-info">
                     <div className="th-info-name">{txn.mobile || item.customerName || "Transaction"}</div>
-                    <div className="th-info-desc">{item.description || item.discription || txn.service || "—"}</div>
+                    <div className="th-info-desc">{item.message || item.description || item.discription || txn.service || "—"}</div>
                     <div className="th-info-date">{item.date} {item.time}</div>
                     {!isMobileView && (
                       <div className="th-meta-grid th-meta-grid--compact">
@@ -366,8 +370,8 @@ const TransactionHistoryScreen = () => {
 
                   {/* Amount + status */}
                   <div className="th-right">
-                    <div className={`th-amount th-amount--${credit ? "credit" : "debit"}`}>
-                      {credit ? "+" : "-"}{formatCurrency(txn.amount ?? item.txnAmt ?? item.amount ?? 0)}
+                    <div className={`th-amount th-amount--${sk === "success" ? "credit" : "debit"}`}>
+                      {formatCurrency(txn.amount ?? item.txnAmt ?? item.amount ?? 0)}
                     </div>
                     <div className="th-status" style={{ "--st-color": cfg.color }}>
                       {cfg.icon} {item.status || cfg.label}

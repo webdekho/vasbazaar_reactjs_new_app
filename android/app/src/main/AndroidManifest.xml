@@ -55,6 +55,14 @@
                 <data android:scheme="https" android:host="app.vasbazaar.com" android:pathPrefix="/payment-callback" />
             </intent-filter>
 
+            <!-- HTTPS deep link for marketplace (store share links) -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="app.vasbazaar.com" android:pathPrefix="/customer/app/marketplace" />
+            </intent-filter>
+
         </activity>
 
         <provider

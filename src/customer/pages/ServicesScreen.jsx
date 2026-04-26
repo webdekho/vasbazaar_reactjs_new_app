@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaSearch, FaDownload, FaSyncAlt, FaClock, FaPlaneDeparture } from "react-icons/fa";
+import { FaSearch, FaDownload, FaSyncAlt, FaClock, FaRupeeSign } from "react-icons/fa";
 import { FiShare, FiPlusSquare, FiAlertTriangle, FiClock, FiShield, FiChevronRight } from "react-icons/fi";
 import { HiOutlineCurrencyRupee, HiMiniSquares2X2 } from "react-icons/hi2";
 import { FaCalendarAlt, FaChevronRight } from "react-icons/fa";
@@ -9,6 +9,7 @@ import { advertisementService } from "../services/advertisementService";
 import { userService } from "../services/userService";
 import { walletService } from "../services/walletService";
 import { rechargeService } from "../services/rechargeService";
+import { customerStorage } from "../services/storageService";
 import { useCustomerModern } from "../context/CustomerModernContext";
 import { usePWAInstall } from "../hooks/usePWAInstall";
 import DataState from "../components/DataState";
@@ -142,7 +143,23 @@ const UpcomingDuesSection = ({ dues }) => {
     return d.getTime();
   })();
 
+  // Mirror MyDuesScreen's dismissal filter so a due deleted from My Dues
+  // doesn't keep popping back up here. Same key / same submittedDate guard.
+  const dismissed = customerStorage.getDismissedDues() || {};
+  const isDismissed = (item) => {
+    const mobile = item?.mobile || item?.param || "";
+    const operatorId = item?.operatorId?.id || item?.operator?.id || "";
+    const dismissedAt = dismissed[`${mobile}|${operatorId}`];
+    if (!dismissedAt) return false;
+    const itemDate = item?.submittedDate ? new Date(item.submittedDate) : null;
+    const dismissedDate = new Date(dismissedAt);
+    if (!itemDate || Number.isNaN(itemDate.getTime())) return true;
+    // Re-show if user submitted a newer recharge (resets dismissal).
+    return itemDate.getTime() <= dismissedDate.getTime();
+  };
+
   const sortedDues = dues
+    .filter((item) => !isDismissed(item))
     .filter((item) => !item?.fromDate || new Date(item.fromDate).getTime() >= staleCutoff)
     .sort((a, b) => {
       const aTime = a?.fromDate ? new Date(a.fromDate).getTime() : Number.POSITIVE_INFINITY;
@@ -171,6 +188,7 @@ const UpcomingDuesSection = ({ dues }) => {
             contactName: item.name || "",
             operatorData: res.success ? res.data : null,
             operatorId: item.operatorId?.id,
+            amount: item.amount || item.txnAmt,
           },
         },
       });
@@ -245,13 +263,12 @@ const UpcomingDuesSection = ({ dues }) => {
 
 const quickAccessItems = [
   { label: "Services", icon: HiMiniSquares2X2, to: "#services", color: "#40E0D0", isScroll: true, iconUrl: "/images/b.png" },
-  { label: "Travel", icon: FaPlaneDeparture, to: "/customer/app/travel", color: "#007BFF" },
   { label: "My Dues", icon: FaClock, to: "/customer/app/my-dues", color: "#FF3B30" },
   { label: "Cashback", icon: HiOutlineCurrencyRupee, to: "/customer/app/commission?tab=cashback", color: "#FF9800" },
   { label: "History", icon: FiClock, to: "/customer/app/history", color: "#007BFF" },
   { label: "Autopay", icon: FaSyncAlt, to: "/customer/app/autopay", color: "#007BFF" },
   { label: "Complaint", icon: FiAlertTriangle, to: "/customer/app/file-complaint", color: "#FF9800" },
-  { label: "Refer & Earn", icon: FiShare, to: "/customer/app/qr", color: "#6366F1" },
+  { label: "Earn Money", icon: FaRupeeSign, to: "/customer/app/qr", color: "#F59E0B" },
 ];
 
 const RECENT_SERVICES_KEY = "vb_recent_services";
@@ -322,10 +339,12 @@ const QuickAccessCard = ({ services = [] }) => {
         })}
 
         {/* Fixed quick access items */}
-        {quickAccessItems.map((item, i) => (
+        {quickAccessItems.map((item, i) => {
+          const isEarnLifetime = item.label === "Earn Money";
+          return (
           <button
             key={item.label}
-            className="cm-svc-item"
+            className={`cm-svc-item${isEarnLifetime ? " cm-svc-item--earn-fx" : ""}`}
             type="button"
             style={{ animationDelay: `${(recentServices.length + i) * 40}ms`, alignItems: "flex-start" }}
             onClick={() => {
@@ -336,12 +355,24 @@ const QuickAccessCard = ({ services = [] }) => {
               }
             }}
           >
-            <div style={{ width: 52, height: 52, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
+            <div className={isEarnLifetime ? "cm-earn-fx-wrap" : ""} style={{ width: 52, height: 52, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
+              {isEarnLifetime && (
+                <>
+                  <span className="cm-earn-fx-halo" aria-hidden="true" />
+                  <span className="cm-earn-fx-coin cm-earn-fx-coin--1" aria-hidden="true">₹</span>
+                  <span className="cm-earn-fx-coin cm-earn-fx-coin--2" aria-hidden="true">₹</span>
+                  <span className="cm-earn-fx-coin cm-earn-fx-coin--3" aria-hidden="true">₹</span>
+                  <span className="cm-earn-fx-spark cm-earn-fx-spark--1" aria-hidden="true" />
+                  <span className="cm-earn-fx-spark cm-earn-fx-spark--2" aria-hidden="true" />
+                  <span className="cm-earn-fx-spark cm-earn-fx-spark--3" aria-hidden="true" />
+                </>
+              )}
               <ServiceIcon icon={item.icon} iconUrl={item.iconUrl} accentColor={item.color} highlightColor={item.color} />
             </div>
             <span className="cm-svc-label">{formatServiceLabel(item.label)}</span>
           </button>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -578,22 +609,33 @@ const ServicesScreen = () => {
           {filtered.length === 0 ? (
             <div className="cm-empty" style={{ gridColumn: "1 / -1", textAlign: "center", padding: 32 }}>No services matched your search.</div>
           ) : (
-            filtered.map((service, i) => (
-              <button
-                key={service.id}
-                className="cm-svc-item"
-                type="button"
-                style={{ animationDelay: `${i * 30}ms`, alignItems: "flex-start", transition: "transform 0.18s ease, box-shadow 0.18s ease" }}
-                onMouseEnter={(e) => { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "none"; }}
-                onClick={() => navigate(`/customer/app/services/${service.slug}`, { state: { service: toSerializableService(service) } })}
-              >
-                <div style={{ width: 52, height: 52, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
-                  <ServiceIcon icon={service.icon} iconUrl={service.iconUrl} accentColor={service.accentColor} highlightColor={service.highlightColor} />
-                </div>
-                <span className="cm-svc-label">{formatServiceLabel(service.name)}</span>
-              </button>
-            ))
+            filtered.map((service, i) => {
+              const isPrepaid = service.slug === "prepaid";
+              return (
+                <button
+                  key={service.id}
+                  className={`cm-svc-item${isPrepaid ? " cm-svc-item--prepaid-fx" : ""}`}
+                  type="button"
+                  style={{ animationDelay: `${i * 30}ms`, alignItems: "flex-start", transition: "transform 0.18s ease, box-shadow 0.18s ease" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "none"; }}
+                  onClick={() => navigate(`/customer/app/services/${service.slug}`, { state: { service: toSerializableService(service) } })}
+                >
+                  <div className={isPrepaid ? "cm-prepaid-fx-wrap" : ""} style={{ width: 52, height: 52, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
+                    {isPrepaid && (
+                      <>
+                        <span className="cm-prepaid-fx-ring" aria-hidden="true" />
+                        <span className="cm-prepaid-fx-ring cm-prepaid-fx-ring--2" aria-hidden="true" />
+                        <span className="cm-prepaid-fx-ring cm-prepaid-fx-ring--3" aria-hidden="true" />
+                        <span className="cm-prepaid-fx-glow" aria-hidden="true" />
+                      </>
+                    )}
+                    <ServiceIcon icon={service.icon} iconUrl={service.iconUrl} accentColor={service.accentColor} highlightColor={service.highlightColor} />
+                  </div>
+                  <span className="cm-svc-label">{formatServiceLabel(service.name)}</span>
+                </button>
+              );
+            })
           )}
         </div>
         </div>

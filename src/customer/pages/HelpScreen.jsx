@@ -26,8 +26,8 @@ const HelpScreen = () => {
   const [expanded, setExpanded] = useState(null);
 
   const contactCards = [
-    { icon: <FaPhone />, label: "Call Support", sub: "+91 8655681213", action: () => window.open("tel:+918655681213"), color: "#00C853" },
-    { icon: <FaWhatsapp />, label: "WhatsApp Chat", sub: "Quick assistance", action: () => window.open("https://wa.me/918655681213", "_blank"), color: "#25D366" },
+    { icon: <FaPhone />, label: "Call Support", sub: "+91 9522221213", action: () => window.open("tel:+919522221213"), color: "#00C853" },
+    { icon: <FaWhatsapp />, label: "WhatsApp Chat", sub: "Quick assistance", action: () => window.open("https://api.whatsapp.com/send/?phone=919522221213&text&type=phone_number&app_absent=0", "_blank"), color: "#25D366" },
     { icon: <FaEnvelope />, label: "Email Support", sub: "support@vasbazaar.com", action: () => window.open("mailto:support@vasbazaar.com"), color: "#FF9800" },
     { icon: <FaComments />, label: "Live Chat", sub: "Chat with our agents", action: openTawkChat, color: "#007BFF" },
     { icon: <FaRobot />, label: "AI Chat", sub: "Ask our VasBazaar assistant", action: openChatbotPanel, color: "#9333EA" },

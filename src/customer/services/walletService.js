@@ -18,6 +18,12 @@ export const walletService = {
   getReferredUsers: (pageNumber = 0, pageSize = 10) =>
     authGet("/api/customer/user/getReffered_user", { pageNumber, pageSize, isactive: 1 }),
 
+  // Referral stats — computed server-side on demand. Returns the referee's
+  // total transaction amount, the bonus the referrer earned from them, and
+  // the cashback the referee themselves earned.
+  getReferralStats: (refUserId) =>
+    authGet("/api/customer/user/referral_stats", { refUserId }),
+
   // Upcoming dues cached for 1 hour
   getUpcomingDues: () =>
     cachedFetch("upcomingDues", () => authGet("/api/customer/schedular/getAllRecharges"), 3600000),

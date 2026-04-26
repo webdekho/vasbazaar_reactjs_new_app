@@ -53,6 +53,9 @@ export const userService = {
   getReferredUsers: (pageNumber = 0, pageSize = 10) =>
     authGet("/api/customer/user/getReffered_user", { pageNumber, pageSize, isactive: 1 }),
 
+  referContacts: (contacts) =>
+    authPost("/api/customer/user/refer-contacts", { contacts }),
+
   completeOnboarding: async ({ name, sessionToken }) => {
     try {
       const response = await apiClient.post(
