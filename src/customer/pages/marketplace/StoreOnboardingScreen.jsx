@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { FaArrowLeft, FaMapMarkerAlt, FaStore, FaCamera, FaImage } from "react-icons/fa";
+import { FaArrowLeft, FaMapMarkerAlt, FaCamera, FaImage } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
 import "./marketplace.css";
 
