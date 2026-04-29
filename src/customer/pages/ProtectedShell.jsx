@@ -4,7 +4,7 @@ import {
   FaBars, FaTimes, FaChevronRight, FaGift, FaRegBell, FaSignOutAlt,
   FaUserCircle, FaWallet, FaHistory, FaQuestionCircle, FaExclamationTriangle,
   FaHome, FaSearch, FaClock, FaUsers, FaSyncAlt, FaTag,
-  FaExclamationCircle, FaCamera, FaQrcode, FaPlaneDeparture,
+  FaExclamationCircle, FaCamera, FaQrcode, FaPlaneDeparture, FaStore,
   FaShieldAlt, FaDownload, FaShareAlt, FaCheck, FaHeadset
 } from "react-icons/fa";
 import { useCustomerModern } from "../context/CustomerModernContext";
@@ -28,6 +28,8 @@ import ProfilePhotoCropper from "../components/ProfilePhotoCropper";
 import ProfilePhotoPreview from "../components/ProfilePhotoPreview";
 import { openTawkChat } from "../utils/tawk";
 import { useToast } from "../context/ToastContext";
+import { initPushNotifications, setPushNavigateHandler } from "../services/pushService";
+import { syncReminders, registerReminderTapHandler } from "../services/reminderScheduler";
 
 const bottomNavItems = [
   { to: "/customer/app/history", label: "History", icon: <FaHistory /> },
@@ -47,6 +49,10 @@ const drawerMenuItems = [
   { to: "/customer/app/my-coupons", label: "My Coupons", icon: <FaTag /> },
   { to: "/customer/app/referrals", label: "Referral Users", icon: <FaUsers /> },
   { to: "/customer/app/autopay", label: "AutoPay Mandates", icon: <FaSyncAlt /> },
+  { to: "/customer/app/marketplace", label: "Marketplace", icon: <FaStore /> },
+  { to: "/customer/app/marketplace/my-orders", label: "My Marketplace Orders", icon: <FaStore /> },
+  { to: "/customer/app/marketplace/my-store", label: "My Store (Seller)", icon: <FaStore /> },
+  { to: "/customer/app/marketplace/store-orders", label: "Store Orders (Seller)", icon: <FaStore /> },
   { to: "/customer/app/travel", label: "Travel Booking", icon: <FaPlaneDeparture /> },
   { to: "/customer/app/notifications", label: "Notifications", icon: <FaRegBell /> },
   { to: "/customer/app/help", label: "Help & Support", icon: <FaQuestionCircle /> },
@@ -110,6 +116,24 @@ const ProtectedShell = () => {
   }, []);
 
   useEffect(() => { fetchBalances(); }, [fetchBalances]);
+
+  // FCM push registration — runs once after the shell mounts (post-login).
+  // Token gets POSTed to /api/customer/fcm/register; tap handler navigates
+  // into the relevant screen via the existing router.
+  useEffect(() => {
+    setPushNavigateHandler((path) => navigate(path));
+    initPushNotifications({ onNavigate: (path) => navigate(path) });
+  }, [navigate]);
+
+  // Outstanding SMS reminders — re-sync local notification schedule on shell mount
+  // and register a tap handler that routes to the reminder queue screen.
+  useEffect(() => {
+    syncReminders().catch(() => {});
+    const unregister = registerReminderTapHandler((path) => navigate(path));
+    return () => {
+      try { unregister && unregister(); } catch {}
+    };
+  }, [navigate]);
 
   // Unread notification count — a notification disappears after `dismissNotification`
   // so anything still in the list is treated as unread. Bell icon renders only when

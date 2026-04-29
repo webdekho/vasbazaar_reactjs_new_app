@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { FaGift, FaRegBell, FaWallet } from "react-icons/fa";
+import { FaBookOpen, FaGift, FaRegBell, FaWallet } from "react-icons/fa";
 import { useCustomerModern } from "../context/CustomerModernContext";
 import { userService } from "../services/userService";
 import { advertisementService } from "../services/advertisementService";
@@ -57,6 +57,7 @@ const HomeScreen = () => {
     { label: "My Bills", to: "/customer/app/services/electricity", ...getServiceVisual("electricity") },
     { label: "Recharge", to: "/customer/app/services/prepaid", ...getServiceVisual("prepaid") },
     { label: "Wallet", to: "/customer/app/wallet", ...getServiceVisual("wallet") },
+    { label: "ReBill", to: "/customer/app/outstanding", icon: FaBookOpen, accentColor: "#FFE9D6", highlightColor: "#FF7A00" },
     { label: "Rewards", to: "/customer/app/coupons", ...getServiceVisual("rewards") },
   ];
 

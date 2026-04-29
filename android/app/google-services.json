@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "34631772298",
+    "project_id": "vasbazaar-7a70c",
+    "storage_bucket": "vasbazaar-7a70c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:34631772298:android:91659548e6771220b7e573",
+        "android_client_info": {
+          "package_name": "com.vasbazaar.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCYyhnaepREIstNPM_ZUtIxpqVaxOjoAgE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

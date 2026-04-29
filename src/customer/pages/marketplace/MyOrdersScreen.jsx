@@ -11,6 +11,7 @@ const STATUS_COLOR = {
   OUT_FOR_DELIVERY: "#a78bfa",
   DELIVERED: "#34d399",
   CANCELLED: "#f87171",
+  REJECTED: "#f87171",
 };
 
 const formatDate = (s) => {
@@ -86,6 +87,16 @@ const MyOrdersScreen = () => {
                 </span>
                 <strong>₹{Number(o.totalAmount || 0).toFixed(0)}</strong>
               </div>
+              {o.orderStatus === "REJECTED" && o.rejectionReason && (
+                <div style={{ marginTop: 6, fontSize: 11, color: "#f87171" }}>
+                  Reason: {o.rejectionReason}
+                </div>
+              )}
+              {Number(o.orderCharge || 0) > 0 && (
+                <div style={{ marginTop: 4, fontSize: 11, color: "var(--cm-muted)" }}>
+                  Includes platform charge ₹{Number(o.orderCharge).toFixed(2)}
+                </div>
+              )}
             </div>
           ))}
         </div>

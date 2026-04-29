@@ -92,6 +92,30 @@ export const customerStorage = {
     localStorage.setItem(CUSTOMER_STORAGE_KEYS.dismissedDues, JSON.stringify(map));
   },
 
+  // Marketplace checkout — persist last-used delivery address so the user
+  // doesn't have to re-enter it on every order.
+  getMarketplaceAddress: () => {
+    try {
+      const raw = localStorage.getItem("vb_mkt_address");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  setMarketplaceAddress: ({ address, coords, resolvedAddress } = {}) => {
+    try {
+      const payload = {
+        address: address || "",
+        coords: coords || null,
+        resolvedAddress: resolvedAddress || null,
+      };
+      localStorage.setItem("vb_mkt_address", JSON.stringify(payload));
+    } catch {
+      /* ignore quota errors */
+    }
+  },
+
   clear: () => {
     Object.values(CUSTOMER_STORAGE_KEYS).forEach((key) => {
       if (CUSTOMER_STORAGE_PERSISTENT_KEYS.has(key)) return;

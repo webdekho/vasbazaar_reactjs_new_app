@@ -29,6 +29,19 @@ module.exports = function (app) {
     });
   });
 
+  // Intercept POST to /customer/app/marketplace/payment-callback from Juspay
+  // and redirect to GET with form data as query params so CRA serves index.html
+  app.post("/customer/app/marketplace/payment-callback", (req, res) => {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk.toString();
+    });
+    req.on("end", () => {
+      const queryString = body || "";
+      res.redirect(302, `/customer/app/marketplace/payment-callback?${queryString}`);
+    });
+  });
+
   // Proxy each backend path with its own middleware instance
   const paths = ["/api", "/login", "/coupon", "/user"];
   paths.forEach((path) => {

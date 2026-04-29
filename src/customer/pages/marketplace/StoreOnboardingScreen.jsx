@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { FaArrowLeft, FaMapMarkerAlt, FaCamera, FaImage } from "react-icons/fa";
+import { FaArrowLeft, FaMapMarkerAlt, FaCamera, FaImage, FaFileAlt } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
 import "./marketplace.css";
 
@@ -32,6 +32,9 @@ const initialForm = {
   minOrderValue: 0,
   logoUrl: "",
   bannerUrl: "",
+  gstCertificateUrl: "",
+  udyamCertificateUrl: "",
+  fssaiCertificateUrl: "",
 };
 
 const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
@@ -47,14 +50,66 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
   const [submitting, setSubmitting] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [uploadingGst, setUploadingGst] = useState(false);
+  const [uploadingUdyam, setUploadingUdyam] = useState(false);
+  const [uploadingFssai, setUploadingFssai] = useState(false);
+  const [chargesData, setChargesData] = useState(null);
+  const [chargesLoading, setChargesLoading] = useState(false);
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState("");
+  const [couponError, setCouponError] = useState(null);
   const logoInput = useRef(null);
   const bannerInput = useRef(null);
+  const gstInput = useRef(null);
+  const udyamInput = useRef(null);
+  const fssaiInput = useRef(null);
+
+  const selectedCategory = categories.find((c) => Number(c.id) === Number(form.categoryId));
+  const isRestaurant = /restaurant|food|hotel|cafe|eatery|dhaba/i.test(selectedCategory?.name || "");
 
   useEffect(() => {
     marketplaceService.getCategories().then((res) => {
       if (res.success) setCategories(Array.isArray(res.data) ? res.data : []);
     });
   }, []);
+
+  // Fetch charges only at registration (not edit). Re-runs when category or applied coupon changes.
+  useEffect(() => {
+    if (editMode) return;
+    setChargesLoading(true);
+    marketplaceService.getOnboardingCharges({
+      categoryId: form.categoryId || undefined,
+      couponCode: appliedCoupon || undefined,
+    }).then((res) => {
+      setChargesLoading(false);
+      if (res.success) setChargesData(res.data);
+    });
+  }, [editMode, form.categoryId, appliedCoupon]);
+
+  const applyCoupon = () => {
+    setCouponError(null);
+    const code = couponInput.trim().toUpperCase();
+    if (!code) { setCouponError("Enter a coupon code"); return; }
+    marketplaceService.validateOnboardingCoupon({
+      code,
+      categoryId: form.categoryId || null,
+    }).then((res) => {
+      if (!res.success) { setCouponError(res.message || "Invalid coupon"); return; }
+      const couponInfo = res.data?.coupon || {};
+      if (couponInfo.valid) {
+        setAppliedCoupon(code);
+        setChargesData(res.data);
+      } else {
+        setCouponError(couponInfo.message || "Coupon not applicable");
+      }
+    });
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon("");
+    setCouponInput("");
+    setCouponError(null);
+  };
 
   function flattenStore(s) {
     return {
@@ -77,6 +132,9 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
       minOrderValue: Number(s.minOrderValue || 0),
       logoUrl: s.logoUrl || "",
       bannerUrl: s.bannerUrl || "",
+      gstCertificateUrl: s.gstCertificateUrl || "",
+      udyamCertificateUrl: s.udyamCertificateUrl || "",
+      fssaiCertificateUrl: s.fssaiCertificateUrl || "",
     };
   }
 
@@ -108,6 +166,30 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
     } else {
       setError(res.message || "Upload failed");
     }
+  };
+
+  const handleDocumentPick = async (e, purpose, setUploading, setterField) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { setError("File must be under 10 MB"); return; }
+    const allowed = ["image/jpeg", "image/jpg", "image/png", "application/pdf"];
+    if (!allowed.includes(file.type)) { setError("Only JPG, PNG or PDF allowed"); return; }
+    setError(null);
+    setUploading(true);
+    const res = await marketplaceService.uploadImage(file, purpose);
+    setUploading(false);
+    if (res.success && res.data?.url) {
+      setField(setterField, res.data.url);
+    } else {
+      setError(res.message || "Upload failed");
+    }
+  };
+
+  const isPdf = (url) => /\.pdf($|\?)/i.test(url || "");
+  const fileLabel = (url) => {
+    if (!url) return "";
+    if (isPdf(url)) return "PDF uploaded";
+    return "Uploaded";
   };
 
   const validateStep = () => {
@@ -146,12 +228,37 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
     setSubmitting(true);
     setError(null);
     const payload = { ...form };
-    // Normalize categoryId to nested object the backend expects
     if (form.categoryId) payload.categoryId = { id: Number(form.categoryId) };
     else delete payload.categoryId;
-    const res = editMode
-      ? await marketplaceService.updateMyStore(payload)
-      : await marketplaceService.onboardStore(payload);
+
+    if (editMode) {
+      const res = await marketplaceService.updateMyStore(payload);
+      setSubmitting(false);
+      if (res.success) navigate("/customer/app/marketplace/my-store", { replace: true });
+      else setError(res.message || "Submission failed");
+      return;
+    }
+
+    payload.onboardingCouponCode = appliedCoupon || null;
+
+    const payable = Number(chargesData?.payable || 0);
+    let paymentRef = null;
+
+    if (payable > 0) {
+      // TODO: integrate real PG flow — for now ask user to confirm a transaction reference
+      // (admin will reconcile via /onboarding/charges + payment_ref).
+      paymentRef = window.prompt(
+        `Onboarding requires payment of ₹${payable.toFixed(2)}.\nEnter your payment reference / UTR after completing payment:`
+      );
+      if (!paymentRef || !paymentRef.trim()) {
+        setSubmitting(false);
+        setError("Payment reference is required to complete registration.");
+        return;
+      }
+      paymentRef = paymentRef.trim();
+    }
+
+    const res = await marketplaceService.onboardStore(payload, paymentRef);
     setSubmitting(false);
     if (res.success) {
       navigate("/customer/app/marketplace/my-store", { replace: true });
@@ -298,6 +405,55 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
                 <input ref={bannerInput} type="file" accept="image/*" hidden onChange={(e) => handleImagePick(e, "banner", setUploadingBanner, "bannerUrl")} />
               </div>
             </div>
+
+            <div className="mkt-form-section-title" style={{ marginTop: 16 }}>Documents (optional)</div>
+
+            <div className="mkt-field">
+              <label className="mkt-field-label">GST certificate (optional)</label>
+              <div className="mkt-image-upload" onClick={() => gstInput.current?.click()}>
+                <div className="mkt-image-upload-preview">
+                  {form.gstCertificateUrl && !isPdf(form.gstCertificateUrl)
+                    ? <img src={form.gstCertificateUrl} alt="" />
+                    : <FaFileAlt size={20} />}
+                </div>
+                <div className="mkt-image-upload-text">
+                  {uploadingGst ? "Uploading…" : form.gstCertificateUrl ? `${fileLabel(form.gstCertificateUrl)} · Tap to change` : "Tap to upload GST certificate (JPG/PNG/PDF)"}
+                </div>
+                <input ref={gstInput} type="file" accept="image/jpeg,image/png,application/pdf" hidden onChange={(e) => handleDocumentPick(e, "gst_certificate", setUploadingGst, "gstCertificateUrl")} />
+              </div>
+            </div>
+
+            <div className="mkt-field">
+              <label className="mkt-field-label">Udyam Aadhaar / Shop Act (optional)</label>
+              <div className="mkt-image-upload" onClick={() => udyamInput.current?.click()}>
+                <div className="mkt-image-upload-preview">
+                  {form.udyamCertificateUrl && !isPdf(form.udyamCertificateUrl)
+                    ? <img src={form.udyamCertificateUrl} alt="" />
+                    : <FaFileAlt size={20} />}
+                </div>
+                <div className="mkt-image-upload-text">
+                  {uploadingUdyam ? "Uploading…" : form.udyamCertificateUrl ? `${fileLabel(form.udyamCertificateUrl)} · Tap to change` : "Tap to upload Udyam / Shop Act (JPG/PNG/PDF)"}
+                </div>
+                <input ref={udyamInput} type="file" accept="image/jpeg,image/png,application/pdf" hidden onChange={(e) => handleDocumentPick(e, "udyam_certificate", setUploadingUdyam, "udyamCertificateUrl")} />
+              </div>
+            </div>
+
+            {isRestaurant && (
+              <div className="mkt-field">
+                <label className="mkt-field-label">FSSAI certificate (optional)</label>
+                <div className="mkt-image-upload" onClick={() => fssaiInput.current?.click()}>
+                  <div className="mkt-image-upload-preview">
+                    {form.fssaiCertificateUrl && !isPdf(form.fssaiCertificateUrl)
+                      ? <img src={form.fssaiCertificateUrl} alt="" />
+                      : <FaFileAlt size={20} />}
+                  </div>
+                  <div className="mkt-image-upload-text">
+                    {uploadingFssai ? "Uploading…" : form.fssaiCertificateUrl ? `${fileLabel(form.fssaiCertificateUrl)} · Tap to change` : "Tap to upload FSSAI certificate (JPG/PNG/PDF)"}
+                  </div>
+                  <input ref={fssaiInput} type="file" accept="image/jpeg,image/png,application/pdf" hidden onChange={(e) => handleDocumentPick(e, "fssai_certificate", setUploadingFssai, "fssaiCertificateUrl")} />
+                </div>
+              </div>
+            )}
           </>
         )}
 
@@ -313,6 +469,54 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
             <ReviewRow label="Delivery time" value={`${form.deliveryTimeMinutes} min`} />
             <ReviewRow label="Delivery charges" value={`₹${Number(form.deliveryCharges).toFixed(0)}`} />
             <ReviewRow label="Min order" value={`₹${Number(form.minOrderValue).toFixed(0)}`} />
+            {form.gstCertificateUrl && <ReviewRow label="GST certificate" value="Uploaded" />}
+            {form.udyamCertificateUrl && <ReviewRow label="Udyam / Shop Act" value="Uploaded" />}
+            {isRestaurant && form.fssaiCertificateUrl && <ReviewRow label="FSSAI certificate" value="Uploaded" />}
+
+            {!editMode && (
+              <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--cm-line)" }}>
+                <div className="mkt-form-section-title" style={{ marginTop: 0 }}>Onboarding charges</div>
+                {chargesLoading && <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>Loading charges…</div>}
+                {chargesData && (
+                  <>
+                    <ReviewRow label="Security deposit" value={`₹${Number(chargesData.securityDeposit || 0).toFixed(2)}`} />
+                    <ReviewRow label="Activation charges" value={`₹${Number(chargesData.activationCharges || 0).toFixed(2)}`} />
+                    <ReviewRow label="Subtotal" value={`₹${Number(chargesData.subtotal || 0).toFixed(2)}`} />
+                    {Number(chargesData.discount || 0) > 0 && (
+                      <ReviewRow label={`Coupon (${appliedCoupon})`} value={`− ₹${Number(chargesData.discount).toFixed(2)}`} />
+                    )}
+                    <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", fontSize: 15, fontWeight: 700 }}>
+                      <span>Total payable</span>
+                      <span>₹{Number(chargesData.payable || 0).toFixed(2)}</span>
+                    </div>
+                    {Number(chargesData.monthlyCharges || 0) > 0 && (
+                      <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: 4 }}>
+                        Recurring monthly platform fee: ₹{Number(chargesData.monthlyCharges).toFixed(2)} (billed separately).
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {!appliedCoupon ? (
+                  <div className="mkt-field" style={{ marginTop: 12 }}>
+                    <label className="mkt-field-label">Have a marketplace coupon?</label>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input className="mkt-input" style={{ flex: 1 }} value={couponInput}
+                        onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                        placeholder="Enter coupon code" />
+                      <button type="button" className="mkt-btn mkt-btn--secondary" onClick={applyCoupon}>Apply</button>
+                    </div>
+                    {couponError && <div className="mkt-error-text" style={{ marginTop: 6 }}>{couponError}</div>}
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, padding: 8, background: "var(--cm-card)", borderRadius: 8 }}>
+                    <span style={{ fontSize: 13 }}>Coupon <strong>{appliedCoupon}</strong> applied</span>
+                    <button type="button" onClick={removeCoupon} style={{ background: "none", border: "none", color: "var(--cm-muted)", fontSize: 12, cursor: "pointer" }}>Remove</button>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div style={{ fontSize: 12, color: "var(--cm-muted)", marginTop: 12 }}>
               Submission will be reviewed by our admin team. You'll be notified once approved.
             </div>
@@ -329,7 +533,13 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
             <button className="mkt-btn mkt-btn--primary" onClick={next}>Continue</button>
           ) : (
             <button className="mkt-btn mkt-btn--primary" onClick={submit} disabled={submitting}>
-              {submitting ? "Submitting…" : editMode ? "Save & re-submit" : "Submit for approval"}
+              {submitting
+                ? "Submitting…"
+                : editMode
+                  ? "Save & re-submit"
+                  : Number(chargesData?.payable || 0) > 0
+                    ? `Pay ₹${Number(chargesData.payable).toFixed(2)} & submit`
+                    : "Submit for approval"}
             </button>
           )}
         </div>

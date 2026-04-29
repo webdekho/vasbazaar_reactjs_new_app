@@ -18,6 +18,11 @@ body {
   color: #FFFFFF;
   line-height: 1.5;
 }
+/* Honor user's saved theme during boot (set on <html> by the inline script). */
+html[data-theme="light"], html[data-theme="light"] body {
+  background: #F5F7FA;
+  color: #0F172A;
+}
 
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;

@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { playSuccessSound } from "../../services/audioService";
 import {
   FaArrowLeft,
   FaStore,
@@ -26,6 +27,7 @@ const STATUS_LABEL = {
   OUT_FOR_DELIVERY: "Out for delivery",
   DELIVERED: "Delivered",
   CANCELLED: "Cancelled",
+  REJECTED: "Rejected",
 };
 const STATUS_ICON = {
   PLACED: FaClock,
@@ -64,21 +66,57 @@ const itemPrice = (it) =>
 const itemTotal = (it) =>
   Number(it?.total ?? it?.amount ?? itemQty(it) * itemPrice(it));
 
+const CONFETTI_COLORS = ["#00E5A0", "#3B82F6", "#A855F7", "#FFD700", "#FF6B6B", "#06B6D4"];
+
 const OrderDetailScreen = () => {
   const { orderId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Trigger celebration if any of: navigation state (cart→detail flow),
+  // ?celebrate=1 query param (manual trigger / share-back), or first-time
+  // viewing a PAID order (we mark it shown via sessionStorage so a refresh
+  // doesn't re-fire).
+  const initialCelebrate = Boolean(location.state?.celebrate)
+    || new URLSearchParams(location.search).get("celebrate") === "1";
+  const [celebrate, setCelebrate] = useState(initialCelebrate);
+  const celebrateFiredRef = useRef(false);
 
   const load = useCallback(async () => {
     const res = await marketplaceService.getMyOrder(orderId);
     setLoading(false);
-    if (res.success) setOrder(res.data);
+    if (res.success) {
+      setOrder(res.data);
+      // Auto-celebrate first-time view of a paid order this session.
+      const seenKey = `mkt_celebrated_${orderId}`;
+      if (res.data?.paymentStatus === "PAID" && !sessionStorage.getItem(seenKey)) {
+        sessionStorage.setItem(seenKey, "1");
+        setCelebrate(true);
+      }
+    }
   }, [orderId]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!celebrate || celebrateFiredRef.current) return;
+    celebrateFiredRef.current = true;
+
+    let handle;
+    playSuccessSound().then((h) => { handle = h; }).catch(() => {});
+
+    // Clear navigation state so a refresh does not re-celebrate
+    window.history.replaceState({}, "");
+
+    const timer = setTimeout(() => setCelebrate(false), 4500);
+    return () => {
+      clearTimeout(timer);
+      if (handle?.stop) handle.stop();
+    };
+  }, [celebrate]);
 
   const items = useMemo(() => pickItems(order), [order]);
   const itemsSubtotal = useMemo(
@@ -115,17 +153,73 @@ const OrderDetailScreen = () => {
 
   const statusIdx = STATUS_FLOW.indexOf(order.orderStatus);
   const isCancelled = order.orderStatus === "CANCELLED";
+  const isRejected = order.orderStatus === "REJECTED";
   const paymentPaid = order.paymentStatus === "PAID";
   const subtotal = Number(order.subtotal ?? itemsSubtotal);
   const delivery = Number(order.deliveryCharges || 0);
+  const platformCharge = Number(order.orderCharge || 0);
   const tax = Number(order.tax || order.gst || 0);
   const discount = Number(order.discount || 0);
-  const total = Number(order.totalAmount || subtotal + delivery + tax - discount);
+  const total = Number(order.totalAmount || subtotal + delivery + platformCharge + tax - discount);
   const store = order.storeId || {};
   const buyer = order.userId || {};
 
   return (
     <div className="mkt">
+      {celebrate && (
+        <div className="mkt-celebrate no-print" aria-hidden>
+          <div className="mkt-celebrate-glow" />
+          <div className="mkt-celebrate-ring mkt-celebrate-ring--1" />
+          <div className="mkt-celebrate-ring mkt-celebrate-ring--2" />
+          <div className="mkt-celebrate-ring mkt-celebrate-ring--3" />
+          {Array.from({ length: 120 }).map((_, i) => {
+            const angle = (Math.PI * 2 * i) / 120 + Math.random() * 0.4;
+            const distance = 240 + Math.random() * 360;
+            const dx = Math.cos(angle) * distance;
+            // Bias upward — emit point sits near the bottom of the viewport.
+            const dy = -(Math.abs(Math.sin(angle)) * distance + Math.random() * 280);
+            const shapeIdx = i % 4;
+            const shape =
+              shapeIdx === 0 ? "mkt-conf--sq" :
+              shapeIdx === 1 ? "mkt-conf--cir" :
+              shapeIdx === 2 ? "mkt-conf--rib" :
+              "mkt-conf--star";
+            return (
+              <span
+                key={i}
+                className={`mkt-conf ${shape}`}
+                style={{
+                  "--dx": `${dx}px`,
+                  "--dy": `${dy}px`,
+                  "--rot": `${Math.random() * 1440 - 720}deg`,
+                  "--col": CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+                  width: `${shapeIdx === 2 ? 5 : 7 + Math.random() * 5}px`,
+                  height: `${shapeIdx === 2 ? 14 + Math.random() * 8 : 7 + Math.random() * 5}px`,
+                  animationDelay: `${Math.random() * 0.35}s`,
+                  animationDuration: `${1.8 + Math.random() * 1.6}s`,
+                }}
+              />
+            );
+          })}
+          {Array.from({ length: 18 }).map((_, i) => (
+            <span
+              key={`sp${i}`}
+              className="mkt-conf-spark"
+              style={{
+                left: `${10 + Math.random() * 80}%`,
+                top: `${10 + Math.random() * 50}%`,
+                animationDelay: `${0.3 + Math.random() * 1.8}s`,
+              }}
+            />
+          ))}
+          <div className="mkt-celebrate-badge">
+            <svg viewBox="0 0 56 56" width="64" height="64">
+              <circle className="mkt-cb-circle" cx="28" cy="28" r="24" fill="none" />
+              <path className="mkt-cb-check" d="M16 29l8 8 16-18" fill="none" />
+            </svg>
+          </div>
+        </div>
+      )}
       <div className="mkt-header no-print">
         <button
           className="mkt-header-back"
@@ -188,8 +282,8 @@ const OrderDetailScreen = () => {
               fontWeight: 800,
               padding: "4px 10px",
               borderRadius: 6,
-              background: isCancelled ? "rgba(248,113,113,0.14)" : "rgba(20,184,166,0.14)",
-              color: isCancelled ? "#f87171" : "#14b8a6",
+              background: (isCancelled || isRejected) ? "rgba(248,113,113,0.14)" : "rgba(20,184,166,0.14)",
+              color: (isCancelled || isRejected) ? "#f87171" : "#14b8a6",
             }}
           >
             <FaReceipt size={11} />
@@ -262,6 +356,12 @@ const OrderDetailScreen = () => {
             <span>Delivery charges</span>
             <span>{delivery > 0 ? inr(delivery) : "Free"}</span>
           </div>
+          {platformCharge > 0 && (
+            <div className="mkt-receipt-row">
+              <span>Platform charge</span>
+              <span>{inr(platformCharge)}</span>
+            </div>
+          )}
           {tax > 0 && (
             <div className="mkt-receipt-row">
               <span>Tax / GST</span>
@@ -320,7 +420,7 @@ const OrderDetailScreen = () => {
         {/* Tracking timeline */}
         <div className="mkt-receipt-card no-print" style={{ marginTop: 12 }}>
           <div className="mkt-receipt-section-title">Order Tracking</div>
-          {!isCancelled ? (
+          {!(isCancelled || isRejected) ? (
             <div style={{ marginTop: 6 }}>
               {STATUS_FLOW.map((s, i) => {
                 const Icon = STATUS_ICON[s];
@@ -360,8 +460,10 @@ const OrderDetailScreen = () => {
             <div className="mkt-status-banner mkt-status--rejected" style={{ margin: "8px 0 0" }}>
               <FaTimesCircle size={16} style={{ marginTop: 2 }} />
               <div>
-                Order cancelled
-                {order.cancellationReason ? ` — ${order.cancellationReason}` : ""}
+                {isRejected ? "Order rejected" : "Order cancelled"}
+                {(isRejected ? order.rejectionReason : order.cancellationReason)
+                  ? ` — ${isRejected ? order.rejectionReason : order.cancellationReason}`
+                  : ""}
               </div>
             </div>
           )}

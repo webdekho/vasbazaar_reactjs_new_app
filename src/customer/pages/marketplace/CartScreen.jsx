@@ -4,7 +4,8 @@ import { FaArrowLeft, FaPlus, FaMinus, FaTrash, FaStore, FaMapMarkerAlt, FaClock
 import { marketplaceService } from "../../services/marketplaceService";
 import { useMarketplaceCart } from "../../context/MarketplaceCartContext";
 import { useCustomerModern } from "../../context/CustomerModernContext";
-import { savePaymentContext } from "../../services/juspayService";
+import { savePaymentContext, extractPaymentUrl } from "../../services/juspayService";
+import { customerStorage } from "../../services/storageService";
 import { Capacitor } from "@capacitor/core";
 import "./marketplace.css";
 
@@ -39,7 +40,6 @@ const CartScreen = () => {
 
   const [step, setStep] = useState("cart"); // cart | checkout
   const [address, setAddress] = useState("");
-  const [contactMobile, setContactMobile] = useState(userData?.mobile || userData?.mobileNumber || "");
   const [coords, setCoords] = useState(null);
   const [placing, setPlacing] = useState(false);
   const [placingMethod, setPlacingMethod] = useState(null); // "ONLINE" | "COD"
@@ -153,15 +153,24 @@ const CartScreen = () => {
 
   const proceedToCheckout = () => {
     if (belowMin) return;
-    captureLocation();
+    // Prefill address fields from the last successful order if the user
+    // hasn't entered anything in this session yet.
+    const saved = customerStorage.getMarketplaceAddress();
+    if (saved) {
+      if (!address && saved.address) setAddress(saved.address);
+      if (!coords && saved.coords) setCoords(saved.coords);
+      if (!resolvedAddress && saved.resolvedAddress) setResolvedAddress(saved.resolvedAddress);
+    }
+    if (!coords && !(saved && saved.coords)) captureLocation();
     setStep("checkout");
   };
 
   const placeOrder = async (method = "ONLINE") => {
     if (placing) return;
     if (!address.trim()) { setError("Please enter delivery address"); return; }
-    if (!contactMobile || !/^\d{10}$/.test(String(contactMobile).trim())) {
-      setError("Please enter a valid 10-digit contact mobile");
+    const orderMobile = String(userData?.mobile || userData?.mobileNumber || "").trim();
+    if (!orderMobile || !/^\d{10}$/.test(orderMobile)) {
+      setError("Your account mobile is missing. Please re-login and try again.");
       return;
     }
     setError(null);
@@ -172,7 +181,7 @@ const CartScreen = () => {
       storeId: cart.storeId,
       items: items.map((i) => ({ itemId: i.id, quantity: i.qty })),
       deliveryAddress: address.trim(),
-      contactMobile: contactMobile.trim(),
+      contactMobile: orderMobile,
       paymentMethod: method,
       ...(method === "ONLINE" ? { returnUrl: buildMarketplaceReturnUrl() } : {}),
       ...(coords ? { deliveryLat: coords.lat, deliveryLng: coords.lng } : {}),
@@ -186,7 +195,19 @@ const CartScreen = () => {
       setError(res.message || "Failed to place order");
       return;
     }
-    const { orderId, orderNo, totalAmount, paymentUrl } = res.data || {};
+    const { orderId, orderNo, totalAmount } = res.data || {};
+    // The backend may return the Juspay URL in any of several shapes
+    // (paymentUrl, payment_links.web, rawResponse.payment_links.web). Use
+    // the same extractor that PaymentScreen uses for recharges.
+    const paymentUrl = extractPaymentUrl(res) || res.data?.paymentUrl || null;
+
+    // Persist the address now that the order is confirmed — only on success
+    // so we don't pollute storage with abandoned drafts.
+    customerStorage.setMarketplaceAddress({
+      address: address.trim(),
+      coords,
+      resolvedAddress,
+    });
 
     // Persist context so the marketplace callback screen can pick up the
     // order id even if the URL params are stripped on return.
@@ -200,7 +221,7 @@ const CartScreen = () => {
     clearCart();
 
     if (method === "COD") {
-      navigate(`/customer/app/marketplace/orders/${orderId}`, { replace: true });
+      navigate(`/customer/app/marketplace/orders/${orderId}`, { replace: true, state: { celebrate: true } });
       return;
     }
 
@@ -347,17 +368,6 @@ const CartScreen = () => {
                 </div>
               </div>
             )}
-
-            <div className="mkt-form-section-title">Contact</div>
-            <div className="mkt-field">
-              <label className="mkt-field-label">Mobile Number</label>
-              <input
-                className="mkt-input"
-                inputMode="numeric"
-                value={contactMobile}
-                onChange={(e) => setContactMobile(e.target.value.replace(/\D/g, "").slice(0, 10))}
-              />
-            </div>
 
             <div className="mkt-summary" style={{ margin: 0 }}>
               <div className="mkt-summary-row"><span>Subtotal</span><span>₹{totals.subtotal.toFixed(0)}</span></div>

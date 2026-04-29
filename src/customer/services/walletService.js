@@ -31,6 +31,9 @@ export const walletService = {
   deleteReminder: (id) =>
     authDelete(`/api/customer/schedular/${id}`),
 
+  markReminderPaid: (id) =>
+    authPost(`/api/customer/schedular/${id}/mark-paid`, {}),
+
   getCoupons: (pageNumber = 0, pageSize = 10) =>
     authGet("/api/customer/transaction/couponDetails", { pageNumber, pageSize }),
 

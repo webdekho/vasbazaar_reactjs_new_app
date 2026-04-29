@@ -54,6 +54,9 @@ const KycScreen = lazy(() => import("./pages/KycScreen"));
 const KycCallbackScreen = lazy(() => import("./pages/KycCallbackScreen"));
 const QrStickerScreen = lazy(() => import("./pages/QrStickerScreen"));
 const BBPSComplaintListScreen = lazy(() => import("./pages/BBPSComplaintListScreen"));
+const OutstandingListScreen = lazy(() => import("./pages/outstanding/OutstandingListScreen"));
+const CustomerLedgerScreen = lazy(() => import("./pages/outstanding/CustomerLedgerScreen"));
+const ReminderQueueScreen = lazy(() => import("./pages/outstanding/ReminderQueueScreen"));
 const TermsScreen = lazy(() => import("./pages/TermsScreen"));
 
 // Marketplace
@@ -62,6 +65,7 @@ const StoreDetailScreen = lazy(() => import("./pages/marketplace/StoreDetailScre
 const MarketplaceCartScreen = lazy(() => import("./pages/marketplace/CartScreen"));
 const StoreOnboardingScreen = lazy(() => import("./pages/marketplace/StoreOnboardingScreen"));
 const MyStoreManageScreen = lazy(() => import("./pages/marketplace/MyStoreManageScreen"));
+const StoreTimingsScreen = lazy(() => import("./pages/marketplace/StoreTimingsScreen"));
 const MyMarketplaceOrdersScreen = lazy(() => import("./pages/marketplace/MyOrdersScreen"));
 const MarketplaceOrderDetailScreen = lazy(() => import("./pages/marketplace/OrderDetailScreen"));
 const StoreOrdersScreen = lazy(() => import("./pages/marketplace/StoreOrdersScreen"));
@@ -150,12 +154,16 @@ const CustomerModernRoutes = () => {
             <Route path="kyc" element={<Suspense fallback={<RouteFallback />}><KycScreen /></Suspense>} />
             <Route path="kyc-callback" element={<Suspense fallback={<RouteFallback />}><KycCallbackScreen /></Suspense>} />
             <Route path="bbps-complaints" element={<Suspense fallback={<RouteFallback />}><BBPSComplaintListScreen /></Suspense>} />
+            <Route path="outstanding" element={<Suspense fallback={<RouteFallback />}><OutstandingListScreen /></Suspense>} />
+            <Route path="outstanding/reminders" element={<Suspense fallback={<RouteFallback />}><ReminderQueueScreen /></Suspense>} />
+            <Route path="outstanding/:customerId" element={<Suspense fallback={<RouteFallback />}><CustomerLedgerScreen /></Suspense>} />
             {/* Marketplace */}
             <Route path="marketplace" element={<Suspense fallback={<RouteFallback />}><MarketplaceHomeScreen /></Suspense>} />
             <Route path="marketplace/store/:storeId" element={<Suspense fallback={<RouteFallback />}><StoreDetailScreen /></Suspense>} />
             <Route path="marketplace/cart" element={<Suspense fallback={<RouteFallback />}><MarketplaceCartScreen /></Suspense>} />
             <Route path="marketplace/onboard" element={<Suspense fallback={<RouteFallback />}><StoreOnboardingScreen /></Suspense>} />
             <Route path="marketplace/my-store" element={<Suspense fallback={<RouteFallback />}><MyStoreManageScreen /></Suspense>} />
+            <Route path="marketplace/my-store/timings" element={<Suspense fallback={<RouteFallback />}><StoreTimingsScreen /></Suspense>} />
             <Route path="marketplace/my-orders" element={<Suspense fallback={<RouteFallback />}><MyMarketplaceOrdersScreen /></Suspense>} />
             <Route path="marketplace/orders/:orderId" element={<Suspense fallback={<RouteFallback />}><MarketplaceOrderDetailScreen /></Suspense>} />
             <Route path="marketplace/store-orders" element={<Suspense fallback={<RouteFallback />}><StoreOrdersScreen /></Suspense>} />

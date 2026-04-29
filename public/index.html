@@ -6,7 +6,23 @@
     <link rel="shortcut icon" href="%PUBLIC_URL%/favicon.png" />
     <link rel="icon" type="image/png" href="%PUBLIC_URL%/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#0B0B0B" />
+    <meta name="theme-color" id="vb-theme-color" content="#0B0B0B" />
+    <script>
+      // Read user's saved theme synchronously so the boot loader respects light mode.
+      (function () {
+        try {
+          var t = localStorage.getItem("vb_theme") || "dark";
+          var bg = t === "light" ? "#F5F7FA" : "#0B0B0B";
+          var fg = t === "light" ? "#0F172A" : "#FFFFFF";
+          document.documentElement.style.background = bg;
+          document.documentElement.dataset.theme = t;
+          var meta = document.getElementById("vb-theme-color");
+          if (meta) meta.setAttribute("content", bg);
+          // Stash for the inline #app-loader styles that run after this.
+          window.__VB_BOOT__ = { bg: bg, fg: fg, theme: t };
+        } catch (e) {}
+      })();
+    </script>
     <meta
       name="description"
       content="VasBazaar - Recharge, pay bills, manage wallet and earn rewards"
@@ -41,13 +57,26 @@
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root">
       <!-- Initial loading state for PWA - replaced when React mounts -->
-      <div id="app-loader" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0B0B0B;color:#fff;font-family:system-ui,-apple-system,sans-serif">
+      <div id="app-loader" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:system-ui,-apple-system,sans-serif">
         <img src="/icon-192.png" alt="VasBazaar" width="72" height="72" style="border-radius:16px;margin-bottom:20px" onerror="this.style.display='none'">
-        <div style="font-size:18px;font-weight:600;margin-bottom:8px">VasBazaar</div>
-        <div style="font-size:13px;color:#888">Loading...</div>
-        <div style="margin-top:24px;width:40px;height:40px;border:3px solid #333;border-top-color:#40E0D0;border-radius:50%;animation:spin 1s linear infinite"></div>
+        <div id="vb-app-loader-title" style="font-size:18px;font-weight:600;margin-bottom:8px">VasBazaar</div>
+        <div id="vb-app-loader-sub" style="font-size:13px">Loading...</div>
+        <div id="vb-app-loader-spinner" style="margin-top:24px;width:40px;height:40px;border:3px solid #ddd;border-top-color:#40E0D0;border-radius:50%;animation:spin 1s linear infinite"></div>
         <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
       </div>
+      <script>
+        // Apply theme-aware colors to the boot loader.
+        (function () {
+          var b = window.__VB_BOOT__ || { bg: "#0B0B0B", fg: "#fff", theme: "dark" };
+          var loader = document.getElementById("app-loader");
+          if (loader) { loader.style.background = b.bg; loader.style.color = b.fg; }
+          var sub = document.getElementById("vb-app-loader-sub");
+          if (sub) sub.style.color = b.theme === "light" ? "#64748B" : "#888";
+          var sp = document.getElementById("vb-app-loader-spinner");
+          if (sp) sp.style.borderColor = b.theme === "light" ? "#E2E8F0" : "#333";
+          if (sp) sp.style.borderTopColor = "#40E0D0";
+        })();
+      </script>
     </div>
     <!--
       This HTML file is a template.

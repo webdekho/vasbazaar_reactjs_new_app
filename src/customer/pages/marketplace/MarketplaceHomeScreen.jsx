@@ -9,12 +9,68 @@ import {
   FaShareAlt,
   FaStar,
   FaShoppingBag,
+  FaCarrot,
+  FaPrescriptionBottleAlt,
+  FaUtensils,
+  FaBookOpen,
+  FaLaptop,
+  FaTshirt,
+  FaBreadSlice,
+  FaWineBottle,
+  FaCoffee,
+  FaIceCream,
+  FaPaw,
+  FaBaby,
+  FaGifts,
+  FaTools,
+  FaSeedling,
+  FaCandyCane,
+  FaMobileAlt,
+  FaPizzaSlice,
+  FaHamburger,
+  FaFutbol,
+  FaBookReader,
+  FaSpa,
+  FaHeart,
 } from "react-icons/fa";
 import { FiSearch, FiMapPin, FiZap, FiTag, FiTrendingUp } from "react-icons/fi";
 import { marketplaceService } from "../../services/marketplaceService";
 import { useMarketplaceCart } from "../../context/MarketplaceCartContext";
+import { useToast } from "../../context/ToastContext";
 import { shareStore } from "./shareStore";
 import "./marketplace.css";
+
+const CATEGORY_ICON_RULES = [
+  { match: /(grocery|kirana|supermarket|mart)/i, icon: FaCarrot, color: "#10b981" },
+  { match: /(pharma|medic|chemist|drug|clinic|health)/i, icon: FaPrescriptionBottleAlt, color: "#ef4444" },
+  { match: /(pizza)/i, icon: FaPizzaSlice, color: "#f59e0b" },
+  { match: /(burger|fast\s*food)/i, icon: FaHamburger, color: "#f59e0b" },
+  { match: /(restaurant|food|kitchen|dhaba|tiffin|meal)/i, icon: FaUtensils, color: "#f97316" },
+  { match: /(stationery|book|paper|office)/i, icon: FaBookOpen, color: "#3b82f6" },
+  { match: /(electronic|gadget|computer|laptop)/i, icon: FaLaptop, color: "#6366f1" },
+  { match: /(mobile|phone|accessor)/i, icon: FaMobileAlt, color: "#8b5cf6" },
+  { match: /(cloth|fashion|apparel|garment|wear|boutique)/i, icon: FaTshirt, color: "#ec4899" },
+  { match: /(bakery|bread|cake)/i, icon: FaBreadSlice, color: "#d97706" },
+  { match: /(beverage|juice|drink|liquor|wine)/i, icon: FaWineBottle, color: "#7c3aed" },
+  { match: /(cafe|coffee|tea)/i, icon: FaCoffee, color: "#92400e" },
+  { match: /(ice\s*cream|dessert|sweet|mithai)/i, icon: FaIceCream, color: "#ec4899" },
+  { match: /(candy|chocolate|confection)/i, icon: FaCandyCane, color: "#db2777" },
+  { match: /(pet)/i, icon: FaPaw, color: "#0ea5e9" },
+  { match: /(baby|kid|toy)/i, icon: FaBaby, color: "#fb7185" },
+  { match: /(gift|florist|flower)/i, icon: FaGifts, color: "#f43f5e" },
+  { match: /(hardware|tool|repair|electric)/i, icon: FaTools, color: "#64748b" },
+  { match: /(plant|nursery|garden|organic)/i, icon: FaSeedling, color: "#16a34a" },
+  { match: /(sport|fitness|gym)/i, icon: FaFutbol, color: "#0d9488" },
+  { match: /(library|education|tuition)/i, icon: FaBookReader, color: "#1d4ed8" },
+  { match: /(salon|beauty|cosmetic|spa)/i, icon: FaSpa, color: "#a855f7" },
+  { match: /(love|romance|dating)/i, icon: FaHeart, color: "#ef4444" },
+];
+
+const getCategoryIcon = (name) => {
+  const rule = CATEGORY_ICON_RULES.find((r) => r.match.test(name || ""));
+  if (rule) return { Icon: rule.icon, color: rule.color };
+  return { Icon: FaStore, color: null };
+};
 
 const formatDistance = (km) => {
   if (km == null) return null;
@@ -53,6 +109,7 @@ const matchesQuickFilter = (store, filter) => {
 const MarketplaceHomeScreen = () => {
   const navigate = useNavigate();
   const { totals, cart } = useMarketplaceCart();
+  const { showToast } = useToast();
 
   const [coords, setCoords] = useState(null);
   const [coordsError, setCoordsError] = useState(null);
@@ -156,6 +213,7 @@ const MarketplaceHomeScreen = () => {
           <button className="mkt-hero-back" onClick={() => navigate(-1)} aria-label="Back">
             <FaArrowLeft />
           </button>
+          <span className="mkt-hero-eyebrow mkt-hero-eyebrow--inline">{greeting}</span>
           <button
             type="button"
             onClick={onPlusClick}
@@ -166,17 +224,6 @@ const MarketplaceHomeScreen = () => {
             {hasMyStore ? <FaStore size={14} /> : <FaPlus size={14} />}
             <span>{hasMyStore ? "My Store" : "Sell"}</span>
           </button>
-        </div>
-
-        <div className="mkt-hero-greeting">
-          <span className="mkt-hero-eyebrow">{greeting}</span>
-          <h1 className="mkt-hero-title">
-            What can we deliver <span className="mkt-hero-accent">today?</span>
-          </h1>
-          <div className="mkt-hero-locpill">
-            <FiMapPin size={12} />
-            <span>{coordsError ? "Location off" : coords ? "Delivering to your location" : "Locating you…"}</span>
-          </div>
         </div>
 
         <div className="mkt-hero-search">
@@ -231,18 +278,25 @@ const MarketplaceHomeScreen = () => {
               </span>
               <span className="mkt-cat-tile-label">All</span>
             </button>
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                className={`mkt-cat-tile${activeCategoryId === cat.id ? " is-active" : ""}`}
-                onClick={() => setActiveCategoryId(cat.id)}
-              >
-                <span className="mkt-cat-tile-avatar">
-                  {cat.iconUrl ? <img src={cat.iconUrl} alt="" /> : <FaStore size={16} />}
-                </span>
-                <span className="mkt-cat-tile-label">{cat.name}</span>
-              </button>
-            ))}
+            {categories.map((cat) => {
+              const isActive = activeCategoryId === cat.id;
+              const { Icon, color } = getCategoryIcon(cat.name);
+              return (
+                <button
+                  key={cat.id}
+                  className={`mkt-cat-tile${isActive ? " is-active" : ""}`}
+                  onClick={() => setActiveCategoryId(cat.id)}
+                >
+                  <span
+                    className="mkt-cat-tile-avatar"
+                    style={!isActive && color ? { color } : undefined}
+                  >
+                    {cat.iconUrl ? <img src={cat.iconUrl} alt="" /> : <Icon size={18} />}
+                  </span>
+                  <span className="mkt-cat-tile-label">{cat.name}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -332,7 +386,10 @@ const MarketplaceHomeScreen = () => {
                       className="mkt-store-share-fab"
                       onClick={(e) => {
                         e.stopPropagation();
-                        shareStore(store);
+                        shareStore(store, {
+                          onCopied: () => showToast("Link copied to clipboard", "success"),
+                          onError: () => showToast("Could not share. Try again.", "error"),
+                        });
                       }}
                     >
                       <FaShareAlt size={12} />

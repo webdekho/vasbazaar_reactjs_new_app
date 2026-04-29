@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  FaArrowLeft, FaCalendarAlt, FaClock, FaExclamationCircle,
+  FaArrowLeft, FaCalendarAlt, FaCheck, FaClock, FaExclamationCircle,
   FaExclamationTriangle, FaChevronRight, FaTrashAlt
 } from "react-icons/fa";
 import { walletService } from "../services/walletService";
@@ -124,7 +124,7 @@ const EmptyState = ({ onExplore }) => (
 );
 
 /* ─── Due card ─── */
-const DueCard = ({ item, index, onPay, onDelete, processing, deleting }) => {
+const DueCard = ({ item, index, onPay, onDelete, onMarkPaid, processing, deleting, marking }) => {
   const st = getStatus(item);
   const operatorName = item.operatorId?.operatorName || item.operator?.name || item.name || "Service Provider";
   const serviceName = item.operatorId?.serviceId?.serviceName || item.service?.serviceName || "Bill Payment";
@@ -187,12 +187,12 @@ const DueCard = ({ item, index, onPay, onDelete, processing, deleting }) => {
           )}
         </div>
 
-        {/* Bottom: transact button + delete */}
+        {/* Bottom: transact + mark paid + delete */}
         <div className="md-card-actions">
           <button
             className="md-pay-btn"
             type="button"
-            disabled={processing || deleting}
+            disabled={processing || deleting || marking}
             onClick={() => onPay(item)}
           >
             {processing ? (
@@ -202,11 +202,20 @@ const DueCard = ({ item, index, onPay, onDelete, processing, deleting }) => {
             )}
           </button>
           <button
+            className="md-mark-paid-btn"
+            type="button"
+            disabled={processing || deleting || marking}
+            onClick={() => onMarkPaid(item)}
+            title="Mark this bill as paid for the current cycle"
+          >
+            {marking ? <span className="md-spinner" /> : <><FaCheck /> Paid</>}
+          </button>
+          <button
             className="md-delete-btn"
             type="button"
-            disabled={processing || deleting}
+            disabled={processing || deleting || marking}
             onClick={() => onDelete(item)}
-            title="Delete this due"
+            title="Stop showing this due forever"
           >
             {deleting ? <span className="md-spinner" /> : <FaTrashAlt />}
           </button>
@@ -224,6 +233,9 @@ const MyDuesScreen = () => {
   const [error, setError] = useState("");
   const [processingId, setProcessingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [markingId, setMarkingId] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null); // due item pending confirmation
+  const [notice, setNotice] = useState(null); // { tone: 'error'|'info', title, message }
 
   useEffect(() => {
     (async () => {
@@ -280,27 +292,58 @@ const MyDuesScreen = () => {
     }
   };
 
-  const handleDelete = async (item) => {
+  const handleMarkPaid = async (item) => {
     const id = item.id;
     if (!id) return;
+    setMarkingId(id);
+    const res = await walletService.markReminderPaid(id);
+    setMarkingId(null);
+    if (res.success) {
+      setDues((prev) => prev.filter((d) => d.id !== id));
+      invalidate("upcomingDues");
+      setNotice({
+        tone: "info",
+        title: "Marked as Paid",
+        message: "Hidden for this cycle. It will reappear automatically when the next due date arrives.",
+      });
+    } else {
+      const raw = String(res.message || "");
+      const friendly = /No static resource|not found|404/i.test(raw)
+        ? "Server is out of date. Please restart the API server so the new Mark-as-Paid route is loaded."
+        : raw || "Failed to mark as paid. Please try again.";
+      setNotice({ tone: "error", title: "Couldn't mark as paid", message: friendly });
+    }
+  };
 
-    // Confirm before delete
-    if (!window.confirm("Are you sure you want to delete this due?")) return;
+  const handleDelete = (item) => {
+    if (!item?.id) return;
+    setConfirmDelete(item);
+  };
 
+  const performDelete = async () => {
+    const item = confirmDelete;
+    if (!item?.id) return;
+    const id = item.id;
     setDeletingId(id);
     const res = await walletService.deleteReminder(id);
     setDeletingId(null);
+    setConfirmDelete(null);
 
     if (res.success) {
-      // Persist dismissal keyed by {mobile|operatorId} so the reminder stays hidden
-      // on refresh — until user submits a newer recharge (newer submittedDate).
       customerStorage.dismissDue(dismissKeyFor(item), item.submittedDate);
-      // Remove from list
       setDues((prev) => prev.filter((d) => d.id !== id));
-      // Clear cache so next visit fetches fresh data
       invalidate("upcomingDues");
+      setNotice({
+        tone: "info",
+        title: "Deleted",
+        message: "This reminder will not appear again.",
+      });
     } else {
-      alert(res.message || "Failed to delete. Please try again.");
+      setNotice({
+        tone: "error",
+        title: "Couldn't delete",
+        message: res.message || "Please try again.",
+      });
     }
   };
 
@@ -352,10 +395,70 @@ const MyDuesScreen = () => {
               index={i}
               onPay={handlePay}
               onDelete={handleDelete}
+              onMarkPaid={handleMarkPaid}
               processing={processingId === item.id}
               deleting={deletingId === item.id}
+              marking={markingId === item.id}
             />
           ))}
+        </div>
+      )}
+
+      {notice && (
+        <div className="md-modal-overlay" onClick={() => setNotice(null)}>
+          <div className="md-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <div className={`md-modal-icon ${notice.tone === "error" ? "md-modal-icon--error" : "md-modal-icon--info"}`}>
+              {notice.tone === "error" ? <FaExclamationTriangle /> : <FaCheck />}
+            </div>
+            <h3 className="md-modal-title">{notice.title}</h3>
+            <p className="md-modal-desc">{notice.message}</p>
+            <div className="md-modal-actions">
+              <button
+                type="button"
+                className="md-modal-btn md-modal-primary"
+                onClick={() => setNotice(null)}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmDelete && (
+        <div className="md-modal-overlay" onClick={() => !deletingId && setConfirmDelete(null)}>
+          <div className="md-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <div className="md-modal-icon">
+              <FaExclamationTriangle />
+            </div>
+            <h3 className="md-modal-title">Delete this due forever?</h3>
+            <p className="md-modal-desc">
+              <b>{confirmDelete.operatorId?.operatorName || confirmDelete.name || "This reminder"}</b>
+              {" "}for{" "}
+              <b>{maskNumber(confirmDelete.mobile || confirmDelete.param)}</b>
+              {" "}will be removed and will <b>not</b> auto-fetch next month.
+              <br />
+              <small>Tip: To hide it for this cycle only, use <b>Paid</b> instead.</small>
+            </p>
+            <div className="md-modal-actions">
+              <button
+                type="button"
+                className="md-modal-btn md-modal-cancel"
+                onClick={() => setConfirmDelete(null)}
+                disabled={!!deletingId}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="md-modal-btn md-modal-danger"
+                onClick={performDelete}
+                disabled={!!deletingId}
+              >
+                {deletingId ? <span className="md-spinner" /> : "Delete forever"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

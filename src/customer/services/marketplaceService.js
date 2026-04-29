@@ -23,12 +23,47 @@ export const marketplaceService = {
   // ===== My Store (owner side) =====
   getMyStore: () => authGet("/api/customer/marketplace/store/my"),
 
-  onboardStore: (payload) => authPost("/api/customer/marketplace/store/onboard", payload),
+  onboardStore: async (payload, paymentRef) => {
+    try {
+      const token = getToken();
+      if (!token) return { success: false, message: "Authentication required.", data: null };
+      const headers = { "Content-Type": "application/json", access_token: token };
+      if (paymentRef) headers.payment_ref = paymentRef;
+      const response = await apiClient.post("/api/customer/marketplace/store/onboard", payload, { headers });
+      const data = response?.data || {};
+      const ok = String(data.Status || "").toUpperCase() === "SUCCESS";
+      return { success: ok, message: data.message || (ok ? "Submitted" : "Failed"), data: data.data || null };
+    } catch (error) {
+      const msg = error?.response?.data?.message || "Submission failed";
+      return { success: false, message: msg, data: null };
+    }
+  },
+
+  // ===== Marketplace onboarding charges & coupons =====
+  getOnboardingCharges: ({ categoryId, couponCode } = {}) =>
+    authGet("/api/customer/marketplace/onboarding/charges", {
+      ...(categoryId ? { categoryId } : {}),
+      ...(couponCode ? { couponCode } : {}),
+    }),
+
+  validateOnboardingCoupon: ({ code, categoryId }) =>
+    authPost("/api/customer/marketplace/onboarding/validate-coupon", {
+      code,
+      categoryId: categoryId || null,
+    }),
 
   updateMyStore: (payload) => authPut("/api/customer/marketplace/store/my", payload),
 
   toggleMyStoreOpen: (isOpen) =>
     authPut(`/api/customer/marketplace/store/my/toggle-open?isOpen=${isOpen}`, {}),
+
+  updateMyStoreTimings: ({ openTime, closeTime, autoSchedule, weeklySchedule }) =>
+    authPut("/api/customer/marketplace/store/my/timings", {
+      openTime: openTime || null,
+      closeTime: closeTime || null,
+      autoSchedule: !!autoSchedule,
+      weeklySchedule: weeklySchedule || null,
+    }),
 
   getMyItems: () => authGet("/api/customer/marketplace/store/my/items"),
 
@@ -46,6 +81,16 @@ export const marketplaceService = {
 
   updateStoreOrderStatus: (orderId, orderStatus) =>
     authPut(`/api/customer/marketplace/store/my/orders/${orderId}/status?orderStatus=${encodeURIComponent(orderStatus)}`, {}),
+
+  // Seller accept/reject/status (POST + JSON body)
+  acceptOrder: (orderId) =>
+    authPost(`/api/customer/marketplace/seller/orders/${orderId}/accept`, {}),
+
+  rejectOrder: (orderId, reason) =>
+    authPost(`/api/customer/marketplace/seller/orders/${orderId}/reject`, { reason: reason || '' }),
+
+  updateOrderStatus: (orderId, status) =>
+    authPost(`/api/customer/marketplace/seller/orders/${orderId}/status`, { status }),
 
   // ===== Customer orders =====
   placeOrder: (payload) => authPost("/api/customer/marketplace/orders", payload),

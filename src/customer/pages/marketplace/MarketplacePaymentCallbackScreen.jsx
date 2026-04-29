@@ -41,7 +41,7 @@ const MarketplacePaymentCallbackScreen = () => {
           if (status === "PAID") {
             setState(STATE.SUCCESS);
             setMessage("Payment successful");
-            setTimeout(() => navigate(`/customer/app/marketplace/orders/${localOrderId}`, { replace: true }), 1200);
+            setTimeout(() => navigate(`/customer/app/marketplace/orders/${localOrderId}`, { replace: true, state: { celebrate: true } }), 1200);
             return;
           }
           if (status === "FAILED") {

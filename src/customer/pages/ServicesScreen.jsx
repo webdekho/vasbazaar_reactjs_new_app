@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaSearch, FaDownload, FaSyncAlt, FaClock, FaRupeeSign } from "react-icons/fa";
+import { FaSearch, FaDownload, FaSyncAlt, FaClock, FaRupeeSign, FaPlaneDeparture, FaStore, FaBookOpen } from "react-icons/fa";
 import { FiShare, FiPlusSquare, FiAlertTriangle, FiClock, FiShield, FiChevronRight } from "react-icons/fi";
 import { HiOutlineCurrencyRupee, HiMiniSquares2X2 } from "react-icons/hi2";
 import { FaCalendarAlt, FaChevronRight } from "react-icons/fa";
@@ -263,6 +263,9 @@ const UpcomingDuesSection = ({ dues }) => {
 
 const quickAccessItems = [
   { label: "Services", icon: HiMiniSquares2X2, to: "#services", color: "#40E0D0", isScroll: true, iconUrl: "/images/b.png" },
+  { label: "Retail Bazaar", icon: FaStore, to: "/customer/app/marketplace", color: "#10B981" },
+  { label: "ReBill", icon: FaBookOpen, to: "/customer/app/outstanding", color: "#FF7A00" },
+  { label: "Travel", icon: FaPlaneDeparture, to: "/customer/app/travel", color: "#007BFF" },
   { label: "My Dues", icon: FaClock, to: "/customer/app/my-dues", color: "#FF3B30" },
   { label: "Cashback", icon: HiOutlineCurrencyRupee, to: "/customer/app/commission?tab=cashback", color: "#FF9800" },
   { label: "History", icon: FiClock, to: "/customer/app/history", color: "#007BFF" },
