@@ -7952,6 +7952,15 @@
   margin-top: 10px;
 }
 
+.wl-disclaimer {
+  font-size: 0.7rem;
+  color: #FF9800;
+  text-align: center;
+  padding: 10px 16px;
+  line-height: 1.4;
+}
+.theme-light .wl-disclaimer { color: #F57C00; }
+
 /* Month label */
 .wl-month-label {
   font-size: 0.65rem;

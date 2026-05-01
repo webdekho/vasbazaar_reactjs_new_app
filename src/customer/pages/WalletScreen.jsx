@@ -146,6 +146,10 @@ const WalletScreen = () => {
             </div>
           </div>
 
+          <div className="wl-disclaimer">
+            In case the wallet balance exceeds ₹10,000, the surplus amount will be automatically refunded to the your registered bank account within 24 hours.
+          </div>
+
           {/* Search */}
           <div className={`th-search${searchFocused ? " is-focused" : ""}`}>
             <FaSearch className="th-search-icon" />
