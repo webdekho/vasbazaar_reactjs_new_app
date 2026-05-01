@@ -42,7 +42,7 @@ const buildInitialSchedule = (store) => {
 
 const StoreTimingsScreen = () => {
   const navigate = useNavigate();
-  const [store, setStore] = useState(null);
+  const [, setStore] = useState(null);
   const [loading, setLoading] = useState(true);
   const [autoSchedule, setAutoSchedule] = useState(false);
   const [schedule, setSchedule] = useState([]);
