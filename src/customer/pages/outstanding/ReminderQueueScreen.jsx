@@ -63,26 +63,37 @@ const ReminderQueueScreen = () => {
   const pending = items.filter((i) => !sentIds.has(i.customerId));
 
   return (
-    <div className="cm-page ol-page">
-      <header className="cm-app-header">
-        <button className="cm-back" onClick={() => navigate(-1)} aria-label="Back">
+    <div className="cm-page ol-page ol-reminder-queue">
+      <header className="ol-ledger-header">
+        <button className="ol-back-btn" onClick={() => navigate(-1)} aria-label="Back">
           <FaArrowLeft />
         </button>
-        <h2>Send reminders</h2>
+        <div className="ol-ledger-title">
+          <h2>Send reminders</h2>
+        </div>
       </header>
 
       {loading ? (
-        <div style={{ padding: 24, textAlign: "center" }}>Loading…</div>
+        <div className="ol-sms-list" style={{ margin: "16px 14px" }}>
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="ol-sms-card" style={{ opacity: 0.5 }}>
+              <div className="ol-sms-card-info">
+                <div style={{ width: "60%", height: 16, background: "var(--ol-line)", borderRadius: 8, marginBottom: 8 }} />
+                <div style={{ width: "40%", height: 12, background: "var(--ol-line)", borderRadius: 6 }} />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : error ? (
         <div className="ol-error" style={{ margin: 16 }}>{error}</div>
       ) : items.length === 0 ? (
-        <div style={{ padding: 32, textAlign: "center", color: "#666" }}>
-          <FaCheckCircle size={36} color="#2e7d32" />
+        <div className="ol-empty-state">
+          <FaCheckCircle size={36} className="ol-empty-icon" />
           <p>No reminders due right now.</p>
         </div>
       ) : (
         <>
-          <div style={{ padding: "12px 16px", color: "#555", fontSize: 14 }}>
+          <div className="ol-reminder-hint">
             {pending.length} of {items.length} pending. Tap "Send" to open your phone's SMS app
             with the message pre-filled. SMS charges apply.
           </div>
@@ -95,50 +106,42 @@ const ReminderQueueScreen = () => {
             </div>
           )}
 
-          <ul className="ol-customer-list" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+          <ul className="ol-reminder-list">
             {items.map((item) => {
               const sent = sentIds.has(item.customerId);
               return (
-                <li
-                  key={item.customerId}
-                  style={{
-                    padding: 16,
-                    borderBottom: "1px solid #eee",
-                    background: sent ? "#f5fff5" : "#fff",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <li key={item.customerId} className={`ol-reminder-card ${sent ? "is-sent" : ""}`}>
+                  <div className="ol-reminder-card-head">
                     <div>
-                      <strong>{item.customerName}</strong>
-                      <div style={{ fontSize: 13, color: "#666" }}>+91 {item.customerMobile}</div>
+                      <strong className="ol-reminder-name">{item.customerName}</strong>
+                      <div className="ol-reminder-mobile">+91 {item.customerMobile}</div>
                     </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontWeight: 600, color: "#c62828" }}>{formatINR(item.balance)}</div>
-                      <small style={{ color: "#888" }}>outstanding</small>
+                    <div className="ol-reminder-balance">
+                      <div className="ol-reminder-amount">{formatINR(item.balance)}</div>
+                      <small>outstanding</small>
                     </div>
                   </div>
 
                   <textarea
+                    className="ol-reminder-textarea"
                     rows={3}
                     value={messageFor(item)}
                     onChange={(e) =>
                       setEditing((prev) => ({ ...prev, [item.customerId]: e.target.value }))
                     }
-                    style={{ width: "100%", boxSizing: "border-box", padding: 8, fontSize: 13 }}
                     disabled={sent}
                   />
 
-                  <div style={{ marginTop: 8 }}>
+                  <div className="ol-reminder-action">
                     {sent ? (
-                      <span style={{ color: "#2e7d32", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <span className="ol-reminder-sent">
                         <FaCheckCircle /> Triggered
                       </span>
                     ) : (
                       <button
                         type="button"
                         onClick={() => sendOne(item)}
-                        className="ol-submit"
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, width: "auto", padding: "8px 16px" }}
+                        className="ol-submit ol-reminder-send-btn"
                       >
                         <FaCommentDots /> Send SMS
                       </button>

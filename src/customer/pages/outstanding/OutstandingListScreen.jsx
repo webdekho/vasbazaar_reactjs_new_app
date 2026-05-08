@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaPlus, FaSearch, FaSyncAlt, FaUserCircle, FaInbox, FaReceipt, FaUsers, FaWallet } from "react-icons/fa";
+import { FaArrowLeft, FaPlus, FaSearch, FaSyncAlt, FaUserCircle, FaInbox, FaReceipt, FaUsers, FaWallet, FaBell, FaCommentDots } from "react-icons/fa";
 import { outstandingService } from "../../services/outstandingService";
 import AddCustomerSheet from "./components/AddCustomerSheet";
 import RenewSubscriptionSheet from "./components/RenewSubscriptionSheet";
@@ -160,6 +160,29 @@ const OutstandingListScreen = () => {
           <span className="ol-insight-label">Payable</span>
           <strong>{formatINR(totalPayable)}</strong>
         </div>
+      </div>
+
+      <div className="ol-command-row ol-list-commands">
+        <button
+          className="ol-command-card ol-command-sms"
+          type="button"
+          onClick={() => navigate("/customer/app/outstanding/sms-settings")}
+        >
+          <span className="ol-command-icon"><FaBell /></span>
+          <span>
+            <b>Auto SMS Settings</b>
+          </span>
+        </button>
+        <button
+          className="ol-command-card ol-command-reminder"
+          type="button"
+          onClick={() => navigate("/customer/app/outstanding/reminders")}
+        >
+          <span className="ol-command-icon"><FaCommentDots /></span>
+          <span>
+            <b>Send Reminders</b>
+          </span>
+        </button>
       </div>
 
       <div className="ol-controls">

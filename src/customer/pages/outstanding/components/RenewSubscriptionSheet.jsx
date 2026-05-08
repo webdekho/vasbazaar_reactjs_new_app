@@ -108,16 +108,16 @@ const RenewSubscriptionSheet = ({ onClose }) => {
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-              <div style={{ padding: 12, background: "#f9fafb", borderRadius: 10 }}>
-                <small style={{ color: "#6b7280", fontSize: 11 }}>SUBSCRIPTION FEE</small>
-                <div style={{ fontWeight: 700, fontSize: 18, marginTop: 2 }}>{formatINR(info?.charge)}</div>
-                <small style={{ color: "#6b7280", fontSize: 11 }}>per {info?.cycleDays || 30} days</small>
+            <div className="ol-renew-cards">
+              <div className="ol-renew-card">
+                <small className="ol-renew-label">SUBSCRIPTION FEE</small>
+                <div className="ol-renew-value">{formatINR(info?.charge)}</div>
+                <small className="ol-renew-label">per {info?.cycleDays || 30} days</small>
               </div>
-              <div style={{ padding: 12, background: "#f9fafb", borderRadius: 10 }}>
-                <small style={{ color: "#6b7280", fontSize: 11 }}>WALLET BALANCE</small>
-                <div style={{ fontWeight: 700, fontSize: 18, marginTop: 2 }}>{formatINR(info?.walletBalance)}</div>
-                <small style={{ color: Number(info?.walletBalance || 0) >= Number(info?.charge || 0) ? "#16a34a" : "#FF3B30", fontSize: 11 }}>
+              <div className="ol-renew-card">
+                <small className="ol-renew-label">WALLET BALANCE</small>
+                <div className="ol-renew-value">{formatINR(info?.walletBalance)}</div>
+                <small className={Number(info?.walletBalance || 0) >= Number(info?.charge || 0) ? "ol-renew-sufficient" : "ol-renew-insufficient"}>
                   {Number(info?.walletBalance || 0) >= Number(info?.charge || 0) ? "Sufficient" : "Insufficient"}
                 </small>
               </div>

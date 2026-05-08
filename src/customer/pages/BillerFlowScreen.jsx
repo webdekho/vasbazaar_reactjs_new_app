@@ -12,12 +12,16 @@ import {
 import { FiCreditCard, FiArrowRight } from "react-icons/fi";
 import { serviceService } from "../services/serviceService";
 import { rechargeService } from "../services/rechargeService";
+import { savedVehicleService } from "../services/savedVehicleService";
 import { Capacitor } from "@capacitor/core";
 import juspayService, { isPwaStandalone } from "../services/juspayService";
 import { advertisementService } from "../services/advertisementService";
 import { offerService } from "../services/offerService";
 import { userService } from "../services/userService";
 import BannerSlider from "../components/BannerSlider";
+import SavedVehicleList from "../components/SavedVehicleList";
+import SaveVehiclePrompt from "../components/SaveVehiclePrompt";
+import VehicleHistorySheet from "../components/VehicleHistorySheet";
 import { useToast } from "../context/ToastContext";
 import { sanitizeBackendMessage } from "../utils/userMessages";
 
@@ -1392,6 +1396,19 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
   const autoPrefillRunRef = useRef(false);
   const [autoSubmitPending, setAutoSubmitPending] = useState(null);
 
+  // FASTag Saved Vehicles
+  const isFastag = serviceData?.slug?.toLowerCase().includes('fastag') ||
+                   serviceData?.slug?.toLowerCase().includes('fast-tag') ||
+                   serviceData?.name?.toLowerCase().includes('fastag');
+  const [savedVehicles, setSavedVehicles] = useState([]);
+  const [savedVehiclesLoading, setSavedVehiclesLoading] = useState(false);
+  const [showSavedVehicleStep, setShowSavedVehicleStep] = useState(false);
+  const [selectedSavedVehicle, setSelectedSavedVehicle] = useState(null);
+  const [saveVehiclePromptOpen, setSaveVehiclePromptOpen] = useState(false);
+  const [vehicleToSave, setVehicleToSave] = useState(null);
+  const [vehicleHistoryOpen, setVehicleHistoryOpen] = useState(false);
+  const [historyVehicle, setHistoryVehicle] = useState(null);
+
   /* Fetch billers directly using the same API as old project */
   useEffect(() => {
     advertisementService.getHomeAdvertisements().then((res) => {
@@ -1415,10 +1432,160 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
     fetchBillers();
   }, [serviceData.id]);
 
+  // Fetch saved vehicles for FASTag
+  useEffect(() => {
+    if (!isFastag) return;
+    setSavedVehiclesLoading(true);
+    savedVehicleService.getSavedVehicles().then((res) => {
+      setSavedVehiclesLoading(false);
+      if (res.success) {
+        const list = res.data?.records || res.data?.content || (Array.isArray(res.data) ? res.data : []);
+        setSavedVehicles(list);
+        // Show saved vehicles step if there are saved vehicles
+        if (list.length > 0 && step === 0) {
+          setShowSavedVehicleStep(true);
+        }
+      }
+    });
+  }, [isFastag]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const goBack = useCallback(() => {
-    if (step === 0) navigate("/customer/app/services");
-    else setStep((s) => s - 1);
-  }, [step, navigate]);
+    // For FASTag with saved vehicles showing, go back to services
+    if (showSavedVehicleStep && step === 0) {
+      navigate("/customer/app/services");
+    } else if (step === 0) {
+      // If on biller list (no saved vehicles), go to saved vehicles if any, else services
+      if (isFastag && savedVehicles.length > 0) {
+        setShowSavedVehicleStep(true);
+      } else {
+        navigate("/customer/app/services");
+      }
+    } else {
+      setStep((s) => s - 1);
+    }
+  }, [step, navigate, showSavedVehicleStep, isFastag, savedVehicles.length]);
+
+  /* FASTag: Handle saved vehicle selection */
+  const handleSelectSavedVehicle = (vehicle) => {
+    setSelectedSavedVehicle(vehicle);
+    // operatorId is an object (OperatorEntity) from backend, extract id
+    const opId = vehicle.operatorId?.id || vehicle.operatorId;
+    const opName = vehicle.operatorId?.operatorName || vehicle.operatorId?.name || vehicle.operatorName;
+    const opLogo = vehicle.operatorId?.logo || vehicle.operatorLogo;
+
+    // Find the operator from billers list
+    const biller = billers.find((b) => String(b.id) === String(opId));
+    if (biller) {
+      setSelectedBiller({ ...biller, isDTH: false });
+    } else {
+      // Create synthetic biller from vehicle data
+      setSelectedBiller({
+        id: opId,
+        operatorName: opName,
+        logo: opLogo,
+        isDTH: false,
+      });
+    }
+    setFormValues({ field1: vehicle.vehicleNumber });
+    setMobile(vehicle.vehicleNumber);
+    setShowSavedVehicleStep(false);
+    // Skip to bill fetch - directly go to step 2 (bill view)
+    setStep(2);
+    // Auto-trigger bill fetch
+    handleFormSubmitForSavedVehicle(vehicle);
+  };
+
+  /* FASTag: Auto-fetch bill for saved vehicle */
+  const handleFormSubmitForSavedVehicle = async (vehicle) => {
+    setLoading(true);
+    const values = { field1: vehicle.vehicleNumber, field2: "" };
+    setFormValues(values);
+    setMobile(vehicle.vehicleNumber);
+
+    // operatorId is an object (OperatorEntity) from backend
+    const opId = vehicle.operatorId?.id || vehicle.operatorId;
+    const biller = billers.find((b) => String(b.id) === String(opId)) || {
+      id: opId,
+      fetchRequirement: "MANDATORY",
+    };
+
+    const fetchReq = biller.fetchRequirement;
+    let bill = {
+      dueDate: "NA",
+      billAmount: 0,
+      customername: "No Name",
+      billnumber: "NA",
+      billdate: "NA",
+      billperiod: "NA",
+    };
+    let fetchFailed = false;
+
+    if (fetchReq && fetchReq.toLowerCase() !== "not_supported") {
+      const resp = await rechargeService.viewBill({
+        operatorId: Number(opId),
+        field1: vehicle.vehicleNumber,
+        field2: null,
+        mn: vehicle.vehicleNumber,
+        op: opId,
+      });
+      const respData = resp?.success && resp.data
+        ? (Array.isArray(resp.data?.data) ? resp.data.data[0] : resp.data)
+        : null;
+
+      if (respData) {
+        bill = {
+          dueDate: respData.dueDate || "NA",
+          billAmount: Number(respData.amount || respData.billAmount || 0),
+          customername: respData.customerName || "No Name",
+          billnumber: respData.billnumber || "NA",
+          billdate: respData.billdate || "NA",
+          billperiod: respData.billperiod || "NA",
+        };
+        setAmount(String(bill.billAmount || ""));
+        setCustomerName(bill.customername);
+        setIsExact(Number(respData.exactAmount) === 1 || respData.exactness === "Exact");
+      } else {
+        fetchFailed = true;
+        setBillFetchMessage(extractReadableBillError(resp?.message || resp?.data?.message || ""));
+      }
+    }
+
+    setBillData(bill);
+    setBillFetchFailed(fetchFailed);
+    setLoading(false);
+  };
+
+  /* FASTag: Handle add new vehicle (go to biller list) */
+  const handleAddNewVehicle = () => {
+    setShowSavedVehicleStep(false);
+    setSelectedSavedVehicle(null);
+    setStep(0);
+  };
+
+  /* FASTag: View vehicle history */
+  const handleViewVehicleHistory = (vehicle) => {
+    setHistoryVehicle(vehicle);
+    setVehicleHistoryOpen(true);
+  };
+
+  /* FASTag: After saving vehicle, refresh list */
+  const handleVehicleSaved = () => {
+    setSaveVehiclePromptOpen(false);
+    setVehicleToSave(null);
+    // Refresh saved vehicles list
+    savedVehicleService.getSavedVehicles().then((res) => {
+      if (res.success) {
+        const list = res.data?.records || res.data?.content || (Array.isArray(res.data) ? res.data : []);
+        setSavedVehicles(list);
+      }
+    });
+  };
+
+  /* FASTag: Skip saving vehicle */
+  const handleSkipSaveVehicle = () => {
+    setSaveVehiclePromptOpen(false);
+    setVehicleToSave(null);
+  };
 
   /* Step 1 → 2: Select biller */
   const isDTH = serviceData.slug === "dth";
@@ -1542,6 +1709,23 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
     );
     setLoading(false);
     setStep(2);
+
+    // FASTag: Show save vehicle prompt if not already saved
+    if (isFastag && !selectedSavedVehicle) {
+      // Check if vehicle is already in saved list
+      const alreadySaved = savedVehicles.some(
+        (v) => v.vehicleNumber?.toUpperCase() === values.field1?.toUpperCase()
+      );
+      if (!alreadySaved) {
+        setVehicleToSave({
+          vehicleNumber: values.field1,
+          operatorId: selectedBiller.id,
+          operatorName: selectedBiller.operatorName || selectedBiller.name,
+          operatorLogo: selectedBiller.logo,
+        });
+        setSaveVehiclePromptOpen(true);
+      }
+    }
   };
 
   /* DTH: select a plan → go to offers page */
@@ -1799,9 +1983,77 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
 
   const stepComponents = isDTH ? dthSteps : billerSteps;
 
+  // Refresh saved vehicles (for SavedVehicleList after edit/delete)
+  const refreshSavedVehicles = useCallback(() => {
+    setSavedVehiclesLoading(true);
+    savedVehicleService.getSavedVehicles().then((res) => {
+      setSavedVehiclesLoading(false);
+      if (res.success) {
+        const list = res.data?.records || res.data?.content || (Array.isArray(res.data) ? res.data : []);
+        setSavedVehicles(list);
+      }
+    });
+  }, []);
+
+  // FASTag: Show saved vehicles list first if available
+  if (isFastag && showSavedVehicleStep) {
+    return (
+      <div className="bf-container">
+        <SavedVehicleList
+          vehicles={savedVehicles}
+          isLoading={savedVehiclesLoading}
+          onSelect={handleSelectSavedVehicle}
+          onAddNew={handleAddNewVehicle}
+          onBack={() => navigate("/customer/app/services")}
+          serviceName={serviceData.name}
+          onRefresh={refreshSavedVehicles}
+        />
+
+        {/* Vehicle History Sheet */}
+        <VehicleHistorySheet
+          isOpen={vehicleHistoryOpen}
+          vehicle={historyVehicle}
+          onClose={() => {
+            setVehicleHistoryOpen(false);
+            setHistoryVehicle(null);
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="bf-container">
       {stepComponents[step]}
+
+      {/* FASTag: Save Vehicle Prompt (shown after form submission) */}
+      {isFastag && saveVehiclePromptOpen && vehicleToSave && (
+        <div className="cm-modal-overlay" onClick={handleSkipSaveVehicle}>
+          <div className="cm-modal-content cm-modal-content--sm" onClick={(e) => e.stopPropagation()}>
+            <SaveVehiclePrompt
+              vehicleNumber={vehicleToSave.vehicleNumber}
+              operatorId={vehicleToSave.operatorId}
+              operatorName={vehicleToSave.operatorName}
+              operatorLogo={vehicleToSave.operatorLogo}
+              onSaved={handleVehicleSaved}
+              onSkip={handleSkipSaveVehicle}
+              onClose={handleSkipSaveVehicle}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* FASTag: Vehicle History Sheet */}
+      {isFastag && (
+        <VehicleHistorySheet
+          isOpen={vehicleHistoryOpen}
+          vehicle={historyVehicle}
+          onClose={() => {
+            setVehicleHistoryOpen(false);
+            setHistoryVehicle(null);
+          }}
+        />
+      )}
     </div>
   );
 };

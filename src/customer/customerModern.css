@@ -1669,7 +1669,7 @@
    3. SERVICES PAGE
    ═══════════════════════════════════════════════════════════════ */
 
-.cm-services-page { display: grid; gap: 8px; }
+.cm-services-page { display: grid; gap: 8px; padding-bottom: 140px; }
 
 .cm-install-banner {
   display: flex;
@@ -1924,12 +1924,23 @@
   border: 1px solid rgba(255,255,255,0.1);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, background 0.3s;
+  /* GPU layer fix - prevents icon disappearing on scroll */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  will-change: transform;
 }
 
 /* Make icon images white/bright in dark mode */
 .cm-service-icon-img {
   filter: brightness(0) invert(1);
   transition: filter 0.3s;
+  /* GPU layer fix for filtered images */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .cm-svc-item:active .cm-service-icon {
@@ -8740,6 +8751,12 @@
   background: var(--cm-bg-secondary, #121212);
   border: 1px solid var(--cm-line, #2A2A2A);
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
+  /* GPU layer fix - prevents icon disappearing on scroll */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  will-change: transform;
 }
 
 .cm-quick-access-icon::after {
@@ -11853,6 +11870,11 @@
   place-items: center;
   font-size: 16px;
   color: var(--qa-color, #40E0D0);
+  /* GPU layer fix - prevents icon disappearing on scroll */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .cm-quick-access-label { font-size: 10px; font-weight: 700; color: #B0B0B0; text-align: center; }
@@ -21545,8 +21567,87 @@
 }
 .ol-form-actions > * { flex: 1; }
 
+/* Sheet header with close button */
+.ol-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0 16px;
+  gap: 12px;
+}
+.ol-sheet-head h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin: 0;
+  flex: 1;
+}
+.ol-sheet-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  color: #B0B0B0;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.ol-sheet-close:active { transform: scale(0.9); }
+.ol-sheet-close:hover { background: rgba(255, 255, 255, 0.12); }
+
+/* Submit button */
+.ol-submit {
+  width: 100%;
+  padding: 14px 20px;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(135deg, #FF7A00, #FF5500);
+  color: #FFFFFF;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.15s;
+  margin-top: 8px;
+}
+.ol-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.ol-submit:active:not(:disabled) { transform: scale(0.98); }
+
 .ol-submit-gave { background: linear-gradient(135deg, #FF5757, #C93636) !important; }
 .ol-submit-got { background: linear-gradient(135deg, #00C853, #00873B) !important; }
+
+/* Renewal subscription cards */
+.ol-renew-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.ol-renew-card {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+.ol-renew-label {
+  color: #9CA3AF;
+  font-size: 11px;
+  display: block;
+}
+.ol-renew-value {
+  font-weight: 700;
+  font-size: 18px;
+  margin-top: 2px;
+  color: #FFFFFF;
+}
+.ol-renew-sufficient { color: #16a34a; font-size: 11px; }
+.ol-renew-insufficient { color: #FF3B30; font-size: 11px; }
 
 /* Light theme adjustments */
 .theme-light .ol-item,
@@ -21567,6 +21668,169 @@
   border-top-color: #E2E8F0;
 }
 .theme-light .ol-title { color: #1A1A2E; }
+.theme-light .ol-renew-card {
+  background: #F3F4F6;
+  border-color: #E5E7EB;
+}
+.theme-light .ol-renew-label { color: #6B7280; }
+.theme-light .ol-renew-value { color: #1A1A2E; }
+.theme-light .ol-sheet-head h3 { color: #1A1A2E; }
+.theme-light .ol-sheet-close {
+  background: #F3F4F6;
+  border-color: #E5E7EB;
+  color: #4B5563;
+}
+
+/* Reminder Queue Screen */
+.ol-reminder-queue .ol-ledger-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+.ol-reminder-queue .ol-ledger-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+.ol-back-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  color: #FFFFFF;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 16px;
+}
+.ol-reminder-hint {
+  padding: 12px 16px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+}
+.ol-empty-state {
+  padding: 32px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.5);
+}
+.ol-empty-icon { color: #4ADE80; }
+.ol-reminder-list {
+  list-style: none;
+  padding: 0 16px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ol-reminder-card {
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.ol-reminder-card.is-sent {
+  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34, 197, 94, 0.2);
+}
+.ol-reminder-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+.ol-reminder-name {
+  color: #FFFFFF;
+  font-size: 15px;
+}
+.ol-reminder-mobile {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 2px;
+}
+.ol-reminder-balance {
+  text-align: right;
+}
+.ol-reminder-amount {
+  font-weight: 600;
+  color: #FF6B6B;
+  font-size: 15px;
+}
+.ol-reminder-balance small {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+}
+.ol-reminder-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  font-size: 13px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #FFFFFF;
+  font-family: inherit;
+  resize: none;
+}
+.ol-reminder-textarea:disabled {
+  opacity: 0.6;
+}
+.ol-reminder-action {
+  margin-top: 12px;
+}
+.ol-reminder-sent {
+  color: #4ADE80;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+.ol-reminder-send-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  padding: 10px 18px;
+}
+
+/* Light theme for reminder queue */
+.theme-light .ol-back-btn {
+  background: #F3F4F6;
+  border-color: #E5E7EB;
+  color: #1A1A2E;
+}
+.theme-light .ol-reminder-hint {
+  color: #6B7280;
+}
+.theme-light .ol-empty-state {
+  color: #6B7280;
+}
+.theme-light .ol-reminder-card {
+  background: #FFFFFF;
+  border-color: #E5E7EB;
+}
+.theme-light .ol-reminder-card.is-sent {
+  background: #F0FDF4;
+  border-color: #BBF7D0;
+}
+.theme-light .ol-reminder-name {
+  color: #1A1A2E;
+}
+.theme-light .ol-reminder-mobile {
+  color: #6B7280;
+}
+.theme-light .ol-reminder-amount {
+  color: #DC2626;
+}
+.theme-light .ol-reminder-balance small {
+  color: #9CA3AF;
+}
+.theme-light .ol-reminder-textarea {
+  background: #F9FAFB;
+  border-color: #E5E7EB;
+  color: #1A1A2E;
+}
 
 /* ============================================================
    Outstanding Ledger - Redesigned (overrides)
@@ -22237,29 +22501,51 @@
   margin-top: 14px;
   padding: 9px 6px;
   border-radius: 16px;
-  background: rgba(15, 23, 42, 0.04);
-  border: 1px solid rgba(15, 23, 42, 0.07);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: none;
 }
 
 .ol-list-page .ol-list-hero .ol-split-divider {
-  background: rgba(15, 23, 42, 0.07);
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .ol-list-page .ol-list-hero .ol-split-cell span {
-  color: rgba(17, 24, 39, 0.58);
+  color: rgba(255, 255, 255, 0.6);
   opacity: 1;
 }
 
 .ol-list-page .ol-list-hero .ol-split-cell b {
-  color: #111827;
+  color: #FFFFFF;
 }
 
 .ol-list-page .ol-list-hero .ol-split-cell:first-child b {
-  color: #DC2626;
+  color: #FF6B6B;
 }
 
 .ol-list-page .ol-list-hero .ol-split-cell:last-child b {
+  color: #4ADE80;
+}
+
+/* Light theme for list hero split */
+.theme-light .ol-list-page .ol-list-hero .ol-hero-split {
+  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+.theme-light .ol-list-page .ol-list-hero .ol-split-divider {
+  background: rgba(15, 23, 42, 0.07);
+}
+.theme-light .ol-list-page .ol-list-hero .ol-split-cell span {
+  color: rgba(17, 24, 39, 0.58);
+}
+.theme-light .ol-list-page .ol-list-hero .ol-split-cell b {
+  color: #111827;
+}
+.theme-light .ol-list-page .ol-list-hero .ol-split-cell:first-child b {
+  color: #DC2626;
+}
+.theme-light .ol-list-page .ol-list-hero .ol-split-cell:last-child b {
   color: #059669;
 }
 
@@ -23465,4 +23751,941 @@
   background: rgba(255,255,255,0.08);
   border-color: rgba(255,255,255,0.1);
   color: #fff;
+}
+
+/* Dark mode: Hero card */
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-hero {
+  background: rgba(15, 23, 42, 0.88);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #F8FAFC;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.3);
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-hero::before {
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-hero::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-hero-positive {
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(60, 35, 35, 0.85)),
+    rgba(15, 23, 42, 0.9);
+  border-color: rgba(220, 38, 38, 0.3);
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-hero-positive .ol-hero-label {
+  color: #FCA5A5;
+  background: rgba(220, 38, 38, 0.22);
+  border-color: rgba(220, 38, 38, 0.28);
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-hero-positive .ol-hero-amount {
+  color: #FCA5A5;
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-hero-negative {
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(25, 50, 45, 0.85)),
+    rgba(15, 23, 42, 0.9);
+  border-color: rgba(5, 150, 105, 0.3);
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-hero-negative .ol-hero-label,
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-hero-settled .ol-hero-label {
+  color: #6EE7B7;
+  background: rgba(5, 150, 105, 0.22);
+  border-color: rgba(5, 150, 105, 0.28);
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-hero-negative .ol-hero-amount,
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-hero-settled .ol-hero-amount {
+  color: #6EE7B7;
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-hero-settled {
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(30, 40, 55, 0.85)),
+    rgba(15, 23, 42, 0.9);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-hero-hint {
+  color: rgba(248, 250, 252, 0.65);
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-hero-count {
+  color: rgba(248, 250, 252, 0.6);
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-hero-split {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-hero .ol-split-cell span {
+  color: rgba(248, 250, 252, 0.6);
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-hero .ol-split-cell b {
+  color: #F8FAFC;
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-hero-positive .ol-split-cell:first-child b {
+  color: #FCA5A5;
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-hero-negative .ol-split-cell:last-child b,
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-hero-settled .ol-split-cell b {
+  color: #6EE7B7;
+}
+
+/* Dark mode: Back button improvements */
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-back-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #F8FAFC;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-back-btn:active {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* Dark mode: Ledger mobile and status */
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-ledger-mobile {
+  color: rgba(248, 250, 252, 0.6);
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-ledger-status {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-ledger-status.is-due {
+  color: #FCA5A5;
+  background: rgba(220, 38, 38, 0.18);
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-ledger-status.is-advance {
+  color: #93C5FD;
+  background: rgba(59, 130, 246, 0.18);
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-ledger-status.is-settled {
+  color: #6EE7B7;
+  background: rgba(5, 150, 105, 0.18);
+}
+
+/* Dark mode: Transaction label colors */
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-txn-note {
+  color: rgba(248, 250, 252, 0.5);
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-txn-meta {
+  color: rgba(248, 250, 252, 0.5);
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-txn-amt {
+  color: #F8FAFC;
+}
+
+.customer-modern-app:not(.theme-light) .ol-ledger-page .ol-txn-edit {
+  color: rgba(248, 250, 252, 0.5);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* ========================================
+   SMS REMINDER LIST SCREEN
+   ======================================== */
+
+.ol-sms-list-page {
+  min-height: 100vh;
+  padding-bottom: 32px;
+}
+
+.ol-sms-list-page .ol-ledger-title {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ol-sms-list-page .ol-ledger-title h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ol-ink);
+}
+
+.ol-sms-list-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ol-muted);
+}
+
+.ol-sms-list-hint {
+  padding: 12px 16px;
+  margin: 0 14px 12px;
+  border-radius: 14px;
+  background: rgba(249, 115, 22, 0.08);
+  border: 1px solid rgba(249, 115, 22, 0.16);
+  font-size: 12px;
+  line-height: 1.5;
+  color: #9A3412;
+}
+
+.ol-success-msg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  color: #16A34A;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ol-sms-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ol-sms-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--ol-surface);
+  border: 1px solid var(--ol-line);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+  transition: all 0.2s ease;
+}
+
+.ol-sms-card.is-enabled {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.06), rgba(34, 197, 94, 0.02));
+  border-color: rgba(34, 197, 94, 0.2);
+}
+
+.ol-sms-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.ol-sms-card-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ol-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ol-sms-card-mobile {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ol-muted);
+}
+
+.ol-sms-card-balance {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #DC2626;
+}
+
+.ol-sms-card-balance strong {
+  font-weight: 700;
+}
+
+.ol-sms-card-schedule {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(34, 197, 94, 0.1);
+  font-size: 10px;
+  font-weight: 600;
+  color: #16A34A;
+}
+
+.ol-sms-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ol-sms-toggle.is-off {
+  color: #94A3B8;
+}
+
+.ol-sms-toggle.is-on {
+  color: #16A34A;
+}
+
+.ol-sms-toggle span {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.ol-sms-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ol-sms-toggle-loading {
+  font-size: 14px;
+  color: var(--ol-muted);
+}
+
+.ol-sms-list-footer {
+  padding: 24px 16px;
+  margin: 16px 14px 0;
+  border-top: 1px solid var(--ol-line);
+  text-align: center;
+}
+
+.ol-sms-list-footer p {
+  margin: 0 0 16px;
+  font-size: 12px;
+  color: var(--ol-muted);
+  line-height: 1.5;
+}
+
+/* Dark mode: SMS Reminder List */
+.customer-modern-app:not(.theme-light) .ol-sms-list-page {
+  background:
+    linear-gradient(180deg, rgba(2, 6, 23, 0.98) 0%, rgba(15, 23, 42, 0.96) 48%, rgba(2, 6, 23, 0.98) 100%);
+}
+
+.customer-modern-app:not(.theme-light) .ol-sms-list-page .ol-ledger-header {
+  background: rgba(2, 6, 23, 0.72);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.customer-modern-app:not(.theme-light) .ol-sms-list-page .ol-back-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #F8FAFC;
+}
+
+.customer-modern-app:not(.theme-light) .ol-sms-list-page .ol-ledger-title h2 {
+  color: #F8FAFC;
+}
+
+.customer-modern-app:not(.theme-light) .ol-sms-list-count {
+  color: rgba(248, 250, 252, 0.6);
+}
+
+.customer-modern-app:not(.theme-light) .ol-sms-list-hint {
+  background: rgba(249, 115, 22, 0.12);
+  border-color: rgba(249, 115, 22, 0.24);
+  color: #FDBA74;
+}
+
+.customer-modern-app:not(.theme-light) .ol-success-msg {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.24);
+  color: #6EE7B7;
+}
+
+.customer-modern-app:not(.theme-light) .ol-sms-card {
+  background: rgba(15, 23, 42, 0.82);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.customer-modern-app:not(.theme-light) .ol-sms-card.is-enabled {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(15, 23, 42, 0.82));
+  border-color: rgba(34, 197, 94, 0.24);
+}
+
+.customer-modern-app:not(.theme-light) .ol-sms-card-name {
+  color: #F8FAFC;
+}
+
+.customer-modern-app:not(.theme-light) .ol-sms-card-mobile {
+  color: rgba(248, 250, 252, 0.6);
+}
+
+.customer-modern-app:not(.theme-light) .ol-sms-card-balance {
+  color: #FCA5A5;
+}
+
+.customer-modern-app:not(.theme-light) .ol-sms-card-schedule {
+  background: rgba(34, 197, 94, 0.16);
+  color: #6EE7B7;
+}
+
+.customer-modern-app:not(.theme-light) .ol-sms-toggle.is-off {
+  color: rgba(248, 250, 252, 0.4);
+}
+
+.customer-modern-app:not(.theme-light) .ol-sms-toggle.is-on {
+  color: #6EE7B7;
+}
+
+.customer-modern-app:not(.theme-light) .ol-sms-list-footer {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.customer-modern-app:not(.theme-light) .ol-sms-list-footer p {
+  color: rgba(248, 250, 252, 0.5);
+}
+
+/* Command row for Outstanding List page */
+.ol-list-commands {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+
+.ol-command-sms .ol-command-icon {
+  color: #7C3AED;
+  background: rgba(139, 92, 246, 0.14);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SAVED VEHICLES (FASTag)
+   ═══════════════════════════════════════════════════════════════ */
+
+.cm-vehicle-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+}
+
+.cm-vehicle-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.cm-vehicle-subtitle {
+  font-size: 0.82rem;
+  color: var(--cm-muted, #9CA3AF);
+}
+
+.cm-vehicle-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--cm-accent, #40E0D0), #007BFF);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.cm-vehicle-add-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(64, 224, 208, 0.3);
+}
+
+.cm-vehicle-add-btn:active {
+  transform: scale(0.97);
+}
+
+.cm-vehicle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cm-vehicle-card {
+  padding: 16px;
+  background: var(--cm-card, #1A1A1A);
+  border-radius: 16px;
+  border: 1px solid var(--cm-line, #2A2A2A);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+}
+
+.cm-vehicle-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  border-color: var(--cm-accent, #40E0D0);
+}
+
+.cm-vehicle-card:active {
+  transform: scale(0.98);
+}
+
+.cm-vehicle-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cm-vehicle-card-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cm-vehicle-card-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  object-fit: contain;
+  background: var(--cm-bg-secondary, #121212);
+  padding: 4px;
+}
+
+.cm-vehicle-card-logo-placeholder {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(64, 224, 208, 0.15), rgba(0, 123, 255, 0.15));
+  display: grid;
+  place-items: center;
+  color: var(--cm-accent, #40E0D0);
+  font-size: 1.2rem;
+}
+
+.cm-vehicle-number {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--cm-ink, #FFFFFF);
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+  letter-spacing: 1px;
+}
+
+.cm-vehicle-nickname {
+  font-size: 0.72rem;
+  color: var(--cm-muted, #9CA3AF);
+  margin-top: 2px;
+  font-style: italic;
+}
+
+.cm-vehicle-provider {
+  font-size: 0.72rem;
+  color: var(--cm-accent, #40E0D0);
+  margin-top: 2px;
+}
+
+.cm-vehicle-arrow {
+  color: var(--cm-muted, #9CA3AF);
+  font-size: 14px;
+}
+
+.cm-vehicle-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--cm-line, #2A2A2A);
+}
+
+.cm-vehicle-action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--cm-line, #2A2A2A);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--cm-ink, #FFFFFF);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+
+.cm-vehicle-action-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.cm-vehicle-action-btn:active {
+  transform: scale(0.96);
+}
+
+.cm-vehicle-recharge-btn {
+  background: linear-gradient(135deg, var(--cm-accent, #40E0D0), #007BFF);
+  border-color: transparent;
+  color: #fff;
+  flex: 2;
+}
+
+.cm-vehicle-recharge-btn:hover {
+  box-shadow: 0 4px 12px rgba(64, 224, 208, 0.25);
+}
+
+.cm-vehicle-edit-btn {
+  color: var(--cm-accent, #40E0D0);
+  flex: 0 0 44px;
+}
+
+.cm-vehicle-history-btn {
+  color: #3B82F6;
+  flex: 0 0 44px;
+}
+
+.cm-vehicle-delete-btn {
+  color: #EF4444;
+  flex: 0 0 44px;
+}
+
+.cm-vehicle-delete-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.cm-vehicle-last-recharge {
+  font-size: 0.68rem;
+  color: var(--cm-muted, #9CA3AF);
+  margin-top: 10px;
+  text-align: right;
+}
+
+/* Edit Vehicle Modal */
+.cm-vehicle-edit-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: var(--cm-bg-secondary, #121212);
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.cm-vehicle-edit-icon {
+  font-size: 1.5rem;
+  color: var(--cm-accent, #40E0D0);
+}
+
+.cm-vehicle-edit-info span {
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: 'SF Mono', monospace;
+  letter-spacing: 1px;
+}
+
+/* ─── Save Vehicle Prompt ─── */
+.cm-save-vehicle-prompt {
+  padding: 18px;
+  background: linear-gradient(135deg, rgba(64, 224, 208, 0.08), rgba(0, 123, 255, 0.08));
+  border-radius: 16px;
+  border: 1px solid var(--cm-accent, #40E0D0);
+  margin: 16px 0;
+}
+
+.cm-save-vehicle-prompt-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.cm-save-vehicle-prompt-icon {
+  font-size: 1.2rem;
+  color: var(--cm-accent, #40E0D0);
+}
+
+.cm-save-vehicle-prompt-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--cm-ink, #FFFFFF);
+}
+
+.cm-save-vehicle-prompt-desc {
+  font-size: 0.82rem;
+  color: var(--cm-muted, #9CA3AF);
+  margin: 0 0 12px;
+}
+
+.cm-save-vehicle-prompt-info {
+  background: var(--cm-bg-secondary, #121212);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.cm-save-vehicle-prompt-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+
+.cm-save-vehicle-prompt-label {
+  font-size: 0.78rem;
+  color: var(--cm-muted, #9CA3AF);
+}
+
+.cm-save-vehicle-prompt-value {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--cm-ink, #FFFFFF);
+}
+
+.cm-save-vehicle-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--cm-line, #2A2A2A);
+  border-radius: 10px;
+  background: var(--cm-bg-secondary, #121212);
+  color: var(--cm-ink, #FFFFFF);
+  font-size: 0.9rem;
+}
+
+.cm-save-vehicle-input:focus {
+  outline: none;
+  border-color: var(--cm-accent, #40E0D0);
+}
+
+.cm-save-vehicle-prompt-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.cm-save-vehicle-save-btn {
+  flex: 1;
+}
+
+.cm-save-vehicle-skip-btn {
+  flex: 0 0 auto;
+  min-width: 80px;
+}
+
+/* ─── Vehicle History Sheet ─── */
+.cm-sheet--history {
+  max-height: 70vh;
+}
+
+.cm-vehicle-history-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--cm-bg-secondary, #121212);
+  border-bottom: 1px solid var(--cm-line, #2A2A2A);
+}
+
+.cm-vehicle-history-icon {
+  font-size: 1.5rem;
+  color: var(--cm-accent, #40E0D0);
+}
+
+.cm-vehicle-history-number {
+  font-size: 1rem;
+  font-weight: 800;
+  font-family: 'SF Mono', monospace;
+  letter-spacing: 1px;
+  color: var(--cm-ink, #FFFFFF);
+}
+
+.cm-vehicle-history-nickname {
+  font-size: 0.72rem;
+  color: var(--cm-muted, #9CA3AF);
+  font-style: italic;
+}
+
+.cm-history-loading,
+.cm-history-error,
+.cm-history-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--cm-muted, #9CA3AF);
+}
+
+.cm-history-empty-sub {
+  font-size: 0.78rem;
+  margin-top: 4px;
+}
+
+.cm-history-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.cm-history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--cm-line, #2A2A2A);
+}
+
+.cm-history-item:last-child {
+  border-bottom: none;
+}
+
+.cm-history-item-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cm-history-amount {
+  display: flex;
+  align-items: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--cm-ink, #FFFFFF);
+}
+
+.cm-history-rupee {
+  font-size: 0.85rem;
+  margin-right: 2px;
+}
+
+.cm-history-date {
+  font-size: 0.72rem;
+  color: var(--cm-muted, #9CA3AF);
+}
+
+.cm-history-ref {
+  font-size: 0.68rem;
+  color: var(--cm-muted, #9CA3AF);
+  font-family: 'SF Mono', monospace;
+}
+
+.cm-history-item-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.cm-history-status {
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.cm-history-load-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  margin: 12px 16px;
+  border: 1px solid var(--cm-line, #2A2A2A);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--cm-accent, #40E0D0);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cm-history-load-more:hover {
+  background: rgba(64, 224, 208, 0.08);
+}
+
+/* ─── Light Mode Overrides ─── */
+.theme-light .cm-vehicle-card {
+  background: #FFFFFF;
+  border-color: #E5E7EB;
+}
+
+.theme-light .cm-vehicle-card:hover {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  border-color: #007BFF;
+}
+
+.theme-light .cm-vehicle-number {
+  color: #1F2937;
+}
+
+.theme-light .cm-vehicle-card-actions {
+  border-color: #E5E7EB;
+}
+
+.theme-light .cm-vehicle-action-btn {
+  border-color: #E5E7EB;
+  color: #374151;
+}
+
+.theme-light .cm-vehicle-action-btn:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.theme-light .cm-vehicle-card-logo {
+  background: #F3F4F6;
+}
+
+.theme-light .cm-vehicle-card-logo-placeholder {
+  background: linear-gradient(135deg, rgba(0, 123, 255, 0.1), rgba(64, 224, 208, 0.1));
+}
+
+.theme-light .cm-save-vehicle-prompt {
+  background: linear-gradient(135deg, rgba(0, 123, 255, 0.06), rgba(64, 224, 208, 0.06));
+  border-color: #007BFF;
+}
+
+.theme-light .cm-save-vehicle-prompt-title {
+  color: #1F2937;
+}
+
+.theme-light .cm-save-vehicle-prompt-info {
+  background: #F9FAFB;
+}
+
+.theme-light .cm-save-vehicle-prompt-value {
+  color: #1F2937;
+}
+
+.theme-light .cm-save-vehicle-input {
+  background: #FFFFFF;
+  border-color: #E5E7EB;
+  color: #1F2937;
+}
+
+.theme-light .cm-vehicle-history-info {
+  background: #F9FAFB;
+  border-color: #E5E7EB;
+}
+
+.theme-light .cm-vehicle-history-number {
+  color: #1F2937;
+}
+
+.theme-light .cm-history-item {
+  border-color: #E5E7EB;
+}
+
+.theme-light .cm-history-amount {
+  color: #1F2937;
+}
+
+.theme-light .cm-vehicle-edit-info {
+  background: #F9FAFB;
+}
+
+.theme-light .cm-vehicle-edit-info span {
+  color: #1F2937;
 }

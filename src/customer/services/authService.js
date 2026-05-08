@@ -62,4 +62,12 @@ export const authService = {
   sendPinToWhatsapp: async () => {
     return guestPost("/login/getPin", {});
   },
+
+  // Configure referral code for new users (creates user account)
+  referalConfig: async ({ token, referalCode }) => {
+    return guestPost("/login/referalConfig", {
+      token,
+      referalCode,
+    });
+  },
 };

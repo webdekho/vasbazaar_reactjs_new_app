@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { FaArrowLeft, FaMapMarkerAlt, FaCamera, FaImage, FaFileAlt } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
+import { useGeolocation } from "../../hooks/useGeolocation";
 import "./marketplace.css";
 
 const STEPS = [
@@ -66,6 +67,12 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
 
   const selectedCategory = categories.find((c) => Number(c.id) === Number(form.categoryId));
   const isRestaurant = /restaurant|food|hotel|cafe|eatery|dhaba/i.test(selectedCategory?.name || "");
+
+  // Use Capacitor geolocation hook for proper Android/iOS permission handling
+  const {
+    requestLocation,
+    loading: geoLoading,
+  } = useGeolocation({ autoRequest: false });
 
   useEffect(() => {
     marketplaceService.getCategories().then((res) => {
@@ -140,17 +147,19 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
 
   const setField = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
-  const captureLocation = () => {
-    if (!navigator.geolocation) { setError("Geolocation not available"); return; }
+  const captureLocation = async () => {
     setError(null);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setField("latitude", pos.coords.latitude);
-        setField("longitude", pos.coords.longitude);
-      },
-      (err) => setError(err?.code === 1 ? "Allow location permission to continue" : "Could not get location"),
-      { timeout: 8000, enableHighAccuracy: true }
-    );
+    try {
+      const coords = await requestLocation();
+      if (coords && coords.lat && coords.lng) {
+        setField("latitude", coords.lat);
+        setField("longitude", coords.lng);
+      } else {
+        setError("Allow location permission to continue");
+      }
+    } catch (err) {
+      setError(err?.message || "Could not get location. Please enable location permission.");
+    }
   };
 
   const handleImagePick = async (e, purpose, setUploading, setterField) => {
@@ -339,9 +348,13 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
               <label className="mkt-field-label">Pincode *</label>
               <input className="mkt-input" inputMode="numeric" value={form.pincode} onChange={(e) => setField("pincode", e.target.value.replace(/\D/g, "").slice(0, 6))} />
             </div>
-            <button type="button" className="mkt-btn mkt-btn--secondary" onClick={captureLocation}>
+            <button type="button" className="mkt-btn mkt-btn--secondary" onClick={captureLocation} disabled={geoLoading}>
               <FaMapMarkerAlt size={12} style={{ marginRight: 6 }} />
-              {form.latitude != null ? `Location captured (${form.latitude.toFixed(4)}, ${form.longitude.toFixed(4)})` : "Capture store location *"}
+              {geoLoading
+                ? "Getting location..."
+                : form.latitude != null
+                  ? `Location captured (${form.latitude.toFixed(4)}, ${form.longitude.toFixed(4)})`
+                  : "Capture store location *"}
             </button>
           </>
         )}
@@ -500,11 +513,26 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
                 {!appliedCoupon ? (
                   <div className="mkt-field" style={{ marginTop: 12 }}>
                     <label className="mkt-field-label">Have a marketplace coupon?</label>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <input className="mkt-input" style={{ flex: 1 }} value={couponInput}
+                    <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+                      <input
+                        className="mkt-input"
+                        style={{ flex: 1, minWidth: 0 }}
+                        value={couponInput}
                         onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-                        placeholder="Enter coupon code" />
-                      <button type="button" className="mkt-btn mkt-btn--secondary" onClick={applyCoupon}>Apply</button>
+                        placeholder="Enter coupon code"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="characters"
+                        spellCheck="false"
+                      />
+                      <button
+                        type="button"
+                        className="mkt-btn mkt-btn--secondary"
+                        style={{ width: "auto", flexShrink: 0, padding: "12px 20px" }}
+                        onClick={applyCoupon}
+                      >
+                        Apply
+                      </button>
                     </div>
                     {couponError && <div className="mkt-error-text" style={{ marginTop: 6 }}>{couponError}</div>}
                   </div>

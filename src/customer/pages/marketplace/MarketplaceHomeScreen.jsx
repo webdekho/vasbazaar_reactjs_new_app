@@ -38,6 +38,7 @@ import { marketplaceService } from "../../services/marketplaceService";
 import { useMarketplaceCart } from "../../context/MarketplaceCartContext";
 import { useToast } from "../../context/ToastContext";
 import { shareStore } from "./shareStore";
+import { useGeolocation } from "../../hooks/useGeolocation";
 import "./marketplace.css";
 
 const CATEGORY_ICON_RULES = [
@@ -111,8 +112,27 @@ const MarketplaceHomeScreen = () => {
   const { totals, cart } = useMarketplaceCart();
   const { showToast } = useToast();
 
-  const [coords, setCoords] = useState(null);
-  const [coordsError, setCoordsError] = useState(null);
+  // Use Capacitor geolocation hook for proper Android/iOS permission handling
+  const {
+    coords: geoCoords,
+    error: geoError,
+    permissionStatus,
+  } = useGeolocation({ autoRequest: true, timeout: 10000, maximumAge: 60000 });
+
+  // Memoize coords to prevent infinite re-renders
+  const coords = useMemo(() => {
+    if (geoCoords) return { lat: geoCoords.lat, lng: geoCoords.lng };
+    if (geoError) return { lat: null, lng: null };
+    return null;
+  }, [geoCoords, geoError]);
+
+  const coordsError = useMemo(() => {
+    if (!geoError) return null;
+    return permissionStatus === "denied"
+      ? "Enable location permission to see nearby stores"
+      : "Location unavailable — showing all reachable stores";
+  }, [geoError, permissionStatus]);
+
   const [categories, setCategories] = useState([]);
   const [activeCategoryId, setActiveCategoryId] = useState(null);
   const [activeQuick, setActiveQuick] = useState(null);
@@ -124,27 +144,12 @@ const MarketplaceHomeScreen = () => {
   const [error, setError] = useState(null);
   const [hasMyStore, setHasMyStore] = useState(false);
   const checkedMyStore = useRef(false);
+  const lastFetchKey = useRef(""); // Track last fetch params to prevent duplicate calls
 
   // Rotating search placeholder
   useEffect(() => {
     const t = setInterval(() => setSearchHintIdx((i) => (i + 1) % SEARCH_HINTS.length), 2200);
     return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => {
-    if (!navigator.geolocation) {
-      setCoordsError("Location not available — showing all reachable stores");
-      setCoords({ lat: null, lng: null });
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      (err) => {
-        setCoordsError(err?.code === 1 ? "Enable location to see nearby stores" : "Location unavailable");
-        setCoords({ lat: null, lng: null });
-      },
-      { timeout: 5000, maximumAge: 60000 }
-    );
   }, []);
 
   useEffect(() => {
@@ -166,8 +171,41 @@ const MarketplaceHomeScreen = () => {
     return () => clearTimeout(t);
   }, [search]);
 
+  // Load stores with deduplication to prevent infinite API calls
+  useEffect(() => {
+    if (!coords) return;
+
+    // Create a unique key for this fetch request
+    const fetchKey = `${coords.lat}-${coords.lng}-${debouncedSearch}-${activeCategoryId}`;
+
+    // Skip if we already fetched with these exact params
+    if (lastFetchKey.current === fetchKey) return;
+    lastFetchKey.current = fetchKey;
+
+    const loadStores = async () => {
+      setLoading(true);
+      setError(null);
+      const res = await marketplaceService.getNearbyStores({
+        lat: coords.lat,
+        lng: coords.lng,
+        search: debouncedSearch || undefined,
+        categoryId: activeCategoryId || undefined,
+      });
+      setLoading(false);
+      if (res.success) {
+        setStores(Array.isArray(res.data) ? res.data : []);
+      } else {
+        setError(res.message || "Could not load stores");
+      }
+    };
+
+    loadStores();
+  }, [coords, debouncedSearch, activeCategoryId]);
+
+  // Expose loadStores for manual refresh (e.g., retry button)
   const loadStores = useCallback(async () => {
     if (!coords) return;
+    lastFetchKey.current = ""; // Reset to force refetch
     setLoading(true);
     setError(null);
     const res = await marketplaceService.getNearbyStores({
@@ -179,12 +217,11 @@ const MarketplaceHomeScreen = () => {
     setLoading(false);
     if (res.success) {
       setStores(Array.isArray(res.data) ? res.data : []);
+      lastFetchKey.current = `${coords.lat}-${coords.lng}-${debouncedSearch}-${activeCategoryId}`;
     } else {
       setError(res.message || "Could not load stores");
     }
   }, [coords, debouncedSearch, activeCategoryId]);
-
-  useEffect(() => { loadStores(); }, [loadStores]);
 
   const onPlusClick = () => {
     navigate(hasMyStore ? "/customer/app/marketplace/my-store" : "/customer/app/marketplace/onboard");

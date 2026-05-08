@@ -60,6 +60,21 @@ export const customerStorage = {
 
   getReferralCode: () => localStorage.getItem(CUSTOMER_STORAGE_KEYS.referralCode),
 
+  setIsExist: (value) => {
+    if (value !== null && value !== undefined) {
+      localStorage.setItem(CUSTOMER_STORAGE_KEYS.isExist, value ? "1" : "0");
+    } else {
+      localStorage.removeItem(CUSTOMER_STORAGE_KEYS.isExist);
+    }
+  },
+
+  getIsExist: () => {
+    const val = localStorage.getItem(CUSTOMER_STORAGE_KEYS.isExist);
+    if (val === "1") return true;
+    if (val === "0") return false;
+    return null; // Not set
+  },
+
   setFirstLoginComplete: () => {
     localStorage.setItem(CUSTOMER_STORAGE_KEYS.firstLoginComplete, "1");
   },

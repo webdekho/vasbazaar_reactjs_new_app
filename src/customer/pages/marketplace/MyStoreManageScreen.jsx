@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaPlus, FaPencilAlt, FaTrash, FaStore, FaCamera, FaCheckCircle, FaTimesCircle, FaClock, FaBan, FaEdit, FaRegClock, FaChevronRight, FaPowerOff } from "react-icons/fa";
+import { FaArrowLeft, FaPlus, FaPencilAlt, FaTrash, FaStore, FaCamera, FaCheckCircle, FaTimesCircle, FaClock, FaBan, FaEdit, FaRegClock, FaChevronRight, FaPowerOff, FaChevronDown, FaChevronUp, FaToggleOn, FaToggleOff } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
 import "./marketplace.css";
 
@@ -188,7 +188,7 @@ const MyStoreManageScreen = () => {
             aria-label="My Store sections"
             style={{
               display: "grid",
-              gridTemplateColumns: "1fr 1fr",
+              gridTemplateColumns: "1fr 1fr 1fr",
               gap: 6,
               padding: 4,
               marginTop: 12,
@@ -200,6 +200,7 @@ const MyStoreManageScreen = () => {
             {[
               { key: "orders", label: "Orders", count: recentOrders.length },
               { key: "items", label: "Items", count: items.length },
+              { key: "categories", label: "Categories" },
             ].map((tab) => {
               const isActive = activeTab === tab.key;
               return (
@@ -223,7 +224,7 @@ const MyStoreManageScreen = () => {
                     transition: "background 0.15s ease, color 0.15s ease",
                   }}
                 >
-                  {tab.label} <span style={{ opacity: 0.85, fontWeight: 600 }}>({tab.count})</span>
+                  {tab.label}{tab.count != null && <span style={{ opacity: 0.85, fontWeight: 600 }}> ({tab.count})</span>}
                 </button>
               );
             })}
@@ -344,6 +345,10 @@ const MyStoreManageScreen = () => {
         </>
       )}
 
+      {canManageItems && activeTab === "categories" && (
+        <CategoriesTab />
+      )}
+
       {showItemForm && (
         <ItemFormModal
           initial={editingItem}
@@ -351,6 +356,411 @@ const MyStoreManageScreen = () => {
           onSaved={() => { setShowItemForm(false); setEditingItem(null); load(); }}
         />
       )}
+    </div>
+  );
+};
+
+// ===== Categories & Subcategories Management Tab =====
+const CategoriesTab = () => {
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
+  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(null);
+
+
+  const loadCategories = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await marketplaceService.getMyItemCategories();
+      if (res.success) setCategories(Array.isArray(res.data) ? res.data : []);
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { loadCategories(); }, [loadCategories]);
+
+  const handleDeleteCategory = async (id) => {
+    if (!window.confirm("Delete this category? All subcategories under it will also be deleted.")) return;
+    const res = await marketplaceService.deleteMyItemCategory(id);
+    if (res.success) { setCategories((p) => p.filter((c) => c.id !== id)); if (expandedId === id) setExpandedId(null); }
+    else setError(res.message || "Delete failed");
+  };
+
+  const handleToggleCategory = async (id, currentActive) => {
+    const res = await marketplaceService.toggleMyItemCategoryActive(id, !currentActive);
+    if (res.success) setCategories((p) => p.map((c) => c.id === id ? { ...c, isActive: !currentActive } : c));
+  };
+
+  return (
+    <div style={{ padding: "4px 14px 24px" }}>
+      {/* Add Category CTA */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => { setEditingCategory(null); setShowAddCategory(true); }}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setEditingCategory(null); setShowAddCategory(true); } }}
+        style={{
+          display: "flex", alignItems: "center", gap: 12, padding: 14,
+          borderRadius: 14, border: "1.5px dashed #007BFF",
+          background: "rgba(20, 184, 166, 0.06)", color: "var(--cm-ink)", cursor: "pointer",
+        }}
+      >
+        <div style={{ width: 42, height: 42, borderRadius: 12, display: "grid", placeItems: "center", background: "linear-gradient(135deg, #40E0D0, #007BFF)", color: "#fff", flexShrink: 0 }}>
+          <FaPlus size={16} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>Add item category</div>
+          <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>Group your items (e.g. Fruits, Dairy, Snacks)</div>
+        </div>
+        <FaChevronRight size={12} color="var(--cm-muted)" />
+      </div>
+
+
+      {error && <div className="mkt-error-text" style={{ padding: "8px 0" }}>{error}</div>}
+
+      {/* Category list */}
+      <div style={{ marginTop: 12 }}>
+        <div className="mkt-form-section-title" style={{ margin: "0 0 8px" }}>
+          Item Categories <span style={{ color: "var(--cm-muted)", fontWeight: 500 }}>({categories.length})</span>
+        </div>
+
+        {loading ? (
+          <div className="mkt-empty">Loading…</div>
+        ) : categories.length === 0 ? (
+          <div className="mkt-empty">No categories yet. Add one to organize your items.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {categories.map((cat) => {
+              const isExpanded = expandedId === cat.id;
+              return (
+                <div key={cat.id} style={{ borderRadius: 12, border: "1px solid var(--cm-line)", background: "var(--cm-card)", overflow: "hidden" }}>
+                  {/* Category row */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px" }}>
+                    {cat.iconUrl && <img src={cat.iconUrl} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: "cover" }} />}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--cm-ink)" }}>{cat.name}</div>
+                      <div style={{ fontSize: 11, color: "var(--cm-muted)" }}>
+                        Order: {cat.sortOrder ?? 0} · {cat.isActive ? "Active" : "Inactive"}
+                      </div>
+                    </div>
+                    <button onClick={() => handleToggleCategory(cat.id, cat.isActive)} style={{ background: "none", border: "none", cursor: "pointer", color: cat.isActive ? "#14b8a6" : "var(--cm-muted)", padding: 4 }} title={cat.isActive ? "Deactivate" : "Activate"}>
+                      {cat.isActive ? <FaToggleOn size={18} /> : <FaToggleOff size={18} />}
+                    </button>
+                    <button onClick={() => { setEditingCategory(cat); setShowAddCategory(true); }} style={{ background: "none", border: "none", color: "#007BFF", cursor: "pointer", padding: 4 }}><FaPencilAlt size={12} /></button>
+                    <button onClick={() => handleDeleteCategory(cat.id)} style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", padding: 4 }}><FaTrash size={12} /></button>
+                    <button onClick={() => setExpandedId(isExpanded ? null : cat.id)} style={{ background: "none", border: "none", color: "var(--cm-muted)", cursor: "pointer", padding: 4 }}>
+                      {isExpanded ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
+                    </button>
+                  </div>
+                  {/* Subcategories panel */}
+                  {isExpanded && (
+                    <SubcategoriesPanel categoryId={cat.id} categoryName={cat.name} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Add/Edit Category Modal */}
+      {showAddCategory && (
+        <CategoryFormModal
+          initial={editingCategory}
+          onClose={() => { setShowAddCategory(false); setEditingCategory(null); }}
+          onSaved={() => { setShowAddCategory(false); setEditingCategory(null); loadCategories(); }}
+        />
+      )}
+
+    </div>
+  );
+};
+
+// ===== Subcategories panel (nested inside an expanded category) =====
+const SubcategoriesPanel = ({ categoryId, categoryName }) => {
+  const [subs, setSubs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [editingSub, setEditingSub] = useState(null);
+  const [error, setError] = useState(null);
+
+  const loadSubs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await marketplaceService.getMyItemSubcategories(categoryId);
+      if (res.success) setSubs(Array.isArray(res.data) ? res.data : []);
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  }, [categoryId]);
+
+  useEffect(() => { loadSubs(); }, [loadSubs]);
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Delete this subcategory?")) return;
+    const res = await marketplaceService.deleteMyItemSubcategory(id);
+    if (res.success) setSubs((p) => p.filter((s) => s.id !== id));
+    else setError(res.message || "Delete failed");
+  };
+
+  const handleToggle = async (id, currentActive) => {
+    const res = await marketplaceService.toggleMyItemSubcategoryActive(id, !currentActive);
+    if (res.success) setSubs((p) => p.map((s) => s.id === id ? { ...s, isActive: !currentActive } : s));
+  };
+
+  return (
+    <div style={{ borderTop: "1px solid var(--cm-line)", padding: "10px 14px", background: "var(--cm-bg-secondary)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--cm-muted)" }}>
+          Subcategories ({subs.length})
+        </div>
+        <button
+          type="button"
+          onClick={() => { setEditingSub(null); setShowAdd(true); }}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 4,
+            padding: "5px 10px", borderRadius: 8, border: "1px solid #007BFF",
+            background: "transparent", color: "#007BFF", fontSize: 11, fontWeight: 600, cursor: "pointer",
+          }}
+        >
+          <FaPlus size={9} /> Add
+        </button>
+      </div>
+
+      {error && <div className="mkt-error-text" style={{ marginBottom: 6 }}>{error}</div>}
+
+      {loading ? (
+        <div style={{ fontSize: 12, color: "var(--cm-muted)", padding: "8px 0" }}>Loading…</div>
+      ) : subs.length === 0 ? (
+        <div style={{ fontSize: 12, color: "var(--cm-muted)", padding: "8px 0" }}>No subcategories yet.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {subs.map((sub) => (
+            <div key={sub.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--cm-line)", background: "var(--cm-card)" }}>
+              {sub.iconUrl && <img src={sub.iconUrl} alt="" style={{ width: 22, height: 22, borderRadius: 4 }} />}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--cm-ink)" }}>{sub.name}</div>
+                <div style={{ fontSize: 10, color: "var(--cm-muted)" }}>Order: {sub.sortOrder ?? 0}</div>
+              </div>
+              <button onClick={() => handleToggle(sub.id, sub.isActive)} style={{ background: "none", border: "none", cursor: "pointer", color: sub.isActive ? "#14b8a6" : "var(--cm-muted)", padding: 2 }}>
+                {sub.isActive ? <FaToggleOn size={14} /> : <FaToggleOff size={14} />}
+              </button>
+              <button onClick={() => { setEditingSub(sub); setShowAdd(true); }} style={{ background: "none", border: "none", color: "#007BFF", cursor: "pointer", padding: 2 }}><FaPencilAlt size={10} /></button>
+              <button onClick={() => handleDelete(sub.id)} style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", padding: 2 }}><FaTrash size={10} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showAdd && (
+        <SubcategoryFormModal
+          categoryId={categoryId}
+          categoryName={categoryName}
+          initial={editingSub}
+          onClose={() => { setShowAdd(false); setEditingSub(null); }}
+          onSaved={() => { setShowAdd(false); setEditingSub(null); loadSubs(); }}
+        />
+      )}
+    </div>
+  );
+};
+
+// ===== Category Add/Edit Modal =====
+const CategoryFormModal = ({ initial, onClose, onSaved }) => {
+  const [form, setForm] = useState({
+    name: initial?.name || "",
+    iconUrl: initial?.iconUrl || "",
+    sortOrder: initial?.sortOrder ?? 0,
+    isActive: initial?.isActive ?? true,
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef(null);
+
+  const setField = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+
+  const handleImagePick = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { setError("Image must be under 2 MB"); return; }
+    setUploading(true);
+    const res = await marketplaceService.uploadImage(file, "category_icon");
+    setUploading(false);
+    if (res.success && res.data?.url) setField("iconUrl", res.data.url);
+    else setError(res.message || "Upload failed");
+  };
+
+  const submit = async () => {
+    if (!form.name.trim()) { setError("Name is required"); return; }
+    setError(null);
+    setSaving(true);
+    const payload = {
+      ...(initial ? { id: initial.id } : {}),
+      name: form.name.trim(),
+      iconUrl: form.iconUrl || null,
+      sortOrder: Number(form.sortOrder) || 0,
+      isActive: form.isActive,
+    };
+    const res = initial
+      ? await marketplaceService.updateMyItemCategory(payload)
+      : await marketplaceService.createMyItemCategory(payload);
+    setSaving(false);
+    if (res.success) onSaved();
+    else setError(res.message || "Save failed");
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
+      <div style={{ background: "var(--cm-bg)", width: "100%", maxWidth: 480, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "80vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+        <div className="mkt-header" style={{ position: "sticky", top: 0 }}>
+          <button className="mkt-header-back" onClick={onClose}>×</button>
+          <h1 className="mkt-header-title">{initial ? "Edit Category" : "Add Category"}</h1>
+        </div>
+        <div className="mkt-form">
+          <div className="mkt-field">
+            <label className="mkt-field-label">Icon (optional)</label>
+            <div className="mkt-image-upload" onClick={() => fileInput.current?.click()}>
+              <div className="mkt-image-upload-preview" style={{ width: 48, height: 48 }}>
+                {form.iconUrl ? <img src={form.iconUrl} alt="" /> : <FaCamera size={14} />}
+              </div>
+              <div className="mkt-image-upload-text">{uploading ? "Uploading…" : form.iconUrl ? "Tap to change" : "Tap to upload"}</div>
+              <input ref={fileInput} type="file" accept="image/*" hidden onChange={handleImagePick} />
+            </div>
+          </div>
+          <div className="mkt-field">
+            <label className="mkt-field-label">Category name *</label>
+            <input className="mkt-input" value={form.name} onChange={(e) => setField("name", e.target.value)} placeholder="e.g. Fruits, Dairy, Snacks" />
+          </div>
+          <div className="mkt-field">
+            <label className="mkt-field-label">Sort order</label>
+            <input className="mkt-input" inputMode="numeric" value={form.sortOrder} onChange={(e) => setField("sortOrder", e.target.value.replace(/\D/g, ""))} />
+          </div>
+          <div className="mkt-field" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input type="checkbox" checked={form.isActive} onChange={(e) => setField("isActive", e.target.checked)} id="cat-active" />
+            <label htmlFor="cat-active" className="mkt-field-label" style={{ margin: 0 }}>Active</label>
+          </div>
+          {error && <div className="mkt-error-text">{error}</div>}
+          <button className="mkt-btn mkt-btn--primary" onClick={submit} disabled={saving}>
+            {saving ? "Saving…" : initial ? "Save changes" : "Add category"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ===== Subcategory Add/Edit Modal =====
+// Supports two modes:
+// 1. With categoryId prop (called from SubcategoriesPanel inside an expanded category)
+// 2. With categories prop (called from CategoriesTab "Add item subcategory" button — shows category dropdown)
+const SubcategoryFormModal = ({ categoryId: fixedCategoryId, categoryName: fixedCategoryName, categories, initial, onClose, onSaved }) => {
+  const [selectedCategoryId, setSelectedCategoryId] = useState(fixedCategoryId || "");
+  const selectedCategoryName = fixedCategoryName || (categories || []).find((c) => c.id === selectedCategoryId)?.name || "";
+
+  const [form, setForm] = useState({
+    name: initial?.name || "",
+    iconUrl: initial?.iconUrl || "",
+    sortOrder: initial?.sortOrder ?? 0,
+    isActive: initial?.isActive ?? true,
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef(null);
+
+  const setField = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+
+  const handleImagePick = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { setError("Image must be under 2 MB"); return; }
+    setUploading(true);
+    const res = await marketplaceService.uploadImage(file, "subcategory_icon");
+    setUploading(false);
+    if (res.success && res.data?.url) setField("iconUrl", res.data.url);
+    else setError(res.message || "Upload failed");
+  };
+
+  const submit = async () => {
+    if (!selectedCategoryId) { setError("Please select a parent category"); return; }
+    if (!form.name.trim()) { setError("Name is required"); return; }
+    setError(null);
+    setSaving(true);
+    const payload = {
+      ...(initial ? { id: initial.id } : {}),
+      storeItemCategoryId: { id: selectedCategoryId },
+      name: form.name.trim(),
+      iconUrl: form.iconUrl || null,
+      sortOrder: Number(form.sortOrder) || 0,
+      isActive: form.isActive,
+    };
+    const res = initial
+      ? await marketplaceService.updateMyItemSubcategory(payload)
+      : await marketplaceService.createMyItemSubcategory(payload);
+    setSaving(false);
+    if (res.success) onSaved();
+    else setError(res.message || "Save failed");
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
+      <div style={{ background: "var(--cm-bg)", width: "100%", maxWidth: 480, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "80vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+        <div className="mkt-header" style={{ position: "sticky", top: 0 }}>
+          <button className="mkt-header-back" onClick={onClose}>×</button>
+          <h1 className="mkt-header-title">{initial ? "Edit Subcategory" : "Add Subcategory"}</h1>
+        </div>
+        {fixedCategoryId ? (
+          <div style={{ padding: "0 14px", marginBottom: 8 }}>
+            <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>Under: <strong>{selectedCategoryName}</strong></div>
+          </div>
+        ) : null}
+        <div className="mkt-form">
+          {/* Show category dropdown when opened from top-level (no fixedCategoryId) */}
+          {!fixedCategoryId && categories && (
+            <div className="mkt-field">
+              <label className="mkt-field-label">Parent category *</label>
+              <select
+                className="mkt-input"
+                value={selectedCategoryId}
+                onChange={(e) => setSelectedCategoryId(e.target.value ? Number(e.target.value) : "")}
+              >
+                <option value="">-- Select category --</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="mkt-field">
+            <label className="mkt-field-label">Icon (optional)</label>
+            <div className="mkt-image-upload" onClick={() => fileInput.current?.click()}>
+              <div className="mkt-image-upload-preview" style={{ width: 48, height: 48 }}>
+                {form.iconUrl ? <img src={form.iconUrl} alt="" /> : <FaCamera size={14} />}
+              </div>
+              <div className="mkt-image-upload-text">{uploading ? "Uploading…" : form.iconUrl ? "Tap to change" : "Tap to upload"}</div>
+              <input ref={fileInput} type="file" accept="image/*" hidden onChange={handleImagePick} />
+            </div>
+          </div>
+          <div className="mkt-field">
+            <label className="mkt-field-label">Subcategory name *</label>
+            <input className="mkt-input" value={form.name} onChange={(e) => setField("name", e.target.value)} placeholder="e.g. Citrus, Leafy Greens" />
+          </div>
+          <div className="mkt-field">
+            <label className="mkt-field-label">Sort order</label>
+            <input className="mkt-input" inputMode="numeric" value={form.sortOrder} onChange={(e) => setField("sortOrder", e.target.value.replace(/\D/g, ""))} />
+          </div>
+          <div className="mkt-field" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input type="checkbox" checked={form.isActive} onChange={(e) => setField("isActive", e.target.checked)} id="sub-active" />
+            <label htmlFor="sub-active" className="mkt-field-label" style={{ margin: 0 }}>Active</label>
+          </div>
+          {error && <div className="mkt-error-text">{error}</div>}
+          <button className="mkt-btn mkt-btn--primary" onClick={submit} disabled={saving}>
+            {saving ? "Saving…" : initial ? "Save changes" : "Add subcategory"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -364,11 +774,42 @@ const ItemFormModal = ({ initial, onClose, onSaved }) => {
     unit: initial?.unit || "",
     stockQty: initial?.stockQty ?? 0,
     imageUrl: initial?.imageUrl || "",
+    storeItemCategoryId: initial?.storeItemCategoryId?.id || "",
+    storeItemSubcategoryId: initial?.storeItemSubcategoryId?.id || "",
   }));
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInput = useRef(null);
+
+  // Category / subcategory cascading dropdowns
+  const [itemCategories, setItemCategories] = useState([]);
+  const [itemSubcategories, setItemSubcategories] = useState([]);
+  const [loadingCats, setLoadingCats] = useState(false);
+  const [loadingSubs, setLoadingSubs] = useState(false);
+  const [showInlineAddCat, setShowInlineAddCat] = useState(false);
+  const [showInlineAddSub, setShowInlineAddSub] = useState(false);
+
+  const loadItemCategories = useCallback(() => {
+    setLoadingCats(true);
+    marketplaceService.getMyItemCategories()
+      .then((res) => { if (res.success) setItemCategories(Array.isArray(res.data) ? res.data : []); })
+      .catch(() => {})
+      .finally(() => setLoadingCats(false));
+  }, []);
+
+  useEffect(() => { loadItemCategories(); }, [loadItemCategories]);
+
+  const loadItemSubcategories = useCallback(() => {
+    if (!form.storeItemCategoryId) { setItemSubcategories([]); return; }
+    setLoadingSubs(true);
+    marketplaceService.getMyItemSubcategories(form.storeItemCategoryId)
+      .then((res) => { if (res.success) setItemSubcategories(Array.isArray(res.data) ? res.data : []); })
+      .catch(() => setItemSubcategories([]))
+      .finally(() => setLoadingSubs(false));
+  }, [form.storeItemCategoryId]);
+
+  useEffect(() => { loadItemSubcategories(); }, [loadItemSubcategories]);
 
   const setField = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
@@ -398,6 +839,8 @@ const ItemFormModal = ({ initial, onClose, onSaved }) => {
       stockQty: form.stockQty ? Number(form.stockQty) : 0,
       imageUrl: form.imageUrl || null,
       isAvailable: true,
+      storeItemCategoryId: form.storeItemCategoryId ? { id: form.storeItemCategoryId } : null,
+      storeItemSubcategoryId: form.storeItemSubcategoryId ? { id: form.storeItemSubcategoryId } : null,
     };
     const res = initial
       ? await marketplaceService.updateMyItem(payload)
@@ -442,13 +885,114 @@ const ItemFormModal = ({ initial, onClose, onSaved }) => {
             <input className="mkt-input" inputMode="decimal" value={form.mrp} onChange={(e) => setField("mrp", e.target.value)} />
           </div>
           <div className="mkt-field">
-            <label className="mkt-field-label">Unit (e.g. kg, piece)</label>
-            <input className="mkt-input" value={form.unit} onChange={(e) => setField("unit", e.target.value)} />
+            <label className="mkt-field-label">Unit</label>
+            <select className="mkt-input" value={form.unit} onChange={(e) => setField("unit", e.target.value)}>
+              <option value="">-- Select unit --</option>
+              <option value="piece">Piece</option>
+              <option value="kg">Kg</option>
+              <option value="g">Gram (g)</option>
+              <option value="litre">Litre</option>
+              <option value="ml">ML</option>
+              <option value="pack">Pack</option>
+              <option value="dozen">Dozen</option>
+              <option value="box">Box</option>
+              <option value="bundle">Bundle</option>
+              <option value="plate">Plate</option>
+              <option value="bottle">Bottle</option>
+              <option value="bag">Bag</option>
+              <option value="meter">Meter</option>
+              <option value="foot">Foot</option>
+              <option value="set">Set</option>
+              <option value="pair">Pair</option>
+            </select>
           </div>
           <div className="mkt-field">
             <label className="mkt-field-label">Stock quantity</label>
             <input className="mkt-input" inputMode="numeric" value={form.stockQty} onChange={(e) => setField("stockQty", e.target.value.replace(/\D/g, ""))} />
           </div>
+          {/* Category / Subcategory dropdowns with inline add */}
+          <div className="mkt-field">
+            <label className="mkt-field-label">Item Category</label>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <select
+                className="mkt-input"
+                style={{ flex: 1 }}
+                value={form.storeItemCategoryId}
+                onChange={(e) => {
+                  setField("storeItemCategoryId", e.target.value ? Number(e.target.value) : "");
+                  setField("storeItemSubcategoryId", "");
+                }}
+              >
+                <option value="">{loadingCats ? "Loading…" : "-- None --"}</option>
+                {itemCategories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setShowInlineAddCat(true)}
+                style={{
+                  flexShrink: 0, width: 38, height: 38, borderRadius: 10,
+                  border: "none", background: "linear-gradient(135deg, #40E0D0, #007BFF)",
+                  color: "#fff", display: "grid", placeItems: "center", cursor: "pointer",
+                }}
+                title="Add category"
+              >
+                <FaPlus size={14} />
+              </button>
+            </div>
+          </div>
+          <div className="mkt-field">
+            <label className="mkt-field-label">Item Subcategory</label>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <select
+                className="mkt-input"
+                style={{ flex: 1 }}
+                value={form.storeItemSubcategoryId}
+                onChange={(e) => setField("storeItemSubcategoryId", e.target.value ? Number(e.target.value) : "")}
+                disabled={!form.storeItemCategoryId}
+              >
+                <option value="">{!form.storeItemCategoryId ? "-- Select category first --" : loadingSubs ? "Loading…" : "-- None --"}</option>
+                {itemSubcategories.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!form.storeItemCategoryId) { setError("Select a category first"); return; }
+                  setShowInlineAddSub(true);
+                }}
+                style={{
+                  flexShrink: 0, width: 38, height: 38, borderRadius: 10,
+                  border: "none", background: form.storeItemCategoryId ? "linear-gradient(135deg, #14b8a6, #0d9488)" : "var(--cm-line)",
+                  color: "#fff", display: "grid", placeItems: "center",
+                  cursor: form.storeItemCategoryId ? "pointer" : "not-allowed",
+                }}
+                title="Add subcategory"
+              >
+                <FaPlus size={14} />
+              </button>
+            </div>
+          </div>
+
+          {/* Inline add category modal */}
+          {showInlineAddCat && (
+            <CategoryFormModal
+              onClose={() => setShowInlineAddCat(false)}
+              onSaved={() => { setShowInlineAddCat(false); loadItemCategories(); }}
+            />
+          )}
+
+          {/* Inline add subcategory modal */}
+          {showInlineAddSub && form.storeItemCategoryId && (
+            <SubcategoryFormModal
+              categoryId={form.storeItemCategoryId}
+              categoryName={itemCategories.find((c) => c.id === form.storeItemCategoryId)?.name || ""}
+              onClose={() => setShowInlineAddSub(false)}
+              onSaved={() => { setShowInlineAddSub(false); loadItemSubcategories(); }}
+            />
+          )}
           {error && <div className="mkt-error-text">{error}</div>}
           <button className="mkt-btn mkt-btn--primary" onClick={submit} disabled={saving}>
             {saving ? "Saving…" : initial ? "Save changes" : "Add item"}

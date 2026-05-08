@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useState, useCallback } from "react";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { FaArrowLeft, FaChevronRight } from "react-icons/fa";
 import { FiRefreshCw, FiUser } from "react-icons/fi";
 import { useCustomerModern } from "../context/CustomerModernContext";
@@ -11,6 +11,7 @@ import { saveProfilePhoto } from "../utils/profileAvatar";
 import { triggerPWAInstall } from "../hooks/usePWAInstall";
 import { useTheme } from "../context/ThemeContext";
 import { sanitizeBackendMessage } from "../utils/userMessages";
+import { useOtpAutoDetect } from "../hooks/useOtpAutoDetect";
 
 const NAME_PLACEHOLDERS = new Set([
   "NA",
@@ -26,6 +27,7 @@ const NAME_PLACEHOLDERS = new Set([
 
 const OtpScreen = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { theme } = useTheme();
   const [searchParams] = useSearchParams();
   const { setAuthSession } = useCustomerModern();
@@ -41,6 +43,44 @@ const OtpScreen = () => {
   const [nameLoading, setNameLoading] = useState(false);
   const [focused, setFocused] = useState("");
   const mobile = searchParams.get("mobile");
+  const mode = searchParams.get("mode"); // "name" when coming from ReferralScreen
+
+  // OTP auto-detection callback
+  const handleOtpAutoDetect = useCallback((detectedOtp) => {
+    if (detectedOtp && detectedOtp.length === 6 && !pendingSession) {
+      // Fill OTP fields
+      const digits = detectedOtp.split("");
+      setOtp(digits);
+      setStatus({ type: "success", message: "OTP auto-detected" });
+      // Auto-submit after short delay
+      setTimeout(() => document.getElementById("otp-submit-btn")?.click(), 300);
+    }
+  }, [pendingSession]);
+
+  // Initialize OTP auto-detection
+  const { startListening, stopListening } = useOtpAutoDetect(handleOtpAutoDetect, 6);
+
+  // Start OTP auto-detection when component mounts (only for OTP entry mode)
+  useEffect(() => {
+    if (!pendingSession && mode !== "name") {
+      startListening();
+    }
+    return () => {
+      stopListening();
+    };
+  }, [pendingSession, mode, startListening, stopListening]);
+
+  // Handle mode=name (coming from ReferralScreen with session data in router state)
+  useEffect(() => {
+    if (mode === "name" && location.state?.sessionToken && location.state?.userData) {
+      const { sessionToken, userData } = location.state;
+      const existingName = (userData.name || "").trim();
+      setName(existingName);
+      setPendingSession({ sessionToken, userData: { ...userData, name: "" } });
+      // Clear isExist flag from storage
+      customerStorage.setIsExist(null);
+    }
+  }, [mode, location.state]);
 
   // Auto-focus first OTP input on mount (works on mobile too)
   useEffect(() => {
@@ -117,14 +157,66 @@ const OtpScreen = () => {
       setStatus({ type: "error", message: sanitizeBackendMessage(response.message, "Verification failed. Please try again.") });
       return;
     }
-    const apiData = (typeof response.data === "object" && response.data !== null) ? response.data : (response.raw?.data || {});
-    const rawData = response.raw || {};
-    const sessionToken = apiData.token || extractSessionToken(response.data) || token;
+    let apiData = (typeof response.data === "object" && response.data !== null) ? response.data : (response.raw?.data || {});
+    let rawData = response.raw || {};
     customerStorage.setDevOtp(null);
+
+    // Check if user exists from the verify OTP response
+    const isExist = apiData.isExist === true || apiData.isExist === "true" || customerStorage.getIsExist() === true;
+
+    // EXISTING USER: Direct login - no referral, no name entry, no PIN setup needed
+    if (isExist) {
+      const sessionToken = apiData.token || extractSessionToken(response.data) || token;
+      if (apiData.profile) {
+        saveProfilePhoto({ serverUrl: apiData.profile });
+      }
+      const extractedName = apiData.name || apiData.firstName || apiData.userName || apiData.user_name || apiData.customerName
+        || rawData.name || rawData.data?.name || rawData.data?.firstName || rawData.data?.userName || "";
+      const userData = {
+        name: extractedName,
+        mobile: apiData.mobile || apiData.mobileNumber || rawData.data?.mobile || rawData.data?.mobileNumber || mobile,
+        city: apiData.city || "", state: apiData.state || "", userType: apiData.userType || "",
+        refferalCode: apiData.refferalCode || "", verified_status: apiData.verified_status,
+        profile: apiData.profile || "",
+        isExistingUser: true, // Flag to skip PIN setup in AppLockGuard
+      };
+      // Clear isExist flag from storage after use
+      customerStorage.setIsExist(null);
+      finishLogin(sessionToken, userData);
+      return;
+    }
+
+    // NEW USER: Need to configure referral code first
+    const referralCode = customerStorage.getReferralCode();
+
+    // If referral code is available, auto-configure it (no need to show referral screen)
+    if (referralCode) {
+      setLoading(true);
+      setStatus({ type: "info", message: "Configuring your account..." });
+      const configToken = apiData.token || token;
+      const configResponse = await authService.referalConfig({ token: configToken, referalCode: referralCode });
+      setLoading(false);
+      if (!configResponse.success) {
+        setShake(true);
+        setTimeout(() => setShake(false), 500);
+        setStatus({ type: "error", message: sanitizeBackendMessage(configResponse.message, "Failed to configure referral. Please try again.") });
+        return;
+      }
+      // Update apiData with the response from referalConfig
+      apiData = (typeof configResponse.data === "object" && configResponse.data !== null) ? configResponse.data : (configResponse.raw?.data || {});
+      rawData = configResponse.raw || {};
+    } else {
+      // No referral code available - need to collect it from user
+      // Navigate to referral screen
+      navigate(`/customer/referral?mobile=${mobile}`);
+      return;
+    }
+
+    // After referalConfig success (or if it was already configured), proceed to name entry
+    const sessionToken = apiData.token || extractSessionToken(response.data) || token;
     if (apiData.profile) {
       saveProfilePhoto({ serverUrl: apiData.profile });
     }
-    // Try all possible name fields from both data and raw response
     const extractedName = apiData.name || apiData.firstName || apiData.userName || apiData.user_name || apiData.customerName
       || rawData.name || rawData.data?.name || rawData.data?.firstName || rawData.data?.userName || "";
     const userData = {
@@ -133,34 +225,27 @@ const OtpScreen = () => {
       city: apiData.city || "", state: apiData.state || "", userType: apiData.userType || "",
       refferalCode: apiData.refferalCode || "", verified_status: apiData.verified_status,
       profile: apiData.profile || "",
+      isExistingUser: false, // New user needs PIN setup
     };
+
+    // New users always need to enter their name
+    setStatus(null);
+    setNameStatus(null);
     const normalizedName = (extractedName || "").trim().replace(/\s+/g, " ");
     const normalizedNameKey = normalizedName.toUpperCase();
     const nameDigits = normalizedName.replace(/\D/g, "");
     const mobileDigits = String(userData.mobile || "").replace(/\D/g, "");
-    // Treat anything that isn't a real human name as missing: empty, known placeholders,
-    // a copy of the mobile number, or only one short word (e.g. "a"). The first-time-
-    // login flag also forces the form so brand-new signups always set their name even
-    // if the backend somehow returned a stub value.
     const isRealFullName =
       normalizedName
       && !NAME_PLACEHOLDERS.has(normalizedNameKey)
       && !(nameDigits.length >= 10 && mobileDigits && nameDigits === mobileDigits)
-      && /\s/.test(normalizedName)               // must have at least 2 words
-      && /^[A-Za-z][A-Za-z .'-]{2,}$/.test(normalizedName); // letters-only shape, min 3 chars
-    const isFirstTimeDevice = !customerStorage.hasCompletedFirstLogin();
-    const needsNameOnboarding = !isRealFullName || isFirstTimeDevice;
-
-    if (needsNameOnboarding) {
-      setStatus(null);
-      setNameStatus(null);
-      // Pre-fill any reasonable existing name so the user just confirms / edits.
-      setName(isRealFullName ? normalizedName : "");
-      setPendingSession({ sessionToken, userData: { ...userData, name: "" } });
-      return;
-    }
-
-    finishLogin(sessionToken, userData);
+      && /\s/.test(normalizedName)
+      && /^[A-Za-z][A-Za-z .'-]{2,}$/.test(normalizedName);
+    // Pre-fill any reasonable existing name so the user just confirms / edits.
+    setName(isRealFullName ? normalizedName : "");
+    setPendingSession({ sessionToken, userData: { ...userData, name: "" } });
+    // Clear isExist flag from storage
+    customerStorage.setIsExist(null);
   };
 
   const submitName = async (event) => {
@@ -301,19 +386,38 @@ const OtpScreen = () => {
             </form>
           ) : (
             <form className="cm-auth-form" onSubmit={submit}>
+              {/* Hidden input for iOS OTP autofill - captures full OTP then distributes to visible inputs */}
+              <input
+                type="text"
+                name="otp-autofill"
+                autoComplete="one-time-code"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 0, height: 0 }}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+                  if (value.length > 0) {
+                    handleOtpChange(0, value);
+                  }
+                }}
+              />
               <div className={`cm-auth-otp-grid${shake ? " cm-shake" : ""}`}>
                 {otp.map((digit, index) => (
                   <input
                     key={index}
                     id={`otp-${index}`}
+                    name={index === 0 ? "otp" : undefined}
                     className={`cm-auth-otp-input${digit ? " has-value" : ""}`}
                     inputMode="numeric"
+                    pattern="[0-9]*"
                     maxLength={index === 0 ? 6 : 1}
                     value={digit}
                     onChange={(e) => handleOtpChange(index, e.target.value)}
                     onKeyDown={(e) => handleKeyDown(index, e)}
                     autoFocus={index === 0}
                     autoComplete={index === 0 ? "one-time-code" : "off"}
+                    aria-label={`Digit ${index + 1} of 6`}
                   />
                 ))}
               </div>

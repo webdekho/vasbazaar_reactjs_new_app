@@ -11,7 +11,7 @@
  *   - index.html / navigations -> network-first, cache fallback
  *   - static assets -> stale-while-revalidate
  */
-const CACHE_VERSION = "v3";
+const CACHE_VERSION = "v4";
 const CACHE_NAME = `vasbazaar-${CACHE_VERSION}`;
 // Cache both root and start_url for PWA
 const STATIC_ASSETS = [
@@ -46,6 +46,17 @@ self.addEventListener("activate", (event) => {
       .then((keys) =>
         Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
       )
+      // Purge any cached HMR / dev artifacts from the current cache.
+      .then(() => caches.open(CACHE_NAME))
+      .then((cache) =>
+        cache.keys().then((requests) =>
+          Promise.all(
+            requests
+              .filter((r) => r.url.includes(".hot-update.") || r.url.includes("sockjs-node"))
+              .map((r) => cache.delete(r))
+          )
+        )
+      )
       .then(() => self.clients.claim())
   );
 });
@@ -65,6 +76,9 @@ self.addEventListener("fetch", (event) => {
 
   // Never cache API or OTA endpoints.
   if (url.pathname.includes("/api/")) return;
+
+  // Never cache webpack HMR / dev-server artifacts.
+  if (url.pathname.includes(".hot-update.") || url.pathname.includes("sockjs-node")) return;
 
   // Always fetch version.json fresh — this is what drives PWA update detection.
   if (url.pathname.endsWith("/version.json")) {

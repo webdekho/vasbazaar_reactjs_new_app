@@ -82,6 +82,15 @@ export const formatCurrency = (value) => {
 };
 
 const inferOfferMethod = (item) => {
+  // Check for fl_commission - if present, determine type from couponType
+  const flCommission = toFiniteNumber(firstPresent(item.fl_commission, item.flCommission));
+  if (flCommission !== null && flCommission > 0) {
+    const couponType = String(item.couponType || "").toLowerCase();
+    if (couponType.includes("discount")) return "discount";
+    // Default to cashback for fl_commission
+    return "cashback";
+  }
+
   const explicit = String(
     firstPresent(
       item.offerType,
@@ -105,6 +114,12 @@ const inferOfferMethod = (item) => {
 };
 
 const computeOfferValue = (item, method, baseAmount, paidAmount) => {
+  // First check fl_commission (FL cashback from backend)
+  const flCommission = toFiniteNumber(firstPresent(item.fl_commission, item.flCommission));
+  if (flCommission !== null && flCommission > 0) {
+    return flCommission;
+  }
+
   if ((method === "discount" || method === "cashback") && baseAmount !== null && paidAmount !== null) {
     const responseDifference = Number(Math.abs(baseAmount - paidAmount).toFixed(2));
     if (responseDifference > 0) return responseDifference;

@@ -13,8 +13,8 @@ android {
         applicationId "com.vasbazaar.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 35
-        versionName "1.2.4"
+        versionCode 37
+        versionName "1.2.5"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -58,6 +58,8 @@ dependencies {
     // Google Play Services for SMS Retriever
     implementation 'com.google.android.gms:play-services-auth:21.0.0'
     implementation 'com.google.android.gms:play-services-auth-api-phone:18.0.2'
+    // WorkManager for background SMS scheduling
+    implementation 'androidx.work:work-runtime:2.9.0'
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

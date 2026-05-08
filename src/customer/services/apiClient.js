@@ -10,6 +10,7 @@ const CUSTOMER_STORAGE_KEYS = {
   devOtp: "customerDevOtp",
   firstLoginComplete: "customerFirstLoginComplete",
   dismissedDues: "customerDismissedDues",
+  isExist: "customerIsExist",
 };
 
 // Keys that must survive logout (persist across user sessions on the device).

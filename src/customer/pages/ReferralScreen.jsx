@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaArrowLeft, FaChevronRight, FaGift } from "react-icons/fa";
 import { customerStorage } from "../services/storageService";
+import { authService } from "../services/authService";
 import { useTheme } from "../context/ThemeContext";
+import { sanitizeBackendMessage } from "../utils/userMessages";
 
 const DEFAULT_CNF_REFERRAL = "2222222222";
 
@@ -13,6 +15,8 @@ const ReferralScreen = () => {
   const mobile = searchParams.get("mobile") || "";
   const [referralCode, setReferralCode] = useState("");
   const [focused, setFocused] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState(null);
 
   // Guard: if there's no temp token (no sendOtp just happened), bounce to login.
   useEffect(() => {
@@ -21,18 +25,57 @@ const ReferralScreen = () => {
     }
   }, [navigate]);
 
-  const proceedToOtp = (code) => {
-    customerStorage.setReferralCode(code || DEFAULT_CNF_REFERRAL);
-    navigate(`/customer/verify-otp${mobile ? `?mobile=${mobile}` : ""}`);
+  const proceedWithReferral = async (code) => {
+    const finalCode = code || DEFAULT_CNF_REFERRAL;
+    customerStorage.setReferralCode(finalCode);
+
+    // Call referalConfig API to create the user account
+    const tempToken = customerStorage.getTempToken();
+    if (!tempToken) {
+      setStatus({ type: "error", message: "Session expired. Please login again." });
+      return;
+    }
+
+    setLoading(true);
+    setStatus({ type: "info", message: "Setting up your account..." });
+    const response = await authService.referalConfig({ token: tempToken, referalCode: finalCode });
+    setLoading(false);
+
+    if (!response.success) {
+      setStatus({ type: "error", message: sanitizeBackendMessage(response.message, "Failed to configure referral. Please try again.") });
+      return;
+    }
+
+    // Get session data from referalConfig response
+    const apiData = (typeof response.data === "object" && response.data !== null) ? response.data : (response.raw?.data || {});
+    const sessionToken = apiData.token || apiData.permanentToken || tempToken;
+
+    // Navigate to OTP screen with mode=name to show name entry directly
+    navigate(`/customer/verify-otp?mobile=${mobile}&mode=name`, {
+      state: {
+        sessionToken,
+        userData: {
+          name: apiData.name || "",
+          mobile: apiData.mobile || apiData.mobileNumber || mobile,
+          city: apiData.city || "",
+          state: apiData.state || "",
+          userType: apiData.userType || "",
+          refferalCode: apiData.refferalCode || finalCode,
+          verified_status: apiData.verified_status,
+          profile: apiData.profile || "",
+          isExistingUser: false,
+        },
+      },
+    });
   };
 
   const submit = (event) => {
     event.preventDefault();
-    proceedToOtp(referralCode.trim());
+    proceedWithReferral(referralCode.trim());
   };
 
   const skip = () => {
-    proceedToOtp("");
+    proceedWithReferral("");
   };
 
   return (
@@ -82,14 +125,26 @@ const ReferralScreen = () => {
                 onFocus={() => setFocused("referral")}
                 onBlur={() => setFocused("")}
                 autoFocus
+                disabled={loading}
               />
             </div>
 
-            <button className="cm-auth-btn" type="submit">
-              Continue <FaChevronRight className="cm-auth-btn-arrow" />
+            {status && (
+              <div className={`cm-auth-alert cm-auth-alert--${status.type}`}>
+                <span className="cm-auth-alert-dot" />
+                {status.message}
+              </div>
+            )}
+
+            <button className="cm-auth-btn" type="submit" disabled={loading}>
+              {loading ? (
+                <span className="cm-auth-btn-loading"><span className="cm-auth-spinner" />Setting up...</span>
+              ) : (
+                <>Continue <FaChevronRight className="cm-auth-btn-arrow" /></>
+              )}
             </button>
 
-            <button className="cm-auth-skip-btn" type="button" onClick={skip}>
+            <button className="cm-auth-skip-btn" type="button" onClick={skip} disabled={loading}>
               Skip for now
             </button>
           </form>

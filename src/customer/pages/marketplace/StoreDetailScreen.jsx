@@ -19,19 +19,38 @@ const StoreDetailScreen = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Category hierarchy browsing
+  const [itemCategories, setItemCategories] = useState([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState(null);
+  const [subcategories, setSubcategories] = useState([]);
+  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState(null);
+
   useEffect(() => {
     setLoading(true);
     Promise.all([
       marketplaceService.getStore(storeId),
       marketplaceService.getStoreItems(storeId),
+      marketplaceService.getStoreItemCategories(storeId).catch(() => ({ success: false, data: [] })),
     ])
-      .then(([sRes, iRes]) => {
+      .then(([sRes, iRes, cRes]) => {
         if (sRes.success && sRes.data) setStore(sRes.data);
         else setError(sRes.message || "Store not found");
         if (iRes.success) setItems(Array.isArray(iRes.data) ? iRes.data : []);
+        if (cRes.success) setItemCategories(Array.isArray(cRes.data) ? cRes.data : []);
       })
       .finally(() => setLoading(false));
   }, [storeId]);
+
+  // Load subcategories when a category is selected
+  useEffect(() => {
+    if (!selectedCategoryId) { setSubcategories([]); setSelectedSubcategoryId(null); return; }
+    marketplaceService.getItemCategorySubcategories(selectedCategoryId)
+      .then((res) => {
+        if (res.success) setSubcategories(Array.isArray(res.data) ? res.data : []);
+        else setSubcategories([]);
+      })
+      .catch(() => setSubcategories([]));
+  }, [selectedCategoryId]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
@@ -39,10 +58,22 @@ const StoreDetailScreen = () => {
   }, [search]);
 
   const filteredItems = useMemo(() => {
-    if (!debouncedSearch) return items;
-    const q = debouncedSearch.toLowerCase();
-    return items.filter((i) => (i.name || "").toLowerCase().includes(q));
-  }, [items, debouncedSearch]);
+    let result = items;
+    // Filter by selected category
+    if (selectedCategoryId) {
+      result = result.filter((i) => i.storeItemCategoryId?.id === selectedCategoryId);
+    }
+    // Filter by selected subcategory
+    if (selectedSubcategoryId) {
+      result = result.filter((i) => i.storeItemSubcategoryId?.id === selectedSubcategoryId);
+    }
+    // Filter by search text
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase();
+      result = result.filter((i) => (i.name || "").toLowerCase().includes(q));
+    }
+    return result;
+  }, [items, debouncedSearch, selectedCategoryId, selectedSubcategoryId]);
 
   const handleAdd = useCallback((item) => {
     if (!store) return;
@@ -122,6 +153,107 @@ const StoreDetailScreen = () => {
           />
         </div>
       </div>
+
+      {/* Category filter chips */}
+      {itemCategories.length > 0 && (
+        <div style={{ padding: "8px 14px 0", display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
+            <button
+              type="button"
+              onClick={() => { setSelectedCategoryId(null); setSelectedSubcategoryId(null); }}
+              style={{
+                flexShrink: 0,
+                padding: "6px 14px",
+                borderRadius: 999,
+                border: `1px solid ${!selectedCategoryId ? "transparent" : "var(--cm-line)"}`,
+                background: !selectedCategoryId ? "linear-gradient(135deg, #40E0D0, #007BFF)" : "var(--cm-card)",
+                color: !selectedCategoryId ? "#fff" : "var(--cm-muted)",
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              All
+            </button>
+            {itemCategories.map((cat) => {
+              const isActive = selectedCategoryId === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => { setSelectedCategoryId(isActive ? null : cat.id); setSelectedSubcategoryId(null); }}
+                  style={{
+                    flexShrink: 0,
+                    padding: "6px 14px",
+                    borderRadius: 999,
+                    border: `1px solid ${isActive ? "transparent" : "var(--cm-line)"}`,
+                    background: isActive ? "linear-gradient(135deg, #40E0D0, #007BFF)" : "var(--cm-card)",
+                    color: isActive ? "#fff" : "var(--cm-muted)",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                  }}
+                >
+                  {cat.iconUrl && <img src={cat.iconUrl} alt="" style={{ width: 14, height: 14, borderRadius: 3 }} />}
+                  {cat.name}
+                </button>
+              );
+            })}
+          </div>
+          {/* Subcategory chips */}
+          {selectedCategoryId && subcategories.length > 0 && (
+            <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
+              <button
+                type="button"
+                onClick={() => setSelectedSubcategoryId(null)}
+                style={{
+                  flexShrink: 0,
+                  padding: "5px 12px",
+                  borderRadius: 999,
+                  border: `1px solid ${!selectedSubcategoryId ? "transparent" : "var(--cm-line)"}`,
+                  background: !selectedSubcategoryId ? "rgba(20,184,166,0.15)" : "var(--cm-card)",
+                  color: !selectedSubcategoryId ? "#14b8a6" : "var(--cm-muted)",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                All
+              </button>
+              {subcategories.map((sub) => {
+                const isActive = selectedSubcategoryId === sub.id;
+                return (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    onClick={() => setSelectedSubcategoryId(isActive ? null : sub.id)}
+                    style={{
+                      flexShrink: 0,
+                      padding: "5px 12px",
+                      borderRadius: 999,
+                      border: `1px solid ${isActive ? "transparent" : "var(--cm-line)"}`,
+                      background: isActive ? "rgba(20,184,166,0.15)" : "var(--cm-card)",
+                      color: isActive ? "#14b8a6" : "var(--cm-muted)",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {sub.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {filteredItems.length === 0 ? (
         <div className="mkt-empty">No items available</div>

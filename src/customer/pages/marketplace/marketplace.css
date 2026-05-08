@@ -9,7 +9,7 @@
   min-height: 100vh;
   background: var(--cm-bg);
   color: var(--cm-ink);
-  padding-bottom: 96px;
+  padding-bottom: 120px;
   /* Clip any wide native control (e.g. <input type="date">) that would
      otherwise overflow the viewport on small phones. */
   overflow-x: hidden;
@@ -403,7 +403,7 @@
 .mkt-cart-bar-cta { display: flex; align-items: center; gap: 6px; font-weight: 700; }
 
 /* ===== Forms ===== */
-.mkt-form { padding: 16px 14px 24px; display: flex; flex-direction: column; gap: 16px; }
+.mkt-form { padding: 16px 14px 32px; display: flex; flex-direction: column; gap: 16px; }
 .mkt-form-section-title {
   font-size: 12px;
   font-weight: 700;
@@ -429,15 +429,31 @@
   box-sizing: border-box;
   padding: 12px 14px;
   border-radius: 12px;
-  border: 1px solid var(--cm-line);
-  background: var(--cm-card);
-  color: var(--cm-ink);
+  border: 1px solid var(--cm-line, #2A2A2A);
+  background-color: var(--cm-card, #1A1A1A);
+  color: var(--cm-ink, #FFFFFF);
+  -webkit-text-fill-color: var(--cm-ink, #FFFFFF);
+  caret-color: var(--cm-ink, #FFFFFF);
   font-size: 14px;
   outline: none;
   transition: border-color 0.15s ease;
+  -webkit-appearance: none;
+  appearance: none;
 }
 .mkt-input::placeholder,
-.mkt-textarea::placeholder { color: var(--cm-muted); }
+.mkt-textarea::placeholder {
+  color: var(--cm-muted, #9CA3AF);
+  -webkit-text-fill-color: var(--cm-muted, #9CA3AF);
+  opacity: 1;
+}
+/* Fix for Android autofill background */
+.mkt-input:-webkit-autofill,
+.mkt-input:-webkit-autofill:hover,
+.mkt-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--cm-card, #1A1A1A) inset;
+  -webkit-text-fill-color: var(--cm-ink, #FFFFFF);
+  caret-color: var(--cm-ink, #FFFFFF);
+}
 .mkt-input:focus,
 .mkt-textarea:focus,
 .mkt-select:focus { border-color: #007BFF; }

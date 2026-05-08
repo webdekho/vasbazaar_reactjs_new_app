@@ -57,6 +57,7 @@ const BBPSComplaintListScreen = lazy(() => import("./pages/BBPSComplaintListScre
 const OutstandingListScreen = lazy(() => import("./pages/outstanding/OutstandingListScreen"));
 const CustomerLedgerScreen = lazy(() => import("./pages/outstanding/CustomerLedgerScreen"));
 const ReminderQueueScreen = lazy(() => import("./pages/outstanding/ReminderQueueScreen"));
+const SmsReminderListScreen = lazy(() => import("./pages/outstanding/SmsReminderListScreen"));
 const TermsScreen = lazy(() => import("./pages/TermsScreen"));
 
 // Marketplace
@@ -156,6 +157,7 @@ const CustomerModernRoutes = () => {
             <Route path="bbps-complaints" element={<Suspense fallback={<RouteFallback />}><BBPSComplaintListScreen /></Suspense>} />
             <Route path="outstanding" element={<Suspense fallback={<RouteFallback />}><OutstandingListScreen /></Suspense>} />
             <Route path="outstanding/reminders" element={<Suspense fallback={<RouteFallback />}><ReminderQueueScreen /></Suspense>} />
+            <Route path="outstanding/sms-settings" element={<Suspense fallback={<RouteFallback />}><SmsReminderListScreen /></Suspense>} />
             <Route path="outstanding/:customerId" element={<Suspense fallback={<RouteFallback />}><CustomerLedgerScreen /></Suspense>} />
             {/* Marketplace */}
             <Route path="marketplace" element={<Suspense fallback={<RouteFallback />}><MarketplaceHomeScreen /></Suspense>} />

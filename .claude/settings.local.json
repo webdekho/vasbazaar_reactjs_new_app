@@ -26,7 +26,14 @@
       "Bash(find:*)",
       "Bash(adb:*)",
       "Bash(npm i:*)",
-      "Bash(npm search:*)"
+      "Bash(npm search:*)",
+      "WebSearch",
+      "Bash(npm info:*)",
+      "Bash(npm view:*)",
+      "Bash(ls:*)",
+      "Bash(npx cap sync:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(./mvnw compile:*)"
     ]
   }
 }

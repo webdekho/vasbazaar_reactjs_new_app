@@ -45,13 +45,15 @@ const LoginScreen = () => {
     if (tempToken) customerStorage.setTempToken(tempToken);
     customerStorage.setDevOtp(response.raw?.devOtp || null);
     if (urlCode) customerStorage.setReferralCode(urlCode);
+
+    // Store isExist flag from sendOTP response - determines auth flow after OTP verification
+    const apiData = response.data || response.raw?.data || {};
+    const isExist = apiData.isExist === true || apiData.isExist === "true";
+    customerStorage.setIsExist(isExist);
+
     setStatus({ type: "success", message: response.message || "OTP sent successfully." });
 
-    // First-time on this device (and no referral URL code): collect referral on next page.
-    if (!urlCode && !customerStorage.hasCompletedFirstLogin()) {
-      navigate(`/customer/referral?mobile=${mobileNumber}`);
-      return;
-    }
+    // Always go to OTP screen - the OtpScreen will handle routing based on isExist flag
     navigate(`/customer/verify-otp?mobile=${mobileNumber}`);
   };
 

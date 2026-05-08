@@ -1,11 +1,14 @@
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { outstandingService } from "./outstandingService";
+import { sendSmsBackground, openSmsComposer, ensureSmsPermission } from "./smsService";
 
 const CHANNEL_ID = "outstanding-reminders";
 const NOTIFICATION_PREFIX = 70000;
+const SMS_BATCH_DELAY_MS = 1000; // 1 second between SMS to avoid carrier throttling
 
 const isNative = () => Capacitor.isNativePlatform();
+const isAndroid = () => Capacitor.getPlatform() === "android";
 
 const ensurePermission = async () => {
   if (!isNative()) return false;
@@ -146,4 +149,144 @@ export const triggerNativeSms = (mobile, message) => {
       : `sms:${number}?body=${body}`;
   window.location.href = href;
   return true;
+};
+
+/**
+ * Build SMS message from template and customer data
+ */
+const buildSmsMessage = (template, customer, ownerName) => {
+  if (!template) return null;
+  return template
+    .replace(/\{name\}/gi, customer.customerName || "Customer")
+    .replace(/\{balance\}/gi, Math.abs(customer.balance || 0).toLocaleString("en-IN"))
+    .replace(/\{owner\}/gi, ownerName || "");
+};
+
+/**
+ * Send SMS reminders automatically (Android only - background)
+ * For iOS, this opens the SMS composer for each customer
+ * @param {Array} reminders - List of reminder configs with customer data
+ * @param {string} ownerName - Business owner name for template
+ * @param {Object} options - Options
+ * @param {Function} options.onProgress - Progress callback
+ * @param {Function} options.onComplete - Completion callback
+ * @returns {Promise<{total: number, sent: number, failed: number, results: Array}>}
+ */
+export const sendAutoSmsReminders = async (reminders, ownerName, options = {}) => {
+  const { onProgress, onComplete } = options;
+
+  if (!reminders?.length) {
+    return { total: 0, sent: 0, failed: 0, results: [] };
+  }
+
+  const results = [];
+  let sent = 0;
+  let failed = 0;
+
+  for (let i = 0; i < reminders.length; i++) {
+    const reminder = reminders[i];
+    const message = buildSmsMessage(
+      reminder.reminderTemplate,
+      { customerName: reminder.customerName, balance: reminder.balance },
+      ownerName
+    );
+
+    if (!message || !reminder.mobile) {
+      results.push({
+        customerId: reminder.customerId,
+        customerName: reminder.customerName,
+        success: false,
+        error: "Missing mobile or message template"
+      });
+      failed++;
+      continue;
+    }
+
+    try {
+      if (isAndroid()) {
+        // Android: Send in background
+        const result = await sendSmsBackground(reminder.mobile, message);
+        results.push({
+          customerId: reminder.customerId,
+          customerName: reminder.customerName,
+          success: result.success,
+          error: result.error,
+          method: "background"
+        });
+        if (result.success) sent++;
+        else failed++;
+      } else {
+        // iOS: Open SMS composer (user must tap send)
+        openSmsComposer(reminder.mobile, message);
+        results.push({
+          customerId: reminder.customerId,
+          customerName: reminder.customerName,
+          success: true,
+          method: "composer"
+        });
+        sent++;
+      }
+    } catch (err) {
+      results.push({
+        customerId: reminder.customerId,
+        customerName: reminder.customerName,
+        success: false,
+        error: err?.message || "Unknown error"
+      });
+      failed++;
+    }
+
+    if (onProgress) {
+      onProgress({ current: i + 1, total: reminders.length, sent, failed });
+    }
+
+    // Add delay between SMS to avoid carrier throttling
+    if (isAndroid() && i < reminders.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, SMS_BATCH_DELAY_MS));
+    }
+  }
+
+  const result = { total: reminders.length, sent, failed, results };
+  if (onComplete) onComplete(result);
+  return result;
+};
+
+/**
+ * Fetch due reminders and send SMS automatically
+ * Called when app opens or when notification is received
+ * @param {string} ownerName - Business owner name
+ * @returns {Promise<{total: number, sent: number, failed: number}>}
+ */
+export const processAndSendDueReminders = async (ownerName) => {
+  if (!isNative()) return { total: 0, sent: 0, failed: 0, skipped: "not-native" };
+
+  try {
+    const res = await outstandingService.listDueReminders();
+    if (!res?.success || !Array.isArray(res.data) || !res.data.length) {
+      return { total: 0, sent: 0, failed: 0 };
+    }
+
+    // Filter reminders that are due now (within 5 minutes of scheduled time)
+    const now = new Date();
+    const nowHHMM = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+
+    const dueNow = res.data.filter(r => {
+      const reminderTime = (r.reminderTime || "10:00").slice(0, 5);
+      // Check if current time is within 5 minutes of reminder time
+      const [rh, rm] = reminderTime.split(":").map(Number);
+      const [nh, nm] = nowHHMM.split(":").map(Number);
+      const rMinutes = rh * 60 + rm;
+      const nMinutes = nh * 60 + nm;
+      return Math.abs(nMinutes - rMinutes) <= 5;
+    });
+
+    if (!dueNow.length) {
+      return { total: 0, sent: 0, failed: 0, skipped: "not-due-now" };
+    }
+
+    return await sendAutoSmsReminders(dueNow, ownerName);
+  } catch (err) {
+    console.error("Error processing due reminders:", err);
+    return { total: 0, sent: 0, failed: 0, error: err?.message };
+  }
 };

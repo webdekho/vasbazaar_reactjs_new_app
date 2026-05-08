@@ -1,7 +1,6 @@
 export const loader = "LOADER";
 
-// Default production API URL for native apps
-const NATIVE_API_URL = 'https://api.vasbazaar.com';
+export const DEFAULT_API_URL = "http://192.168.1.9:8081";
 
 // Detect if running inside Capacitor native app
 const isCapacitorNative = () => {
@@ -10,13 +9,17 @@ const isCapacitorNative = () => {
   } catch { return false; }
 };
 
-// Get API base URL from .env
-// Local: .env.local (REACT_APP_API_URL=http://localhost:8081)
-// Prod:  .env (REACT_APP_API_URL=https://api.vasbazaar.com)
-export const server_api = () => {
-  // Native app always uses production
-  if (isCapacitorNative()) return NATIVE_API_URL;
+export const getConfiguredApiUrl = () =>
+  process.env.REACT_APP_API_URL ||
+  process.env.REACT_APP_API_BASE_URL ||
+  DEFAULT_API_URL;
 
-  // Use .env value
-  return process.env.REACT_APP_API_URL || NATIVE_API_URL;
+// Get API base URL from one shared env-backed resolver.
+export const server_api = () => {
+  const configuredApiUrl = getConfiguredApiUrl();
+
+  // Native app should use the configured URL too so local environments work on device.
+  if (isCapacitorNative()) return configuredApiUrl;
+
+  return configuredApiUrl;
 };

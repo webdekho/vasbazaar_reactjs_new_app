@@ -20,6 +20,12 @@ export const marketplaceService = {
   getStoreItems: (storeId, search) =>
     authGet(`/api/customer/marketplace/stores/${storeId}/items`, search ? { search } : {}),
 
+  getStoreItemCategories: (storeId) =>
+    authGet(`/api/customer/marketplace/stores/${storeId}/item-categories`),
+
+  getItemCategorySubcategories: (categoryId) =>
+    authGet(`/api/customer/marketplace/item-categories/${categoryId}/subcategories`),
+
   // ===== My Store (owner side) =====
   getMyStore: () => authGet("/api/customer/marketplace/store/my"),
 
@@ -75,6 +81,31 @@ export const marketplaceService = {
 
   toggleItemAvailability: (id, isAvailable) =>
     authPut(`/api/customer/marketplace/store/my/items/${id}/availability?isAvailable=${isAvailable}`, {}),
+
+  // ===== My Store Item Categories (owner side) =====
+  getMyItemCategories: () => authGet("/api/customer/marketplace/store/my/item-categories"),
+
+  createMyItemCategory: (payload) => authPost("/api/customer/marketplace/store/my/item-categories", payload),
+
+  updateMyItemCategory: (payload) => authPut("/api/customer/marketplace/store/my/item-categories", payload),
+
+  deleteMyItemCategory: (id) => authDelete(`/api/customer/marketplace/store/my/item-categories/${id}`),
+
+  toggleMyItemCategoryActive: (id, isActive) =>
+    authPut(`/api/customer/marketplace/store/my/item-categories/${id}/toggle-active?isActive=${isActive}`, {}),
+
+  // ===== My Store Item Subcategories (owner side) =====
+  getMyItemSubcategories: (categoryId) =>
+    authGet("/api/customer/marketplace/store/my/item-subcategories", { categoryId }),
+
+  createMyItemSubcategory: (payload) => authPost("/api/customer/marketplace/store/my/item-subcategories", payload),
+
+  updateMyItemSubcategory: (payload) => authPut("/api/customer/marketplace/store/my/item-subcategories", payload),
+
+  deleteMyItemSubcategory: (id) => authDelete(`/api/customer/marketplace/store/my/item-subcategories/${id}`),
+
+  toggleMyItemSubcategoryActive: (id, isActive) =>
+    authPut(`/api/customer/marketplace/store/my/item-subcategories/${id}/toggle-active?isActive=${isActive}`, {}),
 
   getMyStoreOrders: ({ orderStatus, pageNumber = 0, pageSize = 10 } = {}) =>
     authGet("/api/customer/marketplace/store/my/orders", { pageNumber, pageSize, ...(orderStatus ? { orderStatus } : {}) }),

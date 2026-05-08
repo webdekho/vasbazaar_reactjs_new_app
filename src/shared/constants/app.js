@@ -1,10 +1,14 @@
+import { DEFAULT_API_URL, getConfiguredApiUrl } from "../../utils/constants";
+
 // App-wide constants — keep in sync with backend
 export const APP_VERSION = '1.2.4';
 export const APP_NAME = 'vasbazaar';
 
 // Allowed API hosts — prevents localStorage tampering from redirecting API calls
 const ALLOWED_API_HOSTS = [
+  DEFAULT_API_URL,
   'https://api.vasbazaar.com',
+  'http://192.168.1.9:8081',
   'https://apis.vasbazaar.com',
   'https://apis.uat.vasbazaar.com',
   'https://api.prod.webdekho.in',
@@ -20,7 +24,7 @@ export const getBaseUrl = () => {
       if (isAllowed) return cleaned;
     }
   }
-  return process.env.REACT_APP_API_BASE_URL || 'https://api.vasbazaar.com';
+  return getConfiguredApiUrl();
 };
 
 // Session configuration

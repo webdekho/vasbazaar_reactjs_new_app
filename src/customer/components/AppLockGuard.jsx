@@ -364,7 +364,7 @@ export const ChangePinScreen = ({ onClose }) => {
 
 // ─── Main Guard Component ───
 const AppLockGuard = ({ children }) => {
-  const { sessionToken } = useCustomerModern();
+  const { sessionToken, userData } = useCustomerModern();
   const [locked, setLocked] = useState(false);
   const [needsPin, setNeedsPin] = useState(false);
   const inactivityTimer = useRef(null);
@@ -374,6 +374,20 @@ const AppLockGuard = ({ children }) => {
     if (!sessionToken) return;
 
     const pinSet = localStorage.getItem(LOCK_KEYS.pinSet);
+
+    // Existing users already have PIN set on server - skip SetPinScreen
+    // Mark PIN as set locally so lock screen works normally
+    if (userData?.isExistingUser === true) {
+      if (!pinSet) {
+        localStorage.setItem(LOCK_KEYS.pinSet, "true");
+        localStorage.setItem(LOCK_KEYS.lastActive, Date.now().toString());
+      }
+      // Don't show SetPinScreen for existing users
+      setNeedsPin(false);
+      return;
+    }
+
+    // New users need to create PIN
     if (!pinSet) {
       setNeedsPin(true);
       return;
@@ -386,7 +400,7 @@ const AppLockGuard = ({ children }) => {
     } else {
       localStorage.setItem(LOCK_KEYS.lastActive, Date.now().toString());
     }
-  }, [sessionToken]);
+  }, [sessionToken, userData]);
 
   // Track user activity
   const resetTimer = useCallback(() => {

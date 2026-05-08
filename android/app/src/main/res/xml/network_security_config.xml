@@ -2,7 +2,7 @@
 <network-security-config>
     <!-- Allow cleartext HTTP for local development -->
     <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">192.168.1.4</domain>
+        <domain includeSubdomains="false">192.168.1.9</domain>
     </domain-config>
     <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="true">api.vasbazaar.com</domain>

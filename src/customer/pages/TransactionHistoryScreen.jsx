@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaSearch, FaExclamationCircle, FaChevronDown } from "react-icons/fa";
 import { FiArrowUpRight, FiArrowDownLeft, FiClock, FiCheckCircle, FiXCircle, FiInbox, FiPauseCircle } from "react-icons/fi";
@@ -103,6 +103,9 @@ const TransactionHistoryScreen = () => {
     typeof window !== "undefined" ? window.innerWidth < 768 : false
   );
 
+  // Prevent double API calls (React StrictMode in dev)
+  const hasFetchedRef = useRef(false);
+
   const fetchData = async (pageNum, append = false) => {
     setLoading(true);
     const res = await walletService.getTransactionHistory(pageNum);
@@ -114,7 +117,12 @@ const TransactionHistoryScreen = () => {
     }
   };
 
-  useEffect(() => { fetchData(0); }, []);
+  // Initial fetch - only once
+  useEffect(() => {
+    if (hasFetchedRef.current) return;
+    hasFetchedRef.current = true;
+    fetchData(0);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -188,8 +196,7 @@ const TransactionHistoryScreen = () => {
       });
 
       // Update the affected row in-place so the badge reflects the latest status
-      // without waiting for the page-0 refetch (which may not include this row
-      // and won't change list ordering).
+      // Local state update is sufficient - no need to refetch entire list
       if (txnStatusFromApi || complaintStatusFromApi) {
         setRecords((prev) =>
           prev.map((record) =>
@@ -203,8 +210,6 @@ const TransactionHistoryScreen = () => {
           )
         );
       }
-
-      fetchData(0);
     } catch (error) {
       setComplaintResult({
         status: "ERROR",
@@ -246,6 +251,7 @@ const TransactionHistoryScreen = () => {
         isSubmitted: true,
       });
 
+      // Update the affected row in-place - no need to refetch entire list
       setRecords((prev) =>
         prev.map((record) =>
           record.txnId === selectedComplaintTxn.txnId
@@ -253,7 +259,6 @@ const TransactionHistoryScreen = () => {
             : record
         )
       );
-      fetchData(0);
     } catch (error) {
       setComplaintResult((prev) => ({
         status: prev?.status || "ERROR",
