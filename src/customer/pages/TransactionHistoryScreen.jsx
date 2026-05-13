@@ -11,12 +11,18 @@ const statusConfig = {
   pending: { color: "#FACC15", label: "Pending", icon: <FiClock size={11} /> },
   failed:  { color: "#FF3B30", label: "Failed",  icon: <FiXCircle size={11} /> },
   hold:    { color: "#FFFFFF", label: "Hold",    icon: <FiPauseCircle size={11} /> },
+  not_collected: { color: "#F59E0B", label: "Payment Not Collected", icon: <FiXCircle size={11} /> },
+  initiate: { color: "#0EA5E9", label: "Payment Initiated", icon: <FiClock size={11} /> },
+  refund: { color: "#A855F7", label: "Refunded", icon: <FiCheckCircle size={11} /> },
 };
 
 const getStatusKey = (status) => {
   const s = (status || "").toLowerCase();
   if (s.includes("success")) return "success";
   if (s.includes("hold")) return "hold";
+  if (s.includes("payment_not_collected") || s.includes("not_collected")) return "not_collected";
+  if (s.includes("payment_initiate") || s.includes("initiate")) return "initiate";
+  if (s.includes("refund")) return "refund";
   if (s.includes("pending")) return "pending";
   return "failed";
 };
@@ -445,6 +451,41 @@ const TransactionHistoryScreen = () => {
                         >
                           <FaExclamationCircle size={12} />
                           Complaint Status: {String(item.complaintStatus).toUpperCase()}
+                        </div>
+                      </div>
+                    )}
+
+                    {item.refundType && (
+                      <div
+                        style={{
+                          padding: "0 16px 12px",
+                          display: "flex",
+                          justifyContent: "flex-start",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 8,
+                            padding: "8px 12px",
+                            borderRadius: 999,
+                            background: item.refundType === "WALLET"
+                              ? "rgba(16,185,129,0.12)"
+                              : "rgba(59,130,246,0.12)",
+                            border: item.refundType === "WALLET"
+                              ? "1px solid rgba(16,185,129,0.35)"
+                              : "1px solid rgba(59,130,246,0.35)",
+                            color: item.refundType === "WALLET" ? "#10b981" : "#3b82f6",
+                            fontSize: "0.78rem",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {item.refundType === "WALLET" ? (
+                            <>💰 Refunded to Wallet — check your wallet for the credit entry</>
+                          ) : (
+                            <>🏦 Refunded to your original payment source — will reflect in 1-3 working days</>
+                          )}
                         </div>
                       </div>
                     )}

@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy as reactLazy, Suspense } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import "./customerModern.css";
 import { CustomerModernProvider } from "./context/CustomerModernContext";
@@ -17,6 +17,33 @@ import ReferralScreen from "./pages/ReferralScreen";
 import OtpScreen from "./pages/OtpScreen";
 import ProtectedShell from "./pages/ProtectedShell";
 import ServicesScreen from "./pages/ServicesScreen";
+
+/**
+ * Wraps `lazy()` so a ChunkLoadError (typically caused by a stale `bundle.js`
+ * referencing chunk hashes that no longer exist on the dev server after a
+ * rebuild) is recovered automatically: retry once, then force a full reload
+ * exactly once per session.
+ */
+const RELOAD_FLAG = "__cm_chunk_reload";
+const lazy = (factory) =>
+  reactLazy(() =>
+    factory().catch((err) => {
+      const isChunkErr = err && (err.name === "ChunkLoadError" || /Loading chunk \S+ failed/.test(err.message || ""));
+      if (!isChunkErr) throw err;
+      return new Promise((resolve, reject) => {
+        setTimeout(() => factory().then(resolve, (err2) => {
+          if (typeof window === "undefined") return reject(err2);
+          if (sessionStorage.getItem(RELOAD_FLAG)) return reject(err2);
+          sessionStorage.setItem(RELOAD_FLAG, "1");
+          window.location.reload();
+        }), 500);
+      });
+    })
+  );
+
+if (typeof window !== "undefined") {
+  window.addEventListener("load", () => sessionStorage.removeItem(RELOAD_FLAG));
+}
 
 /**
  * PERF FIX: Lazy-load all non-critical route pages.
@@ -58,6 +85,19 @@ const OutstandingListScreen = lazy(() => import("./pages/outstanding/Outstanding
 const CustomerLedgerScreen = lazy(() => import("./pages/outstanding/CustomerLedgerScreen"));
 const ReminderQueueScreen = lazy(() => import("./pages/outstanding/ReminderQueueScreen"));
 const SmsReminderListScreen = lazy(() => import("./pages/outstanding/SmsReminderListScreen"));
+const RybboHomeScreen = lazy(() => import("./pages/rybbo/RybboHomeScreen"));
+const RybboEventDetailScreen = lazy(() => import("./pages/rybbo/EventDetailScreen"));
+const RybboSeatSelectionScreen = lazy(() => import("./pages/rybbo/SeatSelectionScreen"));
+const RybboBookingSummaryScreen = lazy(() => import("./pages/rybbo/BookingSummaryScreen"));
+const RybboBookingSuccessScreen = lazy(() => import("./pages/rybbo/BookingSuccessScreen"));
+const RybboBookingResultScreen = lazy(() => import("./pages/rybbo/BookingResultScreen"));
+const RybboMyBookingsScreen = lazy(() => import("./pages/rybbo/MyBookingsScreen"));
+const RybboListYourShowScreen = lazy(() => import("./pages/rybbo/ListYourShowScreen"));
+const RybboTicketDetailsScreen = lazy(() => import("./pages/rybbo/TicketDetailsScreen"));
+const RybboQrScannerScreen = lazy(() => import("./pages/rybbo/QrScannerScreen"));
+const RebuddyHomeScreen = lazy(() => import("./pages/rebuddy/RebuddyHomeScreen"));
+const RebuddyNewGroupScreen = lazy(() => import("./pages/rebuddy/NewGroupScreen"));
+const RebuddyGroupDetailScreen = lazy(() => import("./pages/rebuddy/GroupDetailScreen"));
 const TermsScreen = lazy(() => import("./pages/TermsScreen"));
 
 // Marketplace
@@ -159,6 +199,19 @@ const CustomerModernRoutes = () => {
             <Route path="outstanding/reminders" element={<Suspense fallback={<RouteFallback />}><ReminderQueueScreen /></Suspense>} />
             <Route path="outstanding/sms-settings" element={<Suspense fallback={<RouteFallback />}><SmsReminderListScreen /></Suspense>} />
             <Route path="outstanding/:customerId" element={<Suspense fallback={<RouteFallback />}><CustomerLedgerScreen /></Suspense>} />
+            <Route path="rybbo" element={<Suspense fallback={<RouteFallback />}><RybboHomeScreen /></Suspense>} />
+            <Route path="rybbo/event/:slug" element={<Suspense fallback={<RouteFallback />}><RybboEventDetailScreen /></Suspense>} />
+            <Route path="rybbo/event/:slug/seats" element={<Suspense fallback={<RouteFallback />}><RybboSeatSelectionScreen /></Suspense>} />
+            <Route path="rybbo/event/:slug/summary" element={<Suspense fallback={<RouteFallback />}><RybboBookingSummaryScreen /></Suspense>} />
+            <Route path="rybbo/booking-success/:bookingId" element={<Suspense fallback={<RouteFallback />}><RybboBookingSuccessScreen /></Suspense>} />
+            <Route path="rybbo/booking-result" element={<Suspense fallback={<RouteFallback />}><RybboBookingResultScreen /></Suspense>} />
+            <Route path="rybbo/my-bookings" element={<Suspense fallback={<RouteFallback />}><RybboMyBookingsScreen /></Suspense>} />
+            <Route path="rybbo/list-your-show" element={<Suspense fallback={<RouteFallback />}><RybboListYourShowScreen /></Suspense>} />
+            <Route path="rybbo/ticket/:bookingId" element={<Suspense fallback={<RouteFallback />}><RybboTicketDetailsScreen /></Suspense>} />
+            <Route path="rybbo/scan" element={<Suspense fallback={<RouteFallback />}><RybboQrScannerScreen /></Suspense>} />
+            <Route path="rebuddy" element={<Suspense fallback={<RouteFallback />}><RebuddyHomeScreen /></Suspense>} />
+            <Route path="rebuddy/new" element={<Suspense fallback={<RouteFallback />}><RebuddyNewGroupScreen /></Suspense>} />
+            <Route path="rebuddy/group/:id" element={<Suspense fallback={<RouteFallback />}><RebuddyGroupDetailScreen /></Suspense>} />
             {/* Marketplace */}
             <Route path="marketplace" element={<Suspense fallback={<RouteFallback />}><MarketplaceHomeScreen /></Suspense>} />
             <Route path="marketplace/store/:storeId" element={<Suspense fallback={<RouteFallback />}><StoreDetailScreen /></Suspense>} />
