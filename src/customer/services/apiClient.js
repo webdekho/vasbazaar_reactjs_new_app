@@ -89,7 +89,18 @@ export const authGet = async (endpoint, params = {}) => {
     });
     return parseApiResponse(response);
   } catch (error) {
-    return { success: false, message: getErrorMessage(error), data: null, raw: null };
+    const errorData = error?.response?.data;
+    const apiMessage =
+      errorData?.message ||
+      errorData?.error ||
+      errorData?.errorMessage ||
+      errorData?.msg ||
+      errorData?.reason ||
+      errorData?.detail;
+    if (apiMessage && typeof apiMessage === "string") {
+      return { success: false, message: apiMessage, data: errorData, raw: errorData, status: error?.response?.status };
+    }
+    return { success: false, message: getErrorMessage(error), data: null, raw: null, status: error?.response?.status };
   }
 };
 

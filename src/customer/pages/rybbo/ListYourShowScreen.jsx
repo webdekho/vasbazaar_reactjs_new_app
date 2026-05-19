@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaCheckCircle, FaImage, FaTimes, FaMapMarkerAlt, FaCrosshairs, FaPlus, FaTicketAlt, FaExternalLinkAlt } from "react-icons/fa";
+import { FaArrowLeft, FaCheckCircle, FaImage, FaTimes, FaMapMarkerAlt, FaCrosshairs, FaPlus, FaTicketAlt, FaExternalLinkAlt, FaSearch, FaSpinner } from "react-icons/fa";
 import { rybboService } from "../../services/rybboService";
 
 const MAX_BANNER_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -29,6 +29,7 @@ const ListYourShowScreen = () => {
   const navigate = useNavigate();
   const [form, setForm] = useState(empty);
   const [editingId, setEditingId] = useState(null);
+  const [editingStatus, setEditingStatus] = useState(null);
   const [submissions, setSubmissions] = useState([]);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -42,6 +43,7 @@ const ListYourShowScreen = () => {
 
   const beginEdit = (s) => {
     setEditingId(s.id);
+    setEditingStatus(s.status || null);
     const str = (v) => (v == null ? "" : String(v));
     const dateOnly = (v) => (v ? String(v).slice(0, 10) : "");
     const tcs = Array.isArray(s.ticketCategories) ? s.ticketCategories : [];
@@ -71,7 +73,7 @@ const ListYourShowScreen = () => {
   };
 
   const cancelEdit = () => {
-    setEditingId(null); setForm(empty); setError("");
+    setEditingId(null); setEditingStatus(null); setForm(empty); setError("");
   };
 
   const submit = async () => {
@@ -81,7 +83,7 @@ const ListYourShowScreen = () => {
       : await rybboService.submitShow(form);
     setSubmitting(false);
     if (!r.success) { setError(r.message || "Submission failed"); return; }
-    setSuccess(true); setForm(empty); setEditingId(null); loadMine();
+    setSuccess(true); setForm(empty); setEditingId(null); setEditingStatus(null); loadMine();
     setTimeout(() => setSuccess(false), 3500);
   };
 
@@ -172,6 +174,11 @@ const ListYourShowScreen = () => {
         {error && (
           <div style={{ padding: "10px 12px", background: "rgba(255,60,60,0.12)", borderRadius: 8, color: "#ff6b6b", marginBottom: 14, fontSize: 13 }}>{error}</div>
         )}
+        {editingId && editingStatus && editingStatus !== "PENDING" && (
+          <div style={{ padding: "10px 12px", background: "rgba(244,162,97,0.14)", borderRadius: 8, color: "#F4A261", marginBottom: 14, fontSize: 13 }}>
+            This submission is currently <strong>{editingStatus}</strong>. Saving changes will send it back for review.
+          </div>
+        )}
 
         <div style={{ display: "grid", gap: 12 }}>
           <Field label="Organizer name *" value={form.organizerName} onChange={set("organizerName")} placeholder="Your or company name" />
@@ -232,6 +239,17 @@ const ListYourShowScreen = () => {
               <span>Venue & directions</span>
             </div>
             <div style={{ display: "grid", gap: 10 }}>
+              <LocationSearch onPick={(p) => {
+                setForm((f) => ({
+                  ...f,
+                  venueName: f.venueName || p.venueName,
+                  venueAddress: p.address || f.venueAddress,
+                  venueLat: p.lat,
+                  venueLng: p.lng,
+                  city: f.city || p.city,
+                }));
+                setError("");
+              }} />
               <Field label="Venue name" value={form.venueName} onChange={set("venueName")} placeholder="e.g. Phoenix Marketcity Auditorium" />
               <Field label="Address" value={form.venueAddress} onChange={set("venueAddress")} placeholder="Street, area, landmark" />
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, alignItems: "end" }}>
@@ -326,7 +344,7 @@ const ListYourShowScreen = () => {
           )}
           <button type="button" onClick={submit} disabled={submitting}
             style={{ flex: 1, padding: 14, borderRadius: 10, border: "none", background: "#007BFF", color: "#fff", fontWeight: 700, fontSize: 16, cursor: submitting ? "wait" : "pointer", opacity: submitting ? 0.7 : 1 }}>
-            {submitting ? "Saving…" : (editingId ? "Update submission" : "Submit for review")}
+            {submitting ? "Saving…" : (editingId ? (editingStatus && editingStatus !== "PENDING" ? "Resubmit for review" : "Update submission") : "Submit for review")}
           </button>
         </div>
 
@@ -336,7 +354,7 @@ const ListYourShowScreen = () => {
             <div style={{ display: "grid", gap: 8 }}>
               {submissions.map((s) => {
                 const isEditing = editingId === s.id;
-                const locked = s.status && s.status !== "PENDING";
+                const deletable = !s.status || s.status === "PENDING";
                 return (
                   <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", border: `1px solid ${isEditing ? "#007BFF" : "var(--cm-line, #E5E7EB)"}`, borderRadius: 10 }}>
                     <div style={{ minWidth: 0, flex: 1 }}>
@@ -346,13 +364,15 @@ const ListYourShowScreen = () => {
                     <span style={{ fontSize: 11, fontWeight: 700, color: s.status === "APPROVED" ? "#22c55e" : s.status === "REJECTED" ? "#ff6b6b" : "#F4A261" }}>
                       {s.status}
                     </span>
-                    <button type="button" onClick={() => beginEdit(s)} disabled={locked}
-                      title={locked ? "Approved/rejected submissions can't be edited" : "Edit"}
-                      style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #007BFF", background: "transparent", color: locked ? "var(--cm-muted, #6B7280)" : "#007BFF", fontSize: 11, fontWeight: 700, cursor: locked ? "not-allowed" : "pointer", opacity: locked ? 0.5 : 1 }}>
+                    <button type="button" onClick={() => beginEdit(s)}
+                      title={s.status && s.status !== "PENDING" ? "Editing will send this back for review" : "Edit"}
+                      style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #007BFF", background: "transparent", color: "#007BFF", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                       Edit
                     </button>
-                    <button type="button" onClick={() => handleDelete(s)} aria-label="Delete submission"
-                      style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid var(--cm-line, #2A2A3A)", background: "transparent", color: "var(--cm-muted, #6B7280)", cursor: "pointer" }}>
+                    <button type="button" onClick={() => handleDelete(s)} disabled={!deletable}
+                      title={deletable ? "Delete" : "Only pending submissions can be deleted"}
+                      aria-label="Delete submission"
+                      style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid var(--cm-line, #2A2A3A)", background: "transparent", color: "var(--cm-muted, #6B7280)", cursor: deletable ? "pointer" : "not-allowed", opacity: deletable ? 1 : 0.4 }}>
                       <FaTimes size={11} />
                     </button>
                   </div>
@@ -377,5 +397,102 @@ const Field = ({ label, value, onChange, type = "text", placeholder, inputMode }
     <input type={type} value={value} onChange={onChange} placeholder={placeholder} inputMode={inputMode} style={inputStyle} />
   </div>
 );
+
+// Forward-geocode using OpenStreetMap Nominatim. Free, no API key — debounced,
+// India-biased so local venues rank first. On pick, fills lat/lng/address/city.
+const LocationSearch = ({ onPick }) => {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef(null);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 3) { setResults([]); setLoading(false); return; }
+    let cancelled = false;
+    setLoading(true);
+    const t = setTimeout(() => {
+      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(q)}&addressdetails=1&limit=6&countrycodes=in`;
+      fetch(url, { headers: { Accept: "application/json" } })
+        .then((r) => (r.ok ? r.json() : []))
+        .then((data) => {
+          if (cancelled) return;
+          setResults(Array.isArray(data) ? data : []);
+          setOpen(true);
+        })
+        .catch(() => { if (!cancelled) setResults([]); })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    }, 400);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [query]);
+
+  useEffect(() => {
+    const onDocClick = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+
+  const pick = (item) => {
+    const a = item.address || {};
+    const cityVal = a.city || a.town || a.village || a.county || "";
+    const addrParts = [
+      a.house_number, a.road || a.pedestrian || a.neighbourhood,
+      a.suburb || a.city_district, cityVal, a.state, a.postcode,
+    ].filter(Boolean);
+    const address = addrParts.length ? addrParts.join(", ") : item.display_name || "";
+    const venueName = item.namedetails?.name || (item.display_name || "").split(",")[0] || "";
+    onPick({
+      lat: Number(item.lat).toFixed(6),
+      lng: Number(item.lon).toFixed(6),
+      address, city: cityVal, venueName,
+    });
+    setQuery(item.display_name || venueName);
+    setOpen(false);
+  };
+
+  return (
+    <div ref={boxRef} style={{ position: "relative" }}>
+      <label style={labelStyle}>Search location</label>
+      <div style={{ position: "relative" }}>
+        <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--cm-muted, #6B7280)", pointerEvents: "none" }}>
+          <FaSearch size={12} />
+        </span>
+        <input
+          type="search" value={query}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => results.length > 0 && setOpen(true)}
+          placeholder="Search venue, address, landmark…"
+          style={{ ...inputStyle, paddingLeft: 30, paddingRight: 30 }}
+        />
+        {loading && (
+          <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: "var(--cm-muted, #6B7280)" }}>
+            <FaSpinner size={12} style={{ animation: "cm-spin 0.7s linear infinite" }} />
+          </span>
+        )}
+      </div>
+      {open && results.length > 0 && (
+        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, background: "var(--cm-card, #fff)", border: "1px solid var(--cm-line, #E5E7EB)", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.08)", zIndex: 50, maxHeight: 260, overflowY: "auto" }}>
+          {results.map((r) => (
+            <button key={r.place_id} type="button" onClick={() => pick(r)}
+              style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", background: "transparent", border: "none", borderBottom: "1px solid var(--cm-line, #F1F5F9)", cursor: "pointer", color: "inherit" }}>
+              <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3 }}>
+                {(r.display_name || "").split(",")[0]}
+              </div>
+              <div style={{ fontSize: 11, color: "var(--cm-muted, #6B7280)", marginTop: 2, lineHeight: 1.3 }}>
+                {r.display_name}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+      {!loading && open && query.trim().length >= 3 && results.length === 0 && (
+        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, background: "var(--cm-card, #fff)", border: "1px solid var(--cm-line, #E5E7EB)", borderRadius: 10, padding: "10px 12px", fontSize: 12, color: "var(--cm-muted, #6B7280)", zIndex: 50 }}>
+          No matches. Try a broader query or enter lat/lng manually.
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default ListYourShowScreen;

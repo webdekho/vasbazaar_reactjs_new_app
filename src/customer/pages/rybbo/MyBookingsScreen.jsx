@@ -41,22 +41,32 @@ const MyBookingsScreen = () => {
             </div>
           ) : (
             <div style={{ display: "grid", gap: 12 }}>
-              {state.bookings.map((b) => (
-                <button key={b.id} type="button"
-                  onClick={() => navigate(`/customer/app/rybbo/ticket/${b.id}`)}
-                  style={{ display: "flex", gap: 12, padding: 12, border: "1px solid var(--cm-line, #E5E7EB)", borderRadius: 12, textAlign: "left", background: "transparent", color: "inherit", cursor: "pointer", width: "100%" }}>
-                  <img src={b.poster} alt="" style={{ width: 70, height: 90, objectFit: "cover", borderRadius: 8 }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{b.eventTitle}</div>
-                    <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>{b.venue}, {b.city}</div>
-                    <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>{b.showtime?.date} · {b.showtime?.time}</div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
-                      <span style={{ fontSize: 11, color: "#22c55e", fontWeight: 600 }}>{b.status}</span>
-                      <strong style={{ fontSize: 13 }}>₹{b.total}</strong>
+              {state.bookings.map((b) => {
+                const isConfirmed = String(b.status || "").toUpperCase() === "CONFIRMED";
+                const statusColor = isConfirmed
+                  ? "#22c55e"
+                  : String(b.status || "").toUpperCase() === "FAILED"
+                    ? "#ef4444"
+                    : "#f59e0b";
+                return (
+                  <button key={b.id} type="button"
+                    onClick={() => isConfirmed && navigate(`/customer/app/rybbo/ticket/${b.id}`)}
+                    disabled={!isConfirmed}
+                    title={isConfirmed ? undefined : `Ticket unavailable (status: ${b.status})`}
+                    style={{ display: "flex", gap: 12, padding: 12, border: "1px solid var(--cm-line, #E5E7EB)", borderRadius: 12, textAlign: "left", background: "transparent", color: "inherit", cursor: isConfirmed ? "pointer" : "not-allowed", width: "100%", opacity: isConfirmed ? 1 : 0.7 }}>
+                    <img src={b.poster} alt="" style={{ width: 70, height: 90, objectFit: "cover", borderRadius: 8 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{b.eventTitle}</div>
+                      <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>{b.venue}, {b.city}</div>
+                      <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>{b.showtime?.date} · {b.showtime?.time}</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
+                        <span style={{ fontSize: 11, color: statusColor, fontWeight: 600 }}>{b.status}</span>
+                        <strong style={{ fontSize: 13 }}>₹{b.total}</strong>
+                      </div>
                     </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
