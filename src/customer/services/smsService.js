@@ -198,7 +198,8 @@ export const sendSms = async (phoneNumber, message, options = {}) => {
  * @returns {Promise<{total: number, sent: number, failed: number, results: Array}>}
  */
 export const sendBatchSms = async (messages, options = {}) => {
-  const { delayMs = 1000, onProgress: _onProgress } = options;
+  // eslint-disable-next-line no-unused-vars
+  const { delayMs = 1000, onProgress } = options;
 
   if (!isAndroid()) {
     return {
