@@ -1,11 +1,12 @@
 import { authGet } from "./apiClient";
 import { cachedFetch } from "./apiCache";
 
+// Advertisements cached briefly to avoid re-fetching on every navigation,
+// but short enough that admin banner changes (add/update/delete) reflect
+// quickly — a 24h TTL kept serving deleted ads with missing image files.
+const ADS_CACHE_TTL = 300000; // 5 minutes
+
 export const advertisementService = {
-  /**
-   * PERF FIX: Advertisements cached for 24 hours — banner content
-   * doesn't change frequently, no need to re-fetch on every navigation.
-   */
-  getHomeAdvertisements: () => cachedFetch("homeAds", () => authGet("/api/customer/advertisement/getByStatus", { status: "home" }), 86400000),
-  getServiceAdvertisements: () => cachedFetch("serviceAds", () => authGet("/api/customer/advertisement/getByStatus", { status: "services" }), 86400000),
+  getHomeAdvertisements: () => cachedFetch("homeAds", () => authGet("/api/customer/advertisement/getByStatus", { status: "home" }), ADS_CACHE_TTL),
+  getServiceAdvertisements: () => cachedFetch("serviceAds", () => authGet("/api/customer/advertisement/getByStatus", { status: "services" }), ADS_CACHE_TTL),
 };

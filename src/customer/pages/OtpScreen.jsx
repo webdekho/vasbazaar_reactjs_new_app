@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { FaArrowLeft, FaChevronRight } from "react-icons/fa";
-import { FiRefreshCw, FiUser } from "react-icons/fi";
+import { FiRefreshCw, FiUser, FiMapPin } from "react-icons/fi";
 import { useCustomerModern } from "../context/CustomerModernContext";
 import { authService } from "../services/authService";
 import { userService } from "../services/userService";
@@ -41,6 +41,10 @@ const OtpScreen = () => {
   const [name, setName] = useState("");
   const [nameStatus, setNameStatus] = useState(null);
   const [nameLoading, setNameLoading] = useState(false);
+  const [coords, setCoords] = useState(null);
+  const [pincode, setPincode] = useState("");
+  const [locStatus, setLocStatus] = useState(null);
+  const [locLoading, setLocLoading] = useState(false);
   const [focused, setFocused] = useState("");
   const mobile = searchParams.get("mobile");
   const mode = searchParams.get("mode"); // "name" when coming from ReferralScreen
@@ -248,6 +252,45 @@ const OtpScreen = () => {
     customerStorage.setIsExist(null);
   };
 
+  // Capture the device GPS location and reverse-geocode it to a PIN code.
+  const captureLocation = () => {
+    if (!navigator.geolocation) {
+      setLocStatus({ type: "error", message: "Location is not supported on this device." });
+      return;
+    }
+    setLocLoading(true);
+    setLocStatus(null);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const latitude = position.coords.latitude;
+        const longitude = position.coords.longitude;
+        setCoords({ latitude, longitude });
+        const res = await userService.reverseGeocode({
+          latitude,
+          longitude,
+          sessionToken: pendingSession?.sessionToken,
+        });
+        setLocLoading(false);
+        if (res.success && res.data?.pincode) {
+          setPincode(res.data.pincode);
+          setLocStatus({ type: "success", message: "Location captured." });
+        } else {
+          setLocStatus({ type: "error", message: "Couldn't find a PIN code — please enter it manually." });
+        }
+      },
+      (err) => {
+        setLocLoading(false);
+        setLocStatus({
+          type: "error",
+          message: err.code === err.PERMISSION_DENIED
+            ? "Location permission denied. Please allow access or enter PIN code manually."
+            : "Couldn't get your location — please enter PIN code manually.",
+        });
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
   const submitName = async (event) => {
     event.preventDefault();
     if (!pendingSession) return;
@@ -271,6 +314,9 @@ const OtpScreen = () => {
     const response = await userService.completeOnboarding({
       name: trimmedName,
       sessionToken: pendingSession.sessionToken,
+      latitude: coords?.latitude,
+      longitude: coords?.longitude,
+      pincode: pincode || undefined,
     });
     setNameLoading(false);
 
@@ -368,6 +414,56 @@ const OtpScreen = () => {
                   minLength={3}
                 />
               </div>
+
+              <div className={`cm-auth-field${focused === "pincode" ? " is-focused" : ""}`}>
+                <label htmlFor="onboarding-pincode">
+                  <FiMapPin className="cm-auth-field-icon" />
+                  PIN Code
+                </label>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    id="onboarding-pincode"
+                    className="cm-auth-input cm-auth-input--full"
+                    placeholder="Tap “Use my location”"
+                    value={pincode}
+                    onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    onFocus={() => setFocused("pincode")}
+                    onBlur={() => setFocused("")}
+                    inputMode="numeric"
+                    maxLength={6}
+                  />
+                  <button
+                    type="button"
+                    onClick={captureLocation}
+                    disabled={locLoading}
+                    style={{
+                      flexShrink: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "10px 14px",
+                      borderRadius: 12,
+                      border: "1px solid rgba(64, 224, 208, 0.4)",
+                      background: "rgba(64, 224, 208, 0.12)",
+                      color: "#40E0D0",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: locLoading ? "default" : "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <FiMapPin />
+                    {locLoading ? "Locating…" : "Use my location"}
+                  </button>
+                </div>
+              </div>
+
+              {locStatus && (
+                <div className={`cm-auth-alert cm-auth-alert--${locStatus.type}`}>
+                  <span className="cm-auth-alert-dot" />
+                  {locStatus.message}
+                </div>
+              )}
 
               {nameStatus && (
                 <div className={`cm-auth-alert cm-auth-alert--${nameStatus.type}`}>

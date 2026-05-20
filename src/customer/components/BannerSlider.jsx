@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { FaTimes, FaChevronLeft, FaChevronRight, FaCheck, FaUserCircle } from "react-icons/fa";
 import ProfileAvatar from "./ProfileAvatar";
@@ -52,11 +53,16 @@ const BannerSlider = ({ banners = [], userData, balances, showCustomerCard = tru
   };
 
   // Build slides: customer card first, then banners
+  // New ads store the image in bannerLight/bannerDark (legacy `banner` is null).
+  // Prefer the variant matching the active theme, then fall back to whatever exists.
+  const isLightTheme = typeof document !== "undefined"
+    && document.documentElement.getAttribute("data-theme") === "light";
   const bannerSlides = banners.length > 0
     ? banners.map((b) => ({
         id: b.id,
         type: "banner",
-        imageUrl: b.banner || b.image || b.imageUrl || null,
+        imageUrl: (isLightTheme ? b.bannerLight : b.bannerDark)
+          || b.bannerLight || b.bannerDark || b.banner || b.image || b.imageUrl || null,
         title: b.title || "",
         description: b.description || "",
       }))
@@ -389,8 +395,9 @@ const BannerSlider = ({ banners = [], userData, balances, showCustomerCard = tru
         )}
       </div>
 
-      {/* Banner description popup */}
-      {popupSlide && (
+      {/* Banner description popup — portaled to body so position:fixed
+          is not trapped by the carousel's transformed ancestor. */}
+      {popupSlide && createPortal(
         <div className="cm-banner-popup-overlay" onClick={closePopup}>
           <div className="cm-banner-popup" onClick={(e) => e.stopPropagation()}>
             <button className="cm-banner-popup-close" type="button" onClick={closePopup}>
@@ -411,7 +418,8 @@ const BannerSlider = ({ banners = [], userData, balances, showCustomerCard = tru
               Got it
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </>

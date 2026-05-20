@@ -56,11 +56,30 @@ export const userService = {
   referContacts: (contacts) =>
     authPost("/api/customer/user/refer-contacts", { contacts }),
 
-  completeOnboarding: async ({ name, sessionToken }) => {
+  completeOnboarding: async ({ name, sessionToken, latitude, longitude, pincode }) => {
     try {
       const response = await apiClient.post(
         "/api/customer/user/completeOnboarding",
-        { name },
+        { name, latitude, longitude, pincode },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            access_token: sessionToken,
+          },
+        }
+      );
+      return parseApiResponse(response);
+    } catch (error) {
+      return { success: false, message: getErrorMessage(error), data: null, raw: null };
+    }
+  },
+
+  // Reverse-geocode a GPS coordinate to its PIN code (server-side Google call).
+  reverseGeocode: async ({ latitude, longitude, sessionToken }) => {
+    try {
+      const response = await apiClient.post(
+        "/api/customer/user/geocode",
+        { latitude, longitude },
         {
           headers: {
             "Content-Type": "application/json",
