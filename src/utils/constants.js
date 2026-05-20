@@ -1,6 +1,6 @@
 export const loader = "LOADER";
 
-export const DEFAULT_API_URL = "http://192.168.1.9:8081";
+export const DEFAULT_API_URL = "https://api.vasbazaar.com";
 
 // Detect if running inside Capacitor native app
 const isCapacitorNative = () => {
