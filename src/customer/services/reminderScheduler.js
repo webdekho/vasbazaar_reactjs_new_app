@@ -1,7 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { outstandingService } from "./outstandingService";
-import { sendSmsBackground, openSmsComposer, ensureSmsPermission } from "./smsService";
+import { sendSmsBackground, openSmsComposer } from "./smsService";
 
 const CHANNEL_ID = "outstanding-reminders";
 const NOTIFICATION_PREFIX = 70000;

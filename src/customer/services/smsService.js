@@ -198,7 +198,7 @@ export const sendSms = async (phoneNumber, message, options = {}) => {
  * @returns {Promise<{total: number, sent: number, failed: number, results: Array}>}
  */
 export const sendBatchSms = async (messages, options = {}) => {
-  const { delayMs = 1000, onProgress } = options;
+  const { delayMs = 1000, onProgress: _onProgress } = options;
 
   if (!isAndroid()) {
     return {
@@ -372,7 +372,7 @@ export const cancelAllReminders = async () => {
   }
 };
 
-export default {
+const smsService = {
   checkSmsPermission,
   requestSmsPermission,
   ensureSmsPermission,
@@ -385,3 +385,5 @@ export default {
   cancelReminder,
   cancelAllReminders,
 };
+
+export default smsService;

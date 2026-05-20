@@ -1563,6 +1563,7 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
   };
 
   /* FASTag: View vehicle history */
+  // eslint-disable-next-line no-unused-vars
   const handleViewVehicleHistory = (vehicle) => {
     setHistoryVehicle(vehicle);
     setVehicleHistoryOpen(true);
