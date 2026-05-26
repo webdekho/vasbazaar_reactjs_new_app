@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaArrowLeft, FaCheckCircle, FaImage, FaTimes, FaMapMarkerAlt, FaCrosshairs, FaPlus, FaTicketAlt, FaExternalLinkAlt, FaSearch, FaSpinner } from "react-icons/fa";
 import { rybboService } from "../../services/rybboService";
 
@@ -27,6 +27,8 @@ const fileToDataUrl = (file) => new Promise((resolve, reject) => {
 
 const ListYourShowScreen = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const editIdFromUrl = searchParams.get("edit");
   const [form, setForm] = useState(empty);
   const [editingId, setEditingId] = useState(null);
   const [editingStatus, setEditingStatus] = useState(null);
@@ -37,9 +39,26 @@ const ListYourShowScreen = () => {
 
   const loadMine = async () => {
     const r = await rybboService.getMySubmissions();
-    if (r.success) setSubmissions(r.data || []);
+    if (r.success) {
+      const list = r.data || [];
+      setSubmissions(list);
+      return list;
+    }
+    return [];
   };
-  useEffect(() => { loadMine(); }, []);
+  useEffect(() => {
+    (async () => {
+      const list = await loadMine();
+      if (editIdFromUrl) {
+        const match = list.find((s) => String(s.id) === String(editIdFromUrl));
+        if (match) beginEdit(match);
+        // Clear the param so a manual "New submission" reset isn't overridden on next render.
+        searchParams.delete("edit");
+        setSearchParams(searchParams, { replace: true });
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const beginEdit = (s) => {
     setEditingId(s.id);

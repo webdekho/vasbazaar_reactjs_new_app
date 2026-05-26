@@ -1,6 +1,10 @@
 import { useState } from "react";
-import { FaTimes } from "react-icons/fa";
+import { FaTimes, FaAddressBook } from "react-icons/fa";
+import { Capacitor } from "@capacitor/core";
+import { Contacts } from "@capacitor-community/contacts";
 import { outstandingService } from "../../../services/outstandingService";
+
+const isNativePlatform = Capacitor.isNativePlatform();
 
 const AddCustomerSheet = ({ onClose, onAdded }) => {
   const [mobile, setMobile] = useState("");
@@ -8,6 +12,41 @@ const AddCustomerSheet = ({ onClose, onAdded }) => {
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [pickingContact, setPickingContact] = useState(false);
+
+  const pickFromContacts = async () => {
+    if (pickingContact) return;
+    setError("");
+    setPickingContact(true);
+    try {
+      const perm = await Contacts.requestPermissions();
+      if (perm.contacts !== "granted") {
+        setError("Permission to access contacts was denied");
+        return;
+      }
+      const result = await Contacts.pickContact({
+        projection: { name: true, phones: true },
+      });
+      const picked = result?.contact;
+      if (!picked) return;
+
+      const rawPhone = picked.phones?.[0]?.number || "";
+      const digits = rawPhone.replace(/\D/g, "").slice(-10);
+      const displayName = picked.name?.display
+        || [picked.name?.given, picked.name?.family].filter(Boolean).join(" ").trim();
+
+      if (digits.length === 10) {
+        setMobile(digits);
+      } else {
+        setError("Selected contact has no valid 10-digit number");
+      }
+      if (displayName) setName(displayName);
+    } catch (err) {
+      setError("Could not open contacts");
+    } finally {
+      setPickingContact(false);
+    }
+  };
 
   const submit = async (e) => {
     e?.preventDefault();
@@ -57,6 +96,18 @@ const AddCustomerSheet = ({ onClose, onAdded }) => {
                 placeholder="10-digit mobile"
                 required
               />
+              {isNativePlatform && (
+                <button
+                  type="button"
+                  className="ol-contact-btn"
+                  onClick={pickFromContacts}
+                  disabled={pickingContact || submitting}
+                  aria-label="Pick from contacts"
+                  title="Pick from contacts"
+                >
+                  <FaAddressBook />
+                </button>
+              )}
             </div>
           </label>
 

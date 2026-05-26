@@ -32,6 +32,7 @@ const BannerSlider = ({ banners = [], userData, balances, showCustomerCard = tru
   const navigate = useNavigate();
   const [current, setCurrent] = useState(0);
   const [slideBgColors, setSlideBgColors] = useState({});
+  const [brokenImages, setBrokenImages] = useState({});
   const [popupSlide, setPopupSlide] = useState(null);
   const trackRef = useRef(null);
   const touchStart = useRef(0);
@@ -58,14 +59,19 @@ const BannerSlider = ({ banners = [], userData, balances, showCustomerCard = tru
   const isLightTheme = typeof document !== "undefined"
     && document.documentElement.getAttribute("data-theme") === "light";
   const bannerSlides = banners.length > 0
-    ? banners.map((b) => ({
-        id: b.id,
-        type: "banner",
-        imageUrl: (isLightTheme ? b.bannerLight : b.bannerDark)
-          || b.bannerLight || b.bannerDark || b.banner || b.image || b.imageUrl || null,
-        title: b.title || "",
-        description: b.description || "",
-      }))
+    ? banners
+        .map((b) => ({
+          id: b.id,
+          type: "banner",
+          imageUrl: (isLightTheme ? b.bannerLight : b.bannerDark)
+            || b.bannerLight || b.bannerDark || b.banner || b.image || b.imageUrl || null,
+          title: b.title || "",
+          description: b.description || "",
+        }))
+        // Drop banners whose only purpose was the image, if that image failed to load.
+        // Backend currently serves "hidden" banners with dead asset URLs — without this
+        // filter the slider shows the browser's broken-image icon to customers.
+        .filter((s) => !(brokenImages[s.id] && !s.title && !s.description))
     : [
         { id: "d1", type: "banner", title: "Pay Bills Instantly", description: "Electricity, water, gas & more via Bharat Connect. Pay all your utility bills in seconds with guaranteed cashback on every payment.", gradient: "linear-gradient(135deg, #0B0B0B 0%, #121212 40%, #1A1A1A 100%)" },
         { id: "d2", type: "banner", title: "Recharge & Save", description: "Prepaid, DTH, broadband with exclusive cashback. Get the best deals on all your recharges and save money every time.", gradient: "linear-gradient(135deg, #0B0B0B 0%, rgba(64, 224, 208, 0.1) 50%, rgba(0, 123, 255, 0.08) 100%)" },
@@ -78,10 +84,22 @@ const BannerSlider = ({ banners = [], userData, balances, showCustomerCard = tru
   ];
 
   const handleImageLoad = (e, slideId) => {
-    const color = getDominantColor(e.target);
-    if (color) {
-      setSlideBgColors((prev) => ({ ...prev, [slideId]: color }));
-    }
+    // The visible <img> intentionally has no crossOrigin so it always loads,
+    // even when the banner CDN omits CORS headers (which was breaking banners
+    // in production). For the canvas-based dominant-color extraction we need
+    // a CORS-clean image, so we load a second copy with crossOrigin set and
+    // silently skip the tint if that request can't satisfy CORS.
+    const src = e.target?.currentSrc || e.target?.src;
+    if (!src) return;
+    const probe = new Image();
+    probe.crossOrigin = "anonymous";
+    probe.onload = () => {
+      const color = getDominantColor(probe);
+      if (color) {
+        setSlideBgColors((prev) => ({ ...prev, [slideId]: color }));
+      }
+    };
+    probe.src = src;
   };
 
   const total = slides.length;
@@ -335,14 +353,15 @@ const BannerSlider = ({ banners = [], userData, balances, showCustomerCard = tru
               );
             }
 
+            const hasUsableImage = slide.imageUrl && !brokenImages[slide.id];
             return (
               <div
                 key={slide.id}
-                className={`cm-slider-slide${slide.imageUrl ? " cm-slider-slide--banner" : " cm-slider-slide--text"}`}
-                style={{ background: slide.imageUrl ? (slideBgColors[slide.id] || "var(--cm-bg, #0B0B0B)") : (slide.gradient || "linear-gradient(135deg, var(--cm-bg, #0B0B0B), var(--cm-card, #1A1A1A) 48%, rgba(64, 224, 208, 0.08) 100%)"), cursor: (slide.title || slide.description) ? "pointer" : "default" }}
+                className={`cm-slider-slide${hasUsableImage ? " cm-slider-slide--banner" : " cm-slider-slide--text"}`}
+                style={{ background: hasUsableImage ? (slideBgColors[slide.id] || "var(--cm-bg, #0B0B0B)") : (slide.gradient || "linear-gradient(135deg, var(--cm-bg, #0B0B0B), var(--cm-card, #1A1A1A) 48%, rgba(64, 224, 208, 0.08) 100%)"), cursor: (slide.title || slide.description) ? "pointer" : "default" }}
                 onClick={() => handleSlideClick(slide)}
               >
-                {slide.imageUrl ? (
+                {hasUsableImage ? (
                   <>
                     {/**
                      * PERF FIX: Replaced duplicate <img> (same src loaded twice —
@@ -360,8 +379,8 @@ const BannerSlider = ({ banners = [], userData, balances, showCustomerCard = tru
                       src={slide.imageUrl}
                       alt={slide.title || "Banner"}
                       className="cm-slider-img"
-                      crossOrigin="anonymous"
                       onLoad={(e) => handleImageLoad(e, slide.id)}
+                      onError={() => setBrokenImages((prev) => (prev[slide.id] ? prev : { ...prev, [slide.id]: true }))}
                     />
                   </>
                 ) : (

@@ -31,6 +31,10 @@ const initialForm = {
   deliveryTimeMinutes: 30,
   deliveryCharges: 0,
   minOrderValue: 0,
+  autoSchedule: false,
+  openTime: "",
+  closeTime: "",
+  weeklyOffDays: [], // subset of ["MON","TUE","WED","THU","FRI","SAT","SUN"]
   logoUrl: "",
   bannerUrl: "",
   gstCertificateUrl: "",
@@ -137,6 +141,10 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
       deliveryTimeMinutes: Number(s.deliveryTimeMinutes || 30),
       deliveryCharges: Number(s.deliveryCharges || 0),
       minOrderValue: Number(s.minOrderValue || 0),
+      autoSchedule: s.autoSchedule === true,
+      openTime: s.openTime ? String(s.openTime).slice(0, 5) : "",
+      closeTime: s.closeTime ? String(s.closeTime).slice(0, 5) : "",
+      weeklyOffDays: parseOffDays(s.weeklySchedule),
       logoUrl: s.logoUrl || "",
       bannerUrl: s.bannerUrl || "",
       gstCertificateUrl: s.gstCertificateUrl || "",
@@ -220,6 +228,14 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
       if (!form.deliveryTimeMinutes || form.deliveryTimeMinutes <= 0) return "Delivery time required";
       if (form.deliveryCharges < 0) return "Delivery charges cannot be negative";
       if (form.minOrderValue < 0) return "Min order value cannot be negative";
+      if (form.autoSchedule) {
+        if (!form.openTime || !form.closeTime) {
+          return "Set both open and close time, or turn off auto schedule";
+        }
+        if (form.openTime === form.closeTime) {
+          return "Open and close time cannot be the same";
+        }
+      }
     }
     return null;
   };
@@ -240,11 +256,57 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
     if (form.categoryId) payload.categoryId = { id: Number(form.categoryId) };
     else delete payload.categoryId;
 
+    // Timing fields: backend deserializes openTime/closeTime to LocalTime,
+    // so empty strings would 500. Send "HH:mm:ss" or omit entirely.
+    const toIsoTime = (t) => (t && t.length === 5 ? `${t}:00` : t || null);
+    if (form.autoSchedule) {
+      payload.openTime = toIsoTime(form.openTime);
+      payload.closeTime = toIsoTime(form.closeTime);
+      // Build weekly schedule only when seller picked at least one off-day.
+      // Otherwise the single open/close window applies every day.
+      if (form.weeklyOffDays.length > 0) {
+        payload.weeklySchedule = buildWeeklyScheduleJson(form.weeklyOffDays, form.openTime, form.closeTime);
+      } else {
+        payload.weeklySchedule = null;
+      }
+    } else {
+      delete payload.openTime;
+      delete payload.closeTime;
+      payload.weeklySchedule = null;
+    }
+    // Strip the UI-only helper field so backend reflection doesn't trip on it.
+    delete payload.weeklyOffDays;
+    // Seller publishing a profile expects the store to be available.
+    // The "currently open" kill-switch is a separate manual toggle (My Store screen);
+    // clear any stale false value here so auto-schedule actually takes effect.
+    payload.isOpen = true;
+
     if (editMode) {
       const res = await marketplaceService.updateMyStore(payload);
+      if (!res.success) {
+        setSubmitting(false);
+        setError(res.message || "Submission failed");
+        return;
+      }
+      // Profile update path uses reflection that skips null fields, so removing
+      // all weekly holidays or turning auto-schedule off via updateMyStore alone
+      // wouldn't actually clear the stale values. The dedicated timings endpoint
+      // sets these explicitly (including to null), guaranteeing the seller's
+      // current selection is what gets persisted.
+      const timingsRes = await marketplaceService.updateMyStoreTimings({
+        openTime: form.autoSchedule ? toIsoTime(form.openTime) : null,
+        closeTime: form.autoSchedule ? toIsoTime(form.closeTime) : null,
+        autoSchedule: form.autoSchedule,
+        weeklySchedule: form.autoSchedule && form.weeklyOffDays.length > 0
+          ? buildWeeklyScheduleJson(form.weeklyOffDays, form.openTime, form.closeTime)
+          : null,
+      });
       setSubmitting(false);
-      if (res.success) navigate("/customer/app/marketplace/my-store", { replace: true });
-      else setError(res.message || "Submission failed");
+      if (!timingsRes.success) {
+        setError(timingsRes.message || "Profile saved but timings update failed");
+        return;
+      }
+      navigate("/customer/app/marketplace/my-store", { replace: true });
       return;
     }
 
@@ -389,6 +451,86 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
               <label className="mkt-field-label">Min order value (₹)</label>
               <input className="mkt-input" inputMode="decimal" value={form.minOrderValue} onChange={(e) => setField("minOrderValue", e.target.value === "" ? 0 : Number(e.target.value))} />
             </div>
+
+            <div className="mkt-field">
+              <label className="mkt-field-label" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span>Auto open/close by timing</span>
+                <label className="mkt-switch">
+                  <input
+                    type="checkbox"
+                    checked={form.autoSchedule}
+                    onChange={(e) => setField("autoSchedule", e.target.checked)}
+                  />
+                  <span className="mkt-switch-slider" />
+                </label>
+              </label>
+              <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: 4 }}>
+                {form.autoSchedule
+                  ? "Your store will appear as Open only between the times below. Outside this window, customers will see it as Closed."
+                  : "Store stays available all day. Customers can place orders any time."}
+              </div>
+            </div>
+
+            {form.autoSchedule && (
+              <>
+                <div className="mkt-field" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div>
+                    <label className="mkt-field-label">Open time *</label>
+                    <input
+                      type="time"
+                      className="mkt-input"
+                      value={form.openTime}
+                      onChange={(e) => setField("openTime", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="mkt-field-label">Close time *</label>
+                    <input
+                      type="time"
+                      className="mkt-input"
+                      value={form.closeTime}
+                      onChange={(e) => setField("closeTime", e.target.value)}
+                    />
+                  </div>
+                </div>
+                <TimingHint openTime={form.openTime} closeTime={form.closeTime} />
+
+                <div className="mkt-field">
+                  <label className="mkt-field-label" style={{ marginBottom: 6 }}>Weekly holidays</label>
+                  <div style={{ fontSize: 11, color: "var(--cm-muted)", marginBottom: 8 }}>
+                    Tap any day to mark it as a holiday. On those days the store will appear as Closed all day.
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {DAY_OPTIONS.map((d) => {
+                      const off = form.weeklyOffDays.includes(d.key);
+                      return (
+                        <button
+                          key={d.key}
+                          type="button"
+                          onClick={() => setForm((p) => {
+                            const current = Array.isArray(p.weeklyOffDays) ? p.weeklyOffDays : [];
+                            const next = current.includes(d.key)
+                              ? current.filter((x) => x !== d.key)
+                              : [...current, d.key];
+                            return { ...p, weeklyOffDays: next };
+                          })}
+                          className="mkt-day-chip"
+                          data-off={off ? "true" : "false"}
+                          aria-pressed={off}
+                        >
+                          {d.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {form.weeklyOffDays.length === 7 && (
+                    <div style={{ fontSize: 12, color: "#ef4444", marginTop: 8 }}>
+                      ⚠ All 7 days are marked as holiday — your store will never appear open.
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </>
         )}
 
@@ -574,6 +716,82 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
       </div>
     </div>
   );
+};
+
+const DAY_OPTIONS = [
+  { key: "MON", label: "Mon" },
+  { key: "TUE", label: "Tue" },
+  { key: "WED", label: "Wed" },
+  { key: "THU", label: "Thu" },
+  { key: "FRI", label: "Fri" },
+  { key: "SAT", label: "Sat" },
+  { key: "SUN", label: "Sun" },
+];
+
+const parseOffDays = (weeklyScheduleJson) => {
+  if (!weeklyScheduleJson) return [];
+  try {
+    const arr = typeof weeklyScheduleJson === "string"
+      ? JSON.parse(weeklyScheduleJson)
+      : weeklyScheduleJson;
+    if (!Array.isArray(arr)) return [];
+    return arr.filter((d) => d && d.closed === true).map((d) => String(d.day || "").toUpperCase());
+  } catch { return []; }
+};
+
+const buildWeeklyScheduleJson = (offDays, openTime, closeTime) => {
+  const toIso = (t) => (t && t.length === 5 ? `${t}:00` : t || null);
+  const entries = DAY_OPTIONS.map(({ key }) => offDays.includes(key)
+    ? { day: key, closed: true }
+    : { day: key, closed: false, openTime: toIso(openTime), closeTime: toIso(closeTime) }
+  );
+  return JSON.stringify(entries);
+};
+
+// Mirrors the backend semantics in StoreEntity.withinWindow(): when close <= open
+// the window is treated as overnight (e.g., 18:00 – 02:00). Sellers usually intend
+// a same-day window, so surface a warning before they save a near-24h schedule.
+const TimingHint = ({ openTime, closeTime }) => {
+  if (!openTime || !closeTime) return null;
+  const [oh, om] = openTime.split(":").map(Number);
+  const [ch, cm] = closeTime.split(":").map(Number);
+  const openMin = oh * 60 + om;
+  const closeMin = ch * 60 + cm;
+  if (closeMin > openMin) {
+    const hrs = Math.floor((closeMin - openMin) / 60);
+    const mins = (closeMin - openMin) % 60;
+    return (
+      <div style={{ fontSize: 12, color: "#10b981", marginTop: -6, marginBottom: 8 }}>
+        ✓ Open daily for {hrs}h {mins ? `${mins}m` : ""} ({fmt12(openTime)} – {fmt12(closeTime)})
+      </div>
+    );
+  }
+  if (closeMin === openMin) {
+    return (
+      <div style={{ fontSize: 12, color: "#ef4444", marginTop: -6, marginBottom: 8 }}>
+        ⚠ Open and close time are the same — store will never appear open
+      </div>
+    );
+  }
+  // closeMin < openMin → overnight window
+  const overnightMin = (24 * 60 - openMin) + closeMin;
+  const hrs = Math.floor(overnightMin / 60);
+  const mins = overnightMin % 60;
+  return (
+    <div style={{ fontSize: 12, color: "#f59e0b", marginTop: -6, marginBottom: 8, lineHeight: 1.5 }}>
+      ⚠ Close time is earlier than open time. This is treated as an <strong>overnight window</strong>:
+      open from {fmt12(openTime)} today through {fmt12(closeTime)} the next day
+      ({hrs}h {mins ? `${mins}m` : ""}). If you meant same-day hours, set close time after open time.
+    </div>
+  );
+};
+
+const fmt12 = (t) => {
+  if (!t) return "";
+  const [h, m] = t.split(":").map(Number);
+  const period = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${period}`;
 };
 
 const ReviewRow = ({ label, value }) => (

@@ -6,6 +6,7 @@ import { userService } from "../services/userService";
 import { setAppLocked, onSessionExpired } from "../services/apiClient";
 import { useTheme } from "../context/ThemeContext";
 import { sanitizeBackendMessage } from "../utils/userMessages";
+import { pinStorage } from "../utils/pinStorage";
 
 const LOCK_KEYS = {
   pinSet: "vb_pin_set",
@@ -126,25 +127,52 @@ const LockScreen = ({ onUnlock }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const refreshTokenWithStoredPin = async () => {
+    const storedPin = await pinStorage.get();
+    if (!storedPin) return false;
+    const res = await authService.authenticateWithPin({ pin: storedPin, permanentToken: sessionToken });
+    if (!res.success) return false;
+    const newToken = res.data?.token || res.raw?.data?.token;
+    if (newToken) {
+      setAuthSession({
+        sessionToken: newToken,
+        userData: {
+          name: res.data?.name || res.raw?.data?.name,
+          mobile: res.data?.mobile || res.raw?.data?.mobile,
+        },
+      });
+    }
+    return true;
+  };
+
   const handleBiometric = async () => {
     setError("");
     const success = await authenticateWithBiometric();
-    if (success) {
-      // Verify the session token is still valid after biometric unlock
-      const profileCheck = await userService.getUserProfile();
-      if (profileCheck.success) {
-        localStorage.setItem(LOCK_KEYS.lastActive, Date.now().toString());
-        onUnlock();
-      } else {
-        // Session expired — biometric verified identity but token is stale
-        // Fall back to PIN which returns a fresh token from the server
-        setSessionExpired(true);
-        setError("Session expired. Enter PIN to continue.");
-        setShowPin(true);
-      }
-    } else {
+    if (!success) {
       setShowPin(true);
+      return;
     }
+
+    // Fast path: existing token still valid
+    const profileCheck = await userService.getUserProfile();
+    if (profileCheck.success) {
+      localStorage.setItem(LOCK_KEYS.lastActive, Date.now().toString());
+      onUnlock();
+      return;
+    }
+
+    // Token expired — silently refresh using stored PIN
+    const refreshed = await refreshTokenWithStoredPin();
+    if (refreshed) {
+      localStorage.setItem(LOCK_KEYS.lastActive, Date.now().toString());
+      onUnlock();
+      return;
+    }
+
+    // No stored PIN or refresh failed — fall back to PIN entry
+    setSessionExpired(true);
+    setError("Session expired. Enter PIN to continue.");
+    setShowPin(true);
   };
 
   const handlePinSubmit = async (pin) => {
@@ -164,6 +192,7 @@ const LockScreen = ({ onUnlock }) => {
         });
       }
       localStorage.setItem(LOCK_KEYS.lastActive, Date.now().toString());
+      pinStorage.save(pin);
       setPinAttempts(0);
       onUnlock();
     } else {
@@ -182,6 +211,7 @@ const LockScreen = ({ onUnlock }) => {
     localStorage.removeItem(LOCK_KEYS.pinSet);
     localStorage.removeItem(LOCK_KEYS.lastActive);
     localStorage.removeItem(LOCK_KEYS.biometricEnabled);
+    pinStorage.clear();
     // Logout and redirect to login
     logout();
   };
@@ -226,7 +256,7 @@ const LockScreen = ({ onUnlock }) => {
 
         {/* Logout button - always visible */}
         <button type="button" className="al-logout-btn" onClick={handleLogout}>
-          <FaSignOutAlt size={14} /> Logout & Login Again
+          <FaSignOutAlt size={14} /> Logout & Re-Login
         </button>
       </div>
     </div>
@@ -259,6 +289,7 @@ const SetPinScreen = ({ onComplete }) => {
     if (res.success) {
       localStorage.setItem(LOCK_KEYS.pinSet, "true");
       localStorage.setItem(LOCK_KEYS.lastActive, Date.now().toString());
+      pinStorage.save(pin);
       onComplete();
     } else {
       setError(sanitizeBackendMessage(res.message, "Failed to set PIN. Try again."));
@@ -334,6 +365,7 @@ export const ChangePinScreen = ({ onClose }) => {
     }
     const res = await authService.setUserPin({ pin, sessionToken });
     if (res.success) {
+      pinStorage.save(pin);
       onClose("PIN changed successfully");
     } else {
       setError(sanitizeBackendMessage(res.message, "Failed to update PIN."));

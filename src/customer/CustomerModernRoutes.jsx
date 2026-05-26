@@ -95,6 +95,8 @@ const RybboMyBookingsScreen = lazy(() => import("./pages/rybbo/MyBookingsScreen"
 const RybboListYourShowScreen = lazy(() => import("./pages/rybbo/ListYourShowScreen"));
 const RybboTicketDetailsScreen = lazy(() => import("./pages/rybbo/TicketDetailsScreen"));
 const RybboQrScannerScreen = lazy(() => import("./pages/rybbo/QrScannerScreen"));
+const RybboOrganizerEventsScreen = lazy(() => import("./pages/rybbo/OrganizerEventsScreen"));
+const RybboEventScannersScreen = lazy(() => import("./pages/rybbo/EventScannersScreen"));
 const RebuddyHomeScreen = lazy(() => import("./pages/rebuddy/RebuddyHomeScreen"));
 const RebuddyNewGroupScreen = lazy(() => import("./pages/rebuddy/NewGroupScreen"));
 const RebuddyGroupDetailScreen = lazy(() => import("./pages/rebuddy/GroupDetailScreen"));
@@ -209,6 +211,8 @@ const CustomerModernRoutes = () => {
             <Route path="rybbo/list-your-show" element={<Suspense fallback={<RouteFallback />}><RybboListYourShowScreen /></Suspense>} />
             <Route path="rybbo/ticket/:bookingId" element={<Suspense fallback={<RouteFallback />}><RybboTicketDetailsScreen /></Suspense>} />
             <Route path="rybbo/scan" element={<Suspense fallback={<RouteFallback />}><RybboQrScannerScreen /></Suspense>} />
+            <Route path="rybbo/organizer/events" element={<Suspense fallback={<RouteFallback />}><RybboOrganizerEventsScreen /></Suspense>} />
+            <Route path="rybbo/organizer/events/:id/scanners" element={<Suspense fallback={<RouteFallback />}><RybboEventScannersScreen /></Suspense>} />
             <Route path="rebuddy" element={<Suspense fallback={<RouteFallback />}><RebuddyHomeScreen /></Suspense>} />
             <Route path="rebuddy/new" element={<Suspense fallback={<RouteFallback />}><RebuddyNewGroupScreen /></Suspense>} />
             <Route path="rebuddy/group/:id" element={<Suspense fallback={<RouteFallback />}><RebuddyGroupDetailScreen /></Suspense>} />

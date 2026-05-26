@@ -39,7 +39,19 @@ import { useMarketplaceCart } from "../../context/MarketplaceCartContext";
 import { useToast } from "../../context/ToastContext";
 import { shareStore } from "./shareStore";
 import { useGeolocation } from "../../hooks/useGeolocation";
+import LocationPickerSheet from "../../components/LocationPickerSheet";
 import "./marketplace.css";
+
+const SELECTED_LOC_KEY = "marketplaceSelectedLocation";
+const readSelectedLocation = () => {
+  try {
+    const raw = localStorage.getItem(SELECTED_LOC_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.lat === "number" && typeof parsed?.lng === "number") return parsed;
+    return null;
+  } catch { return null; }
+};
 
 const CATEGORY_ICON_RULES = [
   { match: /(grocery|kirana|supermarket|mart)/i, icon: FaCarrot, color: "#10b981" },
@@ -117,14 +129,39 @@ const MarketplaceHomeScreen = () => {
     coords: geoCoords,
     error: geoError,
     permissionStatus,
+    requestLocation: requestGeo,
   } = useGeolocation({ autoRequest: true, timeout: 10000, maximumAge: 60000 });
 
-  // Memoize coords to prevent infinite re-renders
+  // Manually-picked location takes priority over device GPS so users on a
+  // denied/inaccurate location can still browse stores in any area.
+  const [selectedLoc, setSelectedLoc] = useState(readSelectedLocation);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
   const coords = useMemo(() => {
+    if (selectedLoc) return { lat: selectedLoc.lat, lng: selectedLoc.lng };
     if (geoCoords) return { lat: geoCoords.lat, lng: geoCoords.lng };
     if (geoError) return { lat: null, lng: null };
     return null;
-  }, [geoCoords, geoError]);
+  }, [selectedLoc, geoCoords, geoError]);
+
+  const locationLabel = useMemo(() => {
+    if (selectedLoc?.label) return selectedLoc.label;
+    if (geoCoords) return "Current location";
+    if (geoError) return "Set location";
+    return "Detecting…";
+  }, [selectedLoc, geoCoords, geoError]);
+
+  const handleSelectLocation = (place) => {
+    const next = { lat: place.lat, lng: place.lng, label: place.label };
+    setSelectedLoc(next);
+    try { localStorage.setItem(SELECTED_LOC_KEY, JSON.stringify(next)); } catch { /* ignore quota */ }
+  };
+
+  const handleUseCurrentLocation = () => {
+    setSelectedLoc(null);
+    try { localStorage.removeItem(SELECTED_LOC_KEY); } catch { /* ignore */ }
+    if (requestGeo) requestGeo();
+  };
 
   const coordsError = useMemo(() => {
     if (!geoError) return null;
@@ -253,6 +290,17 @@ const MarketplaceHomeScreen = () => {
           <span className="mkt-hero-eyebrow mkt-hero-eyebrow--inline">{greeting}</span>
           <button
             type="button"
+            className="mkt-loc-chip"
+            onClick={() => setPickerOpen(true)}
+            aria-label="Change location"
+            title={locationLabel}
+          >
+            <FiMapPin size={12} />
+            <span className="mkt-loc-chip-label">{locationLabel}</span>
+            <span aria-hidden="true">▾</span>
+          </button>
+          <button
+            type="button"
             onClick={onPlusClick}
             className="mkt-hero-action"
             aria-label={hasMyStore ? "My store" : "Become a seller"}
@@ -299,36 +347,41 @@ const MarketplaceHomeScreen = () => {
         </div>
       )}
 
-      {/* Categories — icon avatar rail */}
+      {/* Categories — modern morphic rail */}
       {categories.length > 0 && (
-        <div className="mkt-section">
+        <div className="mkt-section mkt-cat-section">
           <div className="mkt-section-head">
-            <h2 className="mkt-section-title">Browse categories</h2>
+            <h2 className="mkt-section-title">
+              Browse categories
+              <span className="mkt-cat-section-count">{categories.length + 1}</span>
+            </h2>
           </div>
-          <div className="mkt-cat-rail">
+          <div className="mkt-cat-rail mkt-cat-rail--modern">
             <button
-              className={`mkt-cat-tile${activeCategoryId == null ? " is-active" : ""}`}
+              className={`mkt-cat-tile mkt-cat-tile--modern${activeCategoryId == null ? " is-active" : ""}`}
               onClick={() => setActiveCategoryId(null)}
+              style={{ "--cat-accent": "#6366f1" }}
             >
               <span className="mkt-cat-tile-avatar">
-                <FaShoppingBag size={18} />
+                <span className="mkt-cat-tile-ring" aria-hidden="true" />
+                <FaShoppingBag size={20} />
               </span>
               <span className="mkt-cat-tile-label">All</span>
             </button>
             {categories.map((cat) => {
               const isActive = activeCategoryId === cat.id;
               const { Icon, color } = getCategoryIcon(cat.name);
+              const accent = color || "#6366f1";
               return (
                 <button
                   key={cat.id}
-                  className={`mkt-cat-tile${isActive ? " is-active" : ""}`}
+                  className={`mkt-cat-tile mkt-cat-tile--modern${isActive ? " is-active" : ""}`}
                   onClick={() => setActiveCategoryId(cat.id)}
+                  style={{ "--cat-accent": accent }}
                 >
-                  <span
-                    className="mkt-cat-tile-avatar"
-                    style={!isActive && color ? { color } : undefined}
-                  >
-                    {cat.iconUrl ? <img src={cat.iconUrl} alt="" /> : <Icon size={18} />}
+                  <span className="mkt-cat-tile-avatar">
+                    <span className="mkt-cat-tile-ring" aria-hidden="true" />
+                    {cat.iconUrl ? <img src={cat.iconUrl} alt="" /> : <Icon size={20} />}
                   </span>
                   <span className="mkt-cat-tile-label">{cat.name}</span>
                 </button>
@@ -483,6 +536,14 @@ const MarketplaceHomeScreen = () => {
           <div className="mkt-cart-bar-cta">View cart →</div>
         </div>
       )}
+
+      <LocationPickerSheet
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onSelect={handleSelectLocation}
+        onUseCurrent={handleUseCurrentLocation}
+        currentLabel={locationLabel}
+      />
     </div>
   );
 };

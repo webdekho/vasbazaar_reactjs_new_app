@@ -66,4 +66,12 @@ export const rybboService = {
   deleteShow: (id) => authDelete(`${BASE}/submissions/${id}`),
 
   getMySubmissions: () => authGet(`${BASE}/submissions/mine`),
+
+  getMyScannableEvents: () => authGet(`${BASE}/scanner/my-events`),
+
+  getEventScanners: (eventId) => authGet(`${BASE}/events/${eventId}/scanners`),
+
+  addEventScanner: (eventId, mobile) => authPost(`${BASE}/events/${eventId}/scanners`, { mobile }),
+
+  removeEventScanner: (eventId, scannerId) => authDelete(`${BASE}/events/${eventId}/scanners/${scannerId}`),
 };

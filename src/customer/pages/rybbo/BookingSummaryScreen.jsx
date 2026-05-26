@@ -4,7 +4,7 @@ import { FaArrowLeft, FaTag, FaCheckCircle, FaWallet, FaMobileAlt } from "react-
 import { rybboService } from "../../services/rybboService";
 import { server_api } from "../../../utils/constants";
 
-const CONVENIENCE_PCT = 2; // 2% fee — matches backend CONVENIENCE_PCT
+const DEFAULT_CONVENIENCE_PCT = 2; // fallback when event API does not carry a per-event %
 
 const BookingSummaryScreen = () => {
   const { slug } = useParams();
@@ -25,7 +25,9 @@ const BookingSummaryScreen = () => {
   if (!event || lineItems.length === 0) return <Navigate to={`/customer/app/rybbo/event/${slug}`} replace />;
 
   const discount = appliedCoupon?.discount || 0;
-  const fee = Math.round(((subtotal - discount) * CONVENIENCE_PCT) / 100);
+  const eventFeePct = Number(event?.convenienceFeePct);
+  const conveniencePct = Number.isFinite(eventFeePct) && eventFeePct >= 0 ? eventFeePct : DEFAULT_CONVENIENCE_PCT;
+  const fee = Math.round(((subtotal - discount) * conveniencePct) / 100);
   const total = subtotal - discount + fee;
 
   const applyCoupon = async () => {
@@ -162,7 +164,7 @@ const BookingSummaryScreen = () => {
           {discount > 0 && (
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6, color: "#22c55e" }}><span>Discount</span><span>−₹{discount}</span></div>
           )}
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}><span>Convenience fee ({CONVENIENCE_PCT}%)</span><span>₹{fee}</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}><span>Convenience fee ({conveniencePct}%)</span><span>₹{fee}</span></div>
           <div style={{ borderTop: "1px solid var(--cm-line, #E5E7EB)", marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 15 }}>
             <span>Total payable</span><span>₹{total}</span>
           </div>
