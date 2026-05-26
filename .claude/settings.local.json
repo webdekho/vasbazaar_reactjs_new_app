@@ -33,7 +33,8 @@
       "Bash(ls:*)",
       "Bash(npx cap sync:*)",
       "Bash(npm uninstall:*)",
-      "Bash(./mvnw compile:*)"
+      "Bash(./mvnw compile:*)",
+      "Bash(git status:*)"
     ]
   }
 }
