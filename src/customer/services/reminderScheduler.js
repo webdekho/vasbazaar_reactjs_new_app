@@ -1,14 +1,12 @@
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { outstandingService } from "./outstandingService";
-import { sendSmsBackground, openSmsComposer } from "./smsService";
+import { openSmsComposer } from "./smsService";
 
 const CHANNEL_ID = "outstanding-reminders";
 const NOTIFICATION_PREFIX = 70000;
-const SMS_BATCH_DELAY_MS = 1000; // 1 second between SMS to avoid carrier throttling
 
 const isNative = () => Capacitor.isNativePlatform();
-const isAndroid = () => Capacitor.getPlatform() === "android";
 
 const ensurePermission = async () => {
   if (!isNative()) return false;
@@ -24,7 +22,7 @@ const ensureChannel = async () => {
     await LocalNotifications.createChannel({
       id: CHANNEL_ID,
       name: "Outstanding Reminders",
-      description: "Daily reminders to send SMS to customers with outstanding balance",
+      description: "Reminders to send SMS to customers with outstanding balance",
       importance: 4,
       visibility: 1,
     });
@@ -137,18 +135,13 @@ export const registerReminderTapHandler = (navigate) => {
   };
 };
 
+/**
+ * Open SMS composer with pre-filled message
+ * This is the only SMS sending method now - user manually taps Send
+ */
 export const triggerNativeSms = (mobile, message) => {
   if (!mobile) return false;
-  const cleaned = String(mobile).replace(/[^0-9+]/g, "");
-  const platform = Capacitor.getPlatform();
-  const body = encodeURIComponent(message || "");
-  const number = cleaned.startsWith("+") ? cleaned : `+91${cleaned}`;
-  const href =
-    platform === "ios"
-      ? `sms:${number}&body=${body}`
-      : `sms:${number}?body=${body}`;
-  window.location.href = href;
-  return true;
+  return openSmsComposer(mobile, message);
 };
 
 /**
@@ -163,100 +156,71 @@ const buildSmsMessage = (template, customer, ownerName) => {
 };
 
 /**
- * Send SMS reminders automatically (Android only - background)
- * For iOS, this opens the SMS composer for each customer
+ * Prepare SMS reminders for manual sending
+ * Returns a list of messages ready to be sent one by one via SMS composer
  * @param {Array} reminders - List of reminder configs with customer data
  * @param {string} ownerName - Business owner name for template
- * @param {Object} options - Options
- * @param {Function} options.onProgress - Progress callback
- * @param {Function} options.onComplete - Completion callback
- * @returns {Promise<{total: number, sent: number, failed: number, results: Array}>}
+ * @returns {{total: number, messages: Array}}
  */
-export const sendAutoSmsReminders = async (reminders, ownerName, options = {}) => {
-  const { onProgress, onComplete } = options;
-
+export const prepareSmsReminders = (reminders, ownerName) => {
   if (!reminders?.length) {
-    return { total: 0, sent: 0, failed: 0, results: [] };
+    return { total: 0, messages: [] };
   }
 
-  const results = [];
-  let sent = 0;
-  let failed = 0;
+  const messages = reminders
+    .map((reminder) => {
+      const message = buildSmsMessage(
+        reminder.reminderTemplate,
+        { customerName: reminder.customerName, balance: reminder.balance },
+        ownerName
+      );
 
-  for (let i = 0; i < reminders.length; i++) {
-    const reminder = reminders[i];
-    const message = buildSmsMessage(
-      reminder.reminderTemplate,
-      { customerName: reminder.customerName, balance: reminder.balance },
-      ownerName
-    );
-
-    if (!message || !reminder.mobile) {
-      results.push({
-        customerId: reminder.customerId,
-        customerName: reminder.customerName,
-        success: false,
-        error: "Missing mobile or message template"
-      });
-      failed++;
-      continue;
-    }
-
-    try {
-      if (isAndroid()) {
-        // Android: Send in background
-        const result = await sendSmsBackground(reminder.mobile, message);
-        results.push({
-          customerId: reminder.customerId,
-          customerName: reminder.customerName,
-          success: result.success,
-          error: result.error,
-          method: "background"
-        });
-        if (result.success) sent++;
-        else failed++;
-      } else {
-        // iOS: Open SMS composer (user must tap send)
-        openSmsComposer(reminder.mobile, message);
-        results.push({
-          customerId: reminder.customerId,
-          customerName: reminder.customerName,
-          success: true,
-          method: "composer"
-        });
-        sent++;
+      if (!message || !reminder.mobile) {
+        return null;
       }
-    } catch (err) {
-      results.push({
+
+      return {
         customerId: reminder.customerId,
         customerName: reminder.customerName,
-        success: false,
-        error: err?.message || "Unknown error"
-      });
-      failed++;
-    }
+        mobile: reminder.mobile,
+        message: message,
+      };
+    })
+    .filter(Boolean);
 
-    if (onProgress) {
-      onProgress({ current: i + 1, total: reminders.length, sent, failed });
-    }
-
-    // Add delay between SMS to avoid carrier throttling
-    if (isAndroid() && i < reminders.length - 1) {
-      await new Promise(resolve => setTimeout(resolve, SMS_BATCH_DELAY_MS));
-    }
-  }
-
-  const result = { total: reminders.length, sent, failed, results };
-  if (onComplete) onComplete(result);
-  return result;
+  return { total: messages.length, messages };
 };
 
 /**
- * Fetch due reminders and send SMS automatically
- * Called when app opens or when notification is received
- * @param {string} ownerName - Business owner name
- * @returns {Promise<{total: number, sent: number, failed: number}>}
+ * Send SMS via composer (opens SMS app with pre-filled message)
+ * User needs to tap Send in their SMS app
+ * @param {string} mobile - Phone number
+ * @param {string} message - Message to send
+ * @returns {{success: boolean, method: string}}
  */
+export const sendSmsViaComposer = (mobile, message) => {
+  const result = openSmsComposer(mobile, message);
+  return {
+    success: result.success,
+    method: "composer",
+    info: "SMS app opened. Please tap Send.",
+  };
+};
+
+// Legacy function - now just prepares messages for manual sending
+export const sendAutoSmsReminders = async (reminders, ownerName, options = {}) => {
+  const prepared = prepareSmsReminders(reminders, ownerName);
+  return {
+    total: prepared.total,
+    sent: 0,
+    failed: 0,
+    requiresManualSend: true,
+    messages: prepared.messages,
+    info: "SMS composer will open for each message. User needs to tap Send."
+  };
+};
+
+// Legacy function
 export const processAndSendDueReminders = async (ownerName) => {
   if (!isNative()) return { total: 0, sent: 0, failed: 0, skipped: "not-native" };
 
@@ -266,25 +230,14 @@ export const processAndSendDueReminders = async (ownerName) => {
       return { total: 0, sent: 0, failed: 0 };
     }
 
-    // Filter reminders that are due now (within 5 minutes of scheduled time)
-    const now = new Date();
-    const nowHHMM = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-
-    const dueNow = res.data.filter(r => {
-      const reminderTime = (r.reminderTime || "10:00").slice(0, 5);
-      // Check if current time is within 5 minutes of reminder time
-      const [rh, rm] = reminderTime.split(":").map(Number);
-      const [nh, nm] = nowHHMM.split(":").map(Number);
-      const rMinutes = rh * 60 + rm;
-      const nMinutes = nh * 60 + nm;
-      return Math.abs(nMinutes - rMinutes) <= 5;
-    });
-
-    if (!dueNow.length) {
-      return { total: 0, sent: 0, failed: 0, skipped: "not-due-now" };
-    }
-
-    return await sendAutoSmsReminders(dueNow, ownerName);
+    const prepared = prepareSmsReminders(res.data, ownerName);
+    return {
+      total: prepared.total,
+      sent: 0,
+      failed: 0,
+      requiresManualSend: true,
+      messages: prepared.messages,
+    };
   } catch (err) {
     console.error("Error processing due reminders:", err);
     return { total: 0, sent: 0, failed: 0, error: err?.message };

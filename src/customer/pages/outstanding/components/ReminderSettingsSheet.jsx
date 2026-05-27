@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { FaTimes, FaPaperPlane } from "react-icons/fa";
-import { Capacitor } from "@capacitor/core";
 import { outstandingService } from "../../../services/outstandingService";
 import { syncReminders } from "../../../services/reminderScheduler";
-import { sendSms, ensureSmsPermission, scheduleReminder, cancelReminder } from "../../../services/smsService";
+import { sendSms } from "../../../services/smsService";
 
 const DEFAULT_TEMPLATE =
   "Namaste {name}, you have an outstanding balance of Rs.{balance} with {owner}. Please clear at your earliest convenience.";
@@ -20,8 +19,6 @@ const ReminderSettingsSheet = ({ customer, onClose, onSaved }) => {
   const [minBalance, setMinBalance] = useState("1");
   const [template, setTemplate] = useState(DEFAULT_TEMPLATE);
 
-  const isAndroid = Capacitor.getPlatform() === "android";
-
   // Build message from template
   const buildMessage = () => {
     return template
@@ -30,7 +27,7 @@ const ReminderSettingsSheet = ({ customer, onClose, onSaved }) => {
       .replace(/\{owner\}/gi, ""); // Owner name would come from user profile
   };
 
-  // Send SMS now for testing
+  // Send SMS now - opens SMS composer
   const handleSendNow = async () => {
     if (!customer.customerMobile) {
       setSendResult({ success: false, error: "Customer mobile number not available" });
@@ -42,22 +39,16 @@ const ReminderSettingsSheet = ({ customer, onClose, onSaved }) => {
     setError("");
 
     try {
-      // First ensure permission on Android
-      if (isAndroid) {
-        const hasPermission = await ensureSmsPermission();
-        if (!hasPermission) {
-          setSendResult({ success: false, error: "SMS permission denied. Please allow SMS permission." });
-          setSendingNow(false);
-          return;
-        }
-      }
-
       const message = buildMessage();
       const result = await sendSms(customer.customerMobile, message);
 
-      setSendResult(result);
+      if (result.success) {
+        setSendResult({ success: true, message: "SMS app opened. Please tap Send to send the message." });
+      } else {
+        setSendResult(result);
+      }
     } catch (err) {
-      setSendResult({ success: false, error: err?.message || "Failed to send SMS" });
+      setSendResult({ success: false, error: err?.message || "Failed to open SMS app" });
     }
 
     setSendingNow(false);
@@ -105,47 +96,15 @@ const ReminderSettingsSheet = ({ customer, onClose, onSaved }) => {
       return;
     }
 
-    // Schedule or cancel native SMS reminder (Android)
-    if (isAndroid && customer.customerMobile && frequency !== "NEVER") {
-      try {
-        if (enabled) {
-          // Check if balance meets minimum threshold
-          const balance = Math.abs(customer.balance || 0);
-          if (balance >= (Number(minBalance) || 0)) {
-            const message = buildMessage();
-            const scheduleResult = await scheduleReminder({
-              customerId: customer.id,
-              customerName: customer.customerName,
-              phoneNumber: customer.customerMobile,
-              message: message,
-              time: time,
-              frequency: frequency
-            });
-
-            if (scheduleResult.success) {
-              const hours = Math.floor((scheduleResult.scheduledIn || 0) / 3600000);
-              const mins = Math.floor(((scheduleResult.scheduledIn || 0) % 3600000) / 60000);
-              setSendResult({
-                success: true,
-                method: "scheduled",
-                message: `SMS scheduled in ${hours}h ${mins}m`
-              });
-            } else {
-              setError(scheduleResult.error || "Failed to schedule SMS");
-            }
-          }
-        } else {
-          // Cancel existing reminder
-          await cancelReminder(customer.id);
-        }
-      } catch (err) {
-        console.error("Schedule error:", err);
-      }
-    }
-
-    // Sync notifications (for iOS and as backup)
+    // Sync local notifications (will remind user to send SMS)
     try {
       await syncReminders();
+      if (enabled) {
+        setSendResult({
+          success: true,
+          message: "Reminder saved! You'll get a notification to send SMS."
+        });
+      }
     } catch {}
 
     setSubmitting(false);
@@ -220,20 +179,10 @@ const ReminderSettingsSheet = ({ customer, onClose, onSaved }) => {
               </small>
             </label>
 
-            <div style={{ background: "#fff8e1", padding: 12, borderRadius: 8, fontSize: 13, color: "#7a5b00" }}>
-              {Capacitor.getPlatform() === "android" ? (
-                <>
-                  <strong>Auto SMS:</strong> At the chosen time, SMS will be sent automatically
-                  from your phone. You'll get a notification confirming delivery.
-                  SMS charges apply as per your operator.
-                </>
-              ) : (
-                <>
-                  At the chosen time you will get a notification. Tapping it opens a queue
-                  where you can send each SMS through your phone's messaging app.
-                  SMS charges apply as per your operator.
-                </>
-              )}
+            <div style={{ background: "#e3f2fd", padding: 12, borderRadius: 8, fontSize: 13, color: "#1565c0" }}>
+              <strong>How it works:</strong> At the chosen time, you'll get a notification.
+              Tap it to open the SMS app with pre-filled message. Just tap Send!
+              SMS charges apply as per your operator.
             </div>
 
             {error && <div className="ol-error">{error}</div>}
@@ -244,9 +193,7 @@ const ReminderSettingsSheet = ({ customer, onClose, onSaved }) => {
                 style={sendResult.success ? { background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)", color: "#16a34a", padding: "10px 12px", borderRadius: 10, fontSize: 13 } : {}}
               >
                 {sendResult.success
-                  ? sendResult.method === "scheduled"
-                    ? `✓ ${sendResult.message}`
-                    : `✓ SMS sent via ${sendResult.method === "background" ? "background" : "composer"}!`
+                  ? `✓ ${sendResult.message || "SMS app opened!"}`
                   : sendResult.error || "Failed to send SMS"}
               </div>
             )}

@@ -92,8 +92,7 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 
-    <!-- SMS for sending outstanding reminders -->
-    <uses-permission android:name="android.permission.SEND_SMS" />
+    <!-- SMS: Using SMS composer (opens SMS app) - no permission needed -->
 
     <!-- Remove broad photo/video permissions - using Photo Picker instead -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove" />

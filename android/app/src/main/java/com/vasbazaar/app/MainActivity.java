@@ -14,9 +14,6 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        // Register custom plugins before super.onCreate
-        registerPlugin(SmsSenderPlugin.class);
-
         super.onCreate(savedInstanceState);
         window = getWindow();
 

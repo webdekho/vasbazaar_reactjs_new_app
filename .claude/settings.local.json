@@ -34,7 +34,17 @@
       "Bash(npx cap sync:*)",
       "Bash(npm uninstall:*)",
       "Bash(./mvnw compile:*)",
-      "Bash(git status:*)"
+      "Bash(git status:*)",
+      "Bash({ echo \"SET FOREIGN_KEY_CHECKS = 0;\")",
+      "Bash(})",
+      "Bash(while read line)",
+      "Bash(do echo \"$line\")",
+      "Bash(done)",
+      "Bash(echo \"mysql -u root -p vasbazaar_db < ''/Users/shahidhusen/Documents/vasbazaar_reconsilations/updated/transaction/insert_queries_final.sql''\")",
+      "Bash(npx cap:*)",
+      "Bash(sudo xcode-select:*)",
+      "Bash(mdfind:*)",
+      "Bash(xcodebuild:*)"
     ]
   }
 }
