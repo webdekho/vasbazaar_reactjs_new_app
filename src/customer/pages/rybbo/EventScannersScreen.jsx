@@ -23,7 +23,10 @@ const EventScannersScreen = () => {
     });
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [eventId]);
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId]);
 
   const addScanner = async () => {
     setAddError("");
