@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaSearch, FaDownload, FaSyncAlt, FaClock, FaRupeeSign, FaPlaneDeparture, FaStore, FaBookOpen, FaRocket, FaUsers } from "react-icons/fa";
+import { FaSearch, FaDownload, FaSyncAlt, FaClock, FaRupeeSign, FaPlaneDeparture, FaStore, FaBookOpen, FaRocket, FaUsers, FaHeartbeat } from "react-icons/fa";
 import { FiShare, FiPlusSquare, FiAlertTriangle, FiClock, FiShield, FiChevronRight } from "react-icons/fi";
 import { HiOutlineCurrencyRupee, HiMiniSquares2X2 } from "react-icons/hi2";
 import { FaCalendarAlt, FaChevronRight } from "react-icons/fa";
@@ -10,6 +10,7 @@ import { userService } from "../services/userService";
 import { walletService } from "../services/walletService";
 import { rechargeService } from "../services/rechargeService";
 import { customerStorage } from "../services/storageService";
+import { peekCache } from "../services/apiCache";
 import { useCustomerModern } from "../context/CustomerModernContext";
 import { usePWAInstall } from "../hooks/usePWAInstall";
 import DataState from "../components/DataState";
@@ -263,6 +264,7 @@ const UpcomingDuesSection = ({ dues }) => {
 
 const quickAccessItems = [
   { label: "Services", icon: HiMiniSquares2X2, to: "#services", color: "#40E0D0", isScroll: true, iconUrl: "/images/b.png" },
+  { label: "Resibot 360", icon: FaHeartbeat, to: "/customer/app/resibot", color: "#E11D48" },
   { label: "Retail Bazaar", icon: FaStore, to: "/customer/app/marketplace", color: "#10B981" },
   { label: "ReBill", icon: FaBookOpen, to: "/customer/app/outstanding", color: "#FF7A00" },
   { label: "RYBBO", icon: FaRocket, to: "/customer/app/rybbo", color: "#7C3AED" },
@@ -409,11 +411,17 @@ const ServicesScreen = () => {
     userData?.kyc_verified === true ||
     userData?.kycVerified === true;
   const showKycBanner = !!userData && !isKycVerified;
-  const [services, setServices] = useState([]);
+  // Seed services synchronously from the 24h cache so warm starts paint the
+  // grid on first render — no skeleton, no waiting on a network round-trip.
+  const seededServices = useMemo(() => {
+    const cached = peekCache("getAllServices", 86400000);
+    return (Array.isArray(cached?.data) ? cached.data : []).map(normalizeService);
+  }, []);
+  const [services, setServices] = useState(seededServices);
   const [banners, setBanners] = useState([]);
   const [balances, setBalances] = useState({ cashback: "0.00", incentive: "0.00", wallet: "0.00" });
   const [upcomingDues, setUpcomingDues] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(seededServices.length === 0);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
@@ -423,33 +431,46 @@ const ServicesScreen = () => {
   const operatorsLoadedRef = useRef(false);
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      const [svcRes, adRes, balRes, duesRes] = await Promise.all([
-        serviceService.getAllServices(),
-        advertisementService.getHomeAdvertisements(),
-        userService.getUserBalance(),
-        walletService.getUpcomingDues(),
-      ]);
+    let alive = true;
+
+    // Gate the grid ONLY on the services list (24h-cached → usually instant).
+    // Previously this screen waited on Promise.all of services + ads + balance
+    // + dues, so the 2-minute balance cache forced a network call that held the
+    // whole grid behind the skeleton on every open. Each section now loads
+    // independently and fills in as it arrives.
+    serviceService.getAllServices().then((res) => {
+      if (!alive) return;
+      if (res.success) {
+        setServices((Array.isArray(res.data) ? res.data : []).map(normalizeService));
+      } else if (services.length === 0) {
+        setError(res.message);
+      }
       setLoading(false);
-      if (!svcRes.success) { setError(svcRes.message); return; }
-      setServices((Array.isArray(svcRes.data) ? svcRes.data : []).map(normalizeService));
-      setBanners(Array.isArray(adRes.data) ? adRes.data : []);
-      if (balRes.success && balRes.data) {
-        // Handle potential nested data structure from API
-        const d = balRes.data?.data || balRes.data;
-        setBalances({
-          cashback: d.cashback ?? d.Cashback ?? "0.00",
-          incentive: d.incentive ?? d.Incentive ?? "0.00",
-          wallet: d.balance ?? d.Balance ?? d.walletBalance ?? d.wallet ?? "0.00",
-        });
-      }
-      if (duesRes.success) {
-        const duesData = Array.isArray(duesRes.data) ? duesRes.data : (duesRes.data?.records || []);
-        setUpcomingDues(duesData);
-      }
-    };
-    load();
+    });
+
+    advertisementService.getHomeAdvertisements().then((res) => {
+      if (alive) setBanners(Array.isArray(res.data) ? res.data : []);
+    });
+
+    userService.getUserBalance().then((res) => {
+      if (!alive || !res.success || !res.data) return;
+      // Handle potential nested data structure from API
+      const d = res.data?.data || res.data;
+      setBalances({
+        cashback: d.cashback ?? d.Cashback ?? "0.00",
+        incentive: d.incentive ?? d.Incentive ?? "0.00",
+        wallet: d.balance ?? d.Balance ?? d.walletBalance ?? d.wallet ?? "0.00",
+      });
+    });
+
+    walletService.getUpcomingDues().then((res) => {
+      if (!alive || !res.success) return;
+      const duesData = Array.isArray(res.data) ? res.data : (res.data?.records || []);
+      setUpcomingDues(duesData);
+    });
+
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /**

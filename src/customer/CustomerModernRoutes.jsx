@@ -97,6 +97,16 @@ const RybboTicketDetailsScreen = lazy(() => import("./pages/rybbo/TicketDetailsS
 const RybboQrScannerScreen = lazy(() => import("./pages/rybbo/QrScannerScreen"));
 const RybboOrganizerEventsScreen = lazy(() => import("./pages/rybbo/OrganizerEventsScreen"));
 const RybboEventScannersScreen = lazy(() => import("./pages/rybbo/EventScannersScreen"));
+// Resibot 360 (VasBazaar Life)
+const ResibotDashboardScreen = lazy(() => import("./pages/resibot/ResibotDashboardScreen"));
+const ResibotReminderListScreen = lazy(() => import("./pages/resibot/ResibotReminderListScreen"));
+const ResibotReminderFormScreen = lazy(() => import("./pages/resibot/ResibotReminderFormScreen"));
+const ResibotReminderDetailScreen = lazy(() => import("./pages/resibot/ResibotReminderDetailScreen"));
+const ResibotHealthScreen = lazy(() => import("./pages/resibot/ResibotHealthScreen"));
+const ResibotVitalScreen = lazy(() => import("./pages/resibot/ResibotVitalScreen"));
+const ResibotMembersScreen = lazy(() => import("./pages/resibot/ResibotMembersScreen"));
+const ResibotOrdersScreen = lazy(() => import("./pages/resibot/ResibotOrdersScreen"));
+const ResibotExpenseScreen = lazy(() => import("./pages/resibot/ResibotExpenseScreen"));
 const RebuddyHomeScreen = lazy(() => import("./pages/rebuddy/RebuddyHomeScreen"));
 const RebuddyNewGroupScreen = lazy(() => import("./pages/rebuddy/NewGroupScreen"));
 const RebuddyGroupDetailScreen = lazy(() => import("./pages/rebuddy/GroupDetailScreen"));
@@ -213,6 +223,17 @@ const CustomerModernRoutes = () => {
             <Route path="rybbo/scan" element={<Suspense fallback={<RouteFallback />}><RybboQrScannerScreen /></Suspense>} />
             <Route path="rybbo/organizer/events" element={<Suspense fallback={<RouteFallback />}><RybboOrganizerEventsScreen /></Suspense>} />
             <Route path="rybbo/organizer/events/:id/scanners" element={<Suspense fallback={<RouteFallback />}><RybboEventScannersScreen /></Suspense>} />
+            {/* Resibot 360 (VasBazaar Life) */}
+            <Route path="resibot" element={<Suspense fallback={<RouteFallback />}><ResibotDashboardScreen /></Suspense>} />
+            <Route path="resibot/reminder/new" element={<Suspense fallback={<RouteFallback />}><ResibotReminderFormScreen /></Suspense>} />
+            <Route path="resibot/reminder/:id/edit" element={<Suspense fallback={<RouteFallback />}><ResibotReminderFormScreen /></Suspense>} />
+            <Route path="resibot/reminder/:id" element={<Suspense fallback={<RouteFallback />}><ResibotReminderDetailScreen /></Suspense>} />
+            <Route path="resibot/reminders/:module" element={<Suspense fallback={<RouteFallback />}><ResibotReminderListScreen /></Suspense>} />
+            <Route path="resibot/health" element={<Suspense fallback={<RouteFallback />}><ResibotHealthScreen /></Suspense>} />
+            <Route path="resibot/health/vital/:type" element={<Suspense fallback={<RouteFallback />}><ResibotVitalScreen /></Suspense>} />
+            <Route path="resibot/members" element={<Suspense fallback={<RouteFallback />}><ResibotMembersScreen /></Suspense>} />
+            <Route path="resibot/orders" element={<Suspense fallback={<RouteFallback />}><ResibotOrdersScreen /></Suspense>} />
+            <Route path="resibot/expenses" element={<Suspense fallback={<RouteFallback />}><ResibotExpenseScreen /></Suspense>} />
             <Route path="rebuddy" element={<Suspense fallback={<RouteFallback />}><RebuddyHomeScreen /></Suspense>} />
             <Route path="rebuddy/new" element={<Suspense fallback={<RouteFallback />}><RebuddyNewGroupScreen /></Suspense>} />
             <Route path="rebuddy/group/:id" element={<Suspense fallback={<RouteFallback />}><RebuddyGroupDetailScreen /></Suspense>} />

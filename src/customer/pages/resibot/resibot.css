@@ -1,0 +1,200 @@
+/* ============================================================
+   Resibot 360 — cutting-edge, theme-aware design system.
+   Tokens adapt to the app's dark default + .theme-light override
+   so inputs/cards are always crisp on either background.
+   ============================================================ */
+
+.customer-modern-app {
+  --rb-brand: #E11D48;
+  --rb-brand-2: #FB7185;
+  --rb-grad: linear-gradient(135deg, #E11D48 0%, #FB7185 100%);
+  --rb-brand-soft: rgba(225, 29, 72, 0.16);
+  --rb-brand-ring: rgba(225, 29, 72, 0.22);
+
+  /* dark (default) */
+  --rb-surface: #16171D;
+  --rb-surface-2: #1E2027;
+  --rb-elev: #20222B;
+  --rb-border: rgba(255, 255, 255, 0.10);
+  --rb-border-strong: rgba(255, 255, 255, 0.16);
+  --rb-text: #F4F5F7;
+  --rb-muted: #9AA1AC;
+  --rb-shadow: 0 12px 34px -20px rgba(0, 0, 0, 0.85);
+  --rb-shadow-sm: 0 6px 18px -12px rgba(0, 0, 0, 0.8);
+}
+
+.customer-modern-app.theme-light {
+  --rb-brand-soft: #FFE4EC;
+  --rb-brand-ring: rgba(225, 29, 72, 0.16);
+  --rb-surface: #FFFFFF;
+  --rb-surface-2: #F6F7F9;
+  --rb-elev: #FFFFFF;
+  --rb-border: #E5E8EE;
+  --rb-border-strong: #D7DCE5;
+  --rb-text: #101828;
+  --rb-muted: #667085;
+  --rb-shadow: 0 14px 34px -22px rgba(16, 24, 40, 0.30);
+  --rb-shadow-sm: 0 8px 20px -14px rgba(16, 24, 40, 0.22);
+}
+
+/* ---- Page ---- */
+.rb-page {
+  padding: 8px 6px 96px;
+  width: 100%;
+  color: var(--rb-text);
+  animation: rb-fade-in 0.35s ease both;
+}
+@keyframes rb-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ---- Header ---- */
+.rb-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.rb-back {
+  width: 40px; height: 40px; border-radius: 13px; flex-shrink: 0;
+  border: 1px solid var(--rb-border); background: var(--rb-surface);
+  color: var(--rb-text); display: grid; place-items: center; cursor: pointer;
+  box-shadow: var(--rb-shadow-sm); transition: transform .15s ease, background .15s ease;
+}
+.rb-back:active { transform: scale(0.92); }
+.rb-title { margin: 0; font-size: 21px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
+.rb-subtitle { font-size: 12.5px; color: var(--rb-muted); margin-top: 2px; }
+.rb-header-add {
+  width: 40px; height: 40px; border-radius: 13px; border: none; cursor: pointer;
+  background: var(--rb-grad); color: #fff; display: grid; place-items: center;
+  box-shadow: 0 10px 22px -10px var(--rb-brand-ring); transition: transform .15s ease;
+}
+.rb-header-add:active { transform: scale(0.92); }
+
+/* ---- Card ---- */
+.rb-card {
+  padding: 16px; border-radius: 18px;
+  border: 1px solid var(--rb-border); background: var(--rb-surface);
+  box-shadow: var(--rb-shadow-sm);
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+.rb-card--tap { cursor: pointer; }
+.rb-card--tap:active { transform: scale(0.985); }
+.rb-card--tap:hover { border-color: var(--rb-border-strong); box-shadow: var(--rb-shadow); }
+
+/* ---- Fields ---- */
+.rb-field { display: block; margin-bottom: 16px; }
+.rb-card > .rb-field:last-child,
+.rb-card > div:last-child > .rb-field { margin-bottom: 0; }
+
+/* label row with an inline action (e.g. + Custom) */
+.rb-field-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+.rb-field-head .rb-label { margin-bottom: 0; }
+.rb-add-btn {
+  display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px;
+  border-radius: 999px; border: 1px solid var(--rb-brand); background: transparent;
+  color: var(--rb-brand); font-size: 11px; font-weight: 700; cursor: pointer;
+  transition: background .15s ease, transform .12s ease;
+}
+.rb-add-btn:active { transform: scale(0.94); background: var(--rb-brand-soft); }
+.rb-label {
+  display: block; font-size: 12px; font-weight: 700; letter-spacing: 0.02em;
+  text-transform: uppercase; color: var(--rb-muted); margin-bottom: 7px;
+}
+.rb-input, .rb-select, .rb-textarea {
+  width: 100%; box-sizing: border-box;
+  padding: 13px 14px; border-radius: 14px; font-size: 15px;
+  color: var(--rb-text); background: var(--rb-surface);
+  border: 1.5px solid var(--rb-border);
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+  -webkit-appearance: none; appearance: none; outline: none;
+  font-family: inherit;
+}
+.rb-input::placeholder, .rb-textarea::placeholder { color: var(--rb-muted); opacity: 0.8; }
+.rb-input:focus, .rb-select:focus, .rb-textarea:focus {
+  border-color: var(--rb-brand);
+  box-shadow: 0 0 0 4px var(--rb-brand-ring);
+  background: var(--rb-elev);
+}
+.rb-textarea { min-height: 78px; resize: vertical; line-height: 1.5; }
+/* custom chevron for selects */
+.rb-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center;
+  padding-right: 40px;
+}
+
+/* ---- Primary button ---- */
+.rb-btn {
+  width: 100%; padding: 14px 18px; border-radius: 14px; border: none;
+  background: var(--rb-grad); color: #fff; font-weight: 700; font-size: 15px;
+  cursor: pointer; box-shadow: 0 14px 28px -14px var(--rb-brand-ring);
+  transition: transform .15s ease, filter .15s ease, opacity .15s ease;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+}
+.rb-btn:active { transform: translateY(1px) scale(0.99); }
+.rb-btn:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; }
+
+.rb-btn-ghost {
+  padding: 13px 18px; border-radius: 14px; border: 1px solid var(--rb-border);
+  background: var(--rb-surface); color: var(--rb-text); font-weight: 600; font-size: 14px;
+  cursor: pointer; transition: background .15s ease, border-color .15s ease;
+}
+.rb-btn-ghost:active { background: var(--rb-surface-2); }
+
+/* ---- Chip ---- */
+.rb-chip {
+  display: inline-block; padding: 4px 11px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.01em;
+}
+
+/* ---- Empty ---- */
+.rb-empty {
+  padding: 30px 18px; border-radius: 18px; text-align: center;
+  border: 1px dashed var(--rb-border-strong); background: var(--rb-surface-2);
+  color: var(--rb-muted); font-size: 13.5px; line-height: 1.55;
+}
+
+/* ---- Hero (dashboard) ---- */
+.rb-hero {
+  position: relative; overflow: hidden;
+  background: var(--rb-grad); border-radius: 24px; padding: 22px 20px; color: #fff;
+  margin-bottom: 18px; box-shadow: 0 22px 44px -26px var(--rb-brand-ring);
+}
+.rb-hero::after {
+  content: ""; position: absolute; right: -50px; top: -60px;
+  width: 200px; height: 200px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+}
+.rb-hero::before {
+  content: ""; position: absolute; right: 40px; bottom: -70px;
+  width: 150px; height: 150px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+}
+.rb-hero > * { position: relative; z-index: 1; }
+.rb-hero-badge {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px;
+  border-radius: 999px; background: rgba(255, 255, 255, 0.20);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.04em; margin-bottom: 10px;
+}
+.rb-hero-stat {
+  flex: 1; background: rgba(255, 255, 255, 0.16); border-radius: 14px; padding: 11px 13px;
+  backdrop-filter: blur(2px);
+}
+
+/* ---- Section heading ---- */
+.rb-section-title { font-size: 16px; margin: 0 0 11px; font-weight: 800; letter-spacing: -0.01em; }
+
+/* ---- Module / tracker tiles grid ---- */
+.rb-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 11px; }
+.rb-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 11px; }
+
+/* icon chip */
+.rb-icon-chip {
+  width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center;
+  flex-shrink: 0; background: var(--rb-brand-soft); color: var(--rb-brand);
+}
+
+/* segmented tabs */
+.rb-tabs { display: flex; gap: 4px; padding: 4px; border-radius: 14px; border: 1px solid var(--rb-border); background: var(--rb-surface-2); margin-bottom: 16px; }
+.rb-tab { flex: 1; padding: 10px 0; border-radius: 10px; border: none; cursor: pointer; font-weight: 700; font-size: 13px; background: transparent; color: var(--rb-muted); transition: background .15s ease, color .15s ease; }
+.rb-tab--on { background: var(--rb-surface); color: var(--rb-brand); box-shadow: var(--rb-shadow-sm); }
+
+/* sticky bottom action bar for forms */
+.rb-sticky-bar {
+  position: sticky; bottom: 0; margin: 8px -6px 0; padding: 12px 6px calc(12px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, var(--rb-surface) 70%, transparent);
+}

@@ -83,6 +83,20 @@ export const cachedFetch = async (key, fetcher, ttlMs = 30000) => {
   return promise;
 };
 
+/**
+ * Synchronous, non-fetching cache peek. Returns the cached API response if it
+ * exists and is still within `ttlMs`, otherwise null. Lets a screen seed its
+ * initial state from cache on first render so warm starts paint instantly
+ * without waiting on a Promise/network round-trip.
+ */
+export const peekCache = (key, ttlMs = Infinity) => {
+  const entry = getFromStorage(key);
+  if (entry && Date.now() - entry.timestamp < ttlMs) {
+    return entry.data;
+  }
+  return null;
+};
+
 /** Invalidate a specific cache entry (use after mutations) */
 export const invalidate = (key) => {
   removeFromStorage(key);

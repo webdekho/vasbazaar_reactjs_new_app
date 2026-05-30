@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { FaBookOpen, FaGift, FaRegBell, FaRocket, FaUsers, FaWallet } from "react-icons/fa";
+import { FaBook, FaBookOpen, FaGift, FaRegBell, FaRocket, FaTimes, FaUsers, FaWallet } from "react-icons/fa";
 import { useCustomerModern } from "../context/CustomerModernContext";
 import { userService } from "../services/userService";
 import { advertisementService } from "../services/advertisementService";
@@ -17,6 +17,7 @@ const HomeScreen = () => {
   const [state, setState] = useState({
     loading: true, error: "", ads: [], services: [], walletRecords: [], notifications: [], profile: userData,
   });
+  const [showRentBook, setShowRentBook] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +61,7 @@ const HomeScreen = () => {
     { label: "ReBill", to: "/customer/app/outstanding", icon: FaBookOpen, accentColor: "#FFE9D6", highlightColor: "#FF7A00" },
     { label: "RYBBO", to: "/customer/app/rybbo", icon: FaRocket, accentColor: "#EDE4FF", highlightColor: "#7C3AED" },
     { label: "ReBuddy", to: "/customer/app/rebuddy", icon: FaUsers, accentColor: "#FFE7E0", highlightColor: "#E8735A" },
+    { label: "Rent a Book", action: "rentBook", icon: FaBook, accentColor: "#E8F3FF", highlightColor: "#2563EB" },
     { label: "Rewards", to: "/customer/app/coupons", ...getServiceVisual("rewards") },
   ];
 
@@ -95,7 +97,12 @@ const HomeScreen = () => {
           </div>
           <div className="cm-service-grid">
             {quickLinks.map((item) => (
-              <button key={item.label} className="cm-service-card" type="button" onClick={() => navigate(item.to)}>
+              <button
+                key={item.label}
+                className="cm-service-card"
+                type="button"
+                onClick={() => (item.action === "rentBook" ? setShowRentBook(true) : navigate(item.to))}
+              >
                 <ServiceIcon icon={item.icon} accentColor={item.accentColor} highlightColor={item.highlightColor} />
                 <div className="cm-service-name">{item.label}</div>
               </button>
@@ -185,6 +192,93 @@ const HomeScreen = () => {
           </div>
         ) : null}
       </section>
+
+      {showRentBook ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Rent a Book"
+          onClick={() => setShowRentBook(false)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 1000, display: "flex",
+            alignItems: "flex-end", justifyContent: "center",
+            background: "rgba(15, 23, 42, 0.55)", backdropFilter: "blur(2px)",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%", maxWidth: 520, background: "#fff",
+              borderTopLeftRadius: 20, borderTopRightRadius: 20,
+              padding: "20px 20px 24px", boxShadow: "0 -8px 30px rgba(0,0,0,0.18)",
+              maxHeight: "85vh", overflowY: "auto",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  width: 40, height: 40, borderRadius: 12, background: "#E8F3FF", color: "#2563EB",
+                }}>
+                  <FaBook />
+                </span>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: 18 }}>Rent a Book</h2>
+                  <div className="cm-muted" style={{ fontSize: 12 }}>Read More. Spend Less. Earn From Your Books.</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => setShowRentBook(false)}
+                style={{ border: "none", background: "transparent", fontSize: 18, color: "#64748b", cursor: "pointer" }}
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <p className="cm-muted" style={{ marginTop: 0 }}>
+              Rentabook is a peer-to-peer book rental marketplace — rent out the books you do not use and earn,
+              or rent the books you want to read affordably. Think of it as Airbnb for books.
+            </p>
+
+            <div style={{ display: "grid", gap: 8, margin: "12px 0 16px" }}>
+              {[
+                "Browse books near you by title, author, category or city",
+                "Pick a rental duration — 7, 15, 30 days or custom",
+                "Pay rent + refundable security deposit securely",
+                "Self pickup or doorstep delivery once the owner approves",
+              ].map((line) => (
+                <div key={line} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 14 }}>
+                  <FaBookOpen style={{ color: "#2563EB", marginTop: 3, flexShrink: 0 }} />
+                  <span>{line}</span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                type="button"
+                className="cm-button-ghost"
+                style={{ flex: 1 }}
+                onClick={() => setShowRentBook(false)}
+              >
+                Maybe later
+              </button>
+              <button
+                type="button"
+                style={{
+                  flex: 1, border: "none", borderRadius: 12, padding: "12px 16px",
+                  background: "#2563EB", color: "#fff", fontWeight: 600, cursor: "pointer",
+                }}
+                onClick={() => setShowRentBook(false)}
+              >
+                Explore books
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </DataState>
   );
 };
