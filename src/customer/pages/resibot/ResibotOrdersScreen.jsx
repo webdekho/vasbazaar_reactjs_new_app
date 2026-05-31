@@ -71,7 +71,7 @@ const ResibotOrdersScreen = () => {
   );
 
   return (
-    <div style={{ padding: "12px 4px 32px", width: "100%" }}>
+    <div className="rb-page">
       <ResibotHeader
         title="Orders & Delivery" subtitle="Track your orders in one place"
         onBack={() => navigate("/customer/app/resibot")}

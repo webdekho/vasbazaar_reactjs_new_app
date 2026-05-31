@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaSearch, FaDownload, FaSyncAlt, FaClock, FaRupeeSign, FaPlaneDeparture, FaStore, FaBookOpen, FaRocket, FaUsers, FaHeartbeat } from "react-icons/fa";
+import { FaSearch, FaDownload, FaSyncAlt, FaClock, FaRupeeSign, FaPlaneDeparture, FaStore, FaBook, FaBookOpen, FaRocket, FaUsers, FaHeartbeat } from "react-icons/fa";
 import { FiShare, FiPlusSquare, FiAlertTriangle, FiClock, FiShield, FiChevronRight } from "react-icons/fi";
 import { HiOutlineCurrencyRupee, HiMiniSquares2X2 } from "react-icons/hi2";
 import { FaCalendarAlt, FaChevronRight } from "react-icons/fa";
@@ -266,6 +266,7 @@ const quickAccessItems = [
   { label: "Services", icon: HiMiniSquares2X2, to: "#services", color: "#40E0D0", isScroll: true, iconUrl: "/images/b.png" },
   { label: "Resibot 360", icon: FaHeartbeat, to: "/customer/app/resibot", color: "#E11D48" },
   { label: "Retail Bazaar", icon: FaStore, to: "/customer/app/marketplace", color: "#10B981" },
+  { label: "Rent a Book", icon: FaBook, to: "/customer/app/rentabook", color: "#2563EB" },
   { label: "ReBill", icon: FaBookOpen, to: "/customer/app/outstanding", color: "#FF7A00" },
   { label: "RYBBO", icon: FaRocket, to: "/customer/app/rybbo", color: "#7C3AED" },
   { label: "ReBuddy", icon: FaUsers, to: "/customer/app/rebuddy", color: "#E8735A" },

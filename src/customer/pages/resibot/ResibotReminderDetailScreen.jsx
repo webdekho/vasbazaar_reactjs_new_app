@@ -36,7 +36,7 @@ const ResibotReminderDetailScreen = () => {
 
   if (loading) return <Spinner />;
   if (!r) return (
-    <div style={{ padding: "12px 4px" }}>
+    <div className="rb-page">
       <ResibotHeader title="Reminder" onBack={() => navigate("/customer/app/resibot")} />
       <EmptyState>Reminder not found.</EmptyState>
     </div>
@@ -65,7 +65,7 @@ const ResibotReminderDetailScreen = () => {
   };
 
   return (
-    <div style={{ padding: "12px 4px 32px", width: "100%" }}>
+    <div className="rb-page">
       <ResibotHeader title={r.title || r.category || meta?.label} subtitle={meta?.label} onBack={() => navigate(-1)}
         right={<StatusChip status={r.status} />} />
 

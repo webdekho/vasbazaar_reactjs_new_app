@@ -1,18 +1,23 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaHeartbeat, FaPlus, FaUsers, FaChevronRight, FaTint, FaWeight, FaBoxOpen, FaWallet } from "react-icons/fa";
+import { FaHeartbeat, FaPlus, FaUsers, FaChevronRight, FaTint, FaWeight, FaBoxOpen, FaWallet, FaBell } from "react-icons/fa";
+import { App as CapApp } from "@capacitor/app";
 import { resibotService, RESIBOT_MODULES, getResibotModule } from "../../services/resibotService";
 import { useCustomerModern } from "../../context/CustomerModernContext";
+import { useToast } from "../../context/ToastContext";
+import { computeDueAlerts, syncResibotNotifications, registerResibotTapHandler, checkDueResibotRemindersNow } from "../../services/resibotNotifier";
 import { RB, Spinner, Card, EmptyState, StatusChip, dueLabel, fmtDate } from "./resibotUi";
 
 const ResibotDashboardScreen = () => {
   const navigate = useNavigate();
   const { userData } = useCustomerModern();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [dash, setDash] = useState({ countsByModule: {}, upcoming: [], overdue: 0, totalActive: 0 });
   const [health, setHealth] = useState(null);
   const [activeOrders, setActiveOrders] = useState(0);
   const [expense, setExpense] = useState(null);
+  const [dueAlerts, setDueAlerts] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -29,8 +34,28 @@ const ResibotDashboardScreen = () => {
       if (o?.success && Array.isArray(o.data)) setActiveOrders(o.data.length);
       if (ex?.success && ex.data) setExpense(ex.data);
       setLoading(false);
+
+      // ---- In-app reminder engine (fires from internal data) ----
+      const reminders = d?.data?.upcoming || [];
+      setDueAlerts(computeDueAlerts(reminders));
+      // Pop in-app toast / web notification for anything due right now.
+      checkDueResibotRemindersNow({ showToast, reminders });
+      // Schedule device heads-up notifications (native; fires even when closed).
+      syncResibotNotifications();
     })();
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Re-evaluate whenever the app returns to the foreground.
+  useEffect(() => {
+    let sub;
+    CapApp.addListener("appStateChange", ({ isActive }) => {
+      if (isActive) { checkDueResibotRemindersNow({ showToast }); syncResibotNotifications(); }
+    }).then((s) => { sub = s; }).catch(() => {});
+    const cleanupTap = registerResibotTapHandler(navigate);
+    return () => { if (sub?.remove) sub.remove(); cleanupTap(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (loading) return <Spinner />;
@@ -45,7 +70,7 @@ const ResibotDashboardScreen = () => {
   const upcoming = dash.upcoming || [];
 
   return (
-    <div style={{ padding: "12px 4px 32px", width: "100%" }}>
+    <div className="rb-page">
       {/* Hero */}
       <section style={{
         background: RB.gradient, borderRadius: 20, padding: "22px 20px", color: "#fff",
@@ -69,6 +94,39 @@ const ResibotDashboardScreen = () => {
           </div>
         </div>
       </section>
+
+      {/* Due-now alerts (fired from internal reminder data) */}
+      {dueAlerts.length > 0 && (
+        <section style={{ marginBottom: 20 }}>
+          <Card style={{ borderColor: "rgba(220,38,38,0.35)", background: "rgba(220,38,38,0.06)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <span style={{ width: 30, height: 30, borderRadius: 9, background: "rgba(220,38,38,0.14)", color: "#DC2626", display: "grid", placeItems: "center" }}>
+                <FaBell size={13} />
+              </span>
+              <strong style={{ fontSize: 14.5 }}>
+                {dueAlerts.length} reminder{dueAlerts.length > 1 ? "s" : ""} need attention
+              </strong>
+            </div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {dueAlerts.slice(0, 6).map((a) => (
+                <button key={a.reminder.id} type="button"
+                  onClick={() => navigate(`/customer/app/resibot/reminder/${a.reminder.id}`)}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 12px", borderRadius: 12, border: `1px solid ${RB.border}`, background: RB.cardBg, color: "inherit", cursor: "pointer", textAlign: "left" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {a.reminder.title || a.reminder.category || a.reminder.module}
+                    </div>
+                    <div style={{ fontSize: 12, color: a.daysLeft < 0 ? "#DC2626" : RB.muted }}>
+                      {dueLabel(a.reminder.dueDate)}
+                    </div>
+                  </div>
+                  <FaChevronRight size={12} style={{ color: RB.muted, flexShrink: 0 }} />
+                </button>
+              ))}
+            </div>
+          </Card>
+        </section>
+      )}
 
       {/* Module tiles */}
       <section style={{ marginBottom: 20 }}>

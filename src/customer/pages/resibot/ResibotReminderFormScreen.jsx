@@ -8,6 +8,15 @@ import {
   ResibotHeader, Spinner, Card, Field, TextInput, Select, TextArea, PrimaryButton,
 } from "./resibotUi";
 
+// Keep raw SQL / stack-trace style messages out of the UI.
+const friendlyError = (msg) => {
+  if (!msg) return "Could not save reminder. Please try again.";
+  if (msg.length > 140 || /could not execute|SQL \[|Table '|insert into|Exception/i.test(msg)) {
+    return "Could not save right now. Please try again in a moment.";
+  }
+  return msg;
+};
+
 const emptyForm = (module) => ({
   module: module || "BILL",
   category: "",
@@ -35,15 +44,28 @@ const ResibotReminderFormScreen = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [members, setMembers] = useState([]);
+  const [options, setOptions] = useState({ modules: [], categoriesByModule: {} });
   const [customModule, setCustomModule] = useState(false);
   const [customCategory, setCustomCategory] = useState(false);
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [newMember, setNewMember] = useState({ name: "", mobileNumber: "" });
+  const [memberSaving, setMemberSaving] = useState(false);
   const [form, setForm] = useState(emptyForm(params.get("module") || "BILL"));
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const mRes = await resibotService.listMembers();
+      const [mRes, oRes] = await Promise.all([
+        resibotService.listMembers(),
+        resibotService.getReminderOptions(),
+      ]);
       if (!cancelled && mRes?.success && Array.isArray(mRes.data)) setMembers(mRes.data);
+      if (!cancelled && oRes?.success && oRes.data) {
+        setOptions({
+          modules: Array.isArray(oRes.data.modules) ? oRes.data.modules : [],
+          categoriesByModule: oRes.data.categoriesByModule || {},
+        });
+      }
 
       if (isEdit) {
         const res = await resibotService.getReminder(id);
@@ -74,6 +96,30 @@ const ResibotReminderFormScreen = () => {
 
   const meta = getResibotModule(form.module);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  // Merge user's previously-used custom values into the dropdowns.
+  const customModules = (options.modules || []).filter((m) => !RESIBOT_MODULES.some((x) => x.key === m));
+  const builtinCats = meta?.categories || [];
+  const customCats = (options.categoriesByModule?.[form.module] || []).filter((c) => !builtinCats.includes(c));
+
+  const saveNewMember = async () => {
+    if (!newMember.name.trim()) return;
+    setMemberSaving(true);
+    const res = await resibotService.addMember({
+      name: newMember.name.trim(),
+      mobileNumber: newMember.mobileNumber ? newMember.mobileNumber.trim() : null,
+    });
+    setMemberSaving(false);
+    if (res?.success && res.data?.id) {
+      const list = await resibotService.listMembers();
+      if (list?.success && Array.isArray(list.data)) setMembers(list.data);
+      setForm((f) => ({ ...f, memberId: res.data.id }));
+      setShowAddMember(false);
+      setNewMember({ name: "", mobileNumber: "" });
+    }
+  };
+
+  const selectedMember = members.find((m) => String(m.id) === String(form.memberId));
 
   const handleSave = async () => {
     setError("");
@@ -109,7 +155,7 @@ const ResibotReminderFormScreen = () => {
     if (res?.success) {
       navigate(`/customer/app/resibot/reminders/${form.module}`);
     } else {
-      setError(res?.message || "Could not save reminder.");
+      setError(friendlyError(res?.message));
     }
   };
 
@@ -128,11 +174,7 @@ const ResibotReminderFormScreen = () => {
         onBack={() => navigate(-1)}
       />
 
-      {error && (
-        <div style={{ padding: "11px 13px", borderRadius: 12, background: "rgba(220,38,38,0.12)", color: "#DC2626", fontSize: 13, fontWeight: 600, marginBottom: 14, border: "1px solid rgba(220,38,38,0.25)" }}>
-          {error}
-        </div>
-      )}
+      {error && <div className="rb-error">{error}</div>}
 
       {/* Details */}
       <Card style={{ marginBottom: 14 }}>
@@ -154,7 +196,8 @@ const ResibotReminderFormScreen = () => {
           ) : (
             <Select value={form.module} onChange={set("module")} disabled={isEdit}>
               {RESIBOT_MODULES.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
-              {!RESIBOT_MODULES.some((m) => m.key === form.module) && form.module && (
+              {customModules.map((m) => <option key={m} value={m}>{m}</option>)}
+              {form.module && !RESIBOT_MODULES.some((m) => m.key === form.module) && !customModules.includes(form.module) && (
                 <option value={form.module}>{form.module}</option>
               )}
             </Select>
@@ -173,8 +216,9 @@ const ResibotReminderFormScreen = () => {
           ) : (
             <Select value={form.category} onChange={set("category")}>
               <option value="">Select category</option>
-              {(meta?.categories || []).map((c) => <option key={c} value={c}>{c}</option>)}
-              {form.category && !(meta?.categories || []).includes(form.category) && (
+              {builtinCats.map((c) => <option key={c} value={c}>{c}</option>)}
+              {customCats.map((c) => <option key={c} value={c}>{c}</option>)}
+              {form.category && !builtinCats.includes(form.category) && !customCats.includes(form.category) && (
                 <option value={form.category}>{form.category}</option>
               )}
             </Select>
@@ -237,12 +281,44 @@ const ResibotReminderFormScreen = () => {
 
       {/* More */}
       <Card>
-        <Field label="For family member (optional)">
+        <div className="rb-field">
+          <div className="rb-field-head">
+            <span className="rb-label">For family member (optional)</span>
+            <button type="button" className="rb-add-btn" onClick={() => setShowAddMember((v) => !v)}>
+              {showAddMember ? <><FaListUl size={9} /> Close</> : <><FaPlus size={9} /> Add member</>}
+            </button>
+          </div>
           <Select value={form.memberId} onChange={set("memberId")}>
             <option value="">Myself</option>
-            {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            {members.map((m) => (
+              <option key={m.id} value={m.id}>{m.name}{m.mobileNumber ? ` (${m.mobileNumber})` : ""}</option>
+            ))}
           </Select>
-        </Field>
+
+          {selectedMember?.mobileNumber && (
+            <div style={{ fontSize: 11.5, color: "var(--rb-muted)", marginTop: 7, lineHeight: 1.5 }}>
+              Shared with {selectedMember.name} ({selectedMember.mobileNumber}) — if they use VasBazaar, this reminder will also appear in their app.
+            </div>
+          )}
+
+          {showAddMember && (
+            <div style={{ marginTop: 12, padding: 13, borderRadius: 12, border: "1px dashed var(--rb-border-strong)", background: "var(--rb-surface-2)" }}>
+              <Field label="Name">
+                <TextInput value={newMember.name} onChange={(e) => setNewMember((n) => ({ ...n, name: e.target.value }))} placeholder="Family member name" />
+              </Field>
+              <Field label="Mobile number (their VasBazaar number)">
+                <TextInput type="tel" inputMode="numeric" value={newMember.mobileNumber}
+                  onChange={(e) => setNewMember((n) => ({ ...n, mobileNumber: e.target.value }))} placeholder="e.g. 9876543210" />
+              </Field>
+              <div style={{ fontSize: 11.5, color: "var(--rb-muted)", margin: "-6px 0 12px", lineHeight: 1.5 }}>
+                If this number belongs to a VasBazaar user, reminders you assign to this member appear in their app automatically — they don't need to add anything.
+              </div>
+              <PrimaryButton onClick={saveNewMember} disabled={memberSaving}>
+                {memberSaving ? "Adding…" : "Add & select"}
+              </PrimaryButton>
+            </div>
+          )}
+        </div>
 
         <Field label="Notes">
           <TextArea value={form.notes} onChange={set("notes")} placeholder="Optional notes" />

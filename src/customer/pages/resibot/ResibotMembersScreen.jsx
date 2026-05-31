@@ -4,7 +4,7 @@ import { FaPlus, FaEdit, FaTrash, FaUser } from "react-icons/fa";
 import { resibotService } from "../../services/resibotService";
 import { RB, ResibotHeader, Spinner, Card, Field, TextInput, Select, PrimaryButton, EmptyState, fmtDate } from "./resibotUi";
 
-const empty = { id: null, name: "", relation: "", dob: "", gender: "" };
+const empty = { id: null, name: "", relation: "", mobileNumber: "", dob: "", gender: "" };
 
 const ResibotMembersScreen = () => {
   const navigate = useNavigate();
@@ -25,7 +25,7 @@ const ResibotMembersScreen = () => {
 
   const openNew = () => { setForm(empty); setShowForm(true); };
   const openEdit = (m) => {
-    setForm({ id: m.id, name: m.name || "", relation: m.relation || "", dob: m.dob || "", gender: m.gender || "" });
+    setForm({ id: m.id, name: m.name || "", relation: m.relation || "", mobileNumber: m.mobileNumber || "", dob: m.dob || "", gender: m.gender || "" });
     setShowForm(true);
   };
 
@@ -34,6 +34,7 @@ const ResibotMembersScreen = () => {
     setSaving(true);
     const payload = {
       name: form.name.trim(), relation: form.relation || null,
+      mobileNumber: form.mobileNumber ? form.mobileNumber.trim() : null,
       dob: form.dob || null, gender: form.gender || null,
     };
     if (form.id) {
@@ -57,7 +58,7 @@ const ResibotMembersScreen = () => {
   if (loading) return <Spinner />;
 
   return (
-    <div style={{ padding: "12px 4px 32px", width: "100%" }}>
+    <div className="rb-page">
       <ResibotHeader
         title="Family members"
         subtitle={`${members.length} member(s)`}
@@ -73,6 +74,12 @@ const ResibotMembersScreen = () => {
       {showForm && (
         <Card style={{ marginBottom: 18 }}>
           <Field label="Name"><TextInput value={form.name} onChange={set("name")} placeholder="Member name" /></Field>
+          <Field label="Mobile number (their VasBazaar number to share reminders)">
+            <TextInput type="tel" inputMode="numeric" value={form.mobileNumber} onChange={set("mobileNumber")} placeholder="e.g. 9876543210" />
+          </Field>
+          <div style={{ fontSize: 11.5, color: RB.muted, margin: "-6px 0 14px", lineHeight: 1.5 }}>
+            If this number belongs to a VasBazaar user, reminders you assign to this member will automatically appear in their app too — no action needed from them.
+          </div>
           <Field label="Relation">
             <Select value={form.relation} onChange={set("relation")}>
               <option value="">Select</option>
@@ -110,7 +117,7 @@ const ResibotMembersScreen = () => {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14.5, fontWeight: 700 }}>{m.name}</div>
                 <div style={{ fontSize: 12.5, color: RB.muted }}>
-                  {[m.relation, m.dob ? fmtDate(m.dob) : null].filter(Boolean).join(" · ") || "—"}
+                  {[m.relation, m.mobileNumber, m.dob ? fmtDate(m.dob) : null].filter(Boolean).join(" · ") || "—"}
                 </div>
               </div>
               <button type="button" onClick={() => openEdit(m)} aria-label="Edit"

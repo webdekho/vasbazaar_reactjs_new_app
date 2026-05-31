@@ -47,7 +47,7 @@ const ResibotVitalScreen = () => {
   if (loading) return <Spinner />;
 
   return (
-    <div style={{ padding: "12px 4px 32px", width: "100%" }}>
+    <div className="rb-page">
       <ResibotHeader title={meta.label} subtitle={`Logged in ${meta.unit}`} onBack={() => navigate("/customer/app/resibot/health")} />
 
       <Card style={{ marginBottom: 18 }}>

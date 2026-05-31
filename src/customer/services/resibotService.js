@@ -19,6 +19,9 @@ export const resibotService = {
     cachedFetch(DASHBOARD_KEY, () => authGet(`${RESIBOT_BASE}/reminder/dashboard`), 60000),
 
   // ---- Reminders ----
+  // Distinct modules + categories the user has used (built-in + custom).
+  getReminderOptions: () => authGet(`${RESIBOT_BASE}/reminder/options`),
+
   listReminders: (module) =>
     authGet(`${RESIBOT_BASE}/reminder/all`, module ? { module } : {}),
 

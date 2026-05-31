@@ -52,7 +52,7 @@ const ResibotExpenseScreen = () => {
   const maxTop = top.reduce((m, t) => Math.max(m, Number(t.amount || 0)), 0) || 1;
 
   return (
-    <div style={{ padding: "12px 4px 32px", width: "100%" }}>
+    <div className="rb-page">
       <ResibotHeader
         title="Expense Snapshot" subtitle="Lightweight monthly spend tracker"
         onBack={() => navigate("/customer/app/resibot")}

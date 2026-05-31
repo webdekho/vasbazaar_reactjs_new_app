@@ -90,7 +90,7 @@ const ResibotHealthScreen = () => {
   if (loading) return <Spinner />;
 
   return (
-    <div style={{ padding: "12px 4px 32px", width: "100%" }}>
+    <div className="rb-page">
       <ResibotHeader title="Health" subtitle="Vitals, BMI & water tracking" onBack={() => navigate("/customer/app/resibot")} />
 
       <Field label="Profile for">
