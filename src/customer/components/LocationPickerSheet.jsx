@@ -1,34 +1,41 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FiSearch, FiX, FiNavigation, FiMapPin } from "react-icons/fi";
+import { isGoogleEnabled, autocompletePlaces, getPlaceDetails } from "../services/placesService";
 
-// Free OpenStreetMap Nominatim search — restricted to India, rate-limited (~1 req/sec).
-// No API key required, fine for personal/dev use; for production traffic, switch to
-// a paid provider (Google Places, Mapbox) and keep this shape.
-const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
+// Free OpenStreetMap-based search via Photon (komoot). Unlike Nominatim,
+// Photon sends `Access-Control-Allow-Origin: *`, so it works from the browser
+// / Capacitor webview. No API key; India-biased. For best coverage of small
+// societies/buildings, configure a Google Maps key (see placesService.js).
+const PHOTON_URL = "https://photon.komoot.io/api/";
 
+// IMPORTANT: send NO custom headers — any header turns this into a CORS
+// preflight that the free endpoints don't answer, which silently zeroes results.
 const searchPlaces = async (query, signal) => {
-  const url = `${NOMINATIM_URL}?q=${encodeURIComponent(query)}&format=json&limit=6&countrycodes=in&addressdetails=1`;
-  const res = await fetch(url, { signal, headers: { Accept: "application/json" } });
+  // Bias results toward India (centroid lat/lon) without hard-excluding others.
+  const url = `${PHOTON_URL}?q=${encodeURIComponent(query)}&limit=6&lang=en&lat=22.0&lon=79.0`;
+  const res = await fetch(url, { signal });
   if (!res.ok) throw new Error("Search failed");
-  const rows = await res.json();
-  return rows.map((r) => ({
-    lat: Number(r.lat),
-    lng: Number(r.lon),
-    label: shortLabel(r),
-    full: r.display_name,
-  }));
+  const json = await res.json();
+  return (json.features || []).map((f) => {
+    const p = f.properties || {};
+    const coords = f.geometry?.coordinates || [];
+    return {
+      lat: Number(coords[1]),
+      lng: Number(coords[0]),
+      label: photonLabel(p),
+      full: photonFull(p),
+    };
+  });
 };
 
-const shortLabel = (r) => {
-  const a = r.address || {};
-  const primary = a.suburb || a.neighbourhood || a.village || a.town || a.city_district || a.city || a.county;
-  const secondary = a.city || a.state_district || a.state;
-  if (primary && secondary && primary !== secondary) return `${primary}, ${secondary}`;
-  return primary || secondary || (r.display_name || "").split(",").slice(0, 2).join(",");
-};
+const photonLabel = (p) => p.name || p.street || p.city || p.county || p.state || "Location";
+const photonFull = (p) => [p.name, p.street, p.district, p.city, p.state, p.country]
+  .filter(Boolean)
+  .filter((v, i, a) => a.indexOf(v) === i)
+  .join(", ");
 
-const LocationPickerSheet = ({ open, onClose, onSelect, onUseCurrent, currentLabel }) => {
+const LocationPickerSheet = ({ open, onClose, onSelect, onUseCurrent, currentLabel, allowFreeText = false }) => {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -44,9 +51,12 @@ const LocationPickerSheet = ({ open, onClose, onSelect, onUseCurrent, currentLab
     }
   }, [open]);
 
+  const useGoogle = isGoogleEnabled();
+  const minLen = useGoogle ? 2 : 3;
+
   useEffect(() => {
     const q = query.trim();
-    if (q.length < 3) {
+    if (q.length < minLen) {
       setResults([]);
       setLoading(false);
       return undefined;
@@ -59,7 +69,9 @@ const LocationPickerSheet = ({ open, onClose, onSelect, onUseCurrent, currentLab
       setLoading(true);
       setError(null);
       try {
-        const rows = await searchPlaces(q, ctl.signal);
+        // Prefer Google Places (handles societies, buildings, landmarks);
+        // fall back to free OpenStreetMap when no key is configured.
+        const rows = useGoogle ? await autocompletePlaces(q) : await searchPlaces(q, ctl.signal);
         setResults(rows);
       } catch (e) {
         if (e.name !== "AbortError") setError("Could not search. Try again.");
@@ -68,7 +80,23 @@ const LocationPickerSheet = ({ open, onClose, onSelect, onUseCurrent, currentLab
       }
     }, 400);
     return () => clearTimeout(debounceRef.current);
-  }, [query]);
+  }, [query, useGoogle, minLen]);
+
+  // Resolve a tapped result. Google predictions need a details lookup to get
+  // coordinates; OSM rows already carry lat/lng.
+  const pickResult = async (r) => {
+    if (r.placeId) {
+      try {
+        const d = await getPlaceDetails(r.placeId, r.label);
+        if (d) { onSelect(d); onClose(); return; }
+      } catch { /* fall through to label-only */ }
+      onSelect({ lat: null, lng: null, label: r.label, full: r.full });
+      onClose();
+      return;
+    }
+    onSelect(r);
+    onClose();
+  };
 
   if (!open) return null;
 
@@ -109,18 +137,32 @@ const LocationPickerSheet = ({ open, onClose, onSelect, onUseCurrent, currentLab
         <div className="loc-sheet-results">
           {loading && <div className="loc-sheet-empty">Searching…</div>}
           {!loading && error && <div className="loc-sheet-empty loc-sheet-error">{error}</div>}
-          {!loading && !error && query.trim().length >= 3 && results.length === 0 && (
-            <div className="loc-sheet-empty">No matches</div>
+          {!loading && !error && query.trim().length >= minLen && results.length === 0 && (
+            allowFreeText ? (
+              <button
+                type="button"
+                className="loc-sheet-result"
+                onClick={() => { onSelect({ lat: null, lng: null, label: query.trim(), full: query.trim() }); onClose(); }}
+              >
+                <FiMapPin size={14} />
+                <div>
+                  <div className="loc-sheet-result-label">Use “{query.trim()}”</div>
+                  <div className="loc-sheet-result-full">Set this as your location manually</div>
+                </div>
+              </button>
+            ) : (
+              <div className="loc-sheet-empty">No matches</div>
+            )
           )}
-          {!loading && query.trim().length < 3 && (
-            <div className="loc-sheet-empty">Type at least 3 characters</div>
+          {!loading && query.trim().length < minLen && (
+            <div className="loc-sheet-empty">Type at least {minLen} characters</div>
           )}
           {results.map((r, i) => (
             <button
               type="button"
-              key={`${r.lat}-${r.lng}-${i}`}
+              key={r.placeId || `${r.lat}-${r.lng}-${i}`}
               className="loc-sheet-result"
-              onClick={() => { onSelect(r); onClose(); }}
+              onClick={() => pickResult(r)}
             >
               <FiMapPin size={14} />
               <div>

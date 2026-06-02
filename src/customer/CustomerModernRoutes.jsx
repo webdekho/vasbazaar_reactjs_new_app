@@ -229,6 +229,7 @@ const CustomerModernRoutes = () => {
             <Route path="resibot/reminder/new" element={<Suspense fallback={<RouteFallback />}><ResibotReminderFormScreen /></Suspense>} />
             <Route path="resibot/reminder/:id/edit" element={<Suspense fallback={<RouteFallback />}><ResibotReminderFormScreen /></Suspense>} />
             <Route path="resibot/reminder/:id" element={<Suspense fallback={<RouteFallback />}><ResibotReminderDetailScreen /></Suspense>} />
+            <Route path="resibot/reminders" element={<Suspense fallback={<RouteFallback />}><ResibotReminderListScreen /></Suspense>} />
             <Route path="resibot/reminders/:module" element={<Suspense fallback={<RouteFallback />}><ResibotReminderListScreen /></Suspense>} />
             <Route path="resibot/health" element={<Suspense fallback={<RouteFallback />}><ResibotHealthScreen /></Suspense>} />
             <Route path="resibot/health/vital/:type" element={<Suspense fallback={<RouteFallback />}><ResibotVitalScreen /></Suspense>} />

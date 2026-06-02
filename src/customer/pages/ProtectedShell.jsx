@@ -381,9 +381,9 @@ const ProtectedShell = () => {
           <h3 className="cm-drawer-section-title">My Wallet</h3>
           <div className="cm-drawer-wallets">
             <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/wallet")}><div className="cm-dwc-icon"><FaWallet /></div><strong>₹{balances.balance.toFixed(2)}</strong><span>Wallet Balance</span></div>
-            <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/commission?tab=cashback")}><div className="cm-dwc-icon"><FaGift /></div><strong>₹{balances.cashback.toFixed(2)}</strong><span>Lifetime Cashback</span></div>
-            <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/commission?tab=rewards")}><div className="cm-dwc-icon"><FaUsers /></div><strong>₹{(balances.referralBonus + balances.incentive).toFixed(2)}</strong><span>Lifetime Rewards</span></div>
             <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/referrals")}><div className="cm-dwc-icon"><FaUsers /></div><strong>{balances.referralUsers}</strong><span>Referral Users</span></div>
+            <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/commission?tab=rewards")}><div className="cm-dwc-icon"><FaUsers /></div><strong>₹{(balances.referralBonus + balances.incentive).toFixed(2)}</strong><span>Lifetime Rewards</span></div>
+            <div className="cm-drawer-wallet-card" onClick={() => navigate("/customer/app/commission?tab=cashback")}><div className="cm-dwc-icon"><FaGift /></div><strong>₹{balances.cashback.toFixed(2)}</strong><span>Lifetime Cashback</span></div>
           </div>
         </div>
 
@@ -553,9 +553,9 @@ const ProtectedShell = () => {
           <h3 className="cm-drawer-section-title">My Wallet</h3>
           <div className="cm-drawer-wallets">
             <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/wallet")}><div className="cm-dwc-icon"><FaWallet /></div><strong>₹{balances.balance.toFixed(2)}</strong><span>Wallet Balance</span></div>
-            <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/commission?tab=cashback")}><div className="cm-dwc-icon"><FaGift /></div><strong>₹{balances.cashback.toFixed(2)}</strong><span>Lifetime Cashback</span></div>
-            <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/commission?tab=rewards")}><div className="cm-dwc-icon"><FaUsers /></div><strong>₹{(balances.referralBonus + balances.incentive).toFixed(2)}</strong><span>Lifetime Rewards</span></div>
             <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/referrals")}><div className="cm-dwc-icon"><FaUsers /></div><strong>{balances.referralUsers}</strong><span>Referral Users</span></div>
+            <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/commission?tab=rewards")}><div className="cm-dwc-icon"><FaUsers /></div><strong>₹{(balances.referralBonus + balances.incentive).toFixed(2)}</strong><span>Lifetime Rewards</span></div>
+            <div className="cm-drawer-wallet-card" onClick={() => handleDrawerNav("/customer/app/commission?tab=cashback")}><div className="cm-dwc-icon"><FaGift /></div><strong>₹{balances.cashback.toFixed(2)}</strong><span>Lifetime Cashback</span></div>
           </div>
         </div>
 

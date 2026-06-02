@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { FaPlus, FaListUl } from "react-icons/fa";
+import { FaPlus, FaListUl, FaCheck } from "react-icons/fa";
 import {
   resibotService, RESIBOT_MODULES, RESIBOT_REPEAT_OPTIONS, getResibotModule,
+  RESIBOT_ALERT_PRESETS, getDefaultOffsets, describeOffsets,
 } from "../../services/resibotService";
 import {
   ResibotHeader, Spinner, Card, Field, TextInput, Select, TextArea, PrimaryButton,
@@ -28,7 +29,7 @@ const emptyForm = (module) => ({
   lastActionDate: "",
   repeatFrequency: "NONE",
   repeatIntervalDays: "",
-  alertOffsetsDays: "",
+  alertOffsetsDays: getDefaultOffsets(module || "BILL"),
   paymentMethod: "",
   memberId: "",
   notes: "",
@@ -96,6 +97,21 @@ const ResibotReminderFormScreen = () => {
 
   const meta = getResibotModule(form.module);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  // Module change → reset category + alert defaults to fit the new module.
+  const onModuleChange = (mod) =>
+    setForm((f) => ({ ...f, module: mod, category: "", alertOffsetsDays: getDefaultOffsets(mod) }));
+
+  // Friendly alert chips ↔ CSV offsets.
+  const offsetSet = new Set(
+    String(form.alertOffsetsDays || "").split(",").map((s) => parseInt(s.trim(), 10)).filter((n) => !Number.isNaN(n))
+  );
+  const toggleOffset = (d) => {
+    const s = new Set(offsetSet);
+    if (s.has(d)) s.delete(d); else s.add(d);
+    const csv = Array.from(s).sort((a, b) => b - a).join(",");
+    setForm((f) => ({ ...f, alertOffsetsDays: csv }));
+  };
 
   // Merge user's previously-used custom values into the dropdowns.
   const customModules = (options.modules || []).filter((m) => !RESIBOT_MODULES.some((x) => x.key === m));
@@ -190,11 +206,11 @@ const ResibotReminderFormScreen = () => {
           {customModule && !isEdit ? (
             <TextInput
               value={form.module}
-              onChange={(e) => setForm((f) => ({ ...f, module: e.target.value.toUpperCase() }))}
+              onChange={(e) => onModuleChange(e.target.value.toUpperCase())}
               placeholder="e.g. PET, VEHICLE, RENT"
             />
           ) : (
-            <Select value={form.module} onChange={set("module")} disabled={isEdit}>
+            <Select value={form.module} onChange={(e) => onModuleChange(e.target.value)} disabled={isEdit}>
               {RESIBOT_MODULES.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
               {customModules.map((m) => <option key={m} value={m}>{m}</option>)}
               {form.module && !RESIBOT_MODULES.some((m) => m.key === form.module) && !customModules.includes(form.module) && (
@@ -268,9 +284,25 @@ const ResibotReminderFormScreen = () => {
           </Field>
         )}
 
-        <Field label="Alert offsets (days before, comma separated)">
-          <TextInput value={form.alertOffsetsDays} onChange={set("alertOffsetsDays")} placeholder="Leave blank for defaults e.g. 7,3,1,0" />
-        </Field>
+        <div className="rb-field">
+          <span className="rb-label">When should we remind you?</span>
+          <div className="rb-chips">
+            {RESIBOT_ALERT_PRESETS.map((p) => {
+              const on = offsetSet.has(p.days);
+              return (
+                <button key={p.days} type="button"
+                  className={`rb-chip-toggle${on ? " rb-chip-toggle--on" : ""}`}
+                  onClick={() => toggleOffset(p.days)}>
+                  <span className="rb-chip-check">{on ? <FaCheck size={8} /> : ""}</span>
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 12, color: "var(--rb-muted)", marginTop: 9, lineHeight: 1.5 }}>
+            {describeOffsets(form.alertOffsetsDays)}
+          </div>
+        </div>
 
         {form.module === "SUBSCRIPTION" && (
           <Field label="Payment method">

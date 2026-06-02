@@ -8,10 +8,12 @@
  * Strategy:
  *   - API calls  -> never cached, always network
  *   - version.json -> always network (so OTA check never reads a stale file)
- *   - index.html / navigations -> network-first, cache fallback
+ *   - index.html / navigations -> stale-while-revalidate (instant repeat loads;
+ *       new deploys are picked up by the in-app OTA check + version.json, so we
+ *       can safely serve the cached shell first and refresh it in the background)
  *   - static assets -> stale-while-revalidate
  */
-const CACHE_VERSION = "v4";
+const CACHE_VERSION = "v5";
 const CACHE_NAME = `vasbazaar-${CACHE_VERSION}`;
 // Cache both root and start_url for PWA
 const STATIC_ASSETS = [
@@ -86,35 +88,42 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigation requests: network-first with cache fallback so new HTML
-  // is picked up as soon as the network allows, but offline still works.
+  // Navigation requests: stale-while-revalidate. Serve the cached app shell
+  // INSTANTLY (the #1 lever for sub-1s repeat loads) and refresh the cache in
+  // the background. New deploys are still picked up promptly because the app
+  // runs an independent OTA/version.json check on startup that prompts a
+  // reload — so serving one-build-stale HTML for a single load is safe and the
+  // hashed JS/CSS are content-addressed, so nothing breaks.
   if (req.mode === "navigate") {
     event.respondWith(
-      fetch(req)
-        .then((res) => {
-          // Only cache successful responses
-          if (res.ok) {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
-          }
-          return res;
-        })
-        .catch(async () => {
-          // Try to serve from cache first
-          const cached = await caches.match(req);
-          if (cached) return cached;
-          // Fall back to index.html for SPA routing
-          const indexCached = await caches.match("/index.html");
-          if (indexCached) return indexCached;
-          // Last resort: try root
-          const rootCached = await caches.match("/");
-          if (rootCached) return rootCached;
-          // If nothing in cache, return a basic offline page
-          return new Response(
-            '<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:40px"><h2>You are offline</h2><p>Please check your internet connection.</p><button onclick="location.reload()">Try Again</button></body></html>',
-            { headers: { "Content-Type": "text/html" } }
-          );
-        })
+      (async () => {
+        const cached =
+          (await caches.match(req)) ||
+          (await caches.match("/index.html")) ||
+          (await caches.match("/"));
+
+        const network = fetch(req)
+          .then((res) => {
+            if (res.ok) {
+              const clone = res.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+            }
+            return res;
+          })
+          .catch(() => null);
+
+        // Cached shell first; fall back to the network on a cold cache.
+        if (cached) return cached;
+
+        const fresh = await network;
+        if (fresh) return fresh;
+
+        // Nothing cached and offline: minimal offline page.
+        return new Response(
+          '<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:40px"><h2>You are offline</h2><p>Please check your internet connection.</p><button onclick="location.reload()">Try Again</button></body></html>',
+          { headers: { "Content-Type": "text/html" } }
+        );
+      })()
     );
     return;
   }

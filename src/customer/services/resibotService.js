@@ -178,5 +178,50 @@ export const RESIBOT_REPEAT_OPTIONS = [
   "NONE", "DAILY", "WEEKLY", "MONTHLY", "QUARTERLY", "HALF_YEARLY", "YEARLY", "CUSTOM_DAYS",
 ];
 
+// Friendly, tappable "remind me before" presets (days). Stored internally as
+// the same comma-separated offsets the backend expects.
+export const RESIBOT_ALERT_PRESETS = [
+  { days: 0, label: "On the day" },
+  { days: 1, label: "1 day before" },
+  { days: 2, label: "2 days before" },
+  { days: 3, label: "3 days before" },
+  { days: 5, label: "5 days before" },
+  { days: 7, label: "1 week before" },
+  { days: 15, label: "2 weeks before" },
+  { days: 30, label: "1 month before" },
+  { days: 60, label: "2 months before" },
+  { days: 90, label: "3 months before" },
+];
+
+const MODULE_DEFAULT_OFFSETS = {
+  BILL: [7, 3, 1, 0],
+  RECHARGE: [7, 3, 1],
+  SUBSCRIPTION: [7, 3, 0],
+  WARRANTY: [90, 60, 30, 7],
+  INSURANCE: [60, 30, 15, 7],
+  SERVICE: [30, 15, 7],
+  FAMILY: [7, 1, 0],
+  HEALTH: [1, 0],
+};
+
+/** Default alert offsets (CSV) for a module — used to pre-select chips. */
+export const getDefaultOffsets = (moduleKey) =>
+  (MODULE_DEFAULT_OFFSETS[moduleKey] || [7, 1, 0]).join(",");
+
+/** Human sentence for a set of offsets, e.g. "1 week, 3 days and 1 day before". */
+export const describeOffsets = (csv) => {
+  const nums = String(csv || "").split(",").map((s) => parseInt(s.trim(), 10)).filter((n) => !Number.isNaN(n)).sort((a, b) => b - a);
+  if (!nums.length) return "No alerts selected — pick at least one.";
+  const phrase = (n) => {
+    const p = RESIBOT_ALERT_PRESETS.find((x) => x.days === n);
+    if (p) return n === 0 ? "on the day" : p.label.replace(" before", "");
+    return `${n} days`;
+  };
+  const parts = nums.map(phrase);
+  const last = parts.pop();
+  const joined = parts.length ? `${parts.join(", ")} and ${last}` : last;
+  return `You'll be reminded ${joined}${nums.includes(0) && nums.length === 1 ? "" : " before"}.`;
+};
+
 export const getResibotModule = (key) =>
   RESIBOT_MODULES.find((m) => m.key === key) || null;

@@ -154,6 +154,25 @@
   font-size: 11px; font-weight: 700; letter-spacing: 0.01em;
 }
 
+/* ---- Selectable toggle chips (friendly multi-select) ---- */
+.rb-chips { display: flex; flex-wrap: wrap; gap: 9px; }
+.rb-chip-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 14px; border-radius: 999px; cursor: pointer;
+  border: 1.5px solid var(--rb-border); background: var(--rb-surface);
+  color: var(--rb-text); font-size: 13.5px; font-weight: 600;
+  transition: border-color .15s ease, background .15s ease, color .15s ease, transform .12s ease;
+}
+.rb-chip-toggle:active { transform: scale(0.95); }
+.rb-chip-toggle--on {
+  border-color: var(--rb-brand); background: var(--rb-brand-soft); color: var(--rb-brand);
+}
+.rb-chip-check {
+  width: 16px; height: 16px; border-radius: 50%; display: inline-grid; place-items: center;
+  border: 1.5px solid var(--rb-border-strong); font-size: 9px; line-height: 1;
+}
+.rb-chip-toggle--on .rb-chip-check { background: var(--rb-brand); border-color: var(--rb-brand); color: #fff; }
+
 /* ---- Empty ---- */
 .rb-empty {
   padding: 30px 18px; border-radius: 18px; text-align: center;

@@ -5,6 +5,10 @@
     <script>if (location.protocol !== 'https:' && location.hostname !== 'localhost') location.replace('https:' + location.href.substring(location.protocol.length));</script>
     <link rel="shortcut icon" href="%PUBLIC_URL%/favicon.png" />
     <link rel="icon" type="image/png" href="%PUBLIC_URL%/favicon.png" />
+    <!-- Open the DNS + TLS connection to the API host while JS is still
+         parsing, so the first data request starts ~100-300ms sooner. -->
+    <link rel="preconnect" href="https://api.vasbazaar.com" crossorigin />
+    <link rel="dns-prefetch" href="https://api.vasbazaar.com" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" id="vb-theme-color" content="#0B0B0B" />
     <script>

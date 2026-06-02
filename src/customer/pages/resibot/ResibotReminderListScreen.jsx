@@ -61,11 +61,11 @@ const ResibotReminderListScreen = () => {
   return (
     <div className="rb-page">
       <ResibotHeader
-        title={meta?.label || "Reminders"}
+        title={meta?.label || "All reminders"}
         subtitle={`${items.length} reminder(s)`}
         onBack={() => navigate("/customer/app/resibot")}
         right={
-          <button type="button" onClick={() => navigate(`/customer/app/resibot/reminder/new?module=${module}`)}
+          <button type="button" onClick={() => navigate(`/customer/app/resibot/reminder/new${module ? `?module=${module}` : ""}`)}
             style={{ width: 38, height: 38, borderRadius: 12, border: "none", background: RB.brand, color: "#fff", display: "grid", placeItems: "center", cursor: "pointer" }}>
             <FaPlus size={14} />
           </button>

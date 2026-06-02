@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaHeartbeat, FaPlus, FaUsers, FaChevronRight, FaTint, FaWeight, FaBoxOpen, FaWallet, FaBell } from "react-icons/fa";
 import { App as CapApp } from "@capacitor/app";
-import { resibotService, RESIBOT_MODULES, getResibotModule } from "../../services/resibotService";
+import { resibotService, getResibotModule } from "../../services/resibotService";
 import { useCustomerModern } from "../../context/CustomerModernContext";
 import { useToast } from "../../context/ToastContext";
 import { computeDueAlerts, syncResibotNotifications, registerResibotTapHandler, checkDueResibotRemindersNow } from "../../services/resibotNotifier";
@@ -66,7 +66,6 @@ const ResibotDashboardScreen = () => {
     return `${part}, ${userData?.firstName || userData?.name || "there"}`;
   })();
 
-  const counts = dash.countsByModule || {};
   const upcoming = dash.upcoming || [];
 
   return (
@@ -128,71 +127,71 @@ const ResibotDashboardScreen = () => {
         </section>
       )}
 
-      {/* Module tiles */}
+      {/* Quick sections: Reminders · Health · Tracking */}
       <section style={{ marginBottom: 20 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <h3 style={{ fontSize: 16, margin: 0, fontWeight: 700 }}>Reminder modules</h3>
+          <h3 style={{ fontSize: 16, margin: 0, fontWeight: 700 }}>Quick access</h3>
           <button type="button" onClick={() => navigate("/customer/app/resibot/reminder/new")}
             style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 999, border: `1px solid ${RB.brand}`, background: "transparent", color: RB.brand, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
             <FaPlus size={10} /> New
           </button>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
-          {RESIBOT_MODULES.map((m) => (
-            <Card key={m.key} onClick={() => navigate(`/customer/app/resibot/reminders/${m.key}`)}
-              style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+
+        <div style={{ display: "grid", gap: 12 }}>
+          {/* Reminders */}
+          <Card onClick={() => navigate("/customer/app/resibot/reminders")} style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <span style={{ width: 44, height: 44, borderRadius: 12, background: RB.brandSoft, color: RB.brand, display: "grid", placeItems: "center", flexShrink: 0 }}>
+              <FaBell size={18} />
+            </span>
+            <div style={{ flex: 1, display: "flex", gap: 16 }}>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 700 }}>{m.label}</div>
-                <div style={{ fontSize: 12, color: RB.muted, marginTop: 2 }}>{counts[m.key] || 0} active</div>
+                <div style={{ fontSize: 16, fontWeight: 800 }}>{dash.totalActive || 0}</div>
+                <div style={{ fontSize: 11, color: RB.muted }}><FaBell size={9} /> Active</div>
               </div>
-              <span style={{ width: 30, height: 30, borderRadius: 9, background: m.accentColor, color: m.highlightColor, display: "grid", placeItems: "center", fontWeight: 800, fontSize: 13 }}>
-                {counts[m.key] || 0}
-              </span>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      {/* Health snapshot */}
-      <section style={{ marginBottom: 20 }}>
-        <h3 style={{ fontSize: 16, margin: "0 0 10px", fontWeight: 700 }}>Health</h3>
-        <Card onClick={() => navigate("/customer/app/resibot/health")} style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <span style={{ width: 44, height: 44, borderRadius: 12, background: RB.brandSoft, color: RB.brand, display: "grid", placeItems: "center", flexShrink: 0 }}>
-            <FaHeartbeat size={18} />
-          </span>
-          <div style={{ flex: 1, display: "flex", gap: 16 }}>
-            <div>
-              <div style={{ fontSize: 16, fontWeight: 800 }}>{health?.bmi ?? "—"}</div>
-              <div style={{ fontSize: 11, color: RB.muted }}><FaWeight size={9} /> BMI</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 16, fontWeight: 800 }}>
-                {health?.waterConsumedMl ?? 0}{health?.waterTargetMl ? `/${health.waterTargetMl}` : ""} ml
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: dash.overdue ? "#DC2626" : undefined }}>{dash.overdue || 0}</div>
+                <div style={{ fontSize: 11, color: RB.muted }}>Overdue</div>
               </div>
-              <div style={{ fontSize: 11, color: RB.muted }}><FaTint size={9} /> Water today</div>
             </div>
-          </div>
-          <FaChevronRight size={13} style={{ color: RB.muted }} />
-        </Card>
-      </section>
-
-      {/* Trackers: Orders & Expenses */}
-      <section style={{ marginBottom: 20 }}>
-        <h3 style={{ fontSize: 16, margin: "0 0 10px", fontWeight: 700 }}>Trackers</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <Card onClick={() => navigate("/customer/app/resibot/orders")}>
-            <span style={{ width: 36, height: 36, borderRadius: 10, background: "#DDEBFF", color: "#2563EB", display: "grid", placeItems: "center", marginBottom: 8 }}>
-              <FaBoxOpen size={15} />
-            </span>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>{activeOrders}</div>
-            <div style={{ fontSize: 12, color: RB.muted }}>Orders in transit</div>
+            <FaChevronRight size={13} style={{ color: RB.muted }} />
           </Card>
-          <Card onClick={() => navigate("/customer/app/resibot/expenses")}>
-            <span style={{ width: 36, height: 36, borderRadius: 10, background: "#E6F7E6", color: "#16A34A", display: "grid", placeItems: "center", marginBottom: 8 }}>
-              <FaWallet size={15} />
+
+          {/* Health */}
+          <Card onClick={() => navigate("/customer/app/resibot/health")} style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <span style={{ width: 44, height: 44, borderRadius: 12, background: RB.brandSoft, color: RB.brand, display: "grid", placeItems: "center", flexShrink: 0 }}>
+              <FaHeartbeat size={18} />
             </span>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>₹{Number(expense?.currentMonthTotal || 0).toLocaleString("en-IN")}</div>
-            <div style={{ fontSize: 12, color: RB.muted }}>Spent this month</div>
+            <div style={{ flex: 1, display: "flex", gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800 }}>{health?.bmi ?? "—"}</div>
+                <div style={{ fontSize: 11, color: RB.muted }}><FaWeight size={9} /> BMI</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800 }}>
+                  {health?.waterConsumedMl ?? 0}{health?.waterTargetMl ? `/${health.waterTargetMl}` : ""} ml
+                </div>
+                <div style={{ fontSize: 11, color: RB.muted }}><FaTint size={9} /> Water today</div>
+              </div>
+            </div>
+            <FaChevronRight size={13} style={{ color: RB.muted }} />
+          </Card>
+
+          {/* Tracking */}
+          <Card onClick={() => navigate("/customer/app/resibot/orders")} style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <span style={{ width: 44, height: 44, borderRadius: 12, background: "#DDEBFF", color: "#2563EB", display: "grid", placeItems: "center", flexShrink: 0 }}>
+              <FaBoxOpen size={18} />
+            </span>
+            <div style={{ flex: 1, display: "flex", gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800 }}>{activeOrders}</div>
+                <div style={{ fontSize: 11, color: RB.muted }}><FaBoxOpen size={9} /> Orders</div>
+              </div>
+              <div onClick={(e) => { e.stopPropagation(); navigate("/customer/app/resibot/expenses"); }} style={{ cursor: "pointer" }}>
+                <div style={{ fontSize: 16, fontWeight: 800 }}>₹{Number(expense?.currentMonthTotal || 0).toLocaleString("en-IN")}</div>
+                <div style={{ fontSize: 11, color: RB.muted }}><FaWallet size={9} /> This month</div>
+              </div>
+            </div>
+            <FaChevronRight size={13} style={{ color: RB.muted }} />
           </Card>
         </div>
       </section>
