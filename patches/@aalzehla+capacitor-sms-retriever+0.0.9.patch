@@ -1,0 +1,13 @@
+diff --git a/node_modules/@aalzehla/capacitor-sms-retriever/ios/Plugin/CapacitorSmsRetrieverPlugin.swift b/node_modules/@aalzehla/capacitor-sms-retriever/ios/Plugin/CapacitorSmsRetrieverPlugin.swift
+index 1f156a4..5265494 100644
+--- a/node_modules/@aalzehla/capacitor-sms-retriever/ios/Plugin/CapacitorSmsRetrieverPlugin.swift
++++ b/node_modules/@aalzehla/capacitor-sms-retriever/ios/Plugin/CapacitorSmsRetrieverPlugin.swift
+@@ -75,7 +75,7 @@ class PinViewController: UIViewController, KAPinFieldDelegate {
+       print("didFinishWith : \(code)")
+         pinCodeTextField.animateSuccess(with: "✔️") {
+         }
+-        returnCall.success(["code":code])
++        returnCall.resolve(["code":code])
+         self.dismiss(animated: true) {
+             
+         }

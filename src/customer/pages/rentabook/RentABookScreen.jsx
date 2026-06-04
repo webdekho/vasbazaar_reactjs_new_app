@@ -60,29 +60,6 @@ const READING_HISTORY = [
   { id: "r5", title: "The Almanack of Naval Ravikant", author: "Eric Jorgenson", finishedOn: "2025-02-27", rating: 5, source: "Rented", days: 7, cover: "#F5F3FF", accent: "#7C3AED" },
 ];
 
-// Sample active rentals the reader currently holds. These drive the return
-// flow: rent starts on delivery, deposit refunds on return, return courier is
-// charged to the reader (deducted from deposit). Status timeline:
-//   approved → out_for_delivery → delivered (period running) → return_requested
-//   → return_in_transit → returned (deposit refunded)
-const ACTIVE_RENTALS = [
-  {
-    id: "ar1", title: "Sapiens", author: "Yuval Noah Harari", owner: "Meera J.", city: "Pune",
-    days: 30, rent: 148, deposit: 300, status: "delivered",
-    deliveredOn: "2026-05-20", dueOn: "2026-06-19", cover: "#EEF2FF", accent: "#4F46E5",
-  },
-  {
-    id: "ar2", title: "The Lean Startup", author: "Eric Ries", owner: "Karan D.", city: "Mumbai",
-    days: 15, rent: 78, deposit: 250, status: "out_for_delivery",
-    deliveredOn: null, dueOn: null, cover: "#FEF2F2", accent: "#DC2626",
-  },
-  {
-    id: "ar3", title: "Zero to One", author: "Peter Thiel", owner: "Anita R.", city: "Pune",
-    days: 7, rent: 70, deposit: 200, status: "delivered",
-    deliveredOn: "2026-05-08", dueOn: "2026-05-15", cover: "#F5F3FF", accent: "#7C3AED",
-  },
-];
-
 // Sample lending history — for books the user lent out, who rented them.
 // Keyed loosely by book title so it can surface against My Listings.
 const LENDING_HISTORY = [

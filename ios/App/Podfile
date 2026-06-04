@@ -3,10 +3,10 @@ require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
 platform :ios, '15.0'
 use_frameworks!
 
-# workaround to avoid Xcode caching of Pods that requires
-# Product -> Clean Build Folder after new Cordova plugins installed
-# Requires CocoaPods 1.6 or newer
-install! 'cocoapods', :disable_input_output_paths => true
+# Silence all warnings coming from third-party pods (Capacitor core, plugins,
+# KAPinField, ION* libs). These are deprecation / Swift-mode warnings inside
+# dependency source we don't control.
+inhibit_all_warnings!
 
 def capacitor_pods
   pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
@@ -34,4 +34,18 @@ end
 
 post_install do |installer|
   assertDeploymentTarget(installer)
+
+  # Silence "double-quoted include in framework header" error coming from
+  # @capacitor/ios CapacitorCordova headers under newer Xcode/Clang.
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      config.build_settings['CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER'] = 'NO'
+      # Suppress both Clang (ObjC) and Swift compiler warnings for all pods.
+      config.build_settings['GCC_WARN_INHIBIT_ALL_WARNINGS'] = 'YES'
+      config.build_settings['SWIFT_SUPPRESS_WARNINGS'] = 'YES'
+      # Xcode 16+ module verifier fails on CapacitorCordova's double-quoted
+      # framework header include. Disable verification for pods.
+      config.build_settings['ENABLE_MODULE_VERIFIER'] = 'NO'
+    end
+  end
 end
