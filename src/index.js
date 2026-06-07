@@ -3,6 +3,11 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
+import { bootstrapImpersonation } from './customer/utils/impersonation';
+
+// Consume an admin "Login As" token from the URL before React mounts, so the
+// impersonated session is in storage when the auth context initialises.
+bootstrapImpersonation();
 
 // Remove the initial loader once React is ready
 const removeLoader = () => {

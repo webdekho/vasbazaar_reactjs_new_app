@@ -136,6 +136,9 @@ export const customerStorage = {
       if (CUSTOMER_STORAGE_PERSISTENT_KEYS.has(key)) return;
       localStorage.removeItem(key);
     });
+    // Drop the admin "Login As" bypass flag so a normal login afterwards is
+    // not stuck skipping the PIN lock.
+    localStorage.removeItem("customerImpersonation");
     // PERF FIX: Clear API cache on logout to prevent stale data for next user
     invalidateAll();
   },

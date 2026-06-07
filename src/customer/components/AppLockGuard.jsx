@@ -7,6 +7,7 @@ import { setAppLocked, onSessionExpired } from "../services/apiClient";
 import { useTheme } from "../context/ThemeContext";
 import { sanitizeBackendMessage } from "../utils/userMessages";
 import { pinStorage } from "../utils/pinStorage";
+import { isImpersonationSession } from "../utils/impersonation";
 
 const LOCK_KEYS = {
   pinSet: "vb_pin_set",
@@ -490,6 +491,12 @@ const AppLockGuard = ({ children }) => {
       setAppLocked(false);
     };
   }, [locked, needsPin]);
+
+  // Admin "Login As" sessions skip the PIN lock entirely — the admin does not
+  // know the customer's PIN. The impersonation token still expires server-side.
+  if (isImpersonationSession()) {
+    return children;
+  }
 
   if (needsPin) {
     return <SetPinScreen onComplete={() => { setNeedsPin(false); setLocked(false); }} />;

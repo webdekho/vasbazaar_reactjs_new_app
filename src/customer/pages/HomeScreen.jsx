@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { FaBook, FaBookOpen, FaGift, FaRegBell, FaRocket, FaUsers, FaWallet } from "react-icons/fa";
+import { FaBook, FaBookOpen, FaGift, FaRegBell, FaRocket, FaTools, FaUsers, FaWallet } from "react-icons/fa";
 import { useCustomerModern } from "../context/CustomerModernContext";
 import { userService } from "../services/userService";
 import { advertisementService } from "../services/advertisementService";
@@ -60,6 +60,7 @@ const HomeScreen = () => {
     { label: "ReBill", to: "/customer/app/outstanding", icon: FaBookOpen, accentColor: "#FFE9D6", highlightColor: "#FF7A00" },
     { label: "RYBBO", to: "/customer/app/rybbo", icon: FaRocket, accentColor: "#EDE4FF", highlightColor: "#7C3AED" },
     { label: "ReBuddy", to: "/customer/app/rebuddy", icon: FaUsers, accentColor: "#FFE7E0", highlightColor: "#E8735A" },
+    { label: "Service Bazaar", to: "/customer/app/marketplace", icon: FaTools, accentColor: "#E0F2FE", highlightColor: "#0EA5E9" },
     { label: "Rent a Book", to: "/customer/app/rentabook", icon: FaBook, accentColor: "#E8F3FF", highlightColor: "#2563EB" },
     { label: "Rewards", to: "/customer/app/coupons", ...getServiceVisual("rewards") },
   ];

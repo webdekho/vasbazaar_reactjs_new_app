@@ -1,0 +1,184 @@
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { FaArrowLeft, FaSearch, FaStar, FaCheckCircle, FaStore, FaCalendarCheck, FaMapMarkerAlt } from "react-icons/fa";
+import { serviceBazaarService } from "../../services/serviceBazaarService";
+import { useToast } from "../../context/ToastContext";
+import "./service-bazaar.css";
+
+const SkeletonCards = () => (
+  <>
+    {Array.from({ length: 5 }).map((_, i) => (
+      <div className="sb-skel-card" key={i}>
+        <div className="sb-skel sb-skel-avatar" />
+        <div style={{ flex: 1 }}>
+          <div className="sb-skel sb-skel-line" style={{ width: "55%" }} />
+          <div className="sb-skel sb-skel-line" style={{ width: "75%" }} />
+          <div className="sb-skel sb-skel-line" style={{ width: "35%", marginBottom: 0 }} />
+        </div>
+      </div>
+    ))}
+  </>
+);
+
+/**
+ * Service Bazaar discovery home: category chips + nearby/keyword provider search.
+ * Entry point for the hyperlocal services marketplace.
+ */
+export default function ServiceBazaarHomeScreen() {
+  const navigate = useNavigate();
+  const { showToast } = useToast();
+
+  const [categories, setCategories] = useState([]);
+  const [activeCategory, setActiveCategory] = useState(null);
+  const [search, setSearch] = useState("");
+  const [pincode, setPincode] = useState(localStorage.getItem("sbPincode") || "");
+  const [editingLoc, setEditingLoc] = useState(false);
+  const [providers, setProviders] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    serviceBazaarService.getCategories().then((res) => {
+      if (!cancelled && res.success) setCategories(Array.isArray(res.data) ? res.data : []);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const loadProviders = useCallback(async () => {
+    setLoading(true);
+    const res = await serviceBazaarService.searchProviders({
+      categoryId: activeCategory || undefined,
+      search: search.trim() || undefined,
+      pincode: pincode.trim() || undefined,
+      pageSize: 20,
+    });
+    if (res.success) {
+      setProviders(res.data?.records || []);
+    } else {
+      showToast(res.message || "Could not load services", "error");
+    }
+    setLoading(false);
+  }, [activeCategory, search, pincode, showToast]);
+
+  const saveLocation = () => {
+    localStorage.setItem("sbPincode", pincode.trim());
+    setEditingLoc(false);
+  };
+
+  useEffect(() => {
+    const t = setTimeout(loadProviders, 300);
+    return () => clearTimeout(t);
+  }, [loadProviders]);
+
+  return (
+    <div className="sb-page">
+      <div className="sb-sticky">
+        <div className="sb-topbar" style={{ marginBottom: 8 }}>
+          <button className="sb-back" onClick={() => navigate("/customer/app")} aria-label="Back">
+            <FaArrowLeft />
+          </button>
+          <h1 className="sb-title">Service Bazaar</h1>
+        </div>
+        <div className="sb-hero">
+          <h1>Recharge se Rozgaar tak</h1>
+          <p>Book trusted, verified local services near you</p>
+          {editingLoc ? (
+            <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+              <input
+                className="sb-loc"
+                style={{ color: "#fff", flex: 1 }}
+                placeholder="Enter pincode"
+                value={pincode}
+                onChange={(e) => setPincode(e.target.value)}
+                inputMode="numeric"
+              />
+              <button className="sb-loc" onClick={saveLocation}>Done</button>
+            </div>
+          ) : (
+            <button className="sb-loc" onClick={() => setEditingLoc(true)}>
+              <FaMapMarkerAlt /> {pincode ? `Near ${pincode}` : "Set your location"}
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="sb-cta-row">
+        <button className="sb-btn ghost" onClick={() => navigate("/customer/app/service-bazaar/my-bookings")}>
+          <FaCalendarCheck style={{ marginRight: 6 }} /> My Bookings
+        </button>
+        <button className="sb-btn" onClick={() => navigate("/customer/app/service-bazaar/provider")}>
+          <FaStore style={{ marginRight: 6 }} /> Become a Provider
+        </button>
+      </div>
+
+      <div className="sb-searchrow">
+        <div className="sb-search">
+          <FaSearch style={{ opacity: 0.6 }} />
+          <input
+            placeholder="Search beautician, electrician, tutor…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="sb-chips">
+        <button
+          className={`sb-chip ${activeCategory === null ? "active" : ""}`}
+          onClick={() => setActiveCategory(null)}
+        >
+          All
+        </button>
+        {categories.map((c) => (
+          <button
+            key={c.id}
+            className={`sb-chip ${activeCategory === c.id ? "active" : ""}`}
+            onClick={() => setActiveCategory(c.id)}
+          >
+            {c.name}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <SkeletonCards />
+      ) : providers.length === 0 ? (
+        <div className="sb-empty">No providers found yet. Try another category or be the first to list!</div>
+      ) : (
+        providers.map((p) => (
+          <div
+            key={p.id}
+            className="sb-card"
+            onClick={() => navigate(`/customer/app/service-bazaar/provider/${p.id}`)}
+          >
+            <div className="sb-avatar">
+              {p.profilePhotoUrl ? (
+                <img src={p.profilePhotoUrl} alt={p.providerName} style={{ width: "100%", height: "100%", borderRadius: 12, objectFit: "cover" }} />
+              ) : (
+                (p.businessName || p.providerName || "?").charAt(0).toUpperCase()
+              )}
+            </div>
+            <div className="sb-card-body">
+              <p className="sb-card-name">{p.businessName || p.providerName}</p>
+              <p className="sb-card-meta">
+                {p.headline || p.categoryId?.name || "Service provider"}
+                {p.city ? ` • ${p.city}` : ""}
+              </p>
+              <div className="sb-badges">
+                {Number(p.ratingAvg) > 0 && (
+                  <span className="sb-badge rating">
+                    <FaStar style={{ marginRight: 3, fontSize: 10 }} />
+                    {Number(p.ratingAvg).toFixed(1)} ({p.reviewCount || 0})
+                  </span>
+                )}
+                <span className="sb-badge">
+                  <FaCheckCircle style={{ marginRight: 3, fontSize: 10 }} /> Verified
+                </span>
+              </div>
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}

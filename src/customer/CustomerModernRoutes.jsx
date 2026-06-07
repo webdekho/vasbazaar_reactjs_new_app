@@ -5,6 +5,7 @@ import { CustomerModernProvider } from "./context/CustomerModernContext";
 import { MarketplaceCartProvider } from "./context/MarketplaceCartContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import AuthGuard from "./components/AuthGuard";
+import ImpersonationBanner from "./components/ImpersonationBanner";
 import AppLockGuard from "./components/AppLockGuard";
 import OtaUpdateGate from "./components/OtaUpdateGate";
 import { ChatbotProvider } from "./context/ChatbotContext";
@@ -113,6 +114,14 @@ const RebuddyGroupDetailScreen = lazy(() => import("./pages/rebuddy/GroupDetailS
 const RentABookScreen = lazy(() => import("./pages/rentabook/RentABookScreen"));
 const TermsScreen = lazy(() => import("./pages/TermsScreen"));
 
+// Service Bazaar (hyperlocal services marketplace)
+const ServiceBazaarHomeScreen = lazy(() => import("./pages/service-bazaar/ServiceBazaarHomeScreen"));
+const ServiceBazaarProviderProfileScreen = lazy(() => import("./pages/service-bazaar/ProviderProfileScreen"));
+const MyServiceBookingsScreen = lazy(() => import("./pages/service-bazaar/MyServiceBookingsScreen"));
+const ServiceBookingDetailScreen = lazy(() => import("./pages/service-bazaar/ServiceBookingDetailScreen"));
+const ServicePaymentCallbackScreen = lazy(() => import("./pages/service-bazaar/ServicePaymentCallbackScreen"));
+const ServiceBazaarProviderHubScreen = lazy(() => import("./pages/service-bazaar/ProviderHubScreen"));
+
 // Marketplace
 const MarketplaceHomeScreen = lazy(() => import("./pages/marketplace/MarketplaceHomeScreen"));
 const StoreDetailScreen = lazy(() => import("./pages/marketplace/StoreDetailScreen"));
@@ -155,6 +164,7 @@ const CustomerModernRoutes = () => {
       <CustomerModernProvider>
       <MarketplaceCartProvider>
         <OtaUpdateGate />
+        <ImpersonationBanner />
         <Routes>
           <Route path="/" element={<SmartRedirect />} />
           <Route path="/login" element={<LoginScreen />} />
@@ -240,6 +250,13 @@ const CustomerModernRoutes = () => {
             <Route path="rebuddy/new" element={<Suspense fallback={<RouteFallback />}><RebuddyNewGroupScreen /></Suspense>} />
             <Route path="rebuddy/group/:id" element={<Suspense fallback={<RouteFallback />}><RebuddyGroupDetailScreen /></Suspense>} />
             <Route path="rentabook" element={<Suspense fallback={<RouteFallback />}><RentABookScreen /></Suspense>} />
+            {/* Service Bazaar (hyperlocal services marketplace) */}
+            <Route path="service-bazaar" element={<Suspense fallback={<RouteFallback />}><ServiceBazaarHomeScreen /></Suspense>} />
+            <Route path="service-bazaar/provider" element={<Suspense fallback={<RouteFallback />}><ServiceBazaarProviderHubScreen /></Suspense>} />
+            <Route path="service-bazaar/provider/:providerId" element={<Suspense fallback={<RouteFallback />}><ServiceBazaarProviderProfileScreen /></Suspense>} />
+            <Route path="service-bazaar/my-bookings" element={<Suspense fallback={<RouteFallback />}><MyServiceBookingsScreen /></Suspense>} />
+            <Route path="service-bazaar/bookings/:bookingId" element={<Suspense fallback={<RouteFallback />}><ServiceBookingDetailScreen /></Suspense>} />
+            <Route path="service-bazaar/payment-callback" element={<Suspense fallback={<RouteFallback />}><ServicePaymentCallbackScreen /></Suspense>} />
             {/* Marketplace */}
             <Route path="marketplace" element={<Suspense fallback={<RouteFallback />}><MarketplaceHomeScreen /></Suspense>} />
             <Route path="marketplace/store/:storeId" element={<Suspense fallback={<RouteFallback />}><StoreDetailScreen /></Suspense>} />
