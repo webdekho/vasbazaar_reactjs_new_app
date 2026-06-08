@@ -1,0 +1,6 @@
+framework module CapawesomeTeamCapacitorFileOpener {
+  umbrella header "CapawesomeTeamCapacitorFileOpener-umbrella.h"
+
+  export *
+  module * { export * }
+}

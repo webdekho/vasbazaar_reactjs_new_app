@@ -1,0 +1,23 @@
+{
+  "name": "AalzehlaCapacitorSmsRetriever",
+  "version": "0.0.9",
+  "summary": "Capacitor plugin to retrieve SMS on Android",
+  "license": "MIT",
+  "homepage": "git+https://github.com/aalzehla/capacitor-sms-retriever.git",
+  "authors": "Samer Draidi",
+  "source": {
+    "git": "git+https://github.com/aalzehla/capacitor-sms-retriever.git",
+    "tag": "0.0.9"
+  },
+  "source_files": "ios/Plugin/**/*.{swift,h,m,c,cc,mm,cpp}",
+  "platforms": {
+    "ios": "11.0"
+  },
+  "dependencies": {
+    "Capacitor": [],
+    "KAPinField": [],
+    "SnapKit": []
+  },
+  "swift_versions": "5.1",
+  "swift_version": "5.1"
+}
