@@ -29,6 +29,20 @@ export const deleteGroup = (id) => {
 export const newId = (prefix = "g") =>
   `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 
+// The logged-in customer, read from the same localStorage blob the rest of the
+// app uses. Returns a member-shaped object so the creator can be auto-added.
+export const getCurrentUser = () => {
+  try {
+    const u = JSON.parse(localStorage.getItem("customerUserData") || "null");
+    if (!u) return null;
+    const name = u.name || u.firstName || u.userName || u.user_name || u.customerName || "You";
+    const mobile = (u.mobile || u.mobileNumber || "").toString().replace(/\D/g, "").slice(-10);
+    return { id: "self", name, mobile, isSelf: true };
+  } catch {
+    return null;
+  }
+};
+
 export const formatMoney = (amount, currency = "INR") => {
   const n = Number(amount) || 0;
   try {
@@ -92,6 +106,65 @@ export const memberMap = (group) => {
   (group?.members || []).forEach((m) => { map[m.id] = m; });
   return map;
 };
+
+// The viewer's own member in a group. The backend marks it with isSelf per
+// viewer (mobile match); fall back to the conventional "self" id for safety.
+export const selfMember = (group) =>
+  (group?.members || []).find((m) => m.isSelf) ||
+  (group?.members || []).find((m) => m.id === "self") || null;
+
+// Aggregate the viewer's owe/owed position across many groups, broken down by
+// counterparty (keyed by mobile) and kept per-currency so different currencies
+// never get summed together. Uses simplified settlements so it matches the
+// per-group "Settle up" view. Returns:
+//   { byCurrency: { INR: { owed, owe, net,
+//       people: { "<mobile>": { name, mobile, net } } }, ... } }
+export const buildBalanceReport = (groups) => {
+  const byCurrency = {};
+  (groups || []).forEach((group) => {
+    const self = selfMember(group);
+    if (!self) return;
+    const currency = group.currency || "INR";
+    const mMap = memberMap(group);
+    const bucket = byCurrency[currency] || (byCurrency[currency] = { owed: 0, owe: 0, net: 0, people: {} });
+
+    simplifySettlements(group).forEach((s) => {
+      let other = null;
+      let signed = 0; // + = they owe you, - = you owe them
+      if (s.from === self.id) { other = mMap[s.to]; signed = -s.amount; }
+      else if (s.to === self.id) { other = mMap[s.from]; signed = s.amount; }
+      if (!other) return;
+
+      const key = other.mobile || other.id;
+      const person = bucket.people[key] || (bucket.people[key] = { name: other.name, mobile: other.mobile, net: 0 });
+      person.net += signed;
+      if (other.name) person.name = other.name;
+    });
+  });
+
+  // Recompute per-currency totals from the (already netted) people map so the
+  // summary always matches the breakdown rows.
+  Object.values(byCurrency).forEach((bucket) => {
+    bucket.owed = 0; bucket.owe = 0;
+    Object.values(bucket.people).forEach((p) => {
+      p.net = Math.round(p.net * 100) / 100;
+      if (p.net > 0.009) bucket.owed += p.net;
+      else if (p.net < -0.009) bucket.owe += -p.net;
+    });
+    bucket.owed = Math.round(bucket.owed * 100) / 100;
+    bucket.owe = Math.round(bucket.owe * 100) / 100;
+    bucket.net = Math.round((bucket.owed - bucket.owe) * 100) / 100;
+  });
+
+  return byCurrency;
+};
+
+// Preset group categories (mirrors the "Made for moments like" list on the home
+// screen). Users can pick one of these or type their own.
+export const CATEGORIES = [
+  "Trip", "Flatmates", "Vacation", "Festival", "Camping", "Dinner",
+  "Office", "Family", "Event", "Other",
+];
 
 export const CURRENCIES = [
   { code: "INR", flag: "🇮🇳", label: "Indian Rupee" },

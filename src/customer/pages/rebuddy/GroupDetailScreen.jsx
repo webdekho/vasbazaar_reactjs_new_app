@@ -2,13 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   FaArrowLeft, FaPlus, FaShareAlt, FaTrashAlt, FaUserPlus, FaTimes,
-  FaReceipt, FaHandshake, FaCheckCircle,
+  FaReceipt, FaHandshake, FaCheckCircle, FaAddressBook,
 } from "react-icons/fa";
 import { useToast } from "../../context/ToastContext";
 import {
-  RB, formatMoney, getGroup, memberMap, newId,
-  simplifySettlements, upsertGroup, deleteGroup, computeBalances,
+  RB, formatMoney, memberMap, newId,
+  simplifySettlements, computeBalances,
 } from "./utils";
+import { pickContacts, normalizeMobile, isValidMobile, isUserCancelledError } from "./contacts";
+import { rebuddyService } from "../../services/rebuddyService";
 
 const TABS = [
   { key: "expenses", label: "Expenses", icon: FaReceipt },
@@ -26,18 +28,33 @@ const GroupDetailScreen = () => {
   const [memberModal, setMemberModal] = useState(false);
 
   useEffect(() => {
-    const g = getGroup(id);
-    if (!g) {
-      toast?.showToast?.("Group not found.", "error");
-      navigate("/customer/app/rebuddy", { replace: true });
-      return;
-    }
-    setGroup(g);
+    let alive = true;
+    (async () => {
+      const res = await rebuddyService.getGroup(id);
+      if (!alive) return;
+      if (!res.success || !res.data) {
+        toast?.showToast?.(res.message || "Group not found.", "error");
+        navigate("/customer/app/rebuddy", { replace: true });
+        return;
+      }
+      setGroup(res.data);
+    })();
+    return () => { alive = false; };
   }, [id, navigate, toast]);
 
-  const persist = (next) => {
-    const saved = upsertGroup(next);
-    setGroup(saved);
+  // Optimistically render the new state, then persist server-side. On failure
+  // roll back to the last known-good group and surface the error.
+  const persist = async (next) => {
+    const prev = group;
+    setGroup(next);
+    const res = await rebuddyService.saveGroup(next);
+    if (!res.success) {
+      setGroup(prev);
+      toast?.showToast?.(res.message || "Could not save changes. Please try again.", "error");
+      return false;
+    }
+    if (res.data) setGroup(res.data);
+    return true;
   };
 
   const settle = useMemo(() => (group ? simplifySettlements(group) : []), [group]);
@@ -50,37 +67,68 @@ const GroupDetailScreen = () => {
 
   const closeExpenseModal = () => { setExpenseModal(false); setEditingExpense(null); };
 
-  const handleSaveExpense = (exp) => {
-    if (editingExpense) {
-      persist({
-        ...group,
-        expenses: (group.expenses || []).map((e) =>
-          e.id === editingExpense.id ? { ...e, ...exp, updatedAt: Date.now() } : e
-        ),
-      });
-      toast?.showToast?.("Expense updated.", "success");
-    } else {
-      persist({ ...group, expenses: [{ id: newId("e"), createdAt: Date.now(), ...exp }, ...(group.expenses || [])] });
-      toast?.showToast?.("Expense added.", "success");
-    }
+  const handleSaveExpense = async (exp) => {
+    const editing = !!editingExpense;
+    const next = editing
+      ? {
+          ...group,
+          expenses: (group.expenses || []).map((e) =>
+            e.id === editingExpense.id ? { ...e, ...exp, updatedAt: Date.now() } : e
+          ),
+        }
+      : { ...group, expenses: [{ id: newId("e"), createdAt: Date.now(), ...exp }, ...(group.expenses || [])] };
     closeExpenseModal();
+    if (await persist(next)) {
+      toast?.showToast?.(editing ? "Expense updated." : "Expense added.", "success");
+    }
   };
 
-  const handleDeleteExpense = (eid) => {
-    persist({ ...group, expenses: (group.expenses || []).filter((e) => e.id !== eid) });
-    toast?.showToast?.("Expense removed.", "info");
+  const handleDeleteExpense = async (eid) => {
+    if (await persist({ ...group, expenses: (group.expenses || []).filter((e) => e.id !== eid) })) {
+      toast?.showToast?.("Expense removed.", "info");
+    }
   };
 
-  const handleAddMember = (name) => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    if (group.members.some((m) => m.name.toLowerCase() === trimmed.toLowerCase())) {
-      toast?.showToast?.("Already in the group.", "error");
+  const handleAddMember = async ({ name, mobile }) => {
+    const trimmed = (name || "").trim();
+    const num = normalizeMobile(mobile);
+    if (!trimmed) { toast?.showToast?.("Enter the member's name.", "error"); return; }
+    if (!isValidMobile(num)) { toast?.showToast?.("Enter a valid 10-digit mobile number.", "error"); return; }
+    if (group.members.some((m) => m.mobile === num)) {
+      toast?.showToast?.("That mobile number is already in the group.", "error");
       return;
     }
-    persist({ ...group, members: [...group.members, { id: newId("m"), name: trimmed }] });
     setMemberModal(false);
-    toast?.showToast?.("Member added.", "success");
+    if (await persist({ ...group, members: [...group.members, { id: newId("m"), name: trimmed, mobile: num }] })) {
+      toast?.showToast?.("Member added.", "success");
+    }
+  };
+
+  const handleAddContacts = async (picked) => {
+    const have = new Set(group.members.map((m) => m.mobile));
+    const fresh = picked
+      .filter((c) => !have.has(c.mobile))
+      .map((c) => ({ id: newId("m"), name: c.name, mobile: c.mobile }));
+    if (!fresh.length) { toast?.showToast?.("No new contacts to add.", "info"); return; }
+    setMemberModal(false);
+    if (await persist({ ...group, members: [...group.members, ...fresh] })) {
+      toast?.showToast?.(`${fresh.length} member${fresh.length > 1 ? "s" : ""} added.`, "success");
+    }
+  };
+
+  const handleRemoveMember = async (member) => {
+    if (member.isSelf) { toast?.showToast?.("You can't remove yourself.", "error"); return; }
+    const inExpense = (group.expenses || []).some(
+      (e) => e.paidBy === member.id || (e.splitAmong || []).includes(member.id)
+    );
+    if (inExpense) {
+      toast?.showToast?.("This member is part of an expense. Remove those expenses first.", "error");
+      return;
+    }
+    if (!window.confirm(`Remove ${member.name} from the group?`)) return;
+    if (await persist({ ...group, members: group.members.filter((m) => m.id !== member.id) })) {
+      toast?.showToast?.("Member removed.", "info");
+    }
   };
 
   const handleShare = async () => {
@@ -103,9 +151,13 @@ const GroupDetailScreen = () => {
     }
   };
 
-  const handleDeleteGroup = () => {
+  const handleDeleteGroup = async () => {
     if (!window.confirm(`Delete group "${group.name}"? This cannot be undone.`)) return;
-    deleteGroup(group.id);
+    const res = await rebuddyService.deleteGroup(group.id);
+    if (!res.success) {
+      toast?.showToast?.(res.message || "Could not delete the group.", "error");
+      return;
+    }
     navigate("/customer/app/rebuddy", { replace: true });
   };
 
@@ -160,6 +212,16 @@ const GroupDetailScreen = () => {
       >
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, opacity: 0.9 }}>REBUDDY GROUP</div>
         <h1 style={{ margin: "4px 0 8px", fontSize: 22, fontWeight: 800 }}>{group.name}</h1>
+        {group.category ? (
+          <span style={{
+            display: "inline-flex", alignItems: "center",
+            padding: "3px 10px", borderRadius: 999, marginBottom: 8,
+            background: "rgba(255,255,255,0.22)", color: "#fff",
+            fontSize: 11.5, fontWeight: 700,
+          }}>
+            {group.category}
+          </span>
+        ) : null}
         <div style={{ display: "flex", gap: 16, fontSize: 12.5, opacity: 0.95 }}>
           <span>{group.members.length} members</span>
           <span>•</span>
@@ -187,12 +249,26 @@ const GroupDetailScreen = () => {
             <span
               key={m.id}
               style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
                 padding: "6px 12px", borderRadius: 999,
                 background: RB.coralSoft, color: RB.coralDark,
                 fontSize: 12.5, fontWeight: 600,
               }}
             >
-              {m.name}
+              {m.name}{m.isSelf ? " (You)" : ""}
+              {m.mobile ? <span style={{ opacity: 0.7, fontWeight: 500 }}>· {m.mobile}</span> : null}
+              {!m.isSelf && (
+                <button
+                  type="button" onClick={() => handleRemoveMember(m)}
+                  aria-label={`Remove ${m.name}`}
+                  style={{
+                    background: "transparent", border: "none", color: RB.coralDark,
+                    cursor: "pointer", padding: 0, display: "grid", placeItems: "center",
+                  }}
+                >
+                  <FaTimes size={10} />
+                </button>
+              )}
             </span>
           ))}
         </div>
@@ -247,6 +323,8 @@ const GroupDetailScreen = () => {
         <MemberModal
           onClose={() => setMemberModal(false)}
           onSubmit={handleAddMember}
+          onPickContacts={handleAddContacts}
+          toast={toast}
         />
       )}
     </div>
@@ -365,8 +443,9 @@ const SettlePanel = ({ settle, balances, group, mMap }) => {
         {memberBalances.map((m) => {
           const isPos = m.balance > 0.009;
           const isNeg = m.balance < -0.009;
-          const color = isPos ? "#22C55E" : isNeg ? RB.coral : "var(--cm-muted, #A0A0A0)";
+          const color = isPos ? "#22C55E" : isNeg ? "#EF4444" : "var(--cm-muted, #A0A0A0)";
           const label = isPos ? "gets back" : isNeg ? "owes" : "settled";
+          const sign = isPos ? "+" : isNeg ? "−" : "";
           return (
             <div
               key={m.id}
@@ -380,7 +459,7 @@ const SettlePanel = ({ settle, balances, group, mMap }) => {
               <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{m.name}</div>
               <div style={{ fontSize: 12, color: "var(--cm-muted, #A0A0A0)" }}>{label}</div>
               <div style={{ fontSize: 13, fontWeight: 800, color, minWidth: 70, textAlign: "right" }}>
-                {isPos || isNeg ? formatMoney(Math.abs(m.balance), group.currency) : "—"}
+                {isPos || isNeg ? `${sign}${formatMoney(Math.abs(m.balance), group.currency)}` : "—"}
               </div>
             </div>
           );
@@ -547,21 +626,68 @@ const ExpenseModal = ({ group, existing, onClose, onSubmit }) => {
   );
 };
 
-const MemberModal = ({ onClose, onSubmit }) => {
+const MemberModal = ({ onClose, onSubmit, onPickContacts, toast }) => {
   const [name, setName] = useState("");
+  const [mobile, setMobile] = useState("");
+
+  const fieldStyle = {
+    width: "100%", padding: "11px 14px", borderRadius: 10,
+    border: `1px solid ${RB.borderDark}`, background: RB.surface,
+    color: "inherit", fontSize: 14, outline: "none", marginBottom: 14,
+  };
+
+  const fromContacts = async () => {
+    try {
+      const picked = await pickContacts();
+      if (!picked.length) return;
+      onPickContacts(picked);
+    } catch (err) {
+      if (isUserCancelledError(err)) return;
+      if (err?.code === "permission_denied") toast?.showToast?.("Contacts permission is required.", "error");
+      else if (err?.code === "unsupported") toast?.showToast?.("Contact picker is available in the VasBazaar app or supported browsers.", "error");
+      else toast?.showToast?.("Could not open contacts. Please try again.", "error");
+    }
+  };
+
   return (
     <Modal title="Add a member" onClose={onClose}>
+      <button
+        type="button" onClick={fromContacts}
+        style={{
+          width: "100%", padding: "11px 14px", borderRadius: 10, marginBottom: 14,
+          border: `1px solid ${RB.coral}`, background: "transparent", color: RB.coral,
+          fontWeight: 700, fontSize: 13.5, cursor: "pointer",
+          display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+        }}
+      >
+        <FaAddressBook size={13} /> Add from contacts
+      </button>
+
       <label style={lbl}>Name</label>
       <input
         type="text" value={name} onChange={(e) => setName(e.target.value)}
-        placeholder="Member name" autoFocus
-        style={{
-          width: "100%", padding: "11px 14px", borderRadius: 10,
-          border: `1px solid ${RB.borderDark}`, background: RB.surface,
-          color: "inherit", fontSize: 14, outline: "none", marginBottom: 14,
-        }}
+        placeholder="Member name" autoFocus style={fieldStyle}
       />
-      <button type="button" onClick={() => onSubmit(name)} style={primaryBtn}>Add member</button>
+
+      <label style={lbl}>Mobile number</label>
+      <input
+        type="tel" inputMode="numeric" value={mobile} maxLength={10}
+        onChange={(e) => setMobile(e.target.value)}
+        placeholder="10-digit mobile" style={fieldStyle}
+      />
+
+      <button
+        type="button"
+        onClick={() => onSubmit({ name, mobile })}
+        disabled={!name.trim() || !isValidMobile(normalizeMobile(mobile))}
+        style={{
+          ...primaryBtn,
+          opacity: (!name.trim() || !isValidMobile(normalizeMobile(mobile))) ? 0.5 : 1,
+          cursor: (!name.trim() || !isValidMobile(normalizeMobile(mobile))) ? "not-allowed" : "pointer",
+        }}
+      >
+        Add member
+      </button>
     </Modal>
   );
 };

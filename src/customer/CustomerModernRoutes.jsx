@@ -111,6 +111,7 @@ const ResibotExpenseScreen = lazy(() => import("./pages/resibot/ResibotExpenseSc
 const RebuddyHomeScreen = lazy(() => import("./pages/rebuddy/RebuddyHomeScreen"));
 const RebuddyNewGroupScreen = lazy(() => import("./pages/rebuddy/NewGroupScreen"));
 const RebuddyGroupDetailScreen = lazy(() => import("./pages/rebuddy/GroupDetailScreen"));
+const RebuddyReportScreen = lazy(() => import("./pages/rebuddy/RebuddyReportScreen"));
 const RentABookScreen = lazy(() => import("./pages/rentabook/RentABookScreen"));
 const TermsScreen = lazy(() => import("./pages/TermsScreen"));
 
@@ -248,6 +249,7 @@ const CustomerModernRoutes = () => {
             <Route path="resibot/expenses" element={<Suspense fallback={<RouteFallback />}><ResibotExpenseScreen /></Suspense>} />
             <Route path="rebuddy" element={<Suspense fallback={<RouteFallback />}><RebuddyHomeScreen /></Suspense>} />
             <Route path="rebuddy/new" element={<Suspense fallback={<RouteFallback />}><RebuddyNewGroupScreen /></Suspense>} />
+            <Route path="rebuddy/report" element={<Suspense fallback={<RouteFallback />}><RebuddyReportScreen /></Suspense>} />
             <Route path="rebuddy/group/:id" element={<Suspense fallback={<RouteFallback />}><RebuddyGroupDetailScreen /></Suspense>} />
             <Route path="rentabook" element={<Suspense fallback={<RouteFallback />}><RentABookScreen /></Suspense>} />
             {/* Service Bazaar (hyperlocal services marketplace) */}

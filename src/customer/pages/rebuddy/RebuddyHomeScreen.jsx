@@ -3,8 +3,10 @@ import { useNavigate } from "react-router-dom";
 import {
   FaUsers, FaPlus, FaArrowRight, FaCalculator, FaShareAlt, FaGlobe,
   FaPlaneDeparture, FaHome, FaUmbrellaBeach, FaMusic, FaCampground, FaUtensils,
+  FaChartPie,
 } from "react-icons/fa";
-import { loadGroups, RB, formatMoney, simplifySettlements } from "./utils";
+import { RB, formatMoney, simplifySettlements } from "./utils";
+import { rebuddyService } from "../../services/rebuddyService";
 
 const featureCards = [
   { icon: FaCalculator, title: "Smart settle-up", body: "Our algorithm cuts your group down to the fewest possible payments." },
@@ -30,12 +32,22 @@ const steps = [
 
 const RebuddyHomeScreen = () => {
   const navigate = useNavigate();
-  const [groups, setGroups] = useState({});
+  const [groups, setGroups] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => { setGroups(loadGroups()); }, []);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const res = await rebuddyService.getMyGroups();
+      if (!alive) return;
+      setGroups(res.success && Array.isArray(res.data) ? res.data : []);
+      setLoading(false);
+    })();
+    return () => { alive = false; };
+  }, []);
 
   const groupList = useMemo(
-    () => Object.values(groups).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)),
+    () => [...groups].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)),
     [groups]
   );
 
@@ -101,18 +113,40 @@ const RebuddyHomeScreen = () => {
       <section style={{ marginBottom: 22 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
           <h3 style={{ fontSize: 16, margin: 0, fontWeight: 700 }}>Your groups</h3>
-          <button
-            type="button" onClick={goNew}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button" onClick={() => navigate("/customer/app/rebuddy/report")}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "6px 12px", borderRadius: 999, border: `1px solid ${RB.borderDark}`,
+                background: "transparent", color: "inherit", fontSize: 12, fontWeight: 700, cursor: "pointer",
+              }}
+            >
+              <FaChartPie size={11} /> Report
+            </button>
+            <button
+              type="button" onClick={goNew}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "6px 12px", borderRadius: 999, border: `1px solid ${RB.coral}`,
+                background: "transparent", color: RB.coral, fontSize: 12, fontWeight: 700, cursor: "pointer",
+              }}
+            >
+              <FaPlus size={10} /> New
+            </button>
+          </div>
+        </div>
+        {loading ? (
+          <div
             style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              padding: "6px 12px", borderRadius: 999, border: `1px solid ${RB.coral}`,
-              background: "transparent", color: RB.coral, fontSize: 12, fontWeight: 700, cursor: "pointer",
+              padding: "20px 16px", borderRadius: 14,
+              border: `1px dashed ${RB.borderDark}`, background: RB.cardBg,
+              textAlign: "center", color: "var(--cm-muted, #A0A0A0)", fontSize: 13,
             }}
           >
-            <FaPlus size={10} /> New
-          </button>
-        </div>
-        {groupList.length === 0 ? (
+            Loading your groups…
+          </div>
+        ) : groupList.length === 0 ? (
           <div
             style={{
               padding: "20px 16px", borderRadius: 14,
