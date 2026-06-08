@@ -44,7 +44,8 @@
       "Bash(npx cap:*)",
       "Bash(sudo xcode-select:*)",
       "Bash(mdfind:*)",
-      "Bash(xcodebuild:*)"
+      "Bash(xcodebuild:*)",
+      "Bash(git show:*)"
     ]
   }
 }

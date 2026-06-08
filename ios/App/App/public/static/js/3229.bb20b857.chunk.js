@@ -1,0 +1,1 @@
+"use strict";(globalThis.webpackChunkvasbazaar_reactjs_new_app=globalThis.webpackChunkvasbazaar_reactjs_new_app||[]).push([[3229],{3229(a,e,s){s.d(e,{Browser:()=>r});const r=(0,s(9344).F3)("Browser",{web:()=>s.e(7127).then(s.bind(s,7127)).then(a=>new a.BrowserWeb)})}}]);

@@ -1,0 +1,1 @@
+"use strict";(globalThis.webpackChunkvasbazaar_reactjs_new_app=globalThis.webpackChunkvasbazaar_reactjs_new_app||[]).push([[9804],{9804(a,e,r){r.d(e,{CapacitorSmsRetriever:()=>s});const s=(0,r(9344).F3)("CapacitorSmsRetriever",{web:()=>r.e(6726).then(r.bind(r,6726)).then(a=>new a.CapacitorSmsRetrieverWeb)})}}]);
