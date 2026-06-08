@@ -8,9 +8,17 @@ echo "======================================"
 echo "Starting CI Post-Clone Script"
 echo "======================================"
 
+# Install Node.js using Homebrew
+echo "======================================"
+echo "Installing Node.js..."
+echo "======================================"
+brew install node
+
 cd "$CI_PRIMARY_REPOSITORY_PATH"
 
 echo "Current directory: $(pwd)"
+echo "Node version: $(node --version)"
+echo "NPM version: $(npm --version)"
 
 # Install Node.js dependencies
 echo "======================================"
