@@ -1,0 +1,21 @@
+{
+  "name": "CapacitorCommunityContacts",
+  "version": "7.1.0",
+  "summary": "Contacts Plugin for Capacitor",
+  "license": "MIT",
+  "homepage": "git+https://github.com/capacitor-community/contacts.git",
+  "authors": "",
+  "source": {
+    "git": "git+https://github.com/capacitor-community/contacts.git",
+    "tag": "7.1.0"
+  },
+  "source_files": "ios/Plugin/**/*.{swift,h,m,c,cc,mm,cpp}",
+  "platforms": {
+    "ios": "14.0"
+  },
+  "dependencies": {
+    "Capacitor": []
+  },
+  "swift_versions": "5.1",
+  "swift_version": "5.1"
+}

@@ -1,0 +1,6 @@
+framework module CapacitorCommunityNativeAudio {
+  umbrella header "CapacitorCommunityNativeAudio-umbrella.h"
+
+  export *
+  module * { export * }
+}
