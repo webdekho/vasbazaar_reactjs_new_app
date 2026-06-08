@@ -28,8 +28,7 @@ def capacitor_pods
   # Capawesome Plugins
   pod 'CapawesomeTeamCapacitorFileOpener', '~> 8.0.1'
 
-  # Other Plugins - using Git source
-  pod 'AalzehlaCapacitorSmsRetriever', :git => 'https://github.com/AalzehlaCapacitorSmsRetriever/aalzehla-capacitor-sms-retriever.git', :tag => '0.0.9'
+  # Note: AalzehlaCapacitorSmsRetriever is Android-only, not needed for iOS
 end
 
 target 'App' do
