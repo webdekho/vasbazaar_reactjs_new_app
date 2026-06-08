@@ -1,0 +1,1 @@
+"use strict";(globalThis.webpackChunkvasbazaar_reactjs_new_app=globalThis.webpackChunkvasbazaar_reactjs_new_app||[]).push([[914],{914(a,s,i){i.r(s),i.d(s,{PushNotifications:()=>t});const t=(0,i(9344).F3)("PushNotifications",{})}}]);

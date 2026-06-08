@@ -1,0 +1,32 @@
+{
+	"appId": "com.vasbazaar.app",
+	"appName": "VasBazaar",
+	"webDir": "build",
+	"android": {
+		"allowMixedContent": true
+	},
+	"server": {
+		"androidScheme": "http",
+		"allowNavigation": [
+			"api.vasbazaar.com",
+			"apis.vasbazaar.com",
+			"*.vasbazaar.com"
+		]
+	},
+	"packageClassList": [
+		"CapacitorSmsRetrieverPlugin",
+		"ContactsPlugin",
+		"NativeAudio",
+		"AppPlugin",
+		"CAPBrowserPlugin",
+		"CAPCameraPlugin",
+		"FilesystemPlugin",
+		"GeolocationPlugin",
+		"LocalNotificationsPlugin",
+		"PreferencesPlugin",
+		"PushNotificationsPlugin",
+		"SharePlugin",
+		"StatusBarPlugin",
+		"FileOpenerPlugin"
+	]
+}

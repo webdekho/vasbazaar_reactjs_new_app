@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" fill="none">
+  <!-- Stylized B icon -->
+  <path d="M8 4C8 4 4 8 4 16L4 44C4 52 8 56 16 56L20 56C20 56 12 52 12 44L12 16C12 8 16 4 24 4L20 4C14 4 8 4 8 4Z" fill="#2B5EA7"/>
+  <path d="M24 4C32 4 36 8 36 16C36 24 32 28 24 28L20 28C20 28 28 24 28 16C28 8 24 4 16 4L24 4Z" fill="#2B5EA7"/>
+  <path d="M24 28C34 28 38 32 38 40C38 48 34 56 24 56L16 56C16 56 28 52 28 44C28 36 24 28 16 28L24 28Z" fill="#2B5EA7"/>
+  <!-- Bharat text -->
+  <text x="46" y="28" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="800" fill="#2B5EA7">Bharat</text>
+  <!-- Connect text -->
+  <text x="46" y="52" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="800" fill="#E8631A">Connect</text>
+</svg>
