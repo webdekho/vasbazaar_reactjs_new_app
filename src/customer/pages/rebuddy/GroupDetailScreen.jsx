@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   FaArrowLeft, FaPlus, FaShareAlt, FaTrashAlt, FaUserPlus, FaTimes,
-  FaReceipt, FaHandshake, FaCheckCircle, FaAddressBook, FaHourglassHalf, FaCheck, FaPen,
+  FaReceipt, FaHandshake, FaCheckCircle, FaAddressBook, FaHourglassHalf, FaCheck, FaPen, FaSyncAlt,
 } from "react-icons/fa";
 import { useToast } from "../../context/ToastContext";
 import {
@@ -28,6 +28,7 @@ const GroupDetailScreen = () => {
   const [editingExpense, setEditingExpense] = useState(null);
   const [memberModal, setMemberModal] = useState(false);
   const [settleTarget, setSettleTarget] = useState(null); // { from, to, amount }
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -57,6 +58,21 @@ const GroupDetailScreen = () => {
     }
     if (res.data) setGroup(res.data);
     return true;
+  };
+
+  // Pull the latest group document from the server so entries added by other
+  // members (on their own devices) show up here.
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    const res = await rebuddyService.getGroup(id);
+    setRefreshing(false);
+    if (!res.success || !res.data) {
+      toast?.showToast?.(res.message || "Could not refresh. Please try again.", "error");
+      return;
+    }
+    setGroup(res.data);
+    toast?.showToast?.("Up to date.", "success");
   };
 
   const settle = useMemo(() => (group ? simplifySettlements(group) : []), [group]);
@@ -97,15 +113,15 @@ const GroupDetailScreen = () => {
     }
   };
 
-  // Record a payment between two members. If the viewer IS the owing party
-  // (from), it auto-confirms and settles immediately; otherwise it's logged as
-  // pending until the owing party confirms.
+  // Record a payment between two members. If the viewer IS the creditor (`to`,
+  // the receiver), it auto-confirms and settles immediately; otherwise it's
+  // logged as pending until the creditor confirms they received the money.
   const handleRecordSettlement = async ({ from, to, amount, note }) => {
     const amt = parseFloat(amount);
     if (!from || !to || from === to) { toast?.showToast?.("Pick who paid whom.", "error"); return; }
     if (!amt || amt <= 0) { toast?.showToast?.("Enter a valid amount.", "error"); return; }
     const createdBy = self?.id || from;
-    const status = settlementInitialStatus(createdBy, from);
+    const status = settlementInitialStatus(createdBy, to);
     const now = Date.now();
     const settlement = {
       id: newId("s"),
@@ -222,6 +238,7 @@ const GroupDetailScreen = () => {
 
   return (
     <div style={{ padding: "12px 4px 32px", width: "100%" }}>
+      <style>{"@keyframes rb-spin{to{transform:rotate(360deg)}}"}</style>
       {/* Top bar */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <button
@@ -235,6 +252,20 @@ const GroupDetailScreen = () => {
           <FaArrowLeft size={11} /> All groups
         </button>
         <div style={{ display: "flex", gap: 8 }}>
+          <button
+            type="button" onClick={handleRefresh} disabled={refreshing}
+            aria-label="Refresh"
+            title="Fetch latest entries"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "6px 12px", borderRadius: 999, border: `1px solid ${RB.coral}`,
+              background: "transparent", color: RB.coral, fontSize: 12, fontWeight: 700,
+              cursor: refreshing ? "default" : "pointer", opacity: refreshing ? 0.6 : 1,
+            }}
+          >
+            <FaSyncAlt size={11} style={refreshing ? { animation: "rb-spin 0.8s linear infinite" } : undefined} />
+            {refreshing ? "Refreshing" : "Refresh"}
+          </button>
           <button
             type="button" onClick={handleShare}
             style={{
@@ -404,9 +435,11 @@ const GroupDetailScreen = () => {
 
 const ExpensesPanel = ({ group, mMap, self, onAdd, onEdit, onDelete }) => {
   const expenses = group.expenses || [];
-  // Only the member who added an entry can edit or delete it. Legacy entries
-  // saved before creator tracking (no createdBy) stay editable by anyone.
-  const canModify = (e) => !e.createdBy || (self && e.createdBy === self.id);
+  // Only the member who added an entry can edit or delete it. Older entries
+  // saved before creator tracking have no createdBy — fall back to who paid so
+  // they're restricted to that member, never editable by everyone.
+  const canModify = (e) =>
+    !!self && (e.createdBy ? e.createdBy === self.id : e.paidBy === self.id);
   return (
     <>
       <button
@@ -583,8 +616,8 @@ const SettlePanel = ({
         >
           <FaHourglassHalf size={13} color={RB.coralDark} style={{ flexShrink: 0 }} />
           <div style={{ flex: 1, minWidth: 140, fontSize: 12.5 }}>
-            <strong>{mMap[s.to]?.name || "?"}</strong> recorded that you paid{" "}
-            <strong>{formatMoney(s.amount, group.currency)}</strong>. Confirm to settle.
+            <strong>{mMap[s.from]?.name || "?"}</strong> recorded paying you{" "}
+            <strong>{formatMoney(s.amount, group.currency)}</strong>. Confirm you received it to settle.
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button
@@ -926,9 +959,10 @@ const SettleModal = ({ group, mMap, self, target, onClose, onSubmit }) => {
 
   const fromName = mMap[target.from]?.name || "?";
   const toName = mMap[target.to]?.name || "?";
-  // If the viewer is the one who owes (the `from`), recording it settles right
-  // away. If they're the receiver (or anyone else), the owing party must confirm.
-  const viewerIsPayer = self && self.id === target.from;
+  // The creditor (`to`, the receiver) is the confirmation authority. If the
+  // viewer is the receiver, recording settles immediately. Otherwise the
+  // receiver must confirm they got the money before it settles.
+  const viewerIsReceiver = self && self.id === target.to;
 
   const inputBase = {
     width: "100%", padding: "11px 14px", borderRadius: 10,
@@ -973,9 +1007,9 @@ const SettleModal = ({ group, mMap, self, target, onClose, onSubmit }) => {
           background: RB.coralSoft, color: RB.coralDark, fontSize: 12, fontWeight: 600,
         }}
       >
-        {viewerIsPayer
-          ? "You're the payer — this settles immediately."
-          : `${fromName} will be asked to confirm before this settles.`}
+        {viewerIsReceiver
+          ? "You're receiving this payment — it settles immediately."
+          : `${toName} will be asked to confirm receipt before this settles.`}
       </div>
 
       <button
@@ -983,7 +1017,7 @@ const SettleModal = ({ group, mMap, self, target, onClose, onSubmit }) => {
         onClick={() => onSubmit({ from: target.from, to: target.to, amount, note })}
         style={primaryBtn}
       >
-        {viewerIsPayer ? "Record & settle" : "Record payment"}
+        {viewerIsReceiver ? "Record & settle" : "Record payment"}
       </button>
     </Modal>
   );

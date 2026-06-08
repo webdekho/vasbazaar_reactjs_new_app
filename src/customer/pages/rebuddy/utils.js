@@ -110,18 +110,19 @@ export const simplifySettlements = (group) => {
   return result;
 };
 
-// A settlement is auto-confirmed when the owing party (its `from`) records it —
-// they're admitting they paid, so no confirmation is needed. When anyone else
-// records it (the creditor or a third member), the owing party must confirm
-// before it counts toward balances.
-export const settlementInitialStatus = (createdBy, from) =>
-  createdBy === from ? "confirmed" : "pending";
+// The CREDITOR — the `to` party who RECEIVES the money — is the confirmation
+// authority. When the creditor records the payment themselves it auto-settles
+// (they're acknowledging receipt). When anyone else records it (the paying
+// debtor or a third member), it stays pending until the creditor confirms
+// receipt. This keeps a debtor from unilaterally clearing their own debt.
+export const settlementInitialStatus = (createdBy, to) =>
+  createdBy === to ? "confirmed" : "pending";
 
 // Pending settlements waiting for THIS viewer to confirm — i.e. the viewer is
-// the owing party (`from`) and someone else recorded the payment on their behalf.
+// the creditor (`to`) and someone else recorded a payment made to them.
 export const pendingForViewer = (group, selfId) =>
   !selfId ? [] : (group?.settlements || []).filter(
-    (s) => s.status === "pending" && s.from === selfId
+    (s) => s.status === "pending" && s.to === selfId
   );
 
 export const memberMap = (group) => {
@@ -130,11 +131,21 @@ export const memberMap = (group) => {
   return map;
 };
 
-// The viewer's own member in a group. The backend marks it with isSelf per
-// viewer (mobile match); fall back to the conventional "self" id for safety.
-export const selfMember = (group) =>
-  (group?.members || []).find((m) => m.isSelf) ||
-  (group?.members || []).find((m) => m.id === "self") || null;
+// The viewer's own member in a group. Identity MUST come from the device's
+// logged-in mobile — never from a stored `isSelf`/`id:"self"`, because those are
+// baked into the shared document by whoever created the group and would resolve
+// every viewer to the creator (letting anyone edit the creator's entries).
+// Match by mobile first; only fall back to the stored markers when the logged-in
+// user isn't a member yet (e.g. opening a shared link before being added).
+export const selfMember = (group) => {
+  const members = group?.members || [];
+  const myMobile = getCurrentUser()?.mobile;
+  if (myMobile) {
+    const byMobile = members.find((m) => m.mobile && m.mobile === myMobile);
+    if (byMobile) return byMobile;
+  }
+  return members.find((m) => m.isSelf) || members.find((m) => m.id === "self") || null;
+};
 
 // Aggregate the viewer's owe/owed position across many groups, broken down by
 // counterparty (keyed by mobile) and kept per-currency so different currencies
