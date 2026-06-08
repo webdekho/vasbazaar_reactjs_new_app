@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   FaArrowLeft, FaPlus, FaShareAlt, FaTrashAlt, FaUserPlus, FaTimes,
-  FaReceipt, FaHandshake, FaCheckCircle, FaAddressBook,
+  FaReceipt, FaHandshake, FaCheckCircle, FaAddressBook, FaHourglassHalf, FaCheck, FaPen,
 } from "react-icons/fa";
 import { useToast } from "../../context/ToastContext";
 import {
   RB, formatMoney, memberMap, newId,
   simplifySettlements, computeBalances,
+  selfMember, settlementInitialStatus, pendingForViewer,
 } from "./utils";
 import { pickContacts, normalizeMobile, isValidMobile, isUserCancelledError } from "./contacts";
 import { rebuddyService } from "../../services/rebuddyService";
@@ -26,6 +27,7 @@ const GroupDetailScreen = () => {
   const [expenseModal, setExpenseModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
   const [memberModal, setMemberModal] = useState(false);
+  const [settleTarget, setSettleTarget] = useState(null); // { from, to, amount }
 
   useEffect(() => {
     let alive = true;
@@ -64,6 +66,11 @@ const GroupDetailScreen = () => {
     [group]
   );
   const mMap = useMemo(() => memberMap(group), [group]);
+  const self = useMemo(() => selfMember(group), [group]);
+  const pendingToConfirm = useMemo(
+    () => (group && self ? pendingForViewer(group, self.id) : []),
+    [group, self]
+  );
 
   const closeExpenseModal = () => { setExpenseModal(false); setEditingExpense(null); };
 
@@ -76,17 +83,67 @@ const GroupDetailScreen = () => {
             e.id === editingExpense.id ? { ...e, ...exp, updatedAt: Date.now() } : e
           ),
         }
-      : { ...group, expenses: [{ id: newId("e"), createdAt: Date.now(), ...exp }, ...(group.expenses || [])] };
+      : { ...group, expenses: [{ id: newId("e"), createdAt: Date.now(), createdBy: self?.id, ...exp }, ...(group.expenses || [])] };
     closeExpenseModal();
     if (await persist(next)) {
       toast?.showToast?.(editing ? "Expense updated." : "Expense added.", "success");
     }
   };
 
-  const handleDeleteExpense = async (eid) => {
-    if (await persist({ ...group, expenses: (group.expenses || []).filter((e) => e.id !== eid) })) {
+  const handleDeleteExpense = async (exp) => {
+    if (!window.confirm(`Delete "${exp.description || "this expense"}" (${formatMoney(exp.amount, group.currency)})? This cannot be undone.`)) return;
+    if (await persist({ ...group, expenses: (group.expenses || []).filter((e) => e.id !== exp.id) })) {
       toast?.showToast?.("Expense removed.", "info");
     }
+  };
+
+  // Record a payment between two members. If the viewer IS the owing party
+  // (from), it auto-confirms and settles immediately; otherwise it's logged as
+  // pending until the owing party confirms.
+  const handleRecordSettlement = async ({ from, to, amount, note }) => {
+    const amt = parseFloat(amount);
+    if (!from || !to || from === to) { toast?.showToast?.("Pick who paid whom.", "error"); return; }
+    if (!amt || amt <= 0) { toast?.showToast?.("Enter a valid amount.", "error"); return; }
+    const createdBy = self?.id || from;
+    const status = settlementInitialStatus(createdBy, from);
+    const now = Date.now();
+    const settlement = {
+      id: newId("s"),
+      from, to, amount: amt,
+      note: (note || "").trim(),
+      createdBy, status,
+      createdAt: now,
+      confirmedAt: status === "confirmed" ? now : null,
+    };
+    setSettleTarget(null);
+    const next = { ...group, settlements: [settlement, ...(group.settlements || [])] };
+    if (await persist(next)) {
+      toast?.showToast?.(
+        status === "confirmed"
+          ? "Payment recorded — settled."
+          : "Payment recorded — waiting for confirmation.",
+        "success"
+      );
+    }
+  };
+
+  const handleConfirmSettlement = async (sid) => {
+    const next = {
+      ...group,
+      settlements: (group.settlements || []).map((s) =>
+        s.id === sid ? { ...s, status: "confirmed", confirmedAt: Date.now() } : s
+      ),
+    };
+    if (await persist(next)) toast?.showToast?.("Payment confirmed — settled.", "success");
+  };
+
+  const handleDeleteSettlement = async (sid) => {
+    if (!window.confirm("Remove this payment record?")) return;
+    const next = {
+      ...group,
+      settlements: (group.settlements || []).filter((s) => s.id !== sid),
+    };
+    if (await persist(next)) toast?.showToast?.("Payment record removed.", "info");
   };
 
   const handleAddMember = async ({ name, mobile }) => {
@@ -302,13 +359,20 @@ const GroupDetailScreen = () => {
 
       {tab === "expenses" ? (
         <ExpensesPanel
-          group={group} mMap={mMap}
+          group={group} mMap={mMap} self={self}
           onAdd={() => { setEditingExpense(null); setExpenseModal(true); }}
           onEdit={(e) => { setEditingExpense(e); setExpenseModal(true); }}
           onDelete={handleDeleteExpense}
         />
       ) : (
-        <SettlePanel settle={settle} balances={balances} group={group} mMap={mMap} />
+        <SettlePanel
+          settle={settle} balances={balances} group={group} mMap={mMap}
+          self={self}
+          pendingToConfirm={pendingToConfirm}
+          onSettleClick={(row) => setSettleTarget(row)}
+          onConfirm={handleConfirmSettlement}
+          onDeleteSettlement={handleDeleteSettlement}
+        />
       )}
 
       {expenseModal && (
@@ -327,12 +391,22 @@ const GroupDetailScreen = () => {
           toast={toast}
         />
       )}
+      {settleTarget && (
+        <SettleModal
+          group={group} mMap={mMap} self={self} target={settleTarget}
+          onClose={() => setSettleTarget(null)}
+          onSubmit={handleRecordSettlement}
+        />
+      )}
     </div>
   );
 };
 
-const ExpensesPanel = ({ group, mMap, onAdd, onEdit, onDelete }) => {
+const ExpensesPanel = ({ group, mMap, self, onAdd, onEdit, onDelete }) => {
   const expenses = group.expenses || [];
+  // Only the member who added an entry can edit or delete it. Legacy entries
+  // saved before creator tracking (no createdBy) stay editable by anyone.
+  const canModify = (e) => !e.createdBy || (self && e.createdBy === self.id);
   return (
     <>
       <button
@@ -362,17 +436,18 @@ const ExpensesPanel = ({ group, mMap, onAdd, onEdit, onDelete }) => {
           {expenses.map((e) => {
             const splitNames = (e.splitAmong && e.splitAmong.length ? e.splitAmong : group.members.map((m) => m.id))
               .map((mid) => mMap[mid]?.name).filter(Boolean);
+            const mine = canModify(e);
             return (
               <div
                 key={e.id}
-                role="button" tabIndex={0}
-                onClick={() => onEdit(e)}
-                onKeyDown={(ev) => { if (ev.key === "Enter") onEdit(e); }}
+                role={mine ? "button" : undefined} tabIndex={mine ? 0 : undefined}
+                onClick={mine ? () => onEdit(e) : undefined}
+                onKeyDown={mine ? (ev) => { if (ev.key === "Enter") onEdit(e); } : undefined}
                 style={{
                   display: "flex", gap: 12, alignItems: "center",
                   padding: "12px 14px", borderRadius: 12,
                   background: RB.cardBg, border: `1px solid ${RB.borderDark}`,
-                  cursor: "pointer",
+                  cursor: mine ? "pointer" : "default",
                 }}
               >
                 <div style={{
@@ -388,23 +463,43 @@ const ExpensesPanel = ({ group, mMap, onAdd, onEdit, onDelete }) => {
                   </div>
                   <div style={{ fontSize: 11.5, color: "var(--cm-muted, #A0A0A0)" }}>
                     {mMap[e.paidBy]?.name || "Someone"} paid · split among {splitNames.length} ({splitNames.slice(0, 3).join(", ")}{splitNames.length > 3 ? "…" : ""})
+                    {!mine && e.createdBy ? ` · added by ${mMap[e.createdBy]?.name || "another member"}` : ""}
                   </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: 13.5, fontWeight: 700 }}>
                     {formatMoney(e.amount, group.currency)}
                   </div>
-                  <button
-                    type="button"
-                    onClick={(ev) => { ev.stopPropagation(); onDelete(e.id); }}
-                    aria-label="Delete expense"
-                    style={{
-                      background: "transparent", border: "none", padding: 0,
-                      color: "var(--cm-muted, #A0A0A0)", cursor: "pointer", marginTop: 4,
-                    }}
-                  >
-                    <FaTrashAlt size={11} />
-                  </button>
+                  {mine && (
+                    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", marginTop: 6 }}>
+                      <button
+                        type="button"
+                        onClick={(ev) => { ev.stopPropagation(); onEdit(e); }}
+                        aria-label="Edit expense"
+                        style={{
+                          display: "grid", placeItems: "center",
+                          width: 26, height: 26, borderRadius: 7,
+                          background: RB.coralSoft, border: "none",
+                          color: RB.coralDark, cursor: "pointer",
+                        }}
+                      >
+                        <FaPen size={10} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(ev) => { ev.stopPropagation(); onDelete(e); }}
+                        aria-label="Delete expense"
+                        style={{
+                          display: "grid", placeItems: "center",
+                          width: 26, height: 26, borderRadius: 7,
+                          background: "rgba(239,68,68,0.12)", border: "none",
+                          color: "#EF4444", cursor: "pointer",
+                        }}
+                      >
+                        <FaTrashAlt size={10} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -415,7 +510,10 @@ const ExpensesPanel = ({ group, mMap, onAdd, onEdit, onDelete }) => {
   );
 };
 
-const SettlePanel = ({ settle, balances, group, mMap }) => {
+const SettlePanel = ({
+  settle, balances, group, mMap, self,
+  pendingToConfirm, onSettleClick, onConfirm, onDeleteSettlement,
+}) => {
   if (!group.expenses?.length) {
     return (
       <div
@@ -468,9 +566,120 @@ const SettlePanel = ({ settle, balances, group, mMap }) => {
     </div>
   );
 
+  // Payments someone recorded that THIS viewer (the owing party) must confirm.
+  const PendingBanner = pendingToConfirm.length > 0 && (
+    <div style={{ display: "grid", gap: 8, marginBottom: 14 }}>
+      <div style={{ fontSize: 12.5, fontWeight: 700, color: RB.coralDark }}>
+        Confirm payments
+      </div>
+      {pendingToConfirm.map((s) => (
+        <div
+          key={s.id}
+          style={{
+            display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+            padding: "12px 14px", borderRadius: 12,
+            background: RB.coralSoft, border: `1px solid ${RB.coral}`,
+          }}
+        >
+          <FaHourglassHalf size={13} color={RB.coralDark} style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 140, fontSize: 12.5 }}>
+            <strong>{mMap[s.to]?.name || "?"}</strong> recorded that you paid{" "}
+            <strong>{formatMoney(s.amount, group.currency)}</strong>. Confirm to settle.
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button" onClick={() => onConfirm(s.id)}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 5,
+                padding: "7px 12px", borderRadius: 999, border: "none",
+                background: RB.coral, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer",
+              }}
+            >
+              <FaCheck size={10} /> Confirm
+            </button>
+            <button
+              type="button" onClick={() => onDeleteSettlement(s.id)}
+              style={{
+                padding: "7px 12px", borderRadius: 999,
+                border: `1px solid ${RB.borderDark}`, background: "transparent",
+                color: "var(--cm-muted, #A0A0A0)", fontSize: 12, fontWeight: 700, cursor: "pointer",
+              }}
+            >
+              Reject
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  // A log of every recorded payment (confirmed + still-pending), newest first.
+  const recorded = group.settlements || [];
+  const History = recorded.length > 0 && (
+    <div style={{ marginTop: 18 }}>
+      <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8, color: "var(--cm-muted, #A0A0A0)" }}>
+        Payment history
+      </div>
+      <div style={{ display: "grid", gap: 8 }}>
+        {recorded.map((s) => {
+          const confirmed = s.status === "confirmed";
+          // Only the member who recorded the payment can remove it from history.
+          const mine = self && (s.createdBy ? s.createdBy === self.id : s.from === self.id);
+          return (
+            <div
+              key={s.id}
+              style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "10px 12px", borderRadius: 10,
+                background: RB.cardBg, border: `1px solid ${RB.borderDark}`,
+              }}
+            >
+              <Avatar name={mMap[s.from]?.name} />
+              <div style={{ flex: 1, minWidth: 0, fontSize: 12.5 }}>
+                <div>
+                  <strong>{mMap[s.from]?.name || "?"}</strong>
+                  <span style={{ color: "var(--cm-muted, #A0A0A0)" }}> paid </span>
+                  <strong>{mMap[s.to]?.name || "?"}</strong>
+                  {" "}
+                  <strong>{formatMoney(s.amount, group.currency)}</strong>
+                </div>
+                {s.note ? (
+                  <div style={{ fontSize: 11, color: "var(--cm-muted, #A0A0A0)", marginTop: 2 }}>{s.note}</div>
+                ) : null}
+              </div>
+              <span
+                style={{
+                  padding: "3px 9px", borderRadius: 999, fontSize: 11, fontWeight: 700,
+                  background: confirmed ? "rgba(34,197,94,0.14)" : RB.coralSoft,
+                  color: confirmed ? "#22C55E" : RB.coralDark,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {confirmed ? "Settled" : "Pending"}
+              </span>
+              {mine ? (
+                <button
+                  type="button" onClick={() => onDeleteSettlement(s.id)}
+                  aria-label="Remove payment"
+                  style={{
+                    background: "transparent", border: "none", padding: 0,
+                    color: "var(--cm-muted, #A0A0A0)", cursor: "pointer", flexShrink: 0,
+                  }}
+                >
+                  <FaTrashAlt size={11} />
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   if (settle.length === 0) {
     return (
       <>
+        {PendingBanner}
         {Summary}
         <div
           style={{
@@ -485,27 +694,32 @@ const SettlePanel = ({ settle, balances, group, mMap }) => {
             Everyone’s balance is zero. Nice work.
           </div>
         </div>
+        {History}
       </>
     );
   }
   return (
     <>
+      {PendingBanner}
       {Summary}
       <div style={{ display: "grid", gap: 10 }}>
       <div style={{ fontSize: 12, color: "var(--cm-muted, #A0A0A0)", marginBottom: -2 }}>
         Simplified into {settle.length} payment{settle.length > 1 ? "s" : ""}.
       </div>
-      {settle.map((s, idx) => (
+      {settle.map((s, idx) => {
+        // Either party to the payment can record it from here.
+        const canSettle = self && (s.from === self.id || s.to === self.id);
+        return (
         <div
           key={idx}
           style={{
-            display: "flex", alignItems: "center", gap: 12,
+            display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
             padding: "14px 14px", borderRadius: 12,
             background: RB.cardBg, border: `1px solid ${RB.borderDark}`,
           }}
         >
           <Avatar name={mMap[s.from]?.name} />
-          <div style={{ flex: 1, fontSize: 13 }}>
+          <div style={{ flex: 1, minWidth: 120, fontSize: 13 }}>
             <strong>{mMap[s.from]?.name || "?"}</strong>
             <span style={{ color: "var(--cm-muted, #A0A0A0)" }}> pays </span>
             <strong>{mMap[s.to]?.name || "?"}</strong>
@@ -518,9 +732,23 @@ const SettlePanel = ({ settle, balances, group, mMap }) => {
           }}>
             {formatMoney(s.amount, group.currency)}
           </div>
+          {canSettle && (
+            <button
+              type="button"
+              onClick={() => onSettleClick({ from: s.from, to: s.to, amount: s.amount })}
+              style={{
+                padding: "7px 14px", borderRadius: 999, border: "none",
+                background: RB.coral, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer",
+              }}
+            >
+              Settle up
+            </button>
+          )}
         </div>
-      ))}
+        );
+      })}
       </div>
+      {History}
     </>
   );
 };
@@ -687,6 +915,75 @@ const MemberModal = ({ onClose, onSubmit, onPickContacts, toast }) => {
         }}
       >
         Add member
+      </button>
+    </Modal>
+  );
+};
+
+const SettleModal = ({ group, mMap, self, target, onClose, onSubmit }) => {
+  const [amount, setAmount] = useState(target.amount != null ? String(target.amount) : "");
+  const [note, setNote] = useState("");
+
+  const fromName = mMap[target.from]?.name || "?";
+  const toName = mMap[target.to]?.name || "?";
+  // If the viewer is the one who owes (the `from`), recording it settles right
+  // away. If they're the receiver (or anyone else), the owing party must confirm.
+  const viewerIsPayer = self && self.id === target.from;
+
+  const inputBase = {
+    width: "100%", padding: "11px 14px", borderRadius: 10,
+    border: `1px solid ${RB.borderDark}`, background: RB.surface,
+    color: "inherit", fontSize: 14, outline: "none",
+  };
+
+  return (
+    <Modal title="Record a payment" onClose={onClose}>
+      <div
+        style={{
+          display: "flex", alignItems: "center", gap: 10, marginBottom: 14,
+          padding: "12px 14px", borderRadius: 12,
+          background: RB.cardBg, border: `1px solid ${RB.borderDark}`,
+        }}
+      >
+        <Avatar name={fromName} />
+        <div style={{ flex: 1, fontSize: 13 }}>
+          <strong>{fromName}</strong>
+          <span style={{ color: "var(--cm-muted, #A0A0A0)" }}> pays </span>
+          <strong>{toName}</strong>
+        </div>
+        <Avatar name={toName} />
+      </div>
+
+      <label style={lbl}>Amount ({group.currency})</label>
+      <input
+        type="number" inputMode="decimal" min="0" step="0.01"
+        value={amount} onChange={(e) => setAmount(e.target.value)}
+        placeholder="0.00" style={{ ...inputBase, marginBottom: 14 }}
+      />
+
+      <label style={lbl}>Note (optional)</label>
+      <input
+        type="text" value={note} onChange={(e) => setNote(e.target.value)}
+        placeholder="UPI, cash, bank transfer…" style={{ ...inputBase, marginBottom: 14 }}
+      />
+
+      <div
+        style={{
+          padding: "9px 12px", borderRadius: 9, marginBottom: 14,
+          background: RB.coralSoft, color: RB.coralDark, fontSize: 12, fontWeight: 600,
+        }}
+      >
+        {viewerIsPayer
+          ? "You're the payer — this settles immediately."
+          : `${fromName} will be asked to confirm before this settles.`}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => onSubmit({ from: target.from, to: target.to, amount, note })}
+        style={primaryBtn}
+      >
+        {viewerIsPayer ? "Record & settle" : "Record payment"}
       </button>
     </Modal>
   );

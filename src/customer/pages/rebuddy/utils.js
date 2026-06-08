@@ -67,6 +67,15 @@ export const computeBalances = (group) => {
       if (balances[id] != null) balances[id] -= share;
     });
   });
+  // Confirmed settlements: the owing party `from` paid the creditor `to`. This
+  // moves the debtor's balance toward zero (+amount) and trims the creditor's
+  // (-amount). Pending (unconfirmed) settlements don't touch balances yet.
+  (group.settlements || []).forEach((s) => {
+    if (s.status !== "confirmed") return;
+    const amt = Number(s.amount) || 0;
+    if (balances[s.from] != null) balances[s.from] += amt;
+    if (balances[s.to] != null) balances[s.to] -= amt;
+  });
   Object.keys(balances).forEach((k) => {
     balances[k] = Math.round(balances[k] * 100) / 100;
   });
@@ -100,6 +109,20 @@ export const simplifySettlements = (group) => {
   }
   return result;
 };
+
+// A settlement is auto-confirmed when the owing party (its `from`) records it —
+// they're admitting they paid, so no confirmation is needed. When anyone else
+// records it (the creditor or a third member), the owing party must confirm
+// before it counts toward balances.
+export const settlementInitialStatus = (createdBy, from) =>
+  createdBy === from ? "confirmed" : "pending";
+
+// Pending settlements waiting for THIS viewer to confirm — i.e. the viewer is
+// the owing party (`from`) and someone else recorded the payment on their behalf.
+export const pendingForViewer = (group, selfId) =>
+  !selfId ? [] : (group?.settlements || []).filter(
+    (s) => s.status === "pending" && s.from === selfId
+  );
 
 export const memberMap = (group) => {
   const map = {};
