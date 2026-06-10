@@ -20,4 +20,14 @@ export const rebuddyService = {
 
   // Delete a group (owner only).
   deleteGroup: (id) => authDelete(`${BASE}/${encodeURIComponent(id)}`),
+
+  // "Pay & Settle": create a HDFC SmartGateway order to clear what the caller
+  // owes a payee. Returns { orderId, paymentUrl } — redirect to paymentUrl.
+  initiateSettlement: ({ groupId, fromId, toId, amount, note, returnUrl }) =>
+    authPost(`${BASE}/settlement/initiate`, { groupId, fromId, toId, amount, note, returnUrl }),
+
+  // Reconcile a settlement order after returning from the gateway. The server
+  // re-verifies with HDFC and credits the payee wallet. Returns { status }.
+  confirmSettlement: (orderId) =>
+    authPost(`${BASE}/settlement/confirm?orderId=${encodeURIComponent(orderId)}`, {}),
 };

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   FaArrowLeft, FaPlus, FaShareAlt, FaTrashAlt, FaUserPlus, FaTimes,
   FaReceipt, FaHandshake, FaCheckCircle, FaAddressBook, FaHourglassHalf, FaCheck, FaPen, FaSyncAlt,
@@ -25,13 +25,16 @@ const TABS = [
 const GroupDetailScreen = ({ publicView = false }) => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const toast = useToast();
+  const [verifyingPayment, setVerifyingPayment] = useState(false);
   const [group, setGroup] = useState(null);
   const [tab, setTab] = useState("expenses");
   const [expenseModal, setExpenseModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
   const [memberModal, setMemberModal] = useState(false);
   const [settleTarget, setSettleTarget] = useState(null); // { from, to, amount }
+  const [settleSuccess, setSettleSuccess] = useState(null); // { from, to, amount, settled }
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -80,6 +83,57 @@ const GroupDetailScreen = ({ publicView = false }) => {
     setGroup(res.data);
     toast?.showToast?.("Up to date.", "success");
   };
+
+  // Start an online "Pay & Settle": the backend creates a HDFC SmartGateway
+  // order and returns a payment link. We redirect the payer there; on return
+  // (`?settle=1`) the effect below reconciles and the payee's wallet is credited
+  // — no manual confirmation from the receiver.
+  const handlePayAndSettle = async ({ from, to, amount, note }) => {
+    const amt = parseFloat(amount);
+    if (!amt || amt <= 0) { toast?.showToast?.("Enter a valid amount.", "error"); return; }
+    setSettleTarget(null);
+    toast?.showToast?.("Starting secure payment…", "info");
+    const returnUrl = `${window.location.origin}/customer/app/rebuddy/group/${group.id}?settle=1`;
+    const res = await rebuddyService.initiateSettlement({
+      groupId: group.id, fromId: from, toId: to, amount: amt, note: (note || "").trim(), returnUrl,
+    });
+    if (!res.success || !res.data?.paymentUrl) {
+      toast?.showToast?.(res.message || "Could not start the payment.", "error");
+      return;
+    }
+    try { localStorage.setItem("vb_rebuddy_settle_order", res.data.orderId); } catch {}
+    window.location.href = res.data.paymentUrl;
+  };
+
+  // After returning from the gateway (`?settle=1`, with the gateway appending
+  // `order_id`), verify the payment server-side and refresh the group.
+  useEffect(() => {
+    if (publicView || searchParams.get("settle") !== "1") return;
+    const orderId = searchParams.get("order_id") || (() => {
+      try { return localStorage.getItem("vb_rebuddy_settle_order"); } catch { return null; }
+    })();
+    if (!orderId) { navigate(`/customer/app/rebuddy/group/${id}`, { replace: true }); return; }
+    let alive = true;
+    (async () => {
+      setVerifyingPayment(true);
+      const res = await rebuddyService.confirmSettlement(orderId);
+      if (!alive) return;
+      setVerifyingPayment(false);
+      try { localStorage.removeItem("vb_rebuddy_settle_order"); } catch {}
+      const st = res?.data?.status;
+      if (res.success && st === "SETTLED") {
+        toast?.showToast?.("Payment received — settled.", "success");
+      } else if (st === "PENDING") {
+        toast?.showToast?.("Payment is being verified. Try Refresh in a moment.", "info");
+      } else {
+        toast?.showToast?.(res.message || "Payment was not completed.", "error");
+      }
+      navigate(`/customer/app/rebuddy/group/${id}`, { replace: true });
+      await handleRefresh();
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, publicView]);
 
   const settle = useMemo(() => (group ? simplifySettlements(group) : []), [group]);
   const balances = useMemo(() => (group ? computeBalances(group) : {}), [group]);
@@ -140,13 +194,17 @@ const GroupDetailScreen = ({ publicView = false }) => {
     setSettleTarget(null);
     const next = { ...group, settlements: [settlement, ...(group.settlements || [])] };
     if (await persist(next)) {
-      toast?.showToast?.(
-        status === "confirmed"
-          ? "Payment recorded — settled."
-          : "Payment recorded — waiting for confirmation.",
-        "success"
-      );
+      // Confirm the entry with an explicit success popup. Dismissing it pulls
+      // the latest group from the server so the outstanding balance is fresh.
+      setSettleSuccess({ from, to, amount: amt, settled: status === "confirmed" });
     }
+  };
+
+  // Close the post-settlement success popup and refresh the outstanding amount
+  // from the server so this screen reflects the just-recorded payment.
+  const handleSettleSuccessDone = async () => {
+    setSettleSuccess(null);
+    await handleRefresh();
   };
 
   const handleConfirmSettlement = async (sid) => {
@@ -473,7 +531,28 @@ const GroupDetailScreen = ({ publicView = false }) => {
           group={group} mMap={mMap} self={self} target={settleTarget}
           onClose={() => setSettleTarget(null)}
           onSubmit={handleRecordSettlement}
+          onPayAndSettle={handlePayAndSettle}
         />
+      )}
+      {settleSuccess && (
+        <SettleSuccessModal
+          group={group} mMap={mMap} data={settleSuccess}
+          onDone={handleSettleSuccessDone}
+        />
+      )}
+
+      {verifyingPayment && (
+        <div
+          role="dialog" aria-modal="true"
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)",
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            gap: 14, zIndex: 1200, color: "#fff",
+          }}
+        >
+          <div className="md-spinner" />
+          <div style={{ fontSize: 14, fontWeight: 700 }}>Verifying your payment…</div>
+        </div>
       )}
     </div>
   );
@@ -1001,7 +1080,7 @@ const MemberModal = ({ onClose, onSubmit, onPickContacts, toast }) => {
   );
 };
 
-const SettleModal = ({ group, mMap, self, target, onClose, onSubmit }) => {
+const SettleModal = ({ group, mMap, self, target, onClose, onSubmit, onPayAndSettle }) => {
   const [amount, setAmount] = useState(target.amount != null ? String(target.amount) : "");
   const [note, setNote] = useState("");
 
@@ -1011,6 +1090,9 @@ const SettleModal = ({ group, mMap, self, target, onClose, onSubmit }) => {
   // viewer is the receiver, recording settles immediately. Otherwise the
   // receiver must confirm they got the money before it settles.
   const viewerIsReceiver = self && self.id === target.to;
+  // Only the debtor can pay online — the money leaves their own UPI. They get a
+  // "Pay & Settle" option that credits the payee's wallet directly.
+  const viewerIsPayer = self && self.id === target.from;
 
   const inputBase = {
     width: "100%", padding: "11px 14px", borderRadius: 10,
@@ -1055,19 +1137,87 @@ const SettleModal = ({ group, mMap, self, target, onClose, onSubmit }) => {
           background: RB.coralSoft, color: RB.coralDark, fontSize: 12, fontWeight: 600,
         }}
       >
-        {viewerIsReceiver
+        {viewerIsPayer
+          ? `Pay online and ${toName} gets it in their VasBazaar wallet instantly — no confirmation needed.`
+          : viewerIsReceiver
           ? "You're receiving this payment — it settles immediately."
           : `${toName} will be asked to confirm receipt before this settles.`}
       </div>
 
+      {viewerIsPayer && onPayAndSettle && (
+        <button
+          type="button"
+          onClick={() => onPayAndSettle({ from: target.from, to: target.to, amount, note })}
+          style={{ ...primaryBtn, marginBottom: 10 }}
+        >
+          Pay {formatMoney(parseFloat(amount) || target.amount || 0, group.currency)} &amp; settle
+        </button>
+      )}
+
       <button
         type="button"
         onClick={() => onSubmit({ from: target.from, to: target.to, amount, note })}
-        style={primaryBtn}
+        style={viewerIsPayer
+          ? { ...primaryBtn, background: "transparent", color: RB.coralDark, border: `1px solid ${RB.borderDark}` }
+          : primaryBtn}
       >
-        {viewerIsReceiver ? "Record & settle" : "Record payment"}
+        {viewerIsPayer
+          ? "Record manually instead"
+          : viewerIsReceiver ? "Record & settle" : "Record payment"}
       </button>
     </Modal>
+  );
+};
+
+// Post-settlement confirmation. Centered (not the bottom sheet the input modals
+// use) so it reads as a result, not another form. Dismiss refreshes balances.
+const SettleSuccessModal = ({ group, mMap, data, onDone }) => {
+  const fromName = mMap[data.from]?.name || "?";
+  const toName = mMap[data.to]?.name || "?";
+  return (
+    <div
+      role="dialog" aria-modal="true"
+      onClick={onDone}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 1100, padding: "24px",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "100%", maxWidth: 360,
+          background: RB.cardBg, border: `1px solid ${RB.borderDark}`,
+          borderRadius: 18, padding: "26px 22px 22px", textAlign: "center",
+          boxShadow: "0 24px 48px -24px rgba(0,0,0,0.5)",
+        }}
+      >
+        <div style={{
+          width: 56, height: 56, borderRadius: "50%", margin: "0 auto 14px",
+          background: "rgba(34,197,94,0.14)", display: "grid", placeItems: "center",
+        }}>
+          <FaCheckCircle size={30} color="#22C55E" />
+        </div>
+        <h3 style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 800 }}>
+          {data.settled ? "Payment settled" : "Payment recorded"}
+        </h3>
+        <div style={{ fontSize: 13, color: "var(--cm-muted, #A0A0A0)", marginBottom: 4 }}>
+          <strong>{fromName}</strong> paid <strong>{toName}</strong>
+        </div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: RB.coralDark, marginBottom: 8 }}>
+          {formatMoney(data.amount, group.currency)}
+        </div>
+        <div style={{ fontSize: 12.5, color: "var(--cm-muted, #A0A0A0)", marginBottom: 18 }}>
+          {data.settled
+            ? "The entry has been recorded and the balance is updated."
+            : `Waiting for ${toName} to confirm receipt before it settles.`}
+        </div>
+        <button type="button" onClick={onDone} style={primaryBtn}>
+          Done
+        </button>
+      </div>
+    </div>
   );
 };
 
