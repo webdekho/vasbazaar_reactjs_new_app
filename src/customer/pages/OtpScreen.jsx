@@ -220,7 +220,11 @@ const OtpScreen = () => {
       apiData = (typeof configResponse.data === "object" && configResponse.data !== null) ? configResponse.data : (configResponse.raw?.data || {});
       rawData = configResponse.raw || {};
     } else {
-      // No referral code available - need to collect it from user
+      // No referral code available - need to collect it from user.
+      // Persist the referral_config token from verifyOTP so the referral screen
+      // calls referalConfig with the correct token type (not the old login token).
+      const configToken = apiData.token || token;
+      if (configToken) customerStorage.setTempToken(configToken);
       // Navigate to referral screen
       navigate(`/customer/referral?mobile=${mobile}`);
       return;
