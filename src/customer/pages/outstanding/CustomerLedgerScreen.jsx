@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Capacitor } from "@capacitor/core";
+import { Filesystem, Directory } from "@capacitor/filesystem";
+import { Share } from "@capacitor/share";
 import {
   FaArrowLeft,
   FaArrowDown,
@@ -10,9 +13,17 @@ import {
   FaClock,
   FaEdit,
   FaReceipt,
+  FaShareAlt,
+  FaSpinner,
   FaWhatsapp,
 } from "react-icons/fa";
 import { outstandingService } from "../../services/outstandingService";
+import { useToast } from "../../context/ToastContext";
+import {
+  generateLedgerPdfBlob,
+  getLedgerPdfFileName,
+  getLedgerShareText,
+} from "../../utils/ledgerPdf";
 import AddTxnSheet from "./components/AddTxnSheet";
 import ReminderSettingsSheet from "./components/ReminderSettingsSheet";
 
@@ -80,6 +91,15 @@ const formatBalanceAfter = (value) => {
   return { label: "Settled", amount: formatINR(0), tone: "is-settled" };
 };
 
+const formatPaymentMode = (mode) => {
+  switch (mode) {
+    case "UPI": return "UPI";
+    case "ONLINE_TRANSFER": return "Online Transfer";
+    case "CASH":
+    default: return "Cash";
+  }
+};
+
 const formatOwedBalanceAfter = (value) => {
   const amount = Number(value || 0);
   if (amount > 0) {
@@ -102,8 +122,46 @@ const isTxnInDateRange = (txn, range) => {
   return (!range.dateFrom || txnDate >= range.dateFrom) && (!range.dateTo || txnDate <= range.dateTo);
 };
 
+const isShareCancelled = (error) => {
+  if (!error) return false;
+  if (error.name === "AbortError" || error.name === "NotAllowedError") return true;
+  const code = String(error.code || "").toLowerCase();
+  const message = String(error.message || "").toLowerCase();
+  return code.includes("cancel") || message.includes("cancel") || message.includes("abort") || message.includes("dismiss") || message.includes("रद्द");
+};
+
+const blobToBase64 = (blob) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(String(reader.result || "").split(",")[1] || "");
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+
+const writeFileToDevice = async (blob, fileName) => {
+  const data = await blobToBase64(blob);
+  const result = await Filesystem.writeFile({
+    path: fileName,
+    data,
+    directory: Directory.Cache,
+  });
+  return result.uri;
+};
+
+const downloadBlob = (blob, fileName) => {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+};
+
 const CustomerLedgerScreen = () => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const { customerId } = useParams();
   const [searchParams] = useSearchParams();
   const isOwedView = searchParams.get("view") === "owed";
@@ -117,6 +175,7 @@ const CustomerLedgerScreen = () => {
   const [showReminderSettings, setShowReminderSettings] = useState(false);
   const [previewBill, setPreviewBill] = useState("");
   const [loadingMore, setLoadingMore] = useState(false);
+  const [sharingLedger, setSharingLedger] = useState(false);
 
   const load = async (pageNumber = 0, append = false) => {
     if (append) {
@@ -185,6 +244,86 @@ const CustomerLedgerScreen = () => {
     }
     if (res.data?.whatsappLink) {
       window.open(res.data.whatsappLink, "_blank");
+    }
+  };
+
+  const handleShareLedger = async () => {
+    if (!customer || sharingLedger) return;
+    setSharingLedger(true);
+    try {
+      const res = isOwedView
+        ? await outstandingService.getOwedDetail(customerId, 0, 1000, dateRange)
+        : await outstandingService.getCustomerDetail(customerId, 0, 1000, dateRange);
+      if (!res.success) {
+        showToast(res.message || "Ledger PDF तयार करता आले नाही.", "error");
+        return;
+      }
+
+      const pdfData = res.data || data;
+      const pdfCustomer = pdfData.customer || customer;
+      const records = pdfData.transactions?.records || [];
+      let running = Number(pdfCustomer?.balance || 0);
+      const pdfTransactions = records.map((txn) => {
+        const hasBalance = txn.balanceAfter !== undefined && txn.balanceAfter !== null;
+        const balanceAfter = hasBalance ? Number(txn.balanceAfter || 0) : running;
+        const amount = Number(txn.amount || 0);
+        running = txn.type === "GAVE" ? balanceAfter - amount : balanceAfter + amount;
+        return { ...txn, balanceAfter };
+      });
+      const pdfBlob = generateLedgerPdfBlob({
+        data: pdfData,
+        customer: pdfCustomer,
+        transactions: pdfTransactions,
+        balance: pdfCustomer?.balance,
+        readOnly,
+        dateRange,
+      });
+      const fileName = getLedgerPdfFileName(pdfCustomer);
+      const shareText = getLedgerShareText({
+        customer: pdfCustomer,
+        balance: pdfCustomer?.balance,
+        readOnly,
+      });
+
+      if (Capacitor.isNativePlatform()) {
+        const fileUri = await writeFileToDevice(pdfBlob, fileName);
+        await Share.share({
+          title: "ReBill Ledger PDF",
+          text: shareText,
+          url: fileUri,
+          dialogTitle: "Share ReBill Ledger",
+        });
+        return;
+      }
+
+      const pdfFile = new File([pdfBlob], fileName, { type: "application/pdf" });
+      if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+        await navigator.share({
+          title: "ReBill Ledger PDF",
+          text: shareText,
+          files: [pdfFile],
+        });
+        return;
+      }
+
+      downloadBlob(pdfBlob, fileName);
+      if (navigator.share) {
+        await navigator.share({
+          title: "ReBill Ledger PDF",
+          text: `${shareText}\n\nPDF download झाला आहे. कृपया तो WhatsApp किंवा Email मध्ये attach करा.`,
+        });
+        return;
+      }
+
+      window.open(`https://wa.me/91${pdfCustomer.customerMobile}?text=${encodeURIComponent(`${shareText}\n\nPDF download झाला आहे. कृपया downloaded PDF attach करा.`)}`, "_blank");
+      showToast("PDF download झाला. WhatsApp/Email मध्ये attach करा.", "info");
+    } catch (error) {
+      console.error("Ledger PDF share failed:", error?.message || error);
+      if (!isShareCancelled(error)) {
+        showToast("Ledger PDF share करता आले नाही. पुन्हा प्रयत्न करा.", "error");
+      }
+    } finally {
+      setSharingLedger(false);
     }
   };
 
@@ -303,9 +442,23 @@ const CustomerLedgerScreen = () => {
                   <small>{balance > 0 ? "Create a payment nudge" : "Available when amount is due"}</small>
                 </span>
               </button>
+              <button
+                className="ol-command-card ol-command-share"
+                type="button"
+                onClick={handleShareLedger}
+                disabled={sharingLedger}
+              >
+                <span className="ol-command-icon">
+                  {sharingLedger ? <FaSpinner className="ol-spin" /> : <FaShareAlt />}
+                </span>
+                <span>
+                  <b>{sharingLedger ? "Preparing PDF" : "Share PDF"}</b>
+                  <small>Attach ledger to WhatsApp or Email</small>
+                </span>
+              </button>
               <a
                 className="ol-command-card ol-command-wa"
-                href={`https://wa.me/91${customer.customerMobile}?text=${encodeURIComponent(`Hi ${customer.customerName}, regarding your outstanding amount of ${formatINR(Math.max(0, balance))}.`)}`}
+                href={`https://wa.me/91${customer.customerMobile}?text=${encodeURIComponent(`Hi ${customer.customerName}, ${formatINR(Math.max(0, balance))} is still pending from your side. Please arrange the payment at the earliest.`)}`}
                 target="_blank"
                 rel="noreferrer"
               >
@@ -381,6 +534,8 @@ const CustomerLedgerScreen = () => {
                       </div>
                       <div className="ol-txn-meta">
                         <span>{formatTxnDateTime(t.txnDate, t.createdAt)}</span>
+                        <span>{formatPaymentMode(t.paymentMode)}</span>
+                        {t.paymentReference && <span>Ref: {t.paymentReference}</span>}
                         {isEditedTxn(t) && <span className="ol-edited-badge">Edited</span>}
                       </div>
                       {t.billImage && (

@@ -43,9 +43,40 @@ const OutstandingListScreen = () => {
   const [search, setSearch] = useState("");
   const [showAddSheet, setShowAddSheet] = useState(false);
   const [showRenewSheet, setShowRenewSheet] = useState(false);
+  const [subscriptionLocked, setSubscriptionLocked] = useState(false);
+
+  const checkSubscriptionAccess = async () => {
+    const res = await outstandingService.getSubscription();
+    if (!res?.success || !res.data || res.data.isActive) {
+      setSubscriptionLocked(false);
+      return true;
+    }
+
+    if (res.data.autoRenewEnabled && (res.data.autoRenewMode || "wallet") === "wallet") {
+      const renewRes = await outstandingService.renewSubscription();
+      if (renewRes?.success) {
+        setSubscriptionLocked(false);
+        return true;
+      }
+    }
+
+    setSubscriptionLocked(true);
+    setShowRenewSheet(true);
+    return false;
+  };
 
   const load = async () => {
     setLoading(true);
+    const canUseService = await checkSubscriptionAccess();
+    if (!canUseService) {
+      setLoading(false);
+      setError("ReBill subscription expired. Please renew to continue using this service.");
+      setSummary({ totalReceivable: 0, totalPayable: 0, customerCount: 0 });
+      setCustomers([]);
+      setOwedByMe([]);
+      return;
+    }
+
     const [sumRes, listRes, owedRes] = await Promise.all([
       outstandingService.getSummary(),
       outstandingService.listCustomers(0, 100, sort),
@@ -112,7 +143,8 @@ const OutstandingListScreen = () => {
           className="ol-add-btn-pill"
           type="button"
           aria-label="Add customer"
-          onClick={() => setShowAddSheet(true)}
+          disabled={subscriptionLocked}
+          onClick={() => !subscriptionLocked && setShowAddSheet(true)}
         >
           <FaPlus />
         </button>
@@ -166,7 +198,8 @@ const OutstandingListScreen = () => {
         <button
           className="ol-command-card ol-command-sms"
           type="button"
-          onClick={() => navigate("/customer/app/outstanding/sms-settings")}
+          disabled={subscriptionLocked}
+          onClick={() => !subscriptionLocked && navigate("/customer/app/outstanding/sms-settings")}
         >
           <span className="ol-command-icon"><FaBell /></span>
           <span>
@@ -176,7 +209,8 @@ const OutstandingListScreen = () => {
         <button
           className="ol-command-card ol-command-reminder"
           type="button"
-          onClick={() => navigate("/customer/app/outstanding/reminders")}
+          disabled={subscriptionLocked}
+          onClick={() => !subscriptionLocked && navigate("/customer/app/outstanding/reminders")}
         >
           <span className="ol-command-icon"><FaCommentDots /></span>
           <span>
@@ -237,7 +271,8 @@ const OutstandingListScreen = () => {
                 key={c.id}
                 type="button"
                 className={cls}
-                onClick={() => navigate(`/customer/app/outstanding/${c.id}`)}
+                disabled={subscriptionLocked}
+                onClick={() => !subscriptionLocked && navigate(`/customer/app/outstanding/${c.id}`)}
               >
                 <div className="ol-avatar"><FaUserCircle /></div>
                 <div className="ol-item-main">
@@ -274,7 +309,8 @@ const OutstandingListScreen = () => {
                 key={o.id}
                 type="button"
                 className="ol-item ol-owed-item"
-                onClick={() => navigate(`/customer/app/outstanding/${o.id}?view=owed`)}
+                disabled={subscriptionLocked}
+                onClick={() => !subscriptionLocked && navigate(`/customer/app/outstanding/${o.id}?view=owed`)}
               >
                 <div className="ol-avatar"><FaUserCircle /></div>
                 <div className="ol-item-main">
@@ -299,7 +335,17 @@ const OutstandingListScreen = () => {
       )}
 
       {showRenewSheet && (
-        <RenewSubscriptionSheet onClose={() => setShowRenewSheet(false)} />
+        <RenewSubscriptionSheet
+          requireRenewal={subscriptionLocked}
+          onClose={() => {
+            if (!subscriptionLocked) setShowRenewSheet(false);
+          }}
+          onRenewed={() => {
+            setSubscriptionLocked(false);
+            setShowRenewSheet(false);
+            load();
+          }}
+        />
       )}
     </div>
   );

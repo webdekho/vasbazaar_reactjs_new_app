@@ -6,9 +6,12 @@ import { captureBillPhoto } from "../../../utils/billPhoto";
 const AddTxnSheet = ({ type, customer, transaction, onClose, onAdded }) => {
   const today = new Date().toISOString().slice(0, 10);
   const isEdit = !!transaction?.id;
+  const initialPaymentMode = transaction?.paymentMode || (type === "GOT" ? "UPI" : "CASH");
   const [amount, setAmount] = useState(transaction?.amount ? String(Math.round(Number(transaction.amount))) : "");
   const [date, setDate] = useState(transaction?.txnDate ? String(transaction.txnDate).slice(0, 10) : today);
   const [note, setNote] = useState(transaction?.note || "");
+  const [paymentMode, setPaymentMode] = useState(initialPaymentMode);
+  const [paymentReference, setPaymentReference] = useState(transaction?.paymentReference || "");
   const [notify, setNotify] = useState(!!customer?.isAppUser);
   const [billImage, setBillImage] = useState(transaction?.billImage || "");
   const [capturing, setCapturing] = useState(false);
@@ -29,6 +32,7 @@ const AddTxnSheet = ({ type, customer, transaction, onClose, onAdded }) => {
   };
 
   const isGave = type === "GAVE";
+  const showPaymentReference = paymentMode === "UPI" || paymentMode === "ONLINE_TRANSFER";
   const heading = isEdit
     ? `Edit ${isGave ? "You Gave" : "You Got"}`
     : isGave ? `You Gave to ${customer.customerName}` : `You Got from ${customer.customerName}`;
@@ -47,6 +51,8 @@ const AddTxnSheet = ({ type, customer, transaction, onClose, onAdded }) => {
       amount: amt,
       txnDate: date,
       note: note.trim() || null,
+      paymentMode,
+      paymentReference: showPaymentReference ? paymentReference.trim() || null : null,
       notify,
       billImage: billImage || null,
     };
@@ -103,6 +109,43 @@ const AddTxnSheet = ({ type, customer, transaction, onClose, onAdded }) => {
               maxLength={255}
             />
           </label>
+
+          <div className="ol-field">
+            <span>Collection mode</span>
+            <div className="ol-payment-mode-grid" role="radiogroup" aria-label="Collection mode">
+              {[
+                ["CASH", "Cash"],
+                ["UPI", "UPI"],
+                ["ONLINE_TRANSFER", "Online Transfer"],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`ol-payment-mode${paymentMode === value ? " is-active" : ""}`}
+                  onClick={() => {
+                    setPaymentMode(value);
+                    if (value === "CASH") setPaymentReference("");
+                  }}
+                  aria-pressed={paymentMode === value}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {showPaymentReference && (
+            <label className="ol-field">
+              <span>UTR / Bank reference (optional)</span>
+              <input
+                type="text"
+                value={paymentReference}
+                onChange={(e) => setPaymentReference(e.target.value)}
+                placeholder="e.g. UTR1234567890"
+                maxLength={100}
+              />
+            </label>
+          )}
 
           <div className="ol-field">
             <span>Bill photo (optional)</span>

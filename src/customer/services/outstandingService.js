@@ -65,4 +65,6 @@ export const outstandingService = {
   getSubscription: () => authGet(`${BASE}/subscription`),
 
   renewSubscription: () => authPost(`${BASE}/subscription/renew`, {}),
+
+  updateSubscriptionAutoRenew: (payload) => authPut(`${BASE}/subscription/auto-renew`, payload),
 };
