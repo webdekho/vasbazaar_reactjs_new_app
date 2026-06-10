@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   FaArrowLeft, FaPlus, FaShareAlt, FaTrashAlt, FaUserPlus, FaTimes,
   FaReceipt, FaHandshake, FaCheckCircle, FaAddressBook, FaHourglassHalf, FaCheck, FaPen, FaSyncAlt,
@@ -18,16 +18,14 @@ const TABS = [
   { key: "settle", label: "Settle up", icon: FaHandshake },
 ];
 
-const GroupDetailScreen = () => {
+// `publicView` renders the read-only shared-link version: served by a public
+// route (no login), fetched from the public masked endpoint, with every
+// mutation control and cross-page navigation hidden so the recipient can only
+// view this one group and nothing else in the app.
+const GroupDetailScreen = ({ publicView = false }) => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
   const toast = useToast();
-  // "Shared" / locked view: when the page is opened via a shared invite link
-  // (`?shared=1`) the recipient should only be able to view this single group —
-  // navigation away (back to all groups, deleting) is hidden so they can't roam
-  // the rest of the app from this entry point.
-  const locked = new URLSearchParams(location.search).get("shared") === "1";
   const [group, setGroup] = useState(null);
   const [tab, setTab] = useState("expenses");
   const [expenseModal, setExpenseModal] = useState(false);
@@ -39,17 +37,19 @@ const GroupDetailScreen = () => {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const res = await rebuddyService.getGroup(id);
+      const res = await (publicView ? rebuddyService.getPublicGroup(id) : rebuddyService.getGroup(id));
       if (!alive) return;
       if (!res.success || !res.data) {
         toast?.showToast?.(res.message || "Group not found.", "error");
-        navigate("/customer/app/rebuddy", { replace: true });
+        // In public/shared mode don't bounce to the groups list (the recipient
+        // isn't allowed there) — just surface the error on this page.
+        if (!publicView) navigate("/customer/app/rebuddy", { replace: true });
         return;
       }
       setGroup(res.data);
     })();
     return () => { alive = false; };
-  }, [id, navigate, toast]);
+  }, [id, navigate, toast, publicView]);
 
   // Optimistically render the new state, then persist server-side. On failure
   // roll back to the last known-good group and surface the error.
@@ -71,7 +71,7 @@ const GroupDetailScreen = () => {
   const handleRefresh = async () => {
     if (refreshing) return;
     setRefreshing(true);
-    const res = await rebuddyService.getGroup(id);
+    const res = await (publicView ? rebuddyService.getPublicGroup(id) : rebuddyService.getGroup(id));
     setRefreshing(false);
     if (!res.success || !res.data) {
       toast?.showToast?.(res.message || "Could not refresh. Please try again.", "error");
@@ -211,19 +211,31 @@ const GroupDetailScreen = () => {
   };
 
   const handleShare = async () => {
-    const url = `${window.location.origin}/customer/app/rebuddy/group/${group.id}`;
-    const text = `Join my ReBuddy group "${group.name}" to split expenses: ${url}`;
+    // Always share the public production link (not localhost / the current
+    // origin). `?shared=1` opens the group in a locked, view-only mode for the
+    // recipient. The message also invites them to register on the super app.
+    const base = "https://web.vasbazaar.com";
+    const groupUrl = `${base}/customer/rebuddy/group/${group.id}`;
+    const registerUrl = `${base}/customer/login`;
+    const text =
+      `Hey!\n\n` +
+      `View our "${group.name}" group to split and track trip expenses easily:\n` +
+      `${groupUrl}\n\n` +
+      `Also register on VasBazaar Super App here:\n` +
+      `${registerUrl}`;
     try {
+      // Pass only `text` (the URLs are already inside it) so receivers like
+      // WhatsApp don't append a duplicate copy of the link.
       if (navigator.share) {
-        await navigator.share({ title: `ReBuddy · ${group.name}`, text, url });
+        await navigator.share({ title: `ReBuddy · ${group.name}`, text });
       } else {
-        await navigator.clipboard.writeText(url);
-        toast?.showToast?.("Link copied to clipboard.", "success");
+        await navigator.clipboard.writeText(text);
+        toast?.showToast?.("Invite copied to clipboard.", "success");
       }
     } catch {
       try {
-        await navigator.clipboard.writeText(url);
-        toast?.showToast?.("Link copied.", "success");
+        await navigator.clipboard.writeText(text);
+        toast?.showToast?.("Invite copied.", "success");
       } catch {
         toast?.showToast?.("Could not share link.", "error");
       }
@@ -247,16 +259,20 @@ const GroupDetailScreen = () => {
       <style>{"@keyframes rb-spin{to{transform:rotate(360deg)}}"}</style>
       {/* Top bar */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <button
-          type="button" onClick={() => navigate("/customer/app/rebuddy")}
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            background: "transparent", border: "none", color: "inherit",
-            fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0,
-          }}
-        >
-          <FaArrowLeft size={11} /> All groups
-        </button>
+        {publicView ? (
+          <span />
+        ) : (
+          <button
+            type="button" onClick={() => navigate("/customer/app/rebuddy")}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              background: "transparent", border: "none", color: "inherit",
+              fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0,
+            }}
+          >
+            <FaArrowLeft size={11} /> All groups
+          </button>
+        )}
         <div style={{ display: "flex", gap: 8 }}>
           <button
             type="button" onClick={handleRefresh} disabled={refreshing}
@@ -282,19 +298,41 @@ const GroupDetailScreen = () => {
           >
             <FaShareAlt size={11} /> Share
           </button>
-          <button
-            type="button" onClick={handleDeleteGroup}
-            aria-label="Delete group"
-            style={{
-              display: "inline-flex", alignItems: "center",
-              padding: "6px 10px", borderRadius: 999, border: `1px solid ${RB.borderDark}`,
-              background: "transparent", color: "var(--cm-muted, #A0A0A0)", cursor: "pointer",
-            }}
-          >
-            <FaTrashAlt size={11} />
-          </button>
+          {!publicView && (
+            <button
+              type="button" onClick={handleDeleteGroup}
+              aria-label="Delete group"
+              style={{
+                display: "inline-flex", alignItems: "center",
+                padding: "6px 10px", borderRadius: 999, border: `1px solid ${RB.borderDark}`,
+                background: "transparent", color: "var(--cm-muted, #A0A0A0)", cursor: "pointer",
+              }}
+            >
+              <FaTrashAlt size={11} />
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Shared-link viewers get a gentle nudge to log in for full access */}
+      {publicView && (
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+          padding: "10px 14px", borderRadius: 12, marginBottom: 14,
+          background: RB.coralSoft, border: `1px solid ${RB.coral}`,
+        }}>
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: RB.coralDark }}>
+            You're viewing a shared group. Login to join &amp; edit.
+          </span>
+          <a href="/customer/login" style={{
+            flexShrink: 0, textDecoration: "none",
+            padding: "7px 14px", borderRadius: 999,
+            background: RB.coral, color: "#fff", fontSize: 12, fontWeight: 700,
+          }}>
+            Login
+          </a>
+        </div>
+      )}
 
       {/* Header card */}
       <section
@@ -327,16 +365,18 @@ const GroupDetailScreen = () => {
       <section style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
           <h3 style={{ fontSize: 14, margin: 0, fontWeight: 700 }}>Members</h3>
-          <button
-            type="button" onClick={() => setMemberModal(true)}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              background: "transparent", border: "none", color: RB.coral,
-              fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0,
-            }}
-          >
-            <FaUserPlus size={11} /> Add
-          </button>
+          {!publicView && (
+            <button
+              type="button" onClick={() => setMemberModal(true)}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                background: "transparent", border: "none", color: RB.coral,
+                fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0,
+              }}
+            >
+              <FaUserPlus size={11} /> Add
+            </button>
+          )}
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {group.members.map((m) => (
@@ -351,7 +391,7 @@ const GroupDetailScreen = () => {
             >
               {m.name}{m.isSelf ? " (You)" : ""}
               {m.mobile ? <span style={{ opacity: 0.7, fontWeight: 500 }}>· {m.mobile}</span> : null}
-              {!m.isSelf && (
+              {!publicView && !m.isSelf && (
                 <button
                   type="button" onClick={() => handleRemoveMember(m)}
                   aria-label={`Remove ${m.name}`}
@@ -396,7 +436,7 @@ const GroupDetailScreen = () => {
 
       {tab === "expenses" ? (
         <ExpensesPanel
-          group={group} mMap={mMap} self={self}
+          group={group} mMap={mMap} self={self} readOnly={publicView}
           onAdd={() => { setEditingExpense(null); setExpenseModal(true); }}
           onEdit={(e) => { setEditingExpense(e); setExpenseModal(true); }}
           onDelete={handleDeleteExpense}
@@ -439,26 +479,28 @@ const GroupDetailScreen = () => {
   );
 };
 
-const ExpensesPanel = ({ group, mMap, self, onAdd, onEdit, onDelete }) => {
+const ExpensesPanel = ({ group, mMap, self, onAdd, onEdit, onDelete, readOnly = false }) => {
   const expenses = group.expenses || [];
   // Only the member who added an entry can edit or delete it. Older entries
   // saved before creator tracking have no createdBy — fall back to who paid so
   // they're restricted to that member, never editable by everyone.
   const canModify = (e) =>
-    !!self && (e.createdBy ? e.createdBy === self.id : e.paidBy === self.id);
+    !readOnly && !!self && (e.createdBy ? e.createdBy === self.id : e.paidBy === self.id);
   return (
     <>
-      <button
-        type="button" onClick={onAdd}
-        style={{
-          width: "100%", padding: "13px 16px", borderRadius: 12, border: "none",
-          background: RB.coral, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer",
-          display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
-          marginBottom: 14, boxShadow: "0 12px 24px -16px rgba(0,123,255,0.45)",
-        }}
-      >
-        <FaPlus size={11} /> Add an expense
-      </button>
+      {!readOnly && (
+        <button
+          type="button" onClick={onAdd}
+          style={{
+            width: "100%", padding: "13px 16px", borderRadius: 12, border: "none",
+            background: RB.coral, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer",
+            display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+            marginBottom: 14, boxShadow: "0 12px 24px -16px rgba(0,123,255,0.45)",
+          }}
+        >
+          <FaPlus size={11} /> Add an expense
+        </button>
+      )}
 
       {expenses.length === 0 ? (
         <div

@@ -172,6 +172,21 @@ const CustomerModernRoutes = () => {
           <Route path="/referral" element={<ReferralScreen />} />
           <Route path="/verify-otp" element={<OtpScreen />} />
           <Route path="/terms" element={<Suspense fallback={<RouteFallback />}><TermsScreen /></Suspense>} />
+          {/* Public, login-free shared ReBuddy group link. Rendered OUTSIDE the
+              AuthGuard/ProtectedShell so the recipient sees only this one group
+              (read-only, masked mobiles) and cannot reach any other page. */}
+          <Route
+            path="/rebuddy/group/:id"
+            element={
+              <Suspense fallback={<RouteFallback />}>
+                <div className="customer-modern-protected" style={{ display: "block" }}>
+                  <main className="cm-content" style={{ maxWidth: 720, margin: "0 auto", padding: "0 12px", minHeight: "100vh" }}>
+                    <RebuddyGroupDetailScreen publicView />
+                  </main>
+                </div>
+              </Suspense>
+            }
+          />
           <Route
             path="/app"
             element={

@@ -25,7 +25,16 @@ const LoginScreen = () => {
   useEffect(() => {
     const sessionToken = customerStorage.getSessionToken();
     if (sessionToken) {
-      navigate("/customer/app", { replace: true });
+      // Honour a saved deep link (e.g. a shared ReBuddy group link) if present.
+      let dest = "/customer/app";
+      try {
+        const saved = sessionStorage.getItem("vb_post_login_redirect");
+        if (saved && saved.startsWith("/customer/app")) {
+          dest = saved;
+          sessionStorage.removeItem("vb_post_login_redirect");
+        }
+      } catch {}
+      navigate(dest, { replace: true });
     }
   }, [navigate]);
 

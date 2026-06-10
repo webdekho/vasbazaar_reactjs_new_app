@@ -138,7 +138,17 @@ const OtpScreen = () => {
     setAuthSession({ sessionToken, userData, tempToken: null });
     customerStorage.setFirstLoginComplete();
     triggerPWAInstall();
-    navigate("/customer/app/services", { replace: true });
+    // If the user arrived via a protected deep link (e.g. a shared ReBuddy group
+    // link), AuthGuard saved it — send them there instead of the home screen.
+    let dest = "/customer/app/services";
+    try {
+      const saved = sessionStorage.getItem("vb_post_login_redirect");
+      if (saved && saved.startsWith("/customer/app")) {
+        dest = saved;
+        sessionStorage.removeItem("vb_post_login_redirect");
+      }
+    } catch {}
+    navigate(dest, { replace: true });
   };
 
   const submit = async (event) => {
