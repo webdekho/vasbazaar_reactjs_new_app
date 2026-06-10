@@ -12,6 +12,7 @@ import {
 } from "./utils";
 import { pickContacts, normalizeMobile, isValidMobile, isUserCancelledError } from "./contacts";
 import { rebuddyService } from "../../services/rebuddyService";
+import { server_api } from "../../../utils/constants";
 
 const TABS = [
   { key: "expenses", label: "Expenses", icon: FaReceipt },
@@ -93,7 +94,13 @@ const GroupDetailScreen = ({ publicView = false }) => {
     if (!amt || amt <= 0) { toast?.showToast?.("Enter a valid amount.", "error"); return; }
     setSettleTarget(null);
     toast?.showToast?.("Starting secure payment…", "info");
-    const returnUrl = `${window.location.origin}/customer/app/rebuddy/group/${group.id}?settle=1`;
+    // The gateway POSTs the return URL after payment, so it MUST hit the backend
+    // (a static SPA host answers that POST with HTTP 405 and the payment is lost).
+    // The backend callback reconciles + credits the wallet, then 302-redirects
+    // back to this group screen with `?settle=1`. Mirrors the RYBBO flow.
+    const apiBase = (server_api() || "").replace(/\/$/, "");
+    const appOrigin = encodeURIComponent(window.location.origin);
+    const returnUrl = `${apiBase}/RebuddySettlementCallback?app=${appOrigin}`;
     const res = await rebuddyService.initiateSettlement({
       groupId: group.id, fromId: from, toId: to, amount: amt, note: (note || "").trim(), returnUrl,
     });
