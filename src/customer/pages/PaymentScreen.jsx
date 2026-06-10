@@ -150,6 +150,7 @@ const PaymentScreen = () => {
             payType: "upi",
             mobile: context.mobile || context.field1,
             operatorName: context.operatorName,
+            isPaid: statusResponse.data?.is_paid ?? statusResponse.data?.isPaid ?? false,
           },
         });
       } else {
@@ -164,6 +165,7 @@ const PaymentScreen = () => {
             payType: "upi",
             mobile: context.mobile || context.field1,
             operatorName: context.operatorName,
+            isPaid: statusResponse.data?.is_paid ?? statusResponse.data?.isPaid ?? false,
           },
         });
       }
@@ -183,6 +185,7 @@ const PaymentScreen = () => {
           orderId: context?.orderId,
           amount: context?.amount,
           type: context?.type,
+          isPaid: false,
         },
       });
     }
@@ -375,6 +378,7 @@ const PaymentScreen = () => {
           payType,
           mobile: paymentState.mobile || paymentState.field1,
           operatorName: paymentState.operatorName || paymentState.label,
+          isPaid: statusResponse.data?.is_paid ?? statusResponse.data?.isPaid ?? false,
         },
       });
     } else {
@@ -389,6 +393,7 @@ const PaymentScreen = () => {
           payType,
           mobile: paymentState.mobile || paymentState.field1,
           operatorName: paymentState.operatorName || paymentState.label,
+          isPaid: statusResponse.data?.is_paid ?? statusResponse.data?.isPaid ?? false,
         },
       });
     }
@@ -439,6 +444,7 @@ const PaymentScreen = () => {
             payType: "upi",
             mobile: context.mobile || context.field1,
             operatorName: context.operatorName,
+            isPaid: statusResponse.data?.is_paid ?? statusResponse.data?.isPaid ?? false,
           },
         });
       } else {
@@ -454,6 +460,7 @@ const PaymentScreen = () => {
             payType: "upi",
             mobile: context.mobile || context.field1,
             operatorName: context.operatorName,
+            isPaid: statusResponse.data?.is_paid ?? statusResponse.data?.isPaid ?? false,
           },
         });
       }
@@ -469,6 +476,7 @@ const PaymentScreen = () => {
         state: {
           status: "failed",
           message: "Unable to verify payment status. Please check your transaction history.",
+          isPaid: false,
         },
       });
     }
