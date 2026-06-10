@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import {
   FaArrowLeft, FaPlus, FaShareAlt, FaTrashAlt, FaUserPlus, FaTimes,
   FaReceipt, FaHandshake, FaCheckCircle, FaAddressBook, FaHourglassHalf, FaCheck, FaPen, FaSyncAlt,
@@ -21,7 +21,13 @@ const TABS = [
 const GroupDetailScreen = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const toast = useToast();
+  // "Shared" / locked view: when the page is opened via a shared invite link
+  // (`?shared=1`) the recipient should only be able to view this single group —
+  // navigation away (back to all groups, deleting) is hidden so they can't roam
+  // the rest of the app from this entry point.
+  const locked = new URLSearchParams(location.search).get("shared") === "1";
   const [group, setGroup] = useState(null);
   const [tab, setTab] = useState("expenses");
   const [expenseModal, setExpenseModal] = useState(false);
