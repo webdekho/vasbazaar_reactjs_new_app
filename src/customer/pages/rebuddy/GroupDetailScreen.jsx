@@ -36,6 +36,7 @@ const GroupDetailScreen = ({ publicView = false }) => {
   const [memberModal, setMemberModal] = useState(false);
   const [settleTarget, setSettleTarget] = useState(null); // { from, to, amount }
   const [settleSuccess, setSettleSuccess] = useState(null); // { from, to, amount, settled }
+  const [gatewaySettled, setGatewaySettled] = useState(null); // { amount, payeeName } — confetti popup
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -129,7 +130,11 @@ const GroupDetailScreen = ({ publicView = false }) => {
       try { localStorage.removeItem("vb_rebuddy_settle_order"); } catch {}
       const st = res?.data?.status;
       if (res.success && st === "SETTLED") {
-        toast?.showToast?.("Payment received — settled.", "success");
+        // Celebrate with the confetti popup instead of a plain toast.
+        setGatewaySettled({
+          amount: res.data?.amount ?? 0,
+          payeeName: res.data?.payeeName || "their",
+        });
       } else if (st === "PENDING") {
         toast?.showToast?.("Payment is being verified. Try Refresh in a moment.", "info");
       } else {
@@ -561,6 +566,14 @@ const GroupDetailScreen = ({ publicView = false }) => {
           <div style={{ fontSize: 14, fontWeight: 700 }}>Verifying your payment…</div>
         </div>
       )}
+
+      {gatewaySettled && (
+        <ConfettiSuccessModal
+          data={gatewaySettled}
+          currency={group?.currency}
+          onDone={() => setGatewaySettled(null)}
+        />
+      )}
     </div>
   );
 };
@@ -790,8 +803,8 @@ const SettlePanel = ({
       <div style={{ display: "grid", gap: 8 }}>
         {recorded.map((s) => {
           const confirmed = s.status === "confirmed";
-          // Only the member who recorded the payment can remove it from history.
-          const mine = self && (s.createdBy ? s.createdBy === self.id : s.from === self.id);
+          // Payment-history entries are not deletable — gateway payments moved
+          // real money, and manual records stay as an audit trail.
           return (
             <div
               key={s.id}
@@ -824,18 +837,6 @@ const SettlePanel = ({
               >
                 {confirmed ? "Settled" : "Pending"}
               </span>
-              {mine ? (
-                <button
-                  type="button" onClick={() => onDeleteSettlement(s.id)}
-                  aria-label="Remove payment"
-                  style={{
-                    background: "transparent", border: "none", padding: 0,
-                    color: "var(--cm-muted, #A0A0A0)", cursor: "pointer", flexShrink: 0,
-                  }}
-                >
-                  <FaTrashAlt size={11} />
-                </button>
-              ) : null}
             </div>
           );
         })}
@@ -1223,6 +1224,72 @@ const SettleSuccessModal = ({ group, mMap, data, onDone }) => {
         <button type="button" onClick={onDone} style={primaryBtn}>
           Done
         </button>
+      </div>
+    </div>
+  );
+};
+
+// Celebratory popup shown to the payer after an online "Pay & Settle" succeeds.
+// Self-contained CSS confetti — no extra dependency.
+const CONFETTI_COLORS = ["#40E0D0", "#007BFF", "#FF6B6B", "#FFD93D", "#22C55E", "#A855F7"];
+const ConfettiSuccessModal = ({ data, currency, onDone }) => {
+  const pieces = Array.from({ length: 70 });
+  return (
+    <div
+      role="dialog" aria-modal="true" onClick={onDone}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 1300, padding: 24, overflow: "hidden",
+      }}
+    >
+      <style>{`
+        @keyframes rb-confetti-fall {
+          0% { transform: translateY(-12vh) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(105vh) rotate(720deg); opacity: 0.85; }
+        }
+        @keyframes rb-pop {
+          0% { transform: scale(0.7); opacity: 0; }
+          60% { transform: scale(1.04); }
+          100% { transform: scale(1); opacity: 1; }
+        }
+      `}</style>
+
+      <div aria-hidden="true" style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }}>
+        {pieces.map((_, i) => {
+          const left = Math.random() * 100;
+          const delay = Math.random() * 0.6;
+          const dur = 2.2 + Math.random() * 1.8;
+          const w = 6 + Math.random() * 8;
+          const color = CONFETTI_COLORS[i % CONFETTI_COLORS.length];
+          return (
+            <span key={i} style={{
+              position: "absolute", top: "-12vh", left: `${left}%`,
+              width: w, height: w * 0.42, background: color, borderRadius: 2,
+              animation: `rb-confetti-fall ${dur}s linear ${delay}s forwards`,
+            }} />
+          );
+        })}
+      </div>
+
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: "relative", width: "100%", maxWidth: 360,
+          background: RB.cardBg, border: `1px solid ${RB.borderDark}`,
+          borderRadius: 18, padding: "28px 22px 22px", textAlign: "center",
+          boxShadow: "0 24px 48px -24px rgba(0,0,0,0.5)", animation: "rb-pop 0.4s ease-out",
+        }}
+      >
+        <div style={{ fontSize: 46, lineHeight: 1, marginBottom: 10 }}>🎉</div>
+        <h3 style={{ margin: "0 0 12px", fontSize: 21, fontWeight: 800 }}>Boom — settled!</h3>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>
+          {formatMoney(data.amount, currency)} → {data.payeeName}&rsquo;s wallet, instantly.
+        </div>
+        <div style={{ fontSize: 13.5, color: "var(--cm-muted, #A0A0A0)", marginBottom: 20 }}>
+          You&rsquo;re all clear! ✅
+        </div>
+        <button type="button" onClick={onDone} style={primaryBtn}>Done</button>
       </div>
     </div>
   );

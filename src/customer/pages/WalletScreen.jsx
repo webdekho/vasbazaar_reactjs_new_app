@@ -182,7 +182,9 @@ const WalletScreen = () => {
                   {items.map((txn, i) => {
                     const st = getStatusConfig(txn.status);
                     const isExpanded = expanded === (txn.txnId || txn.id || i);
-                    const isCredit = txn.txnMode === 0 || (txn.message || "").toLowerCase().includes("credit");
+                    const isCredit = txn.txnMode === 0
+                      || txn.serviceType === "rebuddy_settlement"
+                      || (txn.message || "").toLowerCase().includes("credit");
                     return (
                       <div key={txn.txnId || txn.id || i}
                         className={`th-card th-card--collapsible${isExpanded ? " is-expanded" : ""}`}
