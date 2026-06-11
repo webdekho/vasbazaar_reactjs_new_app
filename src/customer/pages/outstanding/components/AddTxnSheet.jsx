@@ -1,7 +1,9 @@
-import { useState } from "react";
-import { FaTimes, FaCamera, FaTrash } from "react-icons/fa";
+import { useRef, useState } from "react";
+import { FaTimes, FaCamera, FaTrash, FaMicrophone, FaStop } from "react-icons/fa";
 import { outstandingService } from "../../../services/outstandingService";
 import { captureBillPhoto } from "../../../utils/billPhoto";
+import { isVoiceSupported, startVoiceCapture, SUPPORTED_VOICE_LANGS } from "../../../utils/voiceInput";
+import { parseVoiceTransaction } from "../../../utils/parseVoiceTransaction";
 
 const AddTxnSheet = ({ type, customer, transaction, onClose, onAdded }) => {
   const today = new Date().toISOString().slice(0, 10);
@@ -17,6 +19,45 @@ const AddTxnSheet = ({ type, customer, transaction, onClose, onAdded }) => {
   const [capturing, setCapturing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const voiceSupported = isVoiceSupported();
+  const [voiceLang, setVoiceLang] = useState("en-IN");
+  const [listening, setListening] = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const stopVoiceRef = useRef(null);
+
+  const applyTranscript = (text) => {
+    const parsed = parseVoiceTransaction(text);
+    if (parsed.amount != null) setAmount(String(parsed.amount));
+    // Always take the latest transcript's note — speech recognisers refine
+    // their guess as you speak (e.g. "बीस" → "बिस्किट"), so the first interim
+    // must NOT stick. Only overwrite when this transcript yields a note.
+    if (parsed.note) setNote(parsed.note);
+  };
+
+  const toggleVoice = () => {
+    if (listening) {
+      stopVoiceRef.current?.();
+      return;
+    }
+    setError("");
+    setTranscript("");
+    setListening(true);
+    stopVoiceRef.current = startVoiceCapture({
+      lang: voiceLang,
+      onResult: (text) => {
+        setTranscript(text);
+        applyTranscript(text);
+      },
+      onError: (err) => {
+        setListening(false);
+        setError(err?.message || "Voice capture failed");
+      },
+      onEnd: (finalText) => {
+        setListening(false);
+        if (finalText) applyTranscript(finalText);
+      },
+    });
+  };
 
   const onCaptureBill = async (sourcePref) => {
     setError("");
@@ -33,6 +74,15 @@ const AddTxnSheet = ({ type, customer, transaction, onClose, onAdded }) => {
 
   const isGave = type === "GAVE";
   const showPaymentReference = paymentMode === "UPI" || paymentMode === "ONLINE_TRANSFER";
+
+  const creditLimit = customer?.creditLimit != null ? Number(customer.creditLimit) : null;
+  const currentBalance = Number(customer?.balance || 0);
+  const projectedBalance = isGave ? currentBalance + Number(amount || 0) : currentBalance;
+  const creditPct = creditLimit && creditLimit > 0
+    ? Math.round((Math.max(0, projectedBalance) / creditLimit) * 100)
+    : null;
+  const creditExceeded = isGave && creditLimit != null && projectedBalance > creditLimit;
+  const creditWarning = isGave && creditPct != null && creditPct >= 80 && Number(amount) > 0;
   const heading = isEdit
     ? `Edit ${isGave ? "You Gave" : "You Got"}`
     : isGave ? `You Gave to ${customer.customerName}` : `You Got from ${customer.customerName}`;
@@ -76,6 +126,38 @@ const AddTxnSheet = ({ type, customer, transaction, onClose, onAdded }) => {
           <button className="cm-sheet-close" type="button" onClick={onClose}><FaTimes /></button>
         </div>
         <form onSubmit={submit} className="ol-form">
+          {voiceSupported && (
+            <div className="ol-voice-box">
+              <div className="ol-voice-row">
+                <div className="ol-voice-copy">
+                  <b>{listening ? "Listening…" : "Speak the entry"}</b>
+                  <small>{transcript ? `“${transcript}”` : "e.g. \"500 doodh\" / \"पाचशे उधार\""}</small>
+                </div>
+                <div className="ol-voice-langs">
+                  {SUPPORTED_VOICE_LANGS.map((l) => (
+                    <button
+                      key={l.code}
+                      type="button"
+                      className={`ol-voice-lang${voiceLang === l.code ? " is-active" : ""}`}
+                      onClick={() => setVoiceLang(l.code)}
+                      disabled={listening}
+                    >
+                      {l.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className={`ol-voice-mic${listening ? " is-listening" : ""}`}
+                  onClick={toggleVoice}
+                  aria-label={listening ? "Stop voice entry" : "Start voice entry"}
+                >
+                  {listening ? <FaStop /> : <FaMicrophone />}
+                </button>
+              </div>
+            </div>
+          )}
+
           <label className="ol-field">
             <span>Amount *</span>
             <div className="ol-amount-input">
@@ -93,6 +175,14 @@ const AddTxnSheet = ({ type, customer, transaction, onClose, onAdded }) => {
               />
             </div>
           </label>
+
+          {creditWarning && (
+            <div className={`ol-credit-warn${creditExceeded ? " is-exceeded" : ""}`}>
+              {creditExceeded
+                ? `This entry crosses the ₹${Math.round(creditLimit).toLocaleString("en-IN")} credit limit (${creditPct}% used).`
+                : `Heads up: this customer will be at ${creditPct}% of the ₹${Math.round(creditLimit).toLocaleString("en-IN")} credit limit.`}
+            </div>
+          )}
 
           <label className="ol-field">
             <span>Date</span>

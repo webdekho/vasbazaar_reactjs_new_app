@@ -46,17 +46,29 @@ try {
   removeLoader();
 }
 
-// Register service worker for PWA support
+// Register service worker for PWA support.
+// IMPORTANT: only in production. In development (`npm start`) the dev server
+// re-stamps sw.js CACHE_VERSION on every restart, which makes an already-installed
+// worker fire spurious "New version available" prompts on localhost. So in dev we
+// actively UNREGISTER any existing worker instead of registering a new one.
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    // Register at root to ensure proper scope for all routes
-    navigator.serviceWorker.register('/sw.js', { scope: '/' })
-      .then((registration) => {
-        // Check for updates periodically
-        setInterval(() => registration.update(), 60 * 60 * 1000); // Every hour
-      })
-      .catch((err) => console.warn('SW registration failed:', err));
-  });
+  if (process.env.NODE_ENV === 'production') {
+    window.addEventListener('load', () => {
+      // Register at root to ensure proper scope for all routes
+      navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        .then((registration) => {
+          // Check for updates periodically
+          setInterval(() => registration.update(), 60 * 60 * 1000); // Every hour
+        })
+        .catch((err) => console.warn('SW registration failed:', err));
+    });
+  } else {
+    // Dev/localhost: tear down any worker left over from a previous session so it
+    // stops controlling the page and triggering update popups.
+    navigator.serviceWorker.getRegistrations()
+      .then((regs) => regs.forEach((r) => r.unregister()))
+      .catch(() => {});
+  }
 }
 
 reportWebVitals();

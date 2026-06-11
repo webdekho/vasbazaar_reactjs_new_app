@@ -20,6 +20,10 @@ const SKIP_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
 const PWA_SKIPPED_KEY = "vb_pwa_skipped_version";
 // Build the user dismissed via "Later" — suppressed until a newer build ships.
 const PWA_DISMISSED_BUILD_KEY = "vb_pwa_dismissed_build";
+// Timestamp set right before a user-initiated reload, so the next mount can
+// briefly ignore the transient service-worker state that a reload produces.
+const PWA_RELOADING_KEY = "vb_pwa_reloading";
+const PWA_RELOAD_SUPPRESS_MS = 5000;
 // How often to re-check version.json for a fresh deploy.
 const BUILD_POLL_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -149,6 +153,16 @@ const OtaUpdateGate = () => {
     if (otaService.isNative()) return;
 
     let cancelled = false;
+
+    // If we just performed a user-initiated reload, ignore the transient SW
+    // "installed" event that can fire immediately afterwards (otherwise the bar
+    // re-appears the instant the page comes back).
+    let reloadedAt = 0;
+    try {
+      reloadedAt = Number(sessionStorage.getItem(PWA_RELOADING_KEY) || 0);
+      sessionStorage.removeItem(PWA_RELOADING_KEY);
+    } catch {}
+    const recentlyReloaded = () => reloadedAt > 0 && Date.now() - reloadedAt < PWA_RELOAD_SUPPRESS_MS;
     const checkPwa = async () => {
       try {
         const res = await otaService.checkUpdate();
@@ -215,7 +229,11 @@ const OtaUpdateGate = () => {
           const installing = reg.installing;
           if (!installing) return;
           installing.addEventListener("statechange", () => {
-            if (installing.state === "installed" && navigator.serviceWorker.controller) {
+            if (
+              installing.state === "installed" &&
+              navigator.serviceWorker.controller &&
+              !recentlyReloaded()
+            ) {
               setPwaUpdate((v) => v || { version: "new" });
             }
           });
@@ -233,20 +251,37 @@ const OtaUpdateGate = () => {
   }, []);
 
   const reloadPwa = useCallback(async () => {
+    setPwaUpdate(false);
+    // Mark the moment we initiate an update so the post-reload mount does not
+    // immediately re-show the bar from a transient service-worker state.
+    try { sessionStorage.setItem(PWA_RELOADING_KEY, String(Date.now())); } catch {}
+
     try {
-      if ("caches" in window) {
-        const keys = await caches.keys();
-        await Promise.all(keys.map((k) => caches.delete(k)));
-      }
       if ("serviceWorker" in navigator) {
-        const regs = await navigator.serviceWorker.getRegistrations();
-        // Ask the waiting SW to activate immediately.
-        regs.forEach((r) => {
-          if (r.waiting) r.waiting.postMessage({ type: "SKIP_WAITING" });
-        });
-        await Promise.all(regs.map((r) => r.update().catch(() => null)));
+        const reg = await navigator.serviceWorker.getRegistration();
+        const waiting = reg && reg.waiting;
+        if (waiting) {
+          // Activate the new worker, then reload exactly once when it takes
+          // control. We do NOT unregister — unregistering forces a fresh worker
+          // to install on the next load while an old controller is still present,
+          // which re-fires `updatefound` and loops the "new version" bar forever.
+          let reloaded = false;
+          const doReload = () => {
+            if (reloaded) return;
+            reloaded = true;
+            window.location.reload();
+          };
+          navigator.serviceWorker.addEventListener("controllerchange", doReload);
+          waiting.postMessage({ type: "SKIP_WAITING" });
+          // Safety net in case controllerchange never fires.
+          setTimeout(doReload, 2000);
+          return;
+        }
       }
     } catch {}
+
+    // Build- or server-driven update with no waiting worker: a plain reload pulls
+    // the fresh, network-first app shell and its new hashed assets.
     window.location.reload();
   }, []);
 

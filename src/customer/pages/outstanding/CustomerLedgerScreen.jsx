@@ -16,6 +16,10 @@ import {
   FaShareAlt,
   FaSpinner,
   FaWhatsapp,
+  FaCog,
+  FaHourglassHalf,
+  FaHandshake,
+  FaFileInvoice,
 } from "react-icons/fa";
 import { outstandingService } from "../../services/outstandingService";
 import { useToast } from "../../context/ToastContext";
@@ -26,6 +30,22 @@ import {
 } from "../../utils/ledgerPdf";
 import AddTxnSheet from "./components/AddTxnSheet";
 import ReminderSettingsSheet from "./components/ReminderSettingsSheet";
+import EditCustomerSheet from "./components/EditCustomerSheet";
+import SettlePaymentSheet from "./components/SettlePaymentSheet";
+import { useCustomerModern } from "../../context/CustomerModernContext";
+import { server_api } from "../../../utils/constants";
+
+const CATEGORY_META = {
+  REGULAR: { label: "Regular", cls: "ol-cat-regular" },
+  RISKY: { label: "Risky", cls: "ol-cat-risky" },
+  VIP: { label: "VIP", cls: "ol-cat-vip" },
+};
+
+const ageingTone = (days) => {
+  if (days <= 30) return "is-fresh";
+  if (days <= 60) return "is-warn";
+  return "is-old";
+};
 
 const PAGE_SIZE = 5;
 
@@ -162,6 +182,7 @@ const downloadBlob = (blob, fileName) => {
 const CustomerLedgerScreen = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { userData } = useCustomerModern();
   const { customerId } = useParams();
   const [searchParams] = useSearchParams();
   const isOwedView = searchParams.get("view") === "owed";
@@ -173,6 +194,9 @@ const CustomerLedgerScreen = () => {
   const [editingTxn, setEditingTxn] = useState(null);
   const [reminderLoading, setReminderLoading] = useState(false);
   const [showReminderSettings, setShowReminderSettings] = useState(false);
+  const [showEditCustomer, setShowEditCustomer] = useState(false);
+  const [showSettle, setShowSettle] = useState(false);
+  const [settleBusy, setSettleBusy] = useState(false);
   const [previewBill, setPreviewBill] = useState("");
   const [loadingMore, setLoadingMore] = useState(false);
   const [sharingLedger, setSharingLedger] = useState(false);
@@ -219,6 +243,12 @@ const CustomerLedgerScreen = () => {
     load();
   };
 
+  const goBack = () => {
+    // Prefer real browser back; fall back to the outstanding list on deep links.
+    if (window.history.length > 1) navigate(-1);
+    else navigate("/customer/app/outstanding");
+  };
+
   const onDateRangeChange = (field, value) => {
     setDateRange((prev) => ({ ...prev, [field]: value }));
   };
@@ -246,6 +276,61 @@ const CustomerLedgerScreen = () => {
       window.open(res.data.whatsappLink, "_blank");
     }
   };
+
+  // Online "Pay & settle": backend creates an HDFC order; we redirect to the
+  // payment link. The gateway POSTs the return URL to our backend callback,
+  // which credits the creditor's wallet + settles the ledger, then 302-redirects
+  // back here with ?settle=1. Mirrors the ReBuddy flow.
+  const handlePayAndSettle = async ({ amount, note }) => {
+    setSettleBusy(true);
+    showToast("Starting secure payment…", "info");
+    const apiBase = (server_api() || "").replace(/\/$/, "");
+    const appOrigin = encodeURIComponent(window.location.origin);
+    const returnUrl = `${apiBase}/OutstandingSettlementCallback?app=${appOrigin}`;
+    const res = await outstandingService.initiateSettlement({ customerId, amount, note, returnUrl });
+    if (!res.success || !res.data?.paymentUrl) {
+      setSettleBusy(false);
+      showToast(res.message || "Could not start the payment.", "error");
+      return;
+    }
+    try { localStorage.setItem("vb_rebill_settle_order", res.data.orderId); } catch (_) {}
+    window.location.href = res.data.paymentUrl;
+  };
+
+  const handleManualSettle = async ({ amount, note }) => {
+    setSettleBusy(true);
+    const res = await outstandingService.claimManualPayment({ customerId, amount, note });
+    setSettleBusy(false);
+    setShowSettle(false);
+    showToast(res.success ? (res.data?.message || "They've been asked to confirm.") : (res.message || "Could not send."), res.success ? "success" : "error");
+  };
+
+  // Reconcile after returning from the gateway (?settle=1).
+  useEffect(() => {
+    if (searchParams.get("settle") !== "1") return;
+    const orderId = searchParams.get("order_id") || (() => {
+      try { return localStorage.getItem("vb_rebill_settle_order"); } catch (_) { return null; }
+    })();
+    if (!orderId) return;
+    let alive = true;
+    (async () => {
+      const res = await outstandingService.confirmSettlement(orderId);
+      if (!alive) return;
+      try { localStorage.removeItem("vb_rebill_settle_order"); } catch (_) {}
+      const st = res?.data?.status;
+      if (res.success && st === "SETTLED") {
+        showToast(`Settled! ₹${Math.round(Number(res.data?.amount || 0))} → ${res.data?.payeeName || "their"} wallet.`, "success");
+      } else if (st === "PENDING") {
+        showToast("Payment is being verified. Pull to refresh in a moment.", "info");
+      } else {
+        showToast(res.message || "Payment was not completed.", "error");
+      }
+      navigate(`/customer/app/outstanding/${customerId}${isOwedView ? "?view=owed" : ""}`, { replace: true });
+      load();
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const handleShareLedger = async () => {
     if (!customer || sharingLedger) return;
@@ -283,12 +368,13 @@ const CustomerLedgerScreen = () => {
         customer: pdfCustomer,
         balance: pdfCustomer?.balance,
         readOnly,
+        data: pdfData,
       });
 
       if (Capacitor.isNativePlatform()) {
         const fileUri = await writeFileToDevice(pdfBlob, fileName);
         await Share.share({
-          title: "ReBill Ledger PDF",
+          title: `Your VasBazaar ReBill statement`,
           text: shareText,
           url: fileUri,
           dialogTitle: "Share ReBill Ledger",
@@ -299,7 +385,7 @@ const CustomerLedgerScreen = () => {
       const pdfFile = new File([pdfBlob], fileName, { type: "application/pdf" });
       if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
         await navigator.share({
-          title: "ReBill Ledger PDF",
+          title: `Your VasBazaar ReBill statement`,
           text: shareText,
           files: [pdfFile],
         });
@@ -309,7 +395,7 @@ const CustomerLedgerScreen = () => {
       downloadBlob(pdfBlob, fileName);
       if (navigator.share) {
         await navigator.share({
-          title: "ReBill Ledger PDF",
+          title: `Your VasBazaar ReBill statement`,
           text: `${shareText}\n\nPDF download झाला आहे. कृपया तो WhatsApp किंवा Email मध्ये attach करा.`,
         });
         return;
@@ -330,6 +416,17 @@ const CustomerLedgerScreen = () => {
   const customer = data.customer;
   const readOnly = isOwedView || data.readOnly || customer?.readOnly;
   const balance = Number(customer?.balance || 0);
+  const category = customer?.category || "REGULAR";
+  const catMeta = CATEGORY_META[category] || CATEGORY_META.REGULAR;
+  const creditLimit = customer?.creditLimit != null ? Number(customer.creditLimit) : null;
+  const creditUsagePct = customer?.creditUsagePct != null ? Number(customer.creditUsagePct) : null;
+  const creditWarning = !!customer?.creditWarning;
+  const creditExceeded = !!customer?.creditExceeded;
+  const ageingDays = Number(customer?.ageingDays || 0);
+  const dueDate = customer?.dueDate;
+  const promiseDate = customer?.promiseToPayDate;
+  const isPromiseOverdue = !readOnly && balance > 0 && promiseDate
+    && String(promiseDate).slice(0, 10) < toDateInputValue(new Date());
   const txns = data.transactions?.records || [];
   const lastTxn = txns[0];
   const totalPages = Number(data.transactions?.totalPages || 0);
@@ -362,13 +459,28 @@ const CustomerLedgerScreen = () => {
   return (
     <div className="ol-page ol-ledger-page">
       <div className="ol-ledger-header">
-        <button className="ol-back-btn" type="button" onClick={() => navigate("/customer/app/outstanding")} aria-label="Back">
+        <button className="ol-back-btn" type="button" onClick={goBack} aria-label="Back">
           <FaArrowLeft />
         </button>
         <div className="ol-ledger-id">
-          <div className="ol-ledger-name">{customer?.customerName || "Customer"}</div>
+          <div className="ol-ledger-name">
+            <span className="ol-ledger-name-text">{customer?.customerName || "Customer"}</span>
+            {customer && !readOnly && (
+              <span className={`ol-cat-pill ${catMeta.cls}`}>{catMeta.label}</span>
+            )}
+          </div>
           {customer && <div className="ol-ledger-mobile">+91 {customer.customerMobile}</div>}
         </div>
+        {customer && !readOnly && (
+          <button
+            className="ol-ledger-settings"
+            type="button"
+            onClick={() => setShowEditCustomer(true)}
+            aria-label="Customer settings"
+          >
+            <FaCog />
+          </button>
+        )}
         {customer && (
           <div className={`ol-ledger-status ${balance === 0 ? "is-settled" : balance > 0 ? "is-due" : "is-advance"}`}>
             {balance === 0 ? "Settled" : balance > 0 ? "Due" : "Advance"}
@@ -406,6 +518,47 @@ const CustomerLedgerScreen = () => {
             </div>
           </div>
 
+          {!readOnly && (creditLimit != null || ageingDays > 0 || dueDate || promiseDate) && (
+            <div className="ol-credit-strip">
+              {creditLimit != null && (
+                <div className={`ol-credit-card${creditExceeded ? " is-exceeded" : creditWarning ? " is-warning" : ""}`}>
+                  <div className="ol-credit-top">
+                    <span>Credit limit</span>
+                    <b>{formatINR(creditLimit)}</b>
+                  </div>
+                  <div className="ol-credit-bar">
+                    <span style={{ width: `${Math.min(100, creditUsagePct || 0)}%` }} />
+                  </div>
+                  <div className="ol-credit-foot">
+                    {creditUsagePct != null ? `${creditUsagePct}% used` : "0% used"}
+                    {creditExceeded
+                      ? " · Limit crossed"
+                      : creditWarning
+                        ? " · Near limit"
+                        : ""}
+                  </div>
+                </div>
+              )}
+              <div className="ol-meta-pills">
+                {ageingDays > 0 && (
+                  <span className={`ol-age-pill ${ageingTone(ageingDays)}`}>
+                    <FaHourglassHalf /> {ageingDays}d old
+                  </span>
+                )}
+                {dueDate && (
+                  <span className="ol-due-pill">
+                    <FaCalendarAlt /> Due {formatDate(dueDate)}
+                  </span>
+                )}
+                {promiseDate && (
+                  <span className={`ol-promise-pill${isPromiseOverdue ? " is-overdue" : ""}`}>
+                    <FaHandshake /> Promise {formatDate(promiseDate)}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="ol-ledger-insights" aria-label="Ledger summary">
             <div className="ol-insight-tile">
               <span className="ol-insight-icon"><FaReceipt /></span>
@@ -425,9 +578,20 @@ const CustomerLedgerScreen = () => {
           </div>
 
           {readOnly ? (
-            <div className="ol-readonly-note">
-              This ledger is shared from {customer.customerName}. You can view it, but only the account owner can edit entries.
-            </div>
+            <>
+              {balance > 0 && (
+                <button
+                  className="cm-button ol-settle-cta"
+                  type="button"
+                  onClick={() => setShowSettle(true)}
+                >
+                  Pay {formatINR(balance)} &amp; settle
+                </button>
+              )}
+              <div className="ol-readonly-note">
+                This ledger is shared from {customer.customerName}. You can view it, but only the account owner can edit entries.
+              </div>
+            </>
           ) : (
             <div className="ol-command-row">
               <button
@@ -477,6 +641,17 @@ const CustomerLedgerScreen = () => {
                 <span>
                   <b>Auto SMS reminder</b>
                   <small>Schedule daily SMS from your phone</small>
+                </span>
+              </button>
+              <button
+                className="ol-command-card ol-command-invoice"
+                type="button"
+                onClick={() => navigate(`/customer/app/outstanding/${customerId}/invoices`)}
+              >
+                <span className="ol-command-icon"><FaFileInvoice /></span>
+                <span>
+                  <b>Invoices</b>
+                  <small>Create &amp; share GST-style bills</small>
                 </span>
               </button>
             </div>
@@ -632,6 +807,29 @@ const CustomerLedgerScreen = () => {
               customer={customer}
               onClose={() => setShowReminderSettings(false)}
               onSaved={() => setShowReminderSettings(false)}
+            />
+          )}
+
+          {showEditCustomer && !readOnly && customer && (
+            <EditCustomerSheet
+              customer={customer}
+              onClose={() => setShowEditCustomer(false)}
+              onSaved={() => {
+                setShowEditCustomer(false);
+                load();
+              }}
+            />
+          )}
+
+          {showSettle && readOnly && customer && (
+            <SettlePaymentSheet
+              payeeName={customer.customerName}
+              selfName={userData?.name || userData?.firstName || "You"}
+              defaultAmount={balance}
+              busy={settleBusy}
+              onClose={() => setShowSettle(false)}
+              onPayAndSettle={handlePayAndSettle}
+              onManual={handleManualSettle}
             />
           )}
 

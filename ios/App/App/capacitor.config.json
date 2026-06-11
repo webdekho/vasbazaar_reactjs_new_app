@@ -17,7 +17,7 @@
 		"CapacitorSmsRetrieverPlugin",
 		"ContactsPlugin",
 		"NativeAudio",
-		"AppPlugin",
+		"SpeechRecognition",
 		"CAPBrowserPlugin",
 		"CAPCameraPlugin",
 		"FilesystemPlugin",

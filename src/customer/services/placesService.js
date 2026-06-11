@@ -2,6 +2,7 @@
 //
 // Set the key in your .env (Create React App reads REACT_APP_* at build time):
 //   REACT_APP_GOOGLE_MAPS_API_KEY=AIza...your-key...
+//   or REACT_APP_GOOGLE_PLACES_API_KEY=AIza...your-key...
 // On the key (Google Cloud Console) enable: "Maps JavaScript API" and "Places API".
 // Restrict the key by HTTP referrer / app bundle id for safety.
 //
@@ -9,7 +10,8 @@
 // NOT send CORS headers and fail from a browser / Capacitor webview. If the key
 // is absent, isGoogleEnabled() is false and callers fall back to OpenStreetMap.
 
-const KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY || "";
+const KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY || process.env.REACT_APP_GOOGLE_PLACES_API_KEY || "";
+const SCRIPT_ID = "vb-google-maps-sdk";
 
 export const isGoogleEnabled = () => Boolean(KEY);
 
@@ -23,11 +25,23 @@ const loadSdk = () => {
   loaderPromise = new Promise((resolve, reject) => {
     const cb = "__vbGmapsReady";
     window[cb] = () => resolve(window.google);
+    const existing = document.getElementById(SCRIPT_ID);
+    if (existing) {
+      existing.addEventListener("error", () => {
+        loaderPromise = null;
+        reject(new Error("Failed to load Google Maps SDK"));
+      }, { once: true });
+      return;
+    }
     const s = document.createElement("script");
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${KEY}&libraries=places&callback=${cb}`;
+    s.id = SCRIPT_ID;
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(KEY)}&libraries=places&callback=${cb}&v=weekly`;
     s.async = true;
     s.defer = true;
-    s.onerror = () => reject(new Error("Failed to load Google Maps SDK"));
+    s.onerror = () => {
+      loaderPromise = null;
+      reject(new Error("Failed to load Google Maps SDK"));
+    };
     document.head.appendChild(s);
   });
   return loaderPromise;

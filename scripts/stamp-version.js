@@ -7,6 +7,7 @@
  * It writes the SAME id to two places:
  *   1. public/version.json   -> served and fetched at runtime (no-cache)
  *   2. src/generated/buildId.js -> compiled into the JS bundle (BUILD_ID)
+ *   3. public/sw.js CACHE_VERSION -> forces a fresh service-worker cache
  *
  * The app (OtaUpdateGate) compares the served buildId to its compiled BUILD_ID;
  * if they differ, a new build is live -> show the "new version" bar. After the
@@ -43,5 +44,20 @@ fs.writeFileSync(
     `export const BUILD_ID = ${JSON.stringify(buildId)};\n` +
     `export const BUILD_TIME = ${JSON.stringify(buildTime)};\n`
 );
+
+// 3) public/sw.js — make every build use a new cache namespace.
+const swPath = path.join(root, "public", "sw.js");
+try {
+  const swSource = fs.readFileSync(swPath, "utf8");
+  const nextSwSource = swSource.replace(
+    /const CACHE_VERSION = ["'`][^"'`]+["'`];/,
+    `const CACHE_VERSION = ${JSON.stringify(`v${buildId}`)};`
+  );
+  if (nextSwSource !== swSource) {
+    fs.writeFileSync(swPath, nextSwSource);
+  }
+} catch (err) {
+  console.warn(`[stamp-version] skipped service-worker stamp: ${err.message}`);
+}
 
 console.log(`[stamp-version] buildId=${buildId} (${buildTime})`);

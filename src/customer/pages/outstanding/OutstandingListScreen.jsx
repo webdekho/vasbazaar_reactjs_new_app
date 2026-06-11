@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaPlus, FaSearch, FaSyncAlt, FaUserCircle, FaInbox, FaReceipt, FaUsers, FaWallet, FaBell, FaCommentDots } from "react-icons/fa";
+import { FaArrowLeft, FaPlus, FaSearch, FaSyncAlt, FaUserCircle, FaInbox, FaBell, FaCommentDots, FaDownload, FaSpinner } from "react-icons/fa";
 import { outstandingService } from "../../services/outstandingService";
+import { useToast } from "../../context/ToastContext";
+import { buildCsv, downloadCsv } from "../../utils/exportCsv";
 import AddCustomerSheet from "./components/AddCustomerSheet";
 import RenewSubscriptionSheet from "./components/RenewSubscriptionSheet";
 
@@ -34,7 +36,9 @@ const formatRelative = (iso) => {
 
 const OutstandingListScreen = () => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
   const [summary, setSummary] = useState({ totalReceivable: 0, totalPayable: 0, customerCount: 0 });
   const [customers, setCustomers] = useState([]);
@@ -115,9 +119,55 @@ const OutstandingListScreen = () => {
     }
   };
 
+  const exportAllCsv = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      // Pull the full customer set (not just the page on screen).
+      const res = await outstandingService.listCustomers(0, 5000, "name");
+      const records = res?.data?.records || customers;
+      if (!records.length) {
+        showToast("No customers to export", "info");
+        return;
+      }
+      const headers = [
+        "Customer Name", "Mobile", "Category", "Status", "Balance (INR)",
+        "Credit Limit", "Credit Used %", "Due Date", "Promise To Pay",
+        "Ageing (days)", "App User", "Last Activity",
+      ];
+      const rows = records.map((c) => {
+        const bal = Number(c.balance || 0);
+        const status = bal > 0 ? "Outstanding" : bal < 0 ? "Advance" : "Settled";
+        return [
+          c.customerName || "",
+          c.customerMobile || "",
+          c.category || "REGULAR",
+          status,
+          Math.round(bal),
+          c.creditLimit != null ? Math.round(Number(c.creditLimit)) : "",
+          c.creditUsagePct != null ? c.creditUsagePct : "",
+          c.dueDate ? String(c.dueDate).slice(0, 10) : "",
+          c.promiseToPayDate ? String(c.promiseToPayDate).slice(0, 10) : "",
+          bal > 0 ? (c.ageingDays || 0) : "",
+          c.isAppUser ? "Yes" : "No",
+          c.lastActivityAt ? new Date(c.lastActivityAt).toLocaleString("en-IN") : "",
+        ];
+      });
+      const csv = buildCsv(headers, rows);
+      const today = new Date().toISOString().slice(0, 10);
+      await downloadCsv(`rebill-customers-${today}.csv`, csv);
+      showToast(`${rows.length} customer${rows.length === 1 ? "" : "s"} exported`, "success");
+    } catch (e) {
+      if (e?.name !== "AbortError") showToast("Could not export CSV. Please try again.", "error");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const totalReceivable = Number(summary.totalReceivable || 0);
   const totalPayable = Number(summary.totalPayable || 0);
   const netBalance = totalReceivable - totalPayable;
+  // +ve net = "You Will Receive" → green; -ve = "You Owe" → red.
   const heroTone = netBalance > 0 ? "ol-hero-positive" : netBalance < 0 ? "ol-hero-negative" : "ol-hero-settled";
 
   return (
@@ -130,6 +180,36 @@ const OutstandingListScreen = () => {
           <div className="ol-ledger-name">ReBill</div>
           <div className="ol-ledger-mobile">{summary.customerCount || 0} customer{summary.customerCount === 1 ? "" : "s"}</div>
         </div>
+        <button
+          className="ol-export-btn-pill"
+          type="button"
+          aria-label="Download all customers (CSV)"
+          title="Download consolidated CSV"
+          disabled={exporting || subscriptionLocked}
+          onClick={exportAllCsv}
+        >
+          {exporting ? <FaSpinner className="ol-spin" /> : <FaDownload />}
+        </button>
+        <button
+          className="ol-hdr-pill ol-hdr-sms"
+          type="button"
+          aria-label="Auto SMS settings"
+          title="Auto SMS settings"
+          disabled={subscriptionLocked}
+          onClick={() => !subscriptionLocked && navigate("/customer/app/outstanding/sms-settings")}
+        >
+          <FaBell />
+        </button>
+        <button
+          className="ol-hdr-pill ol-hdr-remind"
+          type="button"
+          aria-label="Send reminders"
+          title="Send reminders"
+          disabled={subscriptionLocked}
+          onClick={() => !subscriptionLocked && navigate("/customer/app/outstanding/reminders")}
+        >
+          <FaCommentDots />
+        </button>
         <button
           className="ol-renew-btn-pill"
           type="button"
@@ -174,49 +254,6 @@ const OutstandingListScreen = () => {
             <b>{formatINR(totalPayable)}</b>
           </div>
         </div>
-      </div>
-
-      <div className="ol-ledger-insights ol-list-insights" aria-label="ReBill summary">
-        <div className="ol-insight-tile">
-          <span className="ol-insight-icon"><FaUsers /></span>
-          <span className="ol-insight-label">Customers</span>
-          <strong>{summary.customerCount || 0}</strong>
-        </div>
-        <div className="ol-insight-tile">
-          <span className="ol-insight-icon"><FaReceipt /></span>
-          <span className="ol-insight-label">Accounts</span>
-          <strong>{customers.length || "No"} active</strong>
-        </div>
-        <div className="ol-insight-tile">
-          <span className="ol-insight-icon"><FaWallet /></span>
-          <span className="ol-insight-label">Payable</span>
-          <strong>{formatINR(totalPayable)}</strong>
-        </div>
-      </div>
-
-      <div className="ol-command-row ol-list-commands">
-        <button
-          className="ol-command-card ol-command-sms"
-          type="button"
-          disabled={subscriptionLocked}
-          onClick={() => !subscriptionLocked && navigate("/customer/app/outstanding/sms-settings")}
-        >
-          <span className="ol-command-icon"><FaBell /></span>
-          <span>
-            <b>Auto SMS Settings</b>
-          </span>
-        </button>
-        <button
-          className="ol-command-card ol-command-reminder"
-          type="button"
-          disabled={subscriptionLocked}
-          onClick={() => !subscriptionLocked && navigate("/customer/app/outstanding/reminders")}
-        >
-          <span className="ol-command-icon"><FaCommentDots /></span>
-          <span>
-            <b>Send Reminders</b>
-          </span>
-        </button>
       </div>
 
       <div className="ol-controls">
@@ -279,9 +316,19 @@ const OutstandingListScreen = () => {
                   <div className="ol-item-name">
                     {c.customerName}
                     {c.isAppUser && <span className="ol-app-badge">App</span>}
+                    {(c.category === "VIP" || c.category === "RISKY") && (
+                      <span className={`ol-cat-pill ol-cat-${c.category.toLowerCase()}`}>
+                        {c.category === "VIP" ? "VIP" : "Risky"}
+                      </span>
+                    )}
                   </div>
                   <div className="ol-item-sub">
                     +91 {c.customerMobile} · {formatRelative(c.lastActivityAt)}
+                    {bal > 0 && Number(c.ageingDays) > 0 && (
+                      <span className={`ol-age-pill ${Number(c.ageingDays) <= 30 ? "is-fresh" : Number(c.ageingDays) <= 60 ? "is-warn" : "is-old"}`}>
+                        {c.ageingDays}d
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="ol-item-amount">

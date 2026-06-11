@@ -13,7 +13,7 @@
  *       can safely serve the cached shell first and refresh it in the background)
  *   - static assets -> stale-while-revalidate
  */
-const CACHE_VERSION = "v5";
+const CACHE_VERSION = "v1781173442039";
 const CACHE_NAME = `vasbazaar-${CACHE_VERSION}`;
 // Cache both root and start_url for PWA
 const STATIC_ASSETS = [
@@ -88,35 +88,32 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigation requests: stale-while-revalidate. Serve the cached app shell
-  // INSTANTLY (the #1 lever for sub-1s repeat loads) and refresh the cache in
-  // the background. New deploys are still picked up promptly because the app
-  // runs an independent OTA/version.json check on startup that prompts a
-  // reload — so serving one-build-stale HTML for a single load is safe and the
-  // hashed JS/CSS are content-addressed, so nothing breaks.
+  // Navigation requests: NETWORK-FIRST. The app shell (index.html) references
+  // content-hashed JS/CSS, and on a redeploy the host (Vercel) deletes the old
+  // hashed assets. A stale cached shell therefore points at JS that now 404s,
+  // and since the bundle never loads the in-app OTA check can't run to recover.
+  // So we always fetch the freshest shell when online (it matches the current
+  // assets), and only fall back to cache when the network is unavailable.
   if (req.mode === "navigate") {
     event.respondWith(
       (async () => {
+        try {
+          const fresh = await fetch(req);
+          if (fresh && fresh.ok) {
+            const clone = fresh.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+            return fresh;
+          }
+          // Non-OK (deep link the host doesn't recognise): fall back to shell.
+        } catch (e) {
+          // Offline — fall through to the cached shell below.
+        }
+
         const cached =
           (await caches.match(req)) ||
           (await caches.match("/index.html")) ||
           (await caches.match("/"));
-
-        const network = fetch(req)
-          .then((res) => {
-            if (res.ok) {
-              const clone = res.clone();
-              caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
-            }
-            return res;
-          })
-          .catch(() => null);
-
-        // Cached shell first; fall back to the network on a cold cache.
         if (cached) return cached;
-
-        const fresh = await network;
-        if (fresh) return fresh;
 
         // Nothing cached and offline: minimal offline page.
         return new Response(

@@ -67,4 +67,29 @@ export const outstandingService = {
   renewSubscription: () => authPost(`${BASE}/subscription/renew`, {}),
 
   updateSubscriptionAutoRenew: (payload) => authPut(`${BASE}/subscription/auto-renew`, payload),
+
+  // Invoices
+  createInvoice: (payload) => authPost(`${BASE}/invoices`, payload),
+
+  listInvoices: (customerId) =>
+    authGet(`${BASE}/invoices`, customerId ? { customerId } : {}),
+
+  getInvoice: (id) => authGet(`${BASE}/invoices/${id}`),
+
+  updateInvoiceStatus: (id, status) => authPut(`${BASE}/invoices/${id}/status`, { status }),
+
+  deleteInvoice: (id) => authDelete(`${BASE}/invoices/${id}`),
+
+  // Online "Pay & settle": debtor clears a ledger via HDFC gateway; creditor's
+  // wallet is credited and the ledger settles. Returns { orderId, paymentUrl }.
+  initiateSettlement: ({ customerId, amount, note, returnUrl }) =>
+    authPost(`${BASE}/settlement/initiate`, { customerId, amount, note, returnUrl }),
+
+  // Reconcile after returning from the gateway. Returns { status, payeeName, amount }.
+  confirmSettlement: (orderId) =>
+    authPost(`${BASE}/settlement/confirm?orderId=${encodeURIComponent(orderId)}`, {}),
+
+  // "Record manually instead": notify the creditor to confirm an offline payment.
+  claimManualPayment: ({ customerId, amount, note }) =>
+    authPost(`${BASE}/settlement/manual`, { customerId, amount, note }),
 };

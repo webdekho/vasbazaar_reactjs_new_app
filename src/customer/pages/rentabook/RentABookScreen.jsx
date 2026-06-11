@@ -142,7 +142,7 @@ const fromPrice = (book) => {
 
 const EMPTY_FORM = {
   id: null, photo: null, title: "", author: "", publisher: "", edition: "", isbn: "",
-  language: "English", category: "Fiction", condition: "Good", city: "",
+  language: "English", category: "Fiction", condition: "Good", city: "", address: "",
   listingType: "rent",
   // slotPrices: { s7, s15, s30 } — per-day rate per duration tier
   slotPrices: { s7: "", s15: "", s30: "" },
@@ -164,7 +164,16 @@ const WIZARD_STEPS = [
 
 // Map a 2-letter language code from the ISBN API to our dropdown labels.
 const mapLanguage = (code) => (
-  { en: "English", hi: "Hindi", mr: "Marathi", gu: "Gujarati", ta: "Tamil", te: "Telugu", kn: "Kannada", bn: "Bengali" }[code]
+  {
+    en: "English", eng: "English",
+    hi: "Hindi", hin: "Hindi",
+    mr: "Marathi", mar: "Marathi",
+    gu: "Gujarati", guj: "Gujarati",
+    ta: "Tamil", tam: "Tamil",
+    te: "Telugu", tel: "Telugu",
+    kn: "Kannada", kan: "Kannada",
+    bn: "Bengali", ben: "Bengali",
+  }[String(code || "").toLowerCase()]
   || (code ? "Other" : "English")
 );
 
@@ -174,11 +183,26 @@ const matchCategory = (cats = []) => {
   return CATEGORIES.find((c) => joined.includes(c.toLowerCase())) || "";
 };
 
+const isbnLookupCache = new Map();
+const isbnLookupInflight = new Map();
+const normaliseIsbn = (isbn) => String(isbn || "").replace(/[^0-9Xx]/g, "").toUpperCase();
+const GOOGLE_BOOKS_API_KEY = process.env.REACT_APP_GOOGLE_BOOKS_API_KEY || "";
+
+const fetchJson = async (url) => {
+  const res = await fetch(url, { headers: { Accept: "application/json" } });
+  if (res.status === 404) return null;
+  if (res.status === 429) {
+    const err = new Error("rate-limit");
+    err.status = 429;
+    throw err;
+  }
+  if (!res.ok) throw new Error("network");
+  return res.json();
+};
+
 // OpenLibrary — no API key, no daily quota. Primary source.
 async function lookupOpenLibrary(isbn) {
-  const res = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`);
-  if (!res.ok) throw new Error("network");
-  const json = await res.json();
+  const json = await fetchJson(`https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(isbn)}&format=json&jscmd=data`);
   const b = json?.[`ISBN:${isbn}`];
   if (!b) return null;
   const cover = b.cover?.large || b.cover?.medium || b.cover?.small || "";
@@ -197,9 +221,63 @@ async function lookupOpenLibrary(isbn) {
   };
 }
 
-// Google Books — fallback (subject to an anonymous daily quota).
+async function lookupOpenLibraryEdition(isbn) {
+  const edition = await fetchJson(`https://openlibrary.org/isbn/${encodeURIComponent(isbn)}.json`);
+  if (!edition?.title) return null;
+
+  const authorRefs = (edition.authors || []).slice(0, 4).map((a) => a.key).filter(Boolean);
+  const authorNames = await Promise.all(authorRefs.map(async (key) => {
+    try {
+      const author = await fetchJson(`https://openlibrary.org${key}.json`);
+      return author?.name || "";
+    } catch { return ""; }
+  }));
+
+  const subjects = edition.subjects || edition.subject_places || edition.subject_people || [];
+  const langKey = edition.languages?.[0]?.key?.split("/").pop();
+  const coverId = edition.covers?.[0];
+  const cover = coverId ? `https://covers.openlibrary.org/b/id/${coverId}-L.jpg` : "";
+
+  return {
+    title: edition.title || "",
+    subtitle: edition.subtitle || "",
+    author: authorNames.filter(Boolean).join(", "),
+    publisher: (edition.publishers || []).join(", "),
+    publishedDate: edition.publish_date || "",
+    pageCount: edition.number_of_pages || null,
+    language: mapLanguage(langKey),
+    category: matchCategory(subjects),
+    categories: subjects.slice(0, 6),
+    description: typeof edition.notes === "string" ? edition.notes : (edition.notes?.value || ""),
+    thumbnail: cover,
+  };
+}
+
+async function lookupOpenLibrarySearch(isbn) {
+  const json = await fetchJson(`https://openlibrary.org/search.json?isbn=${encodeURIComponent(isbn)}&fields=title,subtitle,author_name,publisher,first_publish_year,language,subject,number_of_pages_median,cover_i&limit=1`);
+  const doc = json?.docs?.[0];
+  if (!doc?.title) return null;
+  return {
+    title: doc.title || "",
+    subtitle: doc.subtitle || "",
+    author: (doc.author_name || []).join(", "),
+    publisher: (doc.publisher || []).slice(0, 2).join(", "),
+    publishedDate: doc.first_publish_year ? String(doc.first_publish_year) : "",
+    pageCount: doc.number_of_pages_median || null,
+    language: mapLanguage(doc.language?.[0]),
+    category: matchCategory(doc.subject || []),
+    categories: (doc.subject || []).slice(0, 6),
+    description: "",
+    thumbnail: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg` : "",
+  };
+}
+
+// Google Books — optional fallback. Keep it behind an API key so anonymous
+// quota failures do not create noisy 429s in the browser console.
 async function lookupGoogleBooks(isbn) {
-  const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`);
+  if (!GOOGLE_BOOKS_API_KEY) return null;
+  const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(`isbn:${isbn}`)}&key=${encodeURIComponent(GOOGLE_BOOKS_API_KEY)}`);
+  if (res.status === 429) return null;
   if (!res.ok) throw new Error("network");
   const json = await res.json();
   const v = json?.items?.[0]?.volumeInfo;
@@ -224,12 +302,32 @@ async function lookupGoogleBooks(isbn) {
  * Google Books. Returns a normalised object, or null when neither matches.
  */
 async function lookupIsbn(isbn) {
-  const clean = isbn.replace(/[^0-9Xx]/g, "");
-  try {
-    const ol = await lookupOpenLibrary(clean);
-    if (ol && ol.title) return ol;
-  } catch { /* fall through to Google Books */ }
-  return lookupGoogleBooks(clean);
+  const clean = normaliseIsbn(isbn);
+  if (isbnLookupCache.has(clean)) return isbnLookupCache.get(clean);
+  if (isbnLookupInflight.has(clean)) return isbnLookupInflight.get(clean);
+
+  const promise = (async () => {
+    const providers = [lookupOpenLibrary, lookupOpenLibraryEdition, lookupOpenLibrarySearch, lookupGoogleBooks];
+    for (const provider of providers) {
+      try {
+        const data = await provider(clean);
+        if (data?.title) {
+          isbnLookupCache.set(clean, data);
+          return data;
+        }
+      } catch (err) {
+        if (err?.status !== 429) {
+          // Try the next source; ISBN lookup should not block manual listing.
+        }
+      }
+    }
+    isbnLookupCache.set(clean, null);
+    return null;
+  })();
+
+  isbnLookupInflight.set(clean, promise);
+  try { return await promise; }
+  finally { isbnLookupInflight.delete(clean); }
 }
 
 // Reverse-geocode lat/lng to a human city label via OpenStreetMap Nominatim
@@ -332,7 +430,11 @@ const RentABookScreen = () => {
 
   // Selected from the search list → use its city label directly.
   const handlePickPlace = (place) => {
-    setField("city", place.label || place.full || "");
+    setForm((f) => ({
+      ...f,
+      city: place.label || place.full || "",
+      address: place.full && place.full !== place.label ? place.full : f.address,
+    }));
   };
   // "Use my current location" → get GPS, then reverse-geocode to a city name.
   const handleUseCurrentLocation = async () => {
@@ -372,7 +474,7 @@ const RentABookScreen = () => {
   };
 
   // Auto-fetch book details when a full ISBN (10 or 13 digits) is entered.
-  const isbnDigits = form.isbn.replace(/[^0-9Xx]/g, "");
+  const isbnDigits = normaliseIsbn(form.isbn);
   useEffect(() => {
     if (view !== "lend") return;
     if (isbnDigits.length !== 10 && isbnDigits.length !== 13) {
@@ -408,7 +510,7 @@ const RentABookScreen = () => {
     const q = query.trim().toLowerCase();
     if (!q) return SAMPLE_BOOKS;
     return SAMPLE_BOOKS.filter((b) =>
-      `${b.title} ${b.author} ${b.category} ${b.city}`.toLowerCase().includes(q)
+      `${b.title} ${b.author} ${b.category} ${b.city} ${b.isbn || ""}`.toLowerCase().includes(q)
     );
   }, [query]);
 
@@ -484,7 +586,7 @@ const RentABookScreen = () => {
       id: book.id, photo: book.photo || null, title: book.title || "", author: book.author || "",
       publisher: book.publisher || "", edition: book.edition || "", isbn: book.isbn || "",
       language: book.language || "English", category: book.category || "Fiction",
-      condition: book.condition || "Good", city: book.city || "",
+      condition: book.condition || "Good", city: book.city || "", address: book.address || "",
       listingType: book.listingType || "rent",
       slotPrices: {
         s7: String(book.slotPrices?.s7 ?? book.rentPerDay ?? ""),
@@ -549,7 +651,7 @@ const RentABookScreen = () => {
     };
     const payload = {
       ...form,
-      title: form.title.trim(), author: form.author.trim(), city: form.city.trim(),
+      title: form.title.trim(), author: form.author.trim(), city: form.city.trim(), address: form.address.trim(),
       slotPrices,
       rentPerDay: 0, // legacy field no longer used; slots are authoritative
       maxDays: Math.min(Math.max(Number(form.maxDays) || 30, 1), 30),
@@ -620,7 +722,7 @@ const RentABookScreen = () => {
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12 }}>
             <FaSearch style={{ color: "#94a3b8" }} />
             <input value={query} onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search title, author, category, city"
+              placeholder="Search title, author, ISBN, category, city"
               style={{ flex: 1, border: "none", outline: "none", fontSize: 14, background: "transparent", color: "#0f172a" }} />
           </div>
 
@@ -632,7 +734,7 @@ const RentABookScreen = () => {
             </button>
             <button type="button" onClick={() => goTo("my-books")}
               style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 6px", borderRadius: 12, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", cursor: "pointer" }}>
-              <FaBook /> My Listings{myBooks.length ? ` ${myBooks.length}` : ""}
+              <FaBook /> My Listing{myBooks.length ? ` (${myBooks.length})` : ""}
             </button>
             <button type="button" onClick={() => goTo("history")}
               style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 6px", borderRadius: 12, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", cursor: "pointer" }}>
@@ -956,6 +1058,12 @@ const RentABookScreen = () => {
 
                 <Field label="City / Location" required error={errors.city}>
                   <input style={inputStyle} value={form.city} onChange={(e) => setField("city", e.target.value)} placeholder="e.g. Pune" />
+                  <input
+                    style={{ ...inputStyle, marginTop: 8 }}
+                    value={form.address}
+                    onChange={(e) => setField("address", e.target.value)}
+                    placeholder="Full address / area / landmark (optional)"
+                  />
                   <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                     <button type="button" onClick={handleUseCurrentLocation} disabled={locating}
                       style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 12px", borderRadius: 10, border: "1px solid #2563EB", background: "#EFF6FF", color: "#2563EB", fontWeight: 600, fontSize: 13, cursor: locating ? "default" : "pointer" }}>
@@ -1132,6 +1240,7 @@ const RentABookScreen = () => {
                 <div style={{ display: "flex", gap: 6, marginTop: 6 }}><TypeBadge type={form.listingType} /></div>
                 <div style={{ background: "#F8FAFC", borderRadius: 12, padding: 14, marginTop: 4 }}>
                   <Row label="City" value={form.city || "—"} />
+                  {form.address && <Row label="Address" value={form.address} />}
                   {form.publisher && <Row label="Publisher" value={form.publisher} />}
                   {form.edition && <Row label="Edition" value={form.edition} />}
                   {form.isbn && <Row label="ISBN" value={form.isbn} />}
@@ -1743,7 +1852,7 @@ const LibraryView = () => {
   useEffect(() => { saveLibrary(books); }, [books]);
 
   // ISBN auto-fill (same OpenLibrary→Google fallback used by the listing flow).
-  const isbnDigits = form.isbn.replace(/[^0-9Xx]/g, "");
+  const isbnDigits = normaliseIsbn(form.isbn);
   useEffect(() => {
     if (mode !== "form") return;
     if (isbnDigits.length !== 10 && isbnDigits.length !== 13) {
