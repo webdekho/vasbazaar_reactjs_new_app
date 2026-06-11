@@ -32,6 +32,9 @@ const fmtWhen = (ms) => {
   }
 };
 
+const isPendingExpense = (expense) => expense?.status === "pending";
+const isApprovedExpense = (expense) => !isPendingExpense(expense);
+
 // `publicView` renders the read-only shared-link version: served by a public
 // route (no login), fetched from the public masked endpoint, with every
 // mutation control and cross-page navigation hidden so the recipient can only
@@ -165,7 +168,7 @@ const GroupDetailScreen = ({ publicView = false }) => {
   const settle = useMemo(() => (group ? simplifySettlements(group) : []), [group]);
   const balances = useMemo(() => (group ? computeBalances(group) : {}), [group]);
   const total = useMemo(
-    () => (group?.expenses || []).reduce((s, e) => s + Number(e.amount || 0), 0),
+    () => (group?.expenses || []).filter(isApprovedExpense).reduce((s, e) => s + Number(e.amount || 0), 0),
     [group]
   );
   const mMap = useMemo(() => memberMap(group), [group]);
@@ -179,18 +182,35 @@ const GroupDetailScreen = ({ publicView = false }) => {
 
   const handleSaveExpense = async (exp) => {
     const editing = !!editingExpense;
+    const needsApproval = !!self && !viewerIsCreator && !!mMap[self.id]?.expenseApprovalRequired;
+    const approvalPatch = needsApproval
+      ? { status: "pending", approvedBy: null, approvedAt: null }
+      : { status: "approved", approvedBy: editingExpense?.approvedBy || self?.id || null, approvedAt: editingExpense?.approvedAt || Date.now() };
     const next = editing
       ? {
           ...group,
           expenses: (group.expenses || []).map((e) =>
-            e.id === editingExpense.id ? { ...e, ...exp, updatedAt: Date.now() } : e
+            e.id === editingExpense.id ? { ...e, ...exp, ...approvalPatch, updatedAt: Date.now() } : e
           ),
         }
-      : { ...group, expenses: [{ id: newId("e"), createdAt: Date.now(), createdBy: self?.id, ...exp }, ...(group.expenses || [])] };
+      : { ...group, expenses: [{ id: newId("e"), createdAt: Date.now(), createdBy: self?.id, ...approvalPatch, ...exp }, ...(group.expenses || [])] };
     closeExpenseModal();
     if (await persist(next)) {
-      toast?.showToast?.(editing ? "Expense updated." : "Expense added.", "success");
+      toast?.showToast?.(
+        needsApproval ? "Expense sent for admin approval." : (editing ? "Expense updated." : "Expense added."),
+        "success"
+      );
     }
+  };
+
+  const handleApproveExpense = async (exp) => {
+    const next = {
+      ...group,
+      expenses: (group.expenses || []).map((e) =>
+        e.id === exp.id ? { ...e, status: "approved", approvedBy: self?.id || null, approvedAt: Date.now(), updatedAt: Date.now() } : e
+      ),
+    };
+    if (await persist(next)) toast?.showToast?.("Expense approved and added to split.", "success");
   };
 
   const handleDeleteExpense = async (exp) => {
@@ -254,7 +274,7 @@ const GroupDetailScreen = ({ publicView = false }) => {
     if (await persist(next)) toast?.showToast?.("Payment record removed.", "info");
   };
 
-  const handleAddMember = async ({ name, mobile }) => {
+  const handleAddMember = async ({ name, mobile, expenseApprovalRequired = true }) => {
     const trimmed = (name || "").trim();
     const num = normalizeMobile(mobile);
     if (!trimmed) { toast?.showToast?.("Enter the member's name.", "error"); return; }
@@ -264,7 +284,7 @@ const GroupDetailScreen = ({ publicView = false }) => {
       return;
     }
     setMemberModal(false);
-    if (await persist({ ...group, members: [...group.members, { id: newId("m"), name: trimmed, mobile: num }] })) {
+    if (await persist({ ...group, members: [...group.members, { id: newId("m"), name: trimmed, mobile: num, expenseApprovalRequired }] })) {
       toast?.showToast?.("Member added.", "success");
     }
   };
@@ -273,7 +293,7 @@ const GroupDetailScreen = ({ publicView = false }) => {
     const have = new Set(group.members.map((m) => m.mobile));
     const fresh = picked
       .filter((c) => !have.has(c.mobile))
-      .map((c) => ({ id: newId("m"), name: c.name, mobile: c.mobile }));
+      .map((c) => ({ id: newId("m"), name: c.name, mobile: c.mobile, expenseApprovalRequired: true }));
     if (!fresh.length) { toast?.showToast?.("No new contacts to add.", "info"); return; }
     setMemberModal(false);
     if (await persist({ ...group, members: [...group.members, ...fresh] })) {
@@ -352,7 +372,13 @@ const GroupDetailScreen = ({ publicView = false }) => {
 
   const handleArchiveGroup = async () => {
     const archiving = !group.archived;
-    if (await persist({ ...group, archived: archiving })) {
+    const res = await rebuddyService.archiveGroup(group.id, archiving);
+    if (!res.success) {
+      toast?.showToast?.(res.message || "Could not update archive status.", "error");
+      return;
+    }
+    setGroup(res.data || { ...group, archived: archiving });
+    if (res.success) {
       toast?.showToast?.(archiving ? "Group archived." : "Group unarchived.", "success");
       if (archiving) navigate("/customer/app/rebuddy", { replace: true });
     }
@@ -453,8 +479,8 @@ const GroupDetailScreen = ({ publicView = false }) => {
           >
             <FaShareAlt size={11} /> Share
           </button>
-          {/* Group lifecycle (archive / delete) is creator-only. */}
-          {!publicView && viewerIsCreator && (
+          {/* Archive is per-member; delete remains creator-only. */}
+          {!publicView && (
             <button
               type="button" onClick={handleArchiveGroup}
               aria-label={group.archived ? "Unarchive group" : "Archive group"}
@@ -604,6 +630,9 @@ const GroupDetailScreen = ({ publicView = false }) => {
                 }}
               >
                 {m.name}{m.isSelf ? " (You)" : isOwnerMember(m) ? " (Admin)" : ""}
+                {!isOwnerMember(m) && m.expenseApprovalRequired ? (
+                  <span style={{ opacity: 0.7, fontWeight: 500 }}>· approval</span>
+                ) : null}
                 {/* Number is hidden by default — revealed on tap. */}
                 {showMobile && m.mobile ? <span style={{ opacity: 0.7, fontWeight: 500 }}>· {m.mobile}</span> : null}
                 {/* Only the group creator can remove a member (never themselves). */}
@@ -669,9 +698,11 @@ const GroupDetailScreen = ({ publicView = false }) => {
       {tab === "expenses" ? (
         <ExpensesPanel
           group={group} mMap={mMap} self={self} readOnly={publicView}
+          canManageAllExpenses={viewerIsCreator}
           onAdd={() => { setEditingExpense(null); setExpenseModal(true); }}
           onEdit={(e) => { setEditingExpense(e); setExpenseModal(true); }}
           onDelete={handleDeleteExpense}
+          onApprove={handleApproveExpense}
         />
       ) : (
         <SettlePanel
@@ -740,13 +771,15 @@ const GroupDetailScreen = ({ publicView = false }) => {
   );
 };
 
-const ExpensesPanel = ({ group, mMap, self, onAdd, onEdit, onDelete, readOnly = false }) => {
+const ExpensesPanel = ({
+  group, mMap, self, onAdd, onEdit, onDelete, onApprove,
+  readOnly = false, canManageAllExpenses = false,
+}) => {
   const expenses = group.expenses || [];
-  // Only the member who added an entry can edit or delete it. Older entries
-  // saved before creator tracking have no createdBy — fall back to who paid so
-  // they're restricted to that member, never editable by everyone.
-  const canModify = (e) =>
-    !readOnly && !!self && (e.createdBy ? e.createdBy === self.id : e.paidBy === self.id);
+  const isOwnEntry = (e) => !!self && (e.createdBy ? e.createdBy === self.id : e.paidBy === self.id);
+  // Group admins manage every expense. Regular members can only change their
+  // own entries. Older entries without creator tracking fall back to paidBy.
+  const canModify = (e) => !readOnly && !!self && (canManageAllExpenses || isOwnEntry(e));
   return (
     <>
       {!readOnly && (
@@ -779,6 +812,8 @@ const ExpensesPanel = ({ group, mMap, self, onAdd, onEdit, onDelete, readOnly = 
             const splitNames = (e.splitAmong && e.splitAmong.length ? e.splitAmong : group.members.map((m) => m.id))
               .map((mid) => mMap[mid]?.name).filter(Boolean);
             const mine = canModify(e);
+            const ownEntry = isOwnEntry(e);
+            const pending = isPendingExpense(e);
             return (
               <div
                 key={e.id}
@@ -802,10 +837,20 @@ const ExpensesPanel = ({ group, mMap, self, onAdd, onEdit, onDelete, readOnly = 
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 2 }}>
                     {e.description || "Expense"}
+                    {pending && (
+                      <span style={{
+                        marginLeft: 8, padding: "2px 7px", borderRadius: 999,
+                        background: "rgba(245,158,11,0.14)", color: "#F59E0B",
+                        fontSize: 10.5, fontWeight: 800, verticalAlign: "middle",
+                      }}>
+                        Pending approval
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize: 11.5, color: "var(--cm-muted, #A0A0A0)" }}>
                     {mMap[e.paidBy]?.name || "Someone"} paid · split among {splitNames.length} ({splitNames.slice(0, 3).join(", ")}{splitNames.length > 3 ? "…" : ""})
-                    {!mine && e.createdBy ? ` · added by ${mMap[e.createdBy]?.name || "another member"}` : ""}
+                    {!ownEntry && e.createdBy ? ` · added by ${mMap[e.createdBy]?.name || "another member"}` : ""}
+                    {pending ? " · not included in balances yet" : ""}
                   </div>
                   {e.createdAt ? (
                     <div style={{ fontSize: 11, color: "var(--cm-muted, #A0A0A0)", marginTop: 2 }}>
@@ -819,6 +864,21 @@ const ExpensesPanel = ({ group, mMap, self, onAdd, onEdit, onDelete, readOnly = 
                   </div>
                   {mine && (
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", marginTop: 6 }}>
+                      {pending && canManageAllExpenses && (
+                        <button
+                          type="button"
+                          onClick={(ev) => { ev.stopPropagation(); onApprove(e); }}
+                          aria-label="Approve expense"
+                          style={{
+                            display: "grid", placeItems: "center",
+                            width: 26, height: 26, borderRadius: 7,
+                            background: "rgba(34,197,94,0.14)", border: "none",
+                            color: "#22C55E", cursor: "pointer",
+                          }}
+                        >
+                          <FaCheck size={10} />
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={(ev) => { ev.stopPropagation(); onEdit(e); }}
@@ -864,7 +924,7 @@ const SettlePanel = ({
   // Hook must run before any early return to keep hook order stable.
   const [sortBy, setSortBy] = useState("amount");
 
-  if (!group.expenses?.length) {
+  if (!(group.expenses || []).some(isApprovedExpense)) {
     return (
       <div
         style={{
@@ -1214,6 +1274,7 @@ const ExpenseModal = ({ group, existing, onClose, onSubmit }) => {
 const MemberModal = ({ onClose, onSubmit, onPickContacts, toast }) => {
   const [name, setName] = useState("");
   const [mobile, setMobile] = useState("");
+  const [expenseApprovalRequired, setExpenseApprovalRequired] = useState(true);
 
   const fieldStyle = {
     width: "100%", padding: "11px 14px", borderRadius: 10,
@@ -1261,9 +1322,35 @@ const MemberModal = ({ onClose, onSubmit, onPickContacts, toast }) => {
         placeholder="10-digit mobile" style={fieldStyle}
       />
 
+      <label style={lbl}>Expense updates</label>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+        {[
+          { value: false, label: "Flexible Addition" },
+          { value: true, label: "Admin Approval Addition" },
+        ].map((opt) => {
+          const active = expenseApprovalRequired === opt.value;
+          return (
+            <button
+              key={opt.label}
+              type="button"
+              onClick={() => setExpenseApprovalRequired(opt.value)}
+              style={{
+                padding: "7px 12px", borderRadius: 999,
+                border: `1px solid ${active ? RB.coral : RB.borderDark}`,
+                background: active ? RB.coralSoft : "transparent",
+                color: active ? RB.coralDark : "var(--cm-muted, #A0A0A0)",
+                fontSize: 12.5, fontWeight: 700, cursor: "pointer",
+              }}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+
       <button
         type="button"
-        onClick={() => onSubmit({ name, mobile })}
+        onClick={() => onSubmit({ name, mobile, expenseApprovalRequired })}
         disabled={!name.trim() || !isValidMobile(normalizeMobile(mobile))}
         style={{
           ...primaryBtn,

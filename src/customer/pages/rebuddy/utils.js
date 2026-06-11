@@ -61,6 +61,7 @@ export const computeBalances = (group) => {
   if (!group?.members?.length) return balances;
   group.members.forEach((m) => { balances[m.id] = 0; });
   (group.expenses || []).forEach((exp) => {
+    if (exp.status === "pending") return;
     const splitAmong = (exp.splitAmong && exp.splitAmong.length) ? exp.splitAmong : group.members.map((m) => m.id);
     const share = exp.amount / splitAmong.length;
     if (balances[exp.paidBy] != null) balances[exp.paidBy] += exp.amount;

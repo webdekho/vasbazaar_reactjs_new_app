@@ -30,6 +30,14 @@ const steps = [
   { n: 4, title: "Settle up", body: "See the cleanest set of payments to zero everyone out." },
 ];
 
+const normalizeGroups = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.records)) return payload.records;
+  if (Array.isArray(payload?.groups)) return payload.groups;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+};
+
 const RebuddyHomeScreen = () => {
   const navigate = useNavigate();
   const [groups, setGroups] = useState([]);
@@ -41,7 +49,7 @@ const RebuddyHomeScreen = () => {
     (async () => {
       const res = await rebuddyService.getMyGroups();
       if (!alive) return;
-      setGroups(res.success && Array.isArray(res.data) ? res.data : []);
+      setGroups(res.success ? normalizeGroups(res.data) : []);
       setLoading(false);
     })();
     return () => { alive = false; };
@@ -54,6 +62,7 @@ const RebuddyHomeScreen = () => {
   const activeGroups = useMemo(() => groupList.filter((g) => !g.archived), [groupList]);
   const archivedGroups = useMemo(() => groupList.filter((g) => g.archived), [groupList]);
   const displayGroups = showArchived ? archivedGroups : activeGroups;
+  const hasAnyGroup = groupList.length > 0;
 
   const goNew = () => navigate("/customer/app/rebuddy/new");
 
@@ -178,7 +187,9 @@ const RebuddyHomeScreen = () => {
           <div style={{ display: "grid", gap: 10 }}>
             {displayGroups.map((g) => {
               const settle = simplifySettlements(g);
-              const total = (g.expenses || []).reduce((s, e) => s + Number(e.amount || 0), 0);
+              const approvedExpenses = (g.expenses || []).filter((e) => e.status !== "pending");
+              const pendingCount = (g.expenses || []).length - approvedExpenses.length;
+              const total = approvedExpenses.reduce((s, e) => s + Number(e.amount || 0), 0);
               return (
                 <button
                   key={g.id} type="button"
@@ -202,7 +213,7 @@ const RebuddyHomeScreen = () => {
                       {g.name}
                     </div>
                     <div style={{ fontSize: 12, color: "var(--cm-muted, #A0A0A0)" }}>
-                      {(g.members || []).length} members · {(g.expenses || []).length} expenses · {settle.length} settle-up{settle.length === 1 ? "" : "s"}
+                      {(g.members || []).length} members · {approvedExpenses.length} expenses{pendingCount ? ` · ${pendingCount} pending` : ""} · {settle.length} settle-up{settle.length === 1 ? "" : "s"}
                     </div>
                   </div>
                   <div style={{ textAlign: "right" }}>
@@ -305,7 +316,7 @@ const RebuddyHomeScreen = () => {
           display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
         }}
       >
-        <FaPlus size={12} /> Create your first group
+        <FaPlus size={12} /> {hasAnyGroup ? "Create another group" : "Create your first group"}
       </button>
     </div>
   );

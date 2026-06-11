@@ -10,6 +10,7 @@ const NewGroupScreen = () => {
   const [name, setName] = useState("");
   const [memberInput, setMemberInput] = useState("");
   const [mobileInput, setMobileInput] = useState("");
+  const [memberExpenseApprovalRequired, setMemberExpenseApprovalRequired] = useState(true);
   // Auto-add the creator so they're always part of their own group.
   const [members, setMembers] = useState(() => {
     const me = getCurrentUser();
@@ -29,9 +30,15 @@ const NewGroupScreen = () => {
       setError("That mobile number is already added.");
       return;
     }
-    setMembers((prev) => [...prev, { id: newId("m"), name: trimmed, mobile }]);
+    setMembers((prev) => [...prev, {
+      id: newId("m"),
+      name: trimmed,
+      mobile,
+      expenseApprovalRequired: memberExpenseApprovalRequired,
+    }]);
     setMemberInput("");
     setMobileInput("");
+    setMemberExpenseApprovalRequired(true);
     setError("");
   };
 
@@ -43,7 +50,7 @@ const NewGroupScreen = () => {
         const have = new Set(prev.map((m) => m.mobile));
         const fresh = picked
           .filter((c) => !have.has(c.mobile))
-          .map((c) => ({ id: newId("m"), name: c.name, mobile: c.mobile }));
+          .map((c) => ({ id: newId("m"), name: c.name, mobile: c.mobile, expenseApprovalRequired: true }));
         return [...prev, ...fresh];
       });
       setError("");
@@ -184,6 +191,30 @@ const NewGroupScreen = () => {
           <FaUserPlus size={12} /> Add
         </button>
       </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+        {[
+          { value: false, label: "Flexible Addition" },
+          { value: true, label: "Admin Approval Addition" },
+        ].map((opt) => {
+          const active = memberExpenseApprovalRequired === opt.value;
+          return (
+            <button
+              key={opt.label}
+              type="button"
+              onClick={() => setMemberExpenseApprovalRequired(opt.value)}
+              style={{
+                padding: "7px 12px", borderRadius: 999,
+                border: `1px solid ${active ? RB.coral : RB.borderDark}`,
+                background: active ? RB.coralSoft : "transparent",
+                color: active ? RB.coralDark : "var(--cm-muted, #A0A0A0)",
+                fontSize: 12.5, fontWeight: 700, cursor: "pointer",
+              }}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18, minHeight: 24 }}>
         {members.length === 0 ? (
           <span style={{ fontSize: 12, color: "var(--cm-muted, #A0A0A0)" }}>
@@ -200,6 +231,7 @@ const NewGroupScreen = () => {
           >
             {m.name}{m.isSelf ? " (You)" : ""}
             {m.mobile ? <span style={{ opacity: 0.7, fontWeight: 500 }}>· {m.mobile}</span> : null}
+            {!m.isSelf && m.expenseApprovalRequired ? <span style={{ opacity: 0.75 }}>· approval</span> : null}
             {!m.isSelf && (
               <button
                 type="button" onClick={() => removeMember(m.id)}

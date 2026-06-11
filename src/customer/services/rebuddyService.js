@@ -24,6 +24,10 @@ export const rebuddyService = {
   // Leave a group (non-owner) — the group + entries stay for everyone else.
   leaveGroup: (id) => authDelete(`${BASE}/${encodeURIComponent(id)}/leave`),
 
+  // Archive/unarchive a group for the logged-in member only.
+  archiveGroup: (id, archived = true) =>
+    authPost(`${BASE}/${encodeURIComponent(id)}/archive?archived=${archived ? "true" : "false"}`, {}),
+
   // "Pay & Settle": create a HDFC SmartGateway order to clear what the caller
   // owes a payee. Returns { orderId, paymentUrl } — redirect to paymentUrl.
   initiateSettlement: ({ groupId, fromId, toId, amount, note, returnUrl }) =>
