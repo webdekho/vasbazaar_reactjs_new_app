@@ -34,6 +34,8 @@ const fmtWhen = (ms) => {
 
 const isPendingExpense = (expense) => expense?.status === "pending";
 const isApprovedExpense = (expense) => !isPendingExpense(expense);
+const memberRequiresExpenseApproval = (member, isOwner = false) =>
+  !isOwner && member?.expenseApprovalRequired !== false;
 
 // `publicView` renders the read-only shared-link version: served by a public
 // route (no login), fetched from the public masked endpoint, with every
@@ -182,7 +184,7 @@ const GroupDetailScreen = ({ publicView = false }) => {
 
   const handleSaveExpense = async (exp) => {
     const editing = !!editingExpense;
-    const needsApproval = !!self && !viewerIsCreator && !!mMap[self.id]?.expenseApprovalRequired;
+    const needsApproval = !!self && memberRequiresExpenseApproval(mMap[self.id], viewerIsCreator);
     const approvalPatch = needsApproval
       ? { status: "pending", approvedBy: null, approvedAt: null }
       : { status: "approved", approvedBy: editingExpense?.approvedBy || self?.id || null, approvedAt: editingExpense?.approvedAt || Date.now() };
@@ -630,7 +632,7 @@ const GroupDetailScreen = ({ publicView = false }) => {
                 }}
               >
                 {m.name}{m.isSelf ? " (You)" : isOwnerMember(m) ? " (Admin)" : ""}
-                {!isOwnerMember(m) && m.expenseApprovalRequired ? (
+                {memberRequiresExpenseApproval(m, isOwnerMember(m)) ? (
                   <span style={{ opacity: 0.7, fontWeight: 500 }}>· approval</span>
                 ) : null}
                 {/* Number is hidden by default — revealed on tap. */}
