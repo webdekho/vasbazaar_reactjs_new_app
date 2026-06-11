@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { otaService } from "../services/otaService";
+import { BUILD_ID } from "../../generated/buildId";
 
 /**
  * OtaUpdateGate
@@ -17,6 +18,10 @@ import { otaService } from "../services/otaService";
 // Skip update check for this many ms after the user dismisses a non-force update.
 const SKIP_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
 const PWA_SKIPPED_KEY = "vb_pwa_skipped_version";
+// Build the user dismissed via "Later" — suppressed until a newer build ships.
+const PWA_DISMISSED_BUILD_KEY = "vb_pwa_dismissed_build";
+// How often to re-check version.json for a fresh deploy.
+const BUILD_POLL_MS = 10 * 60 * 1000; // 10 minutes
 
 // Module-level flag to ensure OTA check only runs ONCE per app session
 let _otaCheckDone = false;
@@ -174,8 +179,33 @@ const OtaUpdateGate = () => {
       }
     };
 
-    // Delay the check to let the app fully load first
+    // Deploy-driven check: compare the served version.json buildId to the one
+    // compiled into THIS bundle. They differ only after a new deploy is live —
+    // which is exactly when we want the "new version" bar. No server config
+    // needed (every build auto-stamps a fresh buildId).
+    const checkBuild = async () => {
+      try {
+        const res = await fetch(`/version.json?t=${Date.now()}`, { cache: "no-store" });
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (cancelled || !data || !data.buildId || !BUILD_ID) return;
+        if (String(data.buildId) === String(BUILD_ID)) return; // already on the latest build
+        let dismissed = null;
+        try { dismissed = localStorage.getItem(PWA_DISMISSED_BUILD_KEY); } catch {}
+        if (dismissed && dismissed === String(data.buildId)) return; // user chose "Later" for this build
+        setPwaUpdate((v) => v || { version: data.version || "new", buildId: String(data.buildId) });
+      } catch {
+        // offline / fetch failed — ignore, try again on the next tick
+      }
+    };
+
+    // Delay the checks to let the app fully load first
     const timer = setTimeout(checkPwa, 3000);
+    const buildTimer = setTimeout(checkBuild, 3500);
+    const buildInterval = setInterval(checkBuild, BUILD_POLL_MS);
+    // Re-check whenever the user returns to the tab/app (common after a deploy).
+    const onVisible = () => { if (document.visibilityState === "visible") checkBuild(); };
+    document.addEventListener("visibilitychange", onVisible);
 
     // Also listen for service-worker updates so refreshed SW can trigger the bar
     if ("serviceWorker" in navigator) {
@@ -196,6 +226,9 @@ const OtaUpdateGate = () => {
     return () => {
       cancelled = true;
       clearTimeout(timer);
+      clearTimeout(buildTimer);
+      clearInterval(buildInterval);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
 
@@ -218,6 +251,10 @@ const OtaUpdateGate = () => {
   }, []);
 
   const dismissPwa = useCallback(() => {
+    if (pwaUpdate?.buildId) {
+      // Suppress only THIS build; a newer deploy (new buildId) shows again.
+      try { localStorage.setItem(PWA_DISMISSED_BUILD_KEY, String(pwaUpdate.buildId)); } catch {}
+    }
     if (pwaUpdate?.version) {
       try {
         localStorage.setItem(

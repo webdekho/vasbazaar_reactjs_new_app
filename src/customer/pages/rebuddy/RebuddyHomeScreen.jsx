@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   FaUsers, FaPlus, FaArrowRight, FaCalculator, FaShareAlt, FaGlobe,
   FaPlaneDeparture, FaHome, FaUmbrellaBeach, FaMusic, FaCampground, FaUtensils,
-  FaChartPie,
+  FaChartPie, FaArchive,
 } from "react-icons/fa";
 import { RB, formatMoney, simplifySettlements } from "./utils";
 import { rebuddyService } from "../../services/rebuddyService";
@@ -34,6 +34,7 @@ const RebuddyHomeScreen = () => {
   const navigate = useNavigate();
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -50,6 +51,9 @@ const RebuddyHomeScreen = () => {
     () => [...groups].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)),
     [groups]
   );
+  const activeGroups = useMemo(() => groupList.filter((g) => !g.archived), [groupList]);
+  const archivedGroups = useMemo(() => groupList.filter((g) => g.archived), [groupList]);
+  const displayGroups = showArchived ? archivedGroups : activeGroups;
 
   const goNew = () => navigate("/customer/app/rebuddy/new");
 
@@ -112,8 +116,20 @@ const RebuddyHomeScreen = () => {
       {/* My groups */}
       <section style={{ marginBottom: 22 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <h3 style={{ fontSize: 16, margin: 0, fontWeight: 700 }}>Your groups</h3>
+          <h3 style={{ fontSize: 16, margin: 0, fontWeight: 700 }}>{showArchived ? "Archived groups" : "Your groups"}</h3>
           <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button" onClick={() => setShowArchived((v) => !v)}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "6px 12px", borderRadius: 999,
+                border: `1px solid ${showArchived ? RB.coral : RB.borderDark}`,
+                background: showArchived ? RB.coralSoft : "transparent",
+                color: showArchived ? RB.coralDark : "inherit", fontSize: 12, fontWeight: 700, cursor: "pointer",
+              }}
+            >
+              <FaArchive size={11} /> {showArchived ? "Active" : `Archived${archivedGroups.length ? ` (${archivedGroups.length})` : ""}`}
+            </button>
             <button
               type="button" onClick={() => navigate("/customer/app/rebuddy/report")}
               style={{
@@ -146,7 +162,7 @@ const RebuddyHomeScreen = () => {
           >
             Loading your groups…
           </div>
-        ) : groupList.length === 0 ? (
+        ) : displayGroups.length === 0 ? (
           <div
             style={{
               padding: "20px 16px", borderRadius: 14,
@@ -154,11 +170,13 @@ const RebuddyHomeScreen = () => {
               textAlign: "center", color: "var(--cm-muted, #A0A0A0)", fontSize: 13,
             }}
           >
-            No groups yet. Tap <strong style={{ color: RB.coral }}>Create a group</strong> to get started.
+            {showArchived
+              ? "No archived groups."
+              : <>No groups yet. Tap <strong style={{ color: RB.coral }}>Create a group</strong> to get started.</>}
           </div>
         ) : (
           <div style={{ display: "grid", gap: 10 }}>
-            {groupList.map((g) => {
+            {displayGroups.map((g) => {
               const settle = simplifySettlements(g);
               const total = (g.expenses || []).reduce((s, e) => s + Number(e.amount || 0), 0);
               return (

@@ -26,3 +26,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .vercel
+
+# Auto-generated build id (stamped each build)
+src/generated/

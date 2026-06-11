@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   FaArrowLeft, FaPlus, FaShareAlt, FaTrashAlt, FaUserPlus, FaTimes,
-  FaReceipt, FaHandshake, FaCheckCircle, FaAddressBook, FaHourglassHalf, FaCheck, FaPen, FaSyncAlt,
+  FaReceipt, FaHandshake, FaCheckCircle, FaAddressBook, FaHourglassHalf, FaCheck, FaPen, FaSyncAlt, FaArchive, FaSignOutAlt,
 } from "react-icons/fa";
 import { useToast } from "../../context/ToastContext";
 import {
@@ -18,6 +18,19 @@ const TABS = [
   { key: "expenses", label: "Expenses", icon: FaReceipt },
   { key: "settle", label: "Settle up", icon: FaHandshake },
 ];
+
+// Compact date+time for expense / settlement entries, e.g. "10 Jun 2026, 7:26 PM".
+const fmtWhen = (ms) => {
+  if (!ms) return "";
+  try {
+    return new Date(Number(ms)).toLocaleString("en-IN", {
+      day: "2-digit", month: "short", year: "numeric",
+      hour: "numeric", minute: "2-digit", hour12: true,
+    });
+  } catch {
+    return "";
+  }
+};
 
 // `publicView` renders the read-only shared-link version: served by a public
 // route (no login), fetched from the public masked endpoint, with every
@@ -38,6 +51,8 @@ const GroupDetailScreen = ({ publicView = false }) => {
   const [settleSuccess, setSettleSuccess] = useState(null); // { from, to, amount, settled }
   const [gatewaySettled, setGatewaySettled] = useState(null); // { amount, payeeName } — confetti popup
   const [refreshing, setRefreshing] = useState(false);
+  const [showAllMembers, setShowAllMembers] = useState(false);
+  const [revealedMobile, setRevealedMobile] = useState({}); // member id → show number
 
   useEffect(() => {
     let alive = true;
@@ -199,6 +214,7 @@ const GroupDetailScreen = ({ publicView = false }) => {
       id: newId("s"),
       from, to, amount: amt,
       note: (note || "").trim(),
+      mode: "manual",
       createdBy, status,
       createdAt: now,
       confirmedAt: status === "confirmed" ? now : null,
@@ -287,24 +303,30 @@ const GroupDetailScreen = ({ publicView = false }) => {
     const base = "https://web.vasbazaar.com";
     const groupUrl = `${base}/customer/rebuddy/group/${group.id}`;
     const registerUrl = `${base}/customer/login`;
-    const text =
+    // Full message (used for clipboard / shows both links).
+    const fullText =
       `Hey!\n\n` +
       `View our "${group.name}" group to split and track trip expenses easily:\n` +
       `${groupUrl}\n\n` +
       `Also register on VasBazaar Super App here:\n` +
       `${registerUrl}`;
+    // Share-sheet text: keep the GROUP link out of the body and pass it as the
+    // canonical `url` instead — otherwise the OS preview grabs the LAST url in
+    // the text (the sign-up link) and looks like we're sharing login.
+    const shareText =
+      `Hey!\n\n` +
+      `View our "${group.name}" group to split and track trip expenses easily.\n\n` +
+      `Also register on VasBazaar Super App here:\n${registerUrl}`;
     try {
-      // Pass only `text` (the URLs are already inside it) so receivers like
-      // WhatsApp don't append a duplicate copy of the link.
       if (navigator.share) {
-        await navigator.share({ title: `ReBuddy · ${group.name}`, text });
+        await navigator.share({ title: `ReBuddy · ${group.name}`, text: shareText, url: groupUrl });
       } else {
-        await navigator.clipboard.writeText(text);
+        await navigator.clipboard.writeText(fullText);
         toast?.showToast?.("Invite copied to clipboard.", "success");
       }
     } catch {
       try {
-        await navigator.clipboard.writeText(text);
+        await navigator.clipboard.writeText(fullText);
         toast?.showToast?.("Invite copied.", "success");
       } catch {
         toast?.showToast?.("Could not share link.", "error");
@@ -312,7 +334,45 @@ const GroupDetailScreen = ({ publicView = false }) => {
     }
   };
 
+  const handleLeaveGroup = async () => {
+    // A member may leave only once their own balance is settled.
+    if (self && Math.abs(balances[self.id] || 0) >= 1) {
+      toast?.showToast?.("Settle your balance before leaving the group.", "error");
+      return;
+    }
+    if (!window.confirm(`Leave "${group.name}"? You'll exit the group — everyone else keeps it with all entries intact.`)) return;
+    const res = await rebuddyService.leaveGroup(group.id);
+    if (!res.success) {
+      toast?.showToast?.(res.message || "Could not leave the group.", "error");
+      return;
+    }
+    toast?.showToast?.("You left the group.", "success");
+    navigate("/customer/app/rebuddy", { replace: true });
+  };
+
+  const handleArchiveGroup = async () => {
+    const archiving = !group.archived;
+    if (await persist({ ...group, archived: archiving })) {
+      toast?.showToast?.(archiving ? "Group archived." : "Group unarchived.", "success");
+      if (archiving) navigate("/customer/app/rebuddy", { replace: true });
+    }
+  };
+
+  // From the public shared page: stash a return path to the authed group, then
+  // send the visitor to login. After they sign in they land back on the group
+  // (full view) where they can use "Pay & Settle" (UPI).
+  const handlePublicLoginToPay = () => {
+    try { sessionStorage.setItem("vb_post_login_redirect", `/customer/app/rebuddy/group/${id}`); } catch {}
+    navigate("/customer/login");
+  };
+
   const handleDeleteGroup = async () => {
+    // Block deletion while anyone still owes / is owed (≥ ₹1).
+    const hasOutstanding = (group.members || []).some((m) => Math.abs(balances[m.id] || 0) >= 1);
+    if (hasOutstanding) {
+      toast?.showToast?.("Settle all balances before deleting this group.", "error");
+      return;
+    }
     if (!window.confirm(`Delete group "${group.name}"? This cannot be undone.`)) return;
     const res = await rebuddyService.deleteGroup(group.id);
     if (!res.success) {
@@ -323,6 +383,31 @@ const GroupDetailScreen = ({ publicView = false }) => {
   };
 
   if (!group) return null;
+
+  // Members display: keep the group creator ("Admin") and the viewer ("You")
+  // pinned at the top; everyone else collapses behind a "view all members"
+  // link. Only the creator may remove members.
+  const ownerMob = group.ownerMobile ? normalizeMobile(group.ownerMobile) : null;
+  const viewerIsCreator = !!self && !!ownerMob && normalizeMobile(self.mobile) === ownerMob;
+  const isOwnerMember = (m) => !!ownerMob && normalizeMobile(m.mobile) === ownerMob;
+  const allMembers = group.members || [];
+  const creatorMember = allMembers.find(isOwnerMember);
+  const selfChip = allMembers.find((m) => m.isSelf);
+  const topMembers = [];
+  if (creatorMember) topMembers.push(creatorMember);
+  if (selfChip && selfChip !== creatorMember) topMembers.push(selfChip);
+  // The public/shared view has no "self" or owner context (mobiles are masked),
+  // so just show everyone there; the collapse only applies to the in-app view.
+  const collapseMembers = !publicView && topMembers.length > 0;
+  const restMembers = collapseMembers ? allMembers.filter((m) => !topMembers.includes(m)) : [];
+  const shownMembers = collapseMembers
+    ? (showAllMembers ? [...topMembers, ...restMembers] : topMembers)
+    : allMembers;
+
+  // The group can only be deleted once everyone is settled (no balance ≥ ₹1).
+  const groupHasOutstanding = allMembers.some((m) => Math.abs(balances[m.id] || 0) >= 1);
+  // A member can leave only once their OWN balance is settled.
+  const viewerSettled = !self || Math.abs(balances[self.id] || 0) < 1;
 
   return (
     <div style={{ padding: "12px 4px 32px", width: "100%" }}>
@@ -368,14 +453,53 @@ const GroupDetailScreen = ({ publicView = false }) => {
           >
             <FaShareAlt size={11} /> Share
           </button>
-          {!publicView && (
+          {/* Group lifecycle (archive / delete) is creator-only. */}
+          {!publicView && viewerIsCreator && (
             <button
-              type="button" onClick={handleDeleteGroup}
-              aria-label="Delete group"
+              type="button" onClick={handleArchiveGroup}
+              aria-label={group.archived ? "Unarchive group" : "Archive group"}
+              title={group.archived ? "Unarchive group" : "Archive group"}
               style={{
                 display: "inline-flex", alignItems: "center",
                 padding: "6px 10px", borderRadius: 999, border: `1px solid ${RB.borderDark}`,
-                background: "transparent", color: "var(--cm-muted, #A0A0A0)", cursor: "pointer",
+                background: group.archived ? RB.coralSoft : "transparent",
+                color: group.archived ? RB.coralDark : "var(--cm-muted, #A0A0A0)", cursor: "pointer",
+              }}
+            >
+              <FaArchive size={11} />
+            </button>
+          )}
+          {/* Non-creators can only leave the group (active once they're settled). */}
+          {!publicView && !viewerIsCreator && (
+            <button
+              type="button" onClick={handleLeaveGroup}
+              disabled={!viewerSettled}
+              aria-label="Leave group"
+              title={viewerSettled ? "Leave group" : "Settle your balance before leaving"}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "6px 12px", borderRadius: 999, border: `1px solid ${RB.borderDark}`,
+                background: "transparent", color: "var(--cm-muted, #A0A0A0)",
+                fontSize: 12, fontWeight: 700,
+                cursor: viewerSettled ? "pointer" : "not-allowed",
+                opacity: viewerSettled ? 1 : 0.4,
+              }}
+            >
+              <FaSignOutAlt size={11} /> Leave
+            </button>
+          )}
+          {!publicView && viewerIsCreator && (
+            <button
+              type="button" onClick={handleDeleteGroup}
+              disabled={groupHasOutstanding}
+              aria-label="Delete group"
+              title={groupHasOutstanding ? "Settle all balances before deleting" : "Delete group"}
+              style={{
+                display: "inline-flex", alignItems: "center",
+                padding: "6px 10px", borderRadius: 999, border: `1px solid ${RB.borderDark}`,
+                background: "transparent", color: "var(--cm-muted, #A0A0A0)",
+                cursor: groupHasOutstanding ? "not-allowed" : "pointer",
+                opacity: groupHasOutstanding ? 0.4 : 1,
               }}
             >
               <FaTrashAlt size={11} />
@@ -384,23 +508,38 @@ const GroupDetailScreen = ({ publicView = false }) => {
         </div>
       </div>
 
-      {/* Shared-link viewers get a gentle nudge to log in for full access */}
+      {/* Shared-link viewers: nudge to log in, and offer to pay via UPI. */}
       {publicView && (
         <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap",
           padding: "10px 14px", borderRadius: 12, marginBottom: 14,
           background: RB.coralSoft, border: `1px solid ${RB.coral}`,
         }}>
-          <span style={{ fontSize: 12.5, fontWeight: 600, color: RB.coralDark }}>
-            You're viewing a shared group. Login to join &amp; edit.
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: RB.coralDark, flex: 1, minWidth: 160 }}>
+            You're viewing a shared group. Login to pay your share or edit.
           </span>
-          <a href="/customer/login" style={{
-            flexShrink: 0, textDecoration: "none",
-            padding: "7px 14px", borderRadius: 999,
-            background: RB.coral, color: "#fff", fontSize: 12, fontWeight: 700,
-          }}>
-            Login
-          </a>
+          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+            <button
+              type="button" onClick={handlePublicLoginToPay}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "7px 14px", borderRadius: 999, border: "none",
+                background: RB.coral, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer",
+              }}
+            >
+              <FaHandshake size={11} /> Pay via UPI
+            </button>
+            <button
+              type="button" onClick={handlePublicLoginToPay}
+              style={{
+                padding: "7px 14px", borderRadius: 999,
+                border: `1px solid ${RB.coral}`, background: "transparent",
+                color: RB.coralDark, fontSize: 12, fontWeight: 700, cursor: "pointer",
+              }}
+            >
+              Login
+            </button>
+          </div>
         </div>
       )}
 
@@ -408,26 +547,27 @@ const GroupDetailScreen = ({ publicView = false }) => {
       <section
         style={{
           background: RB.gradient,
-          borderRadius: 18, padding: "18px 18px 16px", color: "#fff", marginBottom: 14,
+          borderRadius: 18, padding: "18px 18px 16px", color: "#111", marginBottom: 14,
           boxShadow: "0 18px 38px -22px rgba(64, 224, 208, 0.35)",
         }}
       >
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, opacity: 0.9 }}>REBUDDY GROUP</div>
-        <h1 style={{ margin: "4px 0 8px", fontSize: 22, fontWeight: 800 }}>{group.name}</h1>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, color: "#111", opacity: 0.85 }}>REBUDDY GROUP</div>
+        <h1 style={{ margin: "4px 0 8px", fontSize: 22, fontWeight: 800, color: "#111" }}>{group.name}</h1>
         {group.category ? (
           <span style={{
             display: "inline-flex", alignItems: "center",
             padding: "3px 10px", borderRadius: 999, marginBottom: 8,
-            background: "rgba(255,255,255,0.22)", color: "#fff",
+            background: "rgba(0,0,0,0.12)", color: "#111",
             fontSize: 11.5, fontWeight: 700,
           }}>
             {group.category}
           </span>
         ) : null}
-        <div style={{ display: "flex", gap: 16, fontSize: 12.5, opacity: 0.95 }}>
-          <span>{group.members.length} members</span>
-          <span>•</span>
-          <span>Total {formatMoney(total, group.currency)}</span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, color: "#111" }}>
+          <span style={{ fontSize: 12.5 }}>{group.members.length} members</span>
+          <span style={{ fontWeight: 800, fontSize: 29, color: "#000", lineHeight: 1.1, textAlign: "right" }}>
+            Total : {formatMoney(Math.round(total), group.currency)}
+          </span>
         </div>
       </section>
 
@@ -449,32 +589,54 @@ const GroupDetailScreen = ({ publicView = false }) => {
           )}
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {group.members.map((m) => (
-            <span
-              key={m.id}
+          {shownMembers.map((m) => {
+            const showMobile = !!revealedMobile[m.id];
+            return (
+              <span
+                key={m.id}
+                onClick={() => setRevealedMobile((p) => ({ ...p, [m.id]: !p[m.id] }))}
+                title={showMobile ? "Tap to hide number" : "Tap to show number"}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  padding: "6px 12px", borderRadius: 999,
+                  background: RB.coralSoft, color: "var(--cm-ink, #fff)",
+                  fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                {m.name}{m.isSelf ? " (You)" : isOwnerMember(m) ? " (Admin)" : ""}
+                {/* Number is hidden by default — revealed on tap. */}
+                {showMobile && m.mobile ? <span style={{ opacity: 0.7, fontWeight: 500 }}>· {m.mobile}</span> : null}
+                {/* Only the group creator can remove a member (never themselves). */}
+                {!publicView && viewerIsCreator && !m.isSelf && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); handleRemoveMember(m); }}
+                    aria-label={`Remove ${m.name}`}
+                    style={{
+                      background: "transparent", border: "none", color: RB.coralDark,
+                      cursor: "pointer", padding: 0, display: "grid", placeItems: "center",
+                    }}
+                  >
+                    <FaTimes size={10} />
+                  </button>
+                )}
+              </span>
+            );
+          })}
+          {restMembers.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowAllMembers((v) => !v)}
               style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                padding: "6px 12px", borderRadius: 999,
-                background: RB.coralSoft, color: RB.coralDark,
-                fontSize: 12.5, fontWeight: 600,
+                width: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+                marginTop: 2, padding: "9px 12px", borderRadius: 999,
+                border: `1px solid ${RB.coral}`, background: "transparent",
+                color: RB.coral, fontSize: 12.5, fontWeight: 700, cursor: "pointer",
               }}
             >
-              {m.name}{m.isSelf ? " (You)" : ""}
-              {m.mobile ? <span style={{ opacity: 0.7, fontWeight: 500 }}>· {m.mobile}</span> : null}
-              {!publicView && !m.isSelf && (
-                <button
-                  type="button" onClick={() => handleRemoveMember(m)}
-                  aria-label={`Remove ${m.name}`}
-                  style={{
-                    background: "transparent", border: "none", color: RB.coralDark,
-                    cursor: "pointer", padding: 0, display: "grid", placeItems: "center",
-                  }}
-                >
-                  <FaTimes size={10} />
-                </button>
-              )}
-            </span>
-          ))}
+              {showAllMembers ? "Show Less" : `View All (${restMembers.length} more)`}
+            </button>
+          )}
         </div>
       </section>
 
@@ -645,6 +807,11 @@ const ExpensesPanel = ({ group, mMap, self, onAdd, onEdit, onDelete, readOnly = 
                     {mMap[e.paidBy]?.name || "Someone"} paid · split among {splitNames.length} ({splitNames.slice(0, 3).join(", ")}{splitNames.length > 3 ? "…" : ""})
                     {!mine && e.createdBy ? ` · added by ${mMap[e.createdBy]?.name || "another member"}` : ""}
                   </div>
+                  {e.createdAt ? (
+                    <div style={{ fontSize: 11, color: "var(--cm-muted, #A0A0A0)", marginTop: 2 }}>
+                      {fmtWhen(e.createdAt)}
+                    </div>
+                  ) : null}
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: 13.5, fontWeight: 700 }}>
@@ -694,6 +861,9 @@ const SettlePanel = ({
   settle, balances, group, mMap, self,
   pendingToConfirm, onSettleClick, onConfirm, onDeleteSettlement,
 }) => {
+  // Hook must run before any early return to keep hook order stable.
+  const [sortBy, setSortBy] = useState("amount");
+
   if (!group.expenses?.length) {
     return (
       <div
@@ -708,14 +878,52 @@ const SettlePanel = ({
     );
   }
 
-  const memberBalances = group.members.map((m) => ({
-    ...m, balance: balances[m.id] || 0,
-  })).sort((a, b) => b.balance - a.balance);
+  // Only show members with a real outstanding balance — anyone settled or under
+  // ₹1 is hidden. Default sort: largest amount (either direction) first.
+  const memberBalances = group.members
+    .map((m) => ({ ...m, balance: balances[m.id] || 0 }))
+    .filter((m) => Math.abs(m.balance) >= 1)
+    .sort((a, b) => {
+      switch (sortBy) {
+        case "gets": return b.balance - a.balance;
+        case "owes": return a.balance - b.balance;
+        case "name": return (a.name || "").localeCompare(b.name || "");
+        case "amount":
+        default: return Math.abs(b.balance) - Math.abs(a.balance);
+      }
+    });
 
-  const Summary = (
+  // For the viewer, map each counterparty member → the simplified payment, so a
+  // "Settle up" action can sit right next to that member's balance.
+  const settleForMember = {};
+  if (self) {
+    settle.forEach((s) => {
+      if (s.from === self.id) settleForMember[s.to] = s;
+      else if (s.to === self.id) settleForMember[s.from] = s;
+    });
+  }
+
+  const Summary = memberBalances.length === 0 ? null : (
     <div style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8, color: "var(--cm-muted, #A0A0A0)" }}>
-        Balances
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--cm-muted, #A0A0A0)" }}>
+          Balances
+        </div>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          aria-label="Sort balances"
+          style={{
+            fontSize: 11.5, fontWeight: 600, color: RB.coralDark,
+            background: RB.surface, border: `1px solid ${RB.borderDark}`,
+            borderRadius: 8, padding: "4px 8px", cursor: "pointer", outline: "none",
+          }}
+        >
+          <option value="amount">Highest amount</option>
+          <option value="gets">Gets back first</option>
+          <option value="owes">Owes first</option>
+          <option value="name">Name (A–Z)</option>
+        </select>
       </div>
       <div style={{ display: "grid", gap: 6 }}>
         {memberBalances.map((m) => {
@@ -734,11 +942,27 @@ const SettlePanel = ({
               }}
             >
               <Avatar name={m.name} />
-              <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{m.name}</div>
+              <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600 }}>{m.name}</div>
               <div style={{ fontSize: 12, color: "var(--cm-muted, #A0A0A0)" }}>{label}</div>
-              <div style={{ fontSize: 13, fontWeight: 800, color, minWidth: 70, textAlign: "right" }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color, minWidth: 64, textAlign: "right" }}>
                 {isPos || isNeg ? `${sign}${formatMoney(Math.abs(m.balance), group.currency)}` : "—"}
               </div>
+              {settleForMember[m.id] && (
+                <button
+                  type="button"
+                  onClick={() => onSettleClick({
+                    from: settleForMember[m.id].from,
+                    to: settleForMember[m.id].to,
+                    amount: settleForMember[m.id].amount,
+                  })}
+                  style={{
+                    flexShrink: 0, padding: "6px 12px", borderRadius: 999, border: "none",
+                    background: RB.coral, color: "#fff", fontSize: 11.5, fontWeight: 700, cursor: "pointer",
+                  }}
+                >
+                  Settle up
+                </button>
+              )}
             </div>
           );
         })}
@@ -823,9 +1047,20 @@ const SettlePanel = ({
                   {" "}
                   <strong>{formatMoney(s.amount, group.currency)}</strong>
                 </div>
-                {s.note ? (
-                  <div style={{ fontSize: 11, color: "var(--cm-muted, #A0A0A0)", marginTop: 2 }}>{s.note}</div>
-                ) : null}
+                {(() => {
+                  // Gateway payments are tagged mode="vasbazaar" (older ones carry
+                  // it in the note); everything else is a manual record.
+                  const isVasbazaar = s.mode === "vasbazaar" || (s.note || "").toLowerCase().includes("vasbazaar");
+                  const modeLabel = isVasbazaar ? "VasBazaar" : "Manual";
+                  const when = fmtWhen(s.confirmedAt || s.createdAt);
+                  return (
+                    <div style={{ fontSize: 11, color: "var(--cm-muted, #A0A0A0)", marginTop: 2 }}>
+                      {modeLabel}
+                      {!isVasbazaar && s.note ? ` · ${s.note}` : ""}
+                      {when ? ` · ${when}` : ""}
+                    </div>
+                  );
+                })()}
               </div>
               <span
                 style={{
@@ -870,52 +1105,6 @@ const SettlePanel = ({
     <>
       {PendingBanner}
       {Summary}
-      <div style={{ display: "grid", gap: 10 }}>
-      <div style={{ fontSize: 12, color: "var(--cm-muted, #A0A0A0)", marginBottom: -2 }}>
-        Simplified into {settle.length} payment{settle.length > 1 ? "s" : ""}.
-      </div>
-      {settle.map((s, idx) => {
-        // Either party to the payment can record it from here.
-        const canSettle = self && (s.from === self.id || s.to === self.id);
-        return (
-        <div
-          key={idx}
-          style={{
-            display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
-            padding: "14px 14px", borderRadius: 12,
-            background: RB.cardBg, border: `1px solid ${RB.borderDark}`,
-          }}
-        >
-          <Avatar name={mMap[s.from]?.name} />
-          <div style={{ flex: 1, minWidth: 120, fontSize: 13 }}>
-            <strong>{mMap[s.from]?.name || "?"}</strong>
-            <span style={{ color: "var(--cm-muted, #A0A0A0)" }}> pays </span>
-            <strong>{mMap[s.to]?.name || "?"}</strong>
-          </div>
-          <Avatar name={mMap[s.to]?.name} />
-          <div style={{
-            padding: "6px 10px", borderRadius: 999,
-            background: RB.coralSoft, color: RB.coralDark,
-            fontSize: 12.5, fontWeight: 800,
-          }}>
-            {formatMoney(s.amount, group.currency)}
-          </div>
-          {canSettle && (
-            <button
-              type="button"
-              onClick={() => onSettleClick({ from: s.from, to: s.to, amount: s.amount })}
-              style={{
-                padding: "7px 14px", borderRadius: 999, border: "none",
-                background: RB.coral, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer",
-              }}
-            >
-              Settle up
-            </button>
-          )}
-        </div>
-        );
-      })}
-      </div>
       {History}
     </>
   );

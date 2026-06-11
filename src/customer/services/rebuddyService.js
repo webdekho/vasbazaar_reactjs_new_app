@@ -21,6 +21,9 @@ export const rebuddyService = {
   // Delete a group (owner only).
   deleteGroup: (id) => authDelete(`${BASE}/${encodeURIComponent(id)}`),
 
+  // Leave a group (non-owner) — the group + entries stay for everyone else.
+  leaveGroup: (id) => authDelete(`${BASE}/${encodeURIComponent(id)}/leave`),
+
   // "Pay & Settle": create a HDFC SmartGateway order to clear what the caller
   // owes a payee. Returns { orderId, paymentUrl } — redirect to paymentUrl.
   initiateSettlement: ({ groupId, fromId, toId, amount, note, returnUrl }) =>

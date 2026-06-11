@@ -47,10 +47,11 @@ export const formatMoney = (amount, currency = "INR") => {
   const n = Number(amount) || 0;
   try {
     return new Intl.NumberFormat(undefined, {
-      style: "currency", currency, maximumFractionDigits: 2,
+      // Drop trailing .00 on whole amounts, but keep real paise (e.g. ₹82,305.35).
+      style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 2,
     }).format(n);
   } catch {
-    return `${currency} ${n.toFixed(2)}`;
+    return `${currency} ${n % 1 === 0 ? n : n.toFixed(2)}`;
   }
 };
 
