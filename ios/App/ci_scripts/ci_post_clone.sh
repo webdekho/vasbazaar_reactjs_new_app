@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Xcode Cloud post-clone script
+# Xcode Cloud post-clone script for Capacitor 8 (SPM)
 
 set -e
 
@@ -26,14 +26,20 @@ echo "Installing Node.js dependencies..."
 echo "======================================"
 npm ci --legacy-peer-deps
 
-# Navigate to iOS App directory
+# Build the React app
 echo "======================================"
-echo "Installing CocoaPods dependencies..."
+echo "Building React app..."
 echo "======================================"
-cd "$CI_PRIMARY_REPOSITORY_PATH/ios/App"
+npm run build
 
-pod install --repo-update
+# Sync Capacitor (copies web assets to iOS)
+echo "======================================"
+echo "Syncing Capacitor iOS..."
+echo "======================================"
+npx cap sync ios
 
 echo "======================================"
 echo "CI Post-Clone Script Complete!"
+echo "======================================"
+echo "Note: SPM dependencies will be resolved by Xcode automatically"
 echo "======================================"
