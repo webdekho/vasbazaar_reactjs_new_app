@@ -166,6 +166,29 @@ const EventDashboardScreen = () => {
               </div>
             )}
 
+            {/* Guest insights — kids, parking, accommodation, dress compliance */}
+            {e.guestInsights && (e.guestInsights.acceptedGuests ?? 0) > 0 && (
+              <div style={{ border: "1px solid var(--cm-line, #E5E7EB)", borderRadius: 12, padding: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Guest insights (confirmed)</div>
+                <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 13 }}>
+                  <span>🧒 <strong>{e.guestInsights.kidsTotal ?? 0}</strong> kids</span>
+                  <span>🅿️ <strong>{e.guestInsights.parkingNeeded ?? 0}</strong> need parking</span>
+                  <span>🏨 <strong>{e.guestInsights.accommodationNeeded ?? 0}</strong> need stay</span>
+                  {e.dressCode && <span>👗 <strong>{e.guestInsights.dressCompliancePct ?? 0}%</strong> dress confirmed</span>}
+                </div>
+                {Array.isArray(e.guestInsights.songRequests) && e.guestInsights.songRequests.length > 0 && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--cm-muted, #6B7280)", marginBottom: 4 }}>🎵 Song requests</div>
+                    <div style={{ display: "grid", gap: 3, fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>
+                      {e.guestInsights.songRequests.map((s, i) => (
+                        <div key={i}><strong style={{ color: "inherit" }}>{s.song}</strong> — {s.guestName}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Guest list */}
             <div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "0 2px 8px" }}>

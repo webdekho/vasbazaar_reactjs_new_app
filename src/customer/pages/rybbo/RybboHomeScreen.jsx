@@ -1,12 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaSearch, FaMapMarkerAlt, FaTicketAlt, FaPlusCircle, FaQrcode, FaGlassCheers } from "react-icons/fa";
+import { FaSearch, FaMapMarkerAlt, FaTicketAlt, FaPlusCircle, FaQrcode, FaGlassCheers, FaList, FaThLarge } from "react-icons/fa";
 import { rybboService } from "../../services/rybboService";
 import DataState from "../../components/DataState";
 import EventCard from "./components/EventCard";
 import CategoryTabs from "./components/CategoryTabs";
+import "./rybbo.css";
 
 const CITY_KEY = "rybbo_city";
+const VIEW_KEY = "rybbo_event_view";
+const PERSONAL_EVENT_TEXT = "Plan a Personal Event";
+
+// Extra category tabs appended to the API categories in the filter row
+// (next to All, Events, Plays, …). Added only if not already returned by the API.
+const EXTRA_CATEGORIES = [
+  { key: "online", label: "Online events" },
+  { key: "exhibitions", label: "Exhibitions" },
+  { key: "other", label: "Other" },
+];
 
 const RybboHomeScreen = () => {
   const navigate = useNavigate();
@@ -14,7 +25,34 @@ const RybboHomeScreen = () => {
   const [showCityPicker, setShowCityPicker] = useState(false);
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem(VIEW_KEY) || "list");
+  const [personalEventText, setPersonalEventText] = useState("");
   const [state, setState] = useState({ loading: true, error: "", events: [], featured: [], cities: [], categories: [] });
+
+  useEffect(() => {
+    let index = 0;
+    let direction = 1;
+    let holdTicks = 0;
+
+    const timer = setInterval(() => {
+      if (direction === 1 && index === PERSONAL_EVENT_TEXT.length) {
+        holdTicks += 1;
+        if (holdTicks < 8) return;
+        direction = -1;
+        holdTicks = 0;
+      } else if (direction === -1 && index === 0) {
+        holdTicks += 1;
+        if (holdTicks < 4) return;
+        direction = 1;
+        holdTicks = 0;
+      }
+
+      index += direction;
+      setPersonalEventText(PERSONAL_EVENT_TEXT.slice(0, index));
+    }, 90);
+
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -29,7 +67,12 @@ const RybboHomeScreen = () => {
       if (cancelled) return;
       const apiCats = Array.isArray(categories.data) ? categories.data : [];
       const hasWorkshops = apiCats.some((c) => (c.key || "").toLowerCase() === "workshops");
-      const mergedCats = hasWorkshops ? apiCats : [...apiCats, { key: "workshops", label: "Workshops" }];
+      const withWorkshops = hasWorkshops ? apiCats : [...apiCats, { key: "workshops", label: "Workshops" }];
+      // Append Online events / Exhibitions / Other unless the API already has them.
+      const missingExtras = EXTRA_CATEGORIES.filter(
+        (ex) => !withWorkshops.some((c) => (c.key || "").toLowerCase() === ex.key)
+      );
+      const mergedCats = [...withWorkshops, ...missingExtras];
       setState({
         loading: false,
         error: [cities, categories, events, featured].find((r) => !r.success)?.message || "",
@@ -43,6 +86,8 @@ const RybboHomeScreen = () => {
   }, [city, category, search]);
 
   const featured = useMemo(() => state.featured, [state.featured]);
+  const spotlight = featured[0] || state.events[0];
+  const resultLabel = category === "all" ? "events" : state.categories.find((c) => c.key === category)?.label;
 
   const handleCityPick = (c) => {
     setCity(c);
@@ -50,83 +95,113 @@ const RybboHomeScreen = () => {
     setShowCityPicker(false);
   };
 
+  const handleViewMode = (mode) => {
+    setViewMode(mode);
+    localStorage.setItem(VIEW_KEY, mode);
+  };
+
   return (
     <DataState loading={state.loading} error={state.error}>
-      <div style={{ padding: "12px 12px 24px", width: "100%", maxWidth: "100%", boxSizing: "border-box", overflowX: "hidden" }}>
-        {/* Header strip */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
-          <button type="button" onClick={() => setShowCityPicker(true)} style={{ display: "flex", alignItems: "center", gap: 6, background: "transparent", border: "none", cursor: "pointer", color: "inherit", fontSize: 14, fontWeight: 600, flexShrink: 0 }}>
-            <FaMapMarkerAlt color="#007BFF" /> {city} ▾
+      <div className="rybbo-page">
+        <section className="rybbo-hero">
+          {spotlight?.poster && <img className="rybbo-hero-art" src={spotlight.poster} alt="" />}
+          <div className="rybbo-hero-shade" />
+          <div className="rybbo-hero-copy">
+            <div className="rybbo-hero-tools">
+              <button type="button" onClick={() => setShowCityPicker(true)} className="rybbo-city-pill" aria-label={`Change city, currently ${city}`} title={city}>
+                <FaMapMarkerAlt />
+              </button>
+              <div className="rybbo-hero-tools-right">
+              <button type="button" onClick={() => navigate("/customer/app/rybbo/organizer/events")} className="rybbo-mini-tool" aria-label="Scan and enter" title="Scan and enter">
+                <FaQrcode />
+              </button>
+              <button type="button" onClick={() => navigate("/customer/app/rybbo/my-bookings")} className="rybbo-mini-tool" aria-label="My bookings" title="My bookings">
+                <FaTicketAlt />
+              </button>
+              </div>
+            </div>
+            <p className="rybbo-kicker">RYBBO Live</p>
+            <h1>Every Event Begins Here.</h1>
+            <p className="rybbo-hero-sub">Curated shows, workshops, games and private parties around you.</p>
+          </div>
+        </section>
+
+        <div className="rybbo-action-grid">
+          <button type="button" onClick={() => navigate("/customer/app/rybbo/social")} className="rybbo-action-card rybbo-action-card--primary">
+            <FaGlassCheers />
+            <span className="rybbo-type-text" aria-label={PERSONAL_EVENT_TEXT}>{personalEventText}</span>
           </button>
-        </div>
-        <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "2px 2px 10px", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
-          <button type="button" onClick={() => navigate("/customer/app/rybbo/social")} style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 999, border: "none", background: "#7C3AED", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
-            <FaGlassCheers /> Plan a party
-          </button>
-          <button type="button" onClick={() => navigate("/customer/app/rybbo/list-your-show")} style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 999, border: "1px solid var(--cm-line, #E5E7EB)", background: "transparent", color: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
-            <FaPlusCircle /> List your show
-          </button>
-          <button type="button" onClick={() => navigate("/customer/app/rybbo/organizer/events")} style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 999, border: "1px solid var(--cm-line, #E5E7EB)", background: "transparent", color: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
-            <FaQrcode /> Scan &amp; Enter
-          </button>
-          <button type="button" onClick={() => navigate("/customer/app/rybbo/my-bookings")} style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 999, border: "1px solid var(--cm-line, #E5E7EB)", background: "transparent", color: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
-            <FaTicketAlt /> My Bookings
+          <button type="button" onClick={() => navigate("/customer/app/rybbo/list-your-show")} className="rybbo-action-card">
+            <FaPlusCircle />
+            <span>List your show</span>
           </button>
         </div>
 
-        {/* Search */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "var(--cm-card, #FFFFFF)", border: "1px solid var(--cm-line, #E5E7EB)", borderRadius: 12, marginBottom: 12 }}>
-          <FaSearch size={14} color="var(--cm-muted, #6B7280)" />
-          <input
-            type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search events, venues, artists"
-            style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "var(--cm-ink, inherit)", fontSize: 14 }}
-          />
+        <div className="rybbo-search-dock">
+          <div className="rybbo-search">
+            <FaSearch />
+            <input
+              type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search events, venues, artists"
+            />
+          </div>
+          <CategoryTabs categories={state.categories} value={category} onChange={setCategory} />
         </div>
 
-        {/* Categories */}
-        <CategoryTabs categories={state.categories} value={category} onChange={setCategory} />
-
-        {/* Featured rail */}
         {featured.length > 0 && category === "all" && !search && (
-          <div style={{ marginTop: 8, marginBottom: 18 }}>
-            <h3 style={{ fontSize: 16, margin: "8px 2px 10px", fontWeight: 700 }}>Featured in {city}</h3>
-            <div style={{ display: "flex", gap: 12, overflowX: "auto", padding: "2px 2px 8px", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+          <section className="rybbo-section">
+            <div className="rybbo-section-head">
+              <p>Featured drop</p>
+              <h2>Tonight's pulse in {city}</h2>
+            </div>
+            <div className="rybbo-featured-rail">
               {featured.map((e) => (
-                <div key={e.id} style={{ flexShrink: 0, width: 220 }}>
+                <div key={e.id} className="rybbo-featured-card">
                   <EventCard event={e} onClick={() => navigate(`/customer/app/rybbo/event/${e.slug}`)} />
                 </div>
               ))}
             </div>
-          </div>
+          </section>
         )}
 
-        {/* Events list */}
-        <h3 style={{ fontSize: 16, margin: "12px 2px 10px", fontWeight: 700 }}>
-          {state.events.length} {category === "all" ? "events" : state.categories.find((c) => c.key === category)?.label} in {city}
-        </h3>
+        <div className="rybbo-section-head rybbo-results-head">
+          <div>
+            <p>{state.events.length} found</p>
+            <h2>{resultLabel} in {city}</h2>
+          </div>
+          <div className="rybbo-view-toggle" aria-label="Event view mode">
+            <button type="button" className={viewMode === "list" ? "is-active" : ""} onClick={() => handleViewMode("list")} aria-label="List view" title="List view">
+              <FaList />
+              <span>List</span>
+            </button>
+            <button type="button" className={viewMode === "tile" ? "is-active" : ""} onClick={() => handleViewMode("tile")} aria-label="Tile view" title="Tile view">
+              <FaThLarge />
+              <span>Tile</span>
+            </button>
+          </div>
+        </div>
         {state.events.length === 0 ? (
-          <div className="cm-empty" style={{ padding: 32, textAlign: "center" }}>
+          <div className="rybbo-empty">
             No events found. Try a different city or clear your search.
           </div>
         ) : (
-          <div style={{ display: "grid", gap: 14 }}>
+          <div className={`rybbo-event-list${viewMode === "tile" ? " rybbo-event-list--tile" : ""}`}>
             {state.events.map((e) => (
-              <EventCard key={e.id} event={e} layout="horizontal" onClick={() => navigate(`/customer/app/rybbo/event/${e.slug}`)} />
+              <EventCard key={e.id} event={e} layout={viewMode === "tile" ? "vertical" : "horizontal"} onClick={() => navigate(`/customer/app/rybbo/event/${e.slug}`)} />
             ))}
           </div>
         )}
 
         {/* City picker bottom sheet */}
         {showCityPicker && (
-          <div onClick={() => setShowCityPicker(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "flex-end" }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", background: "var(--cm-card, #FFFFFF)", color: "var(--cm-ink, #1A1A2E)", borderRadius: "20px 20px 0 0", padding: "18px 16px 28px", maxHeight: "70vh", overflowY: "auto", boxShadow: "0 -8px 24px rgba(0,0,0,0.12)" }}>
-              <div style={{ width: 40, height: 4, background: "var(--cm-line, #E5E7EB)", borderRadius: 2, margin: "0 auto 14px" }} />
-              <h3 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 12px" }}>Select your city</h3>
-              <div style={{ display: "grid", gap: 8 }}>
+          <div onClick={() => setShowCityPicker(false)} className="rybbo-sheet-backdrop">
+            <div onClick={(e) => e.stopPropagation()} className="rybbo-sheet">
+              <div className="rybbo-sheet-handle" />
+              <h3>Select your city</h3>
+              <div className="rybbo-city-list">
                 {state.cities.map((c) => (
                   <button key={c} type="button" onClick={() => handleCityPick(c)}
-                    style={{ padding: "12px 14px", textAlign: "left", borderRadius: 10, border: `1px solid ${c === city ? "#007BFF" : "var(--cm-line, #E5E7EB)"}`, background: "transparent", color: "inherit", fontSize: 14, fontWeight: c === city ? 700 : 500, cursor: "pointer" }}>
+                    className={`rybbo-city-option${c === city ? " is-active" : ""}`}>
                     {c}{c === city ? "  ✓" : ""}
                   </button>
                 ))}

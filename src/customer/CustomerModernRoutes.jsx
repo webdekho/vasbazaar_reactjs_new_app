@@ -88,6 +88,8 @@ const ReminderQueueScreen = lazy(() => import("./pages/outstanding/ReminderQueue
 const SmsReminderListScreen = lazy(() => import("./pages/outstanding/SmsReminderListScreen"));
 const InvoiceListScreen = lazy(() => import("./pages/outstanding/InvoiceListScreen"));
 const CreateInvoiceScreen = lazy(() => import("./pages/outstanding/CreateInvoiceScreen"));
+const InvoiceViewScreen = lazy(() => import("./pages/outstanding/InvoiceViewScreen"));
+const BusinessProfileScreen = lazy(() => import("./pages/outstanding/BusinessProfileScreen"));
 const RybboHomeScreen = lazy(() => import("./pages/rybbo/RybboHomeScreen"));
 const RybboEventDetailScreen = lazy(() => import("./pages/rybbo/EventDetailScreen"));
 const RybboSeatSelectionScreen = lazy(() => import("./pages/rybbo/SeatSelectionScreen"));
@@ -258,9 +260,12 @@ const CustomerModernRoutes = () => {
             <Route path="outstanding" element={<Suspense fallback={<RouteFallback />}><OutstandingListScreen /></Suspense>} />
             <Route path="outstanding/reminders" element={<Suspense fallback={<RouteFallback />}><ReminderQueueScreen /></Suspense>} />
             <Route path="outstanding/sms-settings" element={<Suspense fallback={<RouteFallback />}><SmsReminderListScreen /></Suspense>} />
+            <Route path="outstanding/business-profile" element={<Suspense fallback={<RouteFallback />}><BusinessProfileScreen /></Suspense>} />
             <Route path="outstanding/:customerId" element={<Suspense fallback={<RouteFallback />}><CustomerLedgerScreen /></Suspense>} />
             <Route path="outstanding/:customerId/invoices" element={<Suspense fallback={<RouteFallback />}><InvoiceListScreen /></Suspense>} />
             <Route path="outstanding/:customerId/invoice/new" element={<Suspense fallback={<RouteFallback />}><CreateInvoiceScreen /></Suspense>} />
+            <Route path="outstanding/:customerId/invoice/:invoiceId/edit" element={<Suspense fallback={<RouteFallback />}><CreateInvoiceScreen /></Suspense>} />
+            <Route path="outstanding/:customerId/invoice/:invoiceId" element={<Suspense fallback={<RouteFallback />}><InvoiceViewScreen /></Suspense>} />
             <Route path="rybbo" element={<Suspense fallback={<RouteFallback />}><RybboHomeScreen /></Suspense>} />
             <Route path="rybbo/event/:slug" element={<Suspense fallback={<RouteFallback />}><RybboEventDetailScreen /></Suspense>} />
             <Route path="rybbo/event/:slug/seats" element={<Suspense fallback={<RouteFallback />}><RybboSeatSelectionScreen /></Suspense>} />

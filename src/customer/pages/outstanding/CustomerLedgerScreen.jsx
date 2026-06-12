@@ -712,6 +712,15 @@ const CustomerLedgerScreen = () => {
                         <span>{formatPaymentMode(t.paymentMode)}</span>
                         {t.paymentReference && <span>Ref: {t.paymentReference}</span>}
                         {isEditedTxn(t) && <span className="ol-edited-badge">Edited</span>}
+                        {t.invoiceId && (
+                          <button
+                            type="button"
+                            className="ol-txn-invoice-link"
+                            onClick={() => navigate(`/customer/app/outstanding/${customerId}/invoice/${t.invoiceId}`)}
+                          >
+                            View invoice
+                          </button>
+                        )}
                       </div>
                       {t.billImage && (
                         <button

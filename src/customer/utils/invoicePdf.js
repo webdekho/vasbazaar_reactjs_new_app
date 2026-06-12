@@ -69,13 +69,48 @@ export const getInvoiceShareText = ({ invoice, ownerName }) => {
   ].join("\n");
 };
 
-export const generateInvoicePdfBlob = ({ invoice, ownerName, ownerMobile }) => {
+// Loads an organisation logo URL into a JPEG base64 (via canvas) so it can be
+// embedded in the hand-built PDF. Returns null on any failure (CORS / load error)
+// so the PDF still renders without it.
+const loadOrgLogoJpeg = async (url) => {
+  if (!url || typeof document === "undefined") return null;
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const im = new Image();
+      im.crossOrigin = "anonymous";
+      im.onload = () => resolve(im);
+      im.onerror = reject;
+      im.src = url;
+    });
+    const maxW = 320;
+    const scale = Math.min(1, maxW / (img.naturalWidth || maxW));
+    const w = Math.max(1, Math.round((img.naturalWidth || maxW) * scale));
+    const h = Math.max(1, Math.round((img.naturalHeight || maxW) * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    const base64 = dataUrl.split(",")[1] || "";
+    if (!base64) return null;
+    return { base64, width: w, height: h };
+  } catch (e) {
+    return null;
+  }
+};
+
+export const generateInvoicePdfBlob = async ({ invoice, ownerName, ownerMobile }) => {
   const ops = [];
   let y = PAGE_HEIGHT - MARGIN;
 
+  const orgImage = invoice?.includeOrg ? await loadOrgLogoJpeg(invoice?.orgLogoUrl) : null;
+
   const newPage = () => { ops.push({ t: "page" }); y = PAGE_HEIGHT - MARGIN; };
   const rect = (x, yy, w, h, color) => ops.push({ t: "rect", x, y: yy, w, h, color });
-  const image = (x, yy, w, h) => ops.push({ t: "image", x, y: yy, w, h });
+  const image = (x, yy, w, h, img = "Im0") => ops.push({ t: "image", x, y: yy, w, h, img });
   const hr = (yy, color = C.line) => ops.push({ t: "rule", x1: MARGIN, y1: yy, x2: PAGE_WIDTH - MARGIN, y2: yy, color });
   const text = (str, x, size, opt = {}) => {
     let tx = x;
@@ -93,23 +128,35 @@ export const generateInvoicePdfBlob = ({ invoice, ownerName, ownerMobile }) => {
   const stColor = status === "PAID" ? C.paid : status === "SENT" ? C.sent : C.draft;
   const stBg = status === "PAID" ? C.paidBg : status === "SENT" ? C.sentBg : C.draftBg;
 
-  // ---------- Header ----------
-  const logoW = 150;
-  const logoH = (VASBAZAAR_LOGO_HEIGHT / VASBAZAAR_LOGO_WIDTH) * logoW;
+  // ---------- Header (org logo on the right; VasBazaar logo moves to footer) ----------
   const headerTop = PAGE_HEIGHT - 30;
-  image(MARGIN, headerTop - logoH, logoW, logoH);
-  text("INVOICE", PAGE_WIDTH - MARGIN, 14, { y: headerTop - 8, align: "right", bold: true, color: C.ink });
-  text(`#${invoice?.invoiceNo || ""}`, PAGE_WIDTH - MARGIN, 9.5, { y: headerTop - 22, align: "right", color: C.slate });
-  rect(MARGIN, headerTop - logoH - 12, CONTENT_W, 3, C.teal);
-  y = headerTop - logoH - 30;
+  text("INVOICE", MARGIN, 22, { y: headerTop - 16, bold: true, color: C.ink });
+  text(`#${invoice?.invoiceNo || ""}`, MARGIN, 9.5, { y: headerTop - 32, color: C.slate });
+  if (orgImage) {
+    let ow = 120;
+    let oh = (orgImage.height / orgImage.width) * ow;
+    const maxH = 52;
+    if (oh > maxH) { oh = maxH; ow = (orgImage.width / orgImage.height) * oh; }
+    image(PAGE_WIDTH - MARGIN - ow, headerTop - oh, ow, oh, "Im1");
+  }
+  const headRuleY = headerTop - 46;
+  rect(MARGIN, headRuleY, CONTENT_W, 3, C.teal);
+  y = headRuleY - 18;
 
   // ---------- From / Bill-to / status card ----------
+  const useOrg = !!(invoice?.includeOrg && (invoice?.orgName || invoice?.orgAddress || invoice?.orgGstNumber));
   const cardTop = y;
   const cardH = 88;
   rect(MARGIN, cardTop - cardH, CONTENT_W, cardH, C.cardBg);
   text("FROM", MARGIN + 14, 8, { y: cardTop - 16, bold: true, color: C.muted });
-  text(ownerName || "VasBazaar user", MARGIN + 14, 11, { y: cardTop - 30, bold: true });
-  if (ownerMobile) text(`+91 ${ownerMobile}`, MARGIN + 14, 9, { y: cardTop - 43, color: C.slate });
+  text(useOrg && invoice?.orgName ? invoice.orgName : (ownerName || "VasBazaar user"), MARGIN + 14, 11, { y: cardTop - 30, bold: true });
+  if (useOrg) {
+    if (invoice?.orgAddress) text(String(invoice.orgAddress).slice(0, 46), MARGIN + 14, 9, { y: cardTop - 43, color: C.slate });
+    if (invoice?.orgGstNumber) text(`GSTIN: ${invoice.orgGstNumber}`, MARGIN + 14, 9, { y: cardTop - 55, color: C.ink, bold: true });
+    else if (ownerMobile) text(`+91 ${ownerMobile}`, MARGIN + 14, 9, { y: cardTop - 55, color: C.slate });
+  } else if (ownerMobile) {
+    text(`+91 ${ownerMobile}`, MARGIN + 14, 9, { y: cardTop - 43, color: C.slate });
+  }
 
   const midX = MARGIN + CONTENT_W / 2 + 10;
   text("BILL TO", midX, 8, { y: cardTop - 16, bold: true, color: C.muted });
@@ -190,10 +237,10 @@ export const generateInvoicePdfBlob = ({ invoice, ownerName, ownerMobile }) => {
   y -= 8;
   flow("Generated from VasBazaar ReBill.", MARGIN, 8, { color: C.muted, lineHeight: 11 });
 
-  return assemble(ops);
+  return assemble(ops, orgImage);
 };
 
-const assemble = (ops) => {
+const assemble = (ops, orgImage) => {
   const pages = [[]];
   ops.forEach((op) => { if (op.t === "page") pages.push([]); else pages[pages.length - 1].push(op); });
 
@@ -213,6 +260,17 @@ const assemble = (ops) => {
     + ` /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${logoBin.length} >>\n`
     + `stream\n${logoBin}\nendstream`);
 
+  let orgImageId = null;
+  if (orgImage && orgImage.base64) {
+    const orgBin = typeof atob === "function"
+      ? atob(orgImage.base64)
+      : Buffer.from(orgImage.base64, "base64").toString("binary");
+    orgImageId = addObject(
+      `<< /Type /XObject /Subtype /Image /Width ${orgImage.width} /Height ${orgImage.height}`
+      + ` /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${orgBin.length} >>\n`
+      + `stream\n${orgBin}\nendstream`);
+  }
+
   const pageIds = [];
   const hexToRgb = (hex) => {
     const h = hex || "000000";
@@ -229,7 +287,8 @@ const assemble = (ops) => {
         const [r, g, b] = hexToRgb(op.color);
         content.push(`${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} rg ${op.x} ${op.y} ${op.w} ${op.h} re f`);
       } else if (op.t === "image") {
-        content.push(`q ${op.w} 0 0 ${op.h} ${op.x} ${op.y} cm /Im0 Do Q`);
+        const imName = op.img === "Im1" && orgImageId ? "Im1" : "Im0";
+        content.push(`q ${op.w} 0 0 ${op.h} ${op.x} ${op.y} cm /${imName} Do Q`);
       } else if (op.t === "text") {
         const [r, g, b] = hexToRgb(op.color);
         content.push("BT");
@@ -240,15 +299,20 @@ const assemble = (ops) => {
         content.push("ET");
       }
     });
-    content.push("BT /F1 8 Tf 0.58 0.64 0.72 rg 270 24 Td");
+    // ---------- Footer: VasBazaar logo (moved here from the header) ----------
+    const fLogoW = 96;
+    const fLogoH = (VASBAZAAR_LOGO_HEIGHT / VASBAZAAR_LOGO_WIDTH) * fLogoW;
+    content.push(`q ${fLogoW} 0 0 ${fLogoH} ${MARGIN} 20 cm /Im0 Do Q`);
+    content.push("BT /F1 8 Tf 0.58 0.64 0.72 rg 300 26 Td");
     content.push(`(Page ${index + 1} of ${pages.length} - VasBazaar ReBill) Tj ET`);
 
     const stream = content.join("\n");
     const contentId = addObject(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+    const xobjRes = `/Im0 ${imageId} 0 R` + (orgImageId ? ` /Im1 ${orgImageId} 0 R` : "");
     const pageId = addObject(
       `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}]`
       + ` /Resources << /Font << /F1 ${fontRegularId} 0 R /F2 ${fontBoldId} 0 R >>`
-      + ` /XObject << /Im0 ${imageId} 0 R >> >> /Contents ${contentId} 0 R >>`);
+      + ` /XObject << ${xobjRes} >> >> /Contents ${contentId} 0 R >>`);
     pageIds.push(pageId);
   });
 

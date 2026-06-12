@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { FaArrowLeft, FaPlus, FaTrash } from "react-icons/fa";
+import { FaArrowLeft, FaPlus, FaTrash, FaBuilding, FaPen } from "react-icons/fa";
 import { outstandingService } from "../../services/outstandingService";
 import { useToast } from "../../context/ToastContext";
 
@@ -12,9 +12,11 @@ const emptyItem = () => ({ description: "", quantity: "1", rate: "" });
 
 const CreateInvoiceScreen = () => {
   const navigate = useNavigate();
-  const { customerId } = useParams();
+  const { customerId, invoiceId } = useParams();
+  const isEdit = Boolean(invoiceId);
   const { showToast } = useToast();
   const [customer, setCustomer] = useState(null);
+  const [loading, setLoading] = useState(isEdit);
   const [invoiceDate, setInvoiceDate] = useState(today());
   const [dueDate, setDueDate] = useState("");
   const [items, setItems] = useState([emptyItem()]);
@@ -26,6 +28,16 @@ const CreateInvoiceScreen = () => {
   const [b2b, setB2b] = useState(false);
   const [gstNumber, setGstNumber] = useState("");
   const [notes, setNotes] = useState("");
+
+  // Organisation snapshot (seller's own details)
+  const [includeOrg, setIncludeOrg] = useState(false);
+  const [orgName, setOrgName] = useState("");
+  const [orgAddress, setOrgAddress] = useState("");
+  const [orgGstNumber, setOrgGstNumber] = useState("");
+  const [orgLogoUrl, setOrgLogoUrl] = useState("");
+
+  // Outstanding linkage choice
+  const [addAsOutstanding, setAddAsOutstanding] = useState(true);
 
   const setGstField = (key, field, value) =>
     setGst((p) => ({ ...p, [key]: { ...p[key], [field]: value } }));
@@ -40,6 +52,65 @@ const CreateInvoiceScreen = () => {
     })();
     return () => { active = false; };
   }, [customerId]);
+
+  // Prefill organisation from the saved business profile (create mode only).
+  useEffect(() => {
+    if (isEdit) return;
+    let active = true;
+    (async () => {
+      const res = await outstandingService.getBusinessProfile();
+      if (!active || !res.success || !res.data) return;
+      const p = res.data;
+      setOrgName(p.orgName || "");
+      setOrgAddress(p.address || "");
+      setOrgGstNumber(p.gstNumber || "");
+      setOrgLogoUrl(p.logoUrl || "");
+      if (p.orgName || p.address || p.logoUrl) setIncludeOrg(true);
+    })();
+    return () => { active = false; };
+  }, [isEdit]);
+
+  // Edit mode: load the existing invoice and prefill all fields.
+  useEffect(() => {
+    if (!isEdit) return;
+    let active = true;
+    (async () => {
+      const res = await outstandingService.getInvoice(invoiceId);
+      if (!active) return;
+      if (!res.success || !res.data) {
+        setError(res.message || "Invoice load करता आली नाही");
+        setLoading(false);
+        return;
+      }
+      const inv = res.data;
+      if (inv.editable === false) {
+        showToast("ही invoice आता edit करता येणार नाही", "info");
+        navigate(`/customer/app/outstanding/${customerId}/invoices`, { replace: true });
+        return;
+      }
+      setInvoiceDate(inv.invoiceDate ? String(inv.invoiceDate).slice(0, 10) : today());
+      setDueDate(inv.dueDate ? String(inv.dueDate).slice(0, 10) : "");
+      setItems((inv.items || []).length
+        ? inv.items.map((it) => ({ description: it.description || "", quantity: String(it.quantity ?? "1"), rate: String(it.rate ?? "") }))
+        : [emptyItem()]);
+      setGst({
+        SGST: { on: Number(inv.sgstPercent) > 0, pct: String(Number(inv.sgstPercent) || 9) },
+        CGST: { on: Number(inv.cgstPercent) > 0, pct: String(Number(inv.cgstPercent) || 9) },
+        IGST: { on: Number(inv.igstPercent) > 0, pct: String(Number(inv.igstPercent) || 18) },
+      });
+      setB2b(Boolean(inv.b2b));
+      setGstNumber(inv.gstNumber || "");
+      setNotes(inv.notes || "");
+      setIncludeOrg(Boolean(inv.includeOrg));
+      setOrgName(inv.orgName || "");
+      setOrgAddress(inv.orgAddress || "");
+      setOrgGstNumber(inv.orgGstNumber || "");
+      setOrgLogoUrl(inv.orgLogoUrl || "");
+      setAddAsOutstanding(Boolean(inv.addAsOutstanding));
+      setLoading(false);
+    })();
+    return () => { active = false; };
+  }, [isEdit, invoiceId, customerId, navigate, showToast]);
 
   const updateItem = (index, field, value) => {
     setItems((prev) => prev.map((it, i) => (i === index ? { ...it, [field]: value } : it)));
@@ -72,7 +143,7 @@ const CreateInvoiceScreen = () => {
       return;
     }
     setSubmitting(true);
-    const res = await outstandingService.createInvoice({
+    const payload = {
       customerId: Number(customerId),
       invoiceDate,
       dueDate: dueDate || null,
@@ -82,20 +153,37 @@ const CreateInvoiceScreen = () => {
       b2b,
       gstNumber: b2b ? gstNumber.trim().toUpperCase() : null,
       notes: notes.trim() || null,
+      includeOrg,
+      orgName: includeOrg ? orgName.trim() || null : null,
+      orgAddress: includeOrg ? orgAddress.trim() || null : null,
+      orgGstNumber: includeOrg ? orgGstNumber.trim().toUpperCase() || null : null,
+      orgLogoUrl: includeOrg ? orgLogoUrl || null : null,
+      addAsOutstanding,
       items: validItems.map((it) => ({
         description: it.description.trim(),
         quantity: Number(it.quantity || 1),
         rate: Number(it.rate || 0),
       })),
-    });
+    };
+    const res = isEdit
+      ? await outstandingService.updateInvoice(invoiceId, payload)
+      : await outstandingService.createInvoice(payload);
     setSubmitting(false);
     if (!res.success) {
-      setError(res.message || "Failed to create invoice");
+      setError(res.message || `Failed to ${isEdit ? "update" : "create"} invoice`);
       return;
     }
-    showToast("Invoice तयार झाली", "success");
+    showToast(isEdit ? "Invoice अपडेट झाली" : "Invoice तयार झाली", "success");
     navigate(`/customer/app/outstanding/${customerId}/invoices`, { replace: true });
   };
+
+  if (loading) {
+    return (
+      <div className="ol-page ol-invoice-page">
+        <div className="ol-list">{[0, 1, 2].map((i) => <div key={i} className="ol-item ol-skeleton" />)}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="ol-page ol-invoice-page">
@@ -104,7 +192,7 @@ const CreateInvoiceScreen = () => {
           <FaArrowLeft />
         </button>
         <div className="ol-ledger-id">
-          <div className="ol-ledger-name"><span className="ol-ledger-name-text">New Invoice</span></div>
+          <div className="ol-ledger-name"><span className="ol-ledger-name-text">{isEdit ? "Edit Invoice" : "New Invoice"}</span></div>
           {customer && <div className="ol-ledger-mobile">For {customer.customerName}</div>}
         </div>
       </div>
@@ -119,6 +207,56 @@ const CreateInvoiceScreen = () => {
             <span>Due date (optional)</span>
             <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </label>
+        </div>
+
+        {/* ===== Organisation details ===== */}
+        <div className="ol-inv-opt">
+          <label className="ol-toggle-row">
+            <span><FaBuilding style={{ marginRight: 8, opacity: 0.7 }} />Add organisation details</span>
+            <input type="checkbox" checked={includeOrg} onChange={(e) => setIncludeOrg(e.target.checked)} />
+          </label>
+          {includeOrg ? (
+            <div className="ol-org-fields">
+              {orgLogoUrl ? (
+                <div className="ol-org-logo-preview"><img src={orgLogoUrl} alt="Logo" /></div>
+              ) : null}
+              <input
+                className="ol-inv-desc"
+                type="text"
+                value={orgName}
+                onChange={(e) => setOrgName(e.target.value)}
+                placeholder="Organisation name"
+                maxLength={150}
+              />
+              <textarea
+                className="ol-inv-desc"
+                rows={2}
+                value={orgAddress}
+                onChange={(e) => setOrgAddress(e.target.value)}
+                placeholder="Address"
+                maxLength={255}
+                style={{ marginTop: 8 }}
+              />
+              <input
+                className="ol-inv-desc"
+                type="text"
+                value={orgGstNumber}
+                onChange={(e) => setOrgGstNumber(e.target.value.toUpperCase())}
+                placeholder="Your GST number (optional)"
+                maxLength={20}
+                style={{ marginTop: 8 }}
+              />
+              <button
+                type="button"
+                className="ol-org-edit-link"
+                onClick={() => navigate(`/customer/app/outstanding/business-profile`)}
+              >
+                <FaPen /> Edit saved business profile &amp; logo
+              </button>
+            </div>
+          ) : (
+            <div className="ol-b2c-hint">Invoice will be created without your organisation header.</div>
+          )}
         </div>
 
         <div className="ol-section-head-row">
@@ -227,6 +365,32 @@ const CreateInvoiceScreen = () => {
           )}
         </div>
 
+        {/* ===== Outstanding vs plain invoice ===== */}
+        <div className="ol-inv-opt">
+          <div className="ol-gst-title">Save as</div>
+          <div className="ol-seg">
+            <button
+              type="button"
+              className={`ol-seg-btn ${addAsOutstanding ? "is-active" : ""}`}
+              onClick={() => setAddAsOutstanding(true)}
+            >
+              Add to outstanding
+            </button>
+            <button
+              type="button"
+              className={`ol-seg-btn ${!addAsOutstanding ? "is-active" : ""}`}
+              onClick={() => setAddAsOutstanding(false)}
+            >
+              Just an invoice
+            </button>
+          </div>
+          <div className="ol-b2c-hint">
+            {addAsOutstanding
+              ? "This invoice's total is added to the customer's outstanding balance, and a registered customer can view it on their login."
+              : "Creates the invoice only — the outstanding balance is not changed."}
+          </div>
+        </div>
+
         <label className="ol-field">
           <span>Notes (optional)</span>
           <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={500} placeholder="Terms, thank-you note, etc." />
@@ -243,7 +407,7 @@ const CreateInvoiceScreen = () => {
         {error && <div className="ol-error">{error}</div>}
 
         <button type="submit" className="ol-inv-submit" disabled={submitting}>
-          {submitting ? "Saving…" : `Create invoice · ${formatINR(total)}`}
+          {submitting ? "Saving…" : `${isEdit ? "Update" : "Create"} invoice · ${formatINR(total)}`}
         </button>
       </form>
     </div>

@@ -15,7 +15,7 @@ const SocialHomeScreen = () => {
     (async () => {
       const r = await rybboSocialService.getMyEvents();
       if (cancelled) return;
-      setState({ loading: false, error: r.success ? "" : (r.message || "Could not load your events"), events: r.data || [] });
+      setState({ loading: false, error: r.success ? "" : (r.message || "Could not load your events"), events: Array.isArray(r.data) ? r.data : [] });
     })();
     return () => { cancelled = true; };
   }, []);

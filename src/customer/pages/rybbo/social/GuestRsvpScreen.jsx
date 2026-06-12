@@ -1,14 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
-import { FaCheckCircle, FaQuestionCircle, FaTimesCircle, FaMapMarkerAlt, FaCalendarPlus, FaWallet, FaMobileAlt, FaQrcode } from "react-icons/fa";
+import { FaCheckCircle, FaQuestionCircle, FaTimesCircle, FaMapMarkerAlt, FaCalendarPlus, FaWallet, FaMobileAlt, FaQrcode, FaVolumeUp, FaVolumeMute } from "react-icons/fa";
 import { rybboSocialService, buildContributionReturnUrl } from "../../../services/rybboSocialService";
 import DataState from "../../../components/DataState";
 
 const ACCENT = "#7C3AED";
 const PAY_KEY = "rybbo_social_pay";
 
-const FOOD_PREFS = ["", "veg", "non-veg", "jain"];
+const FOOD_PREFS = ["", "veg", "non-veg", "jain", "vegan", "eggless"];
 
 const inputStyle = {
   width: "100%", boxSizing: "border-box", padding: "11px 12px", borderRadius: 10,
@@ -22,11 +22,22 @@ const RESPONSES = [
   { key: "DECLINE", label: "Can't make it", icon: FaTimesCircle, color: "#ef4444" },
 ];
 
+// Short human date for the extra dates of a multi-day event.
+const fmtDate = (iso) => {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+};
+
 /** Public, login-free invite + RSVP page. Rendered OUTSIDE the AuthGuard. */
 const GuestRsvpScreen = () => {
   const { token } = useParams();
   const [state, setState] = useState({ loading: true, error: "", event: null });
-  const [form, setForm] = useState({ guestName: "", guestMobile: "", response: "ACCEPT", partySize: 1, foodPref: "", note: "" });
+  const [form, setForm] = useState({
+    guestName: "", guestMobile: "", response: "ACCEPT", partySize: 1, foodPref: "", note: "",
+    allergies: "", dressConfirm: false, arrivalTime: "", parkingNeeded: false,
+    kidsCount: 0, accommodationNeeded: false, songRequest: "",
+  });
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(null); // { message, response }
 
@@ -115,11 +126,29 @@ const GuestRsvpScreen = () => {
                 {/* Details */}
                 <div style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: 14, display: "grid", gap: 8, fontSize: 14 }}>
                   <div>🗓️ <strong>{e.date}</strong>{e.time ? ` · ${e.time}` : ""}</div>
+                  {Array.isArray(e.eventDates) && e.eventDates.length > 1 && (
+                    <div style={{ fontSize: 12, color: "#6B7280" }}>
+                      Also on: {e.eventDates.slice(1).map((d) => fmtDate(d)).filter(Boolean).join(" · ")}
+                    </div>
+                  )}
                   {e.venue && <div>📍 {e.venue}</div>}
+                  {e.parkingInfo && <div>🅿️ {e.parkingInfo}</div>}
                   {e.dressCode && <div>👗 Dress code: {e.dressCode}</div>}
                   {e.foodPref && <div style={{ textTransform: "capitalize" }}>🍽️ {e.foodPref}</div>}
+                  {e.ageRestriction && <div>🔞 {e.ageRestriction}</div>}
+                  {e.kidsAllowed != null && <div>{e.kidsAllowed ? "🧒 Kids are welcome" : "🚫 No kids, please"}</div>}
+                  {e.plusOneAllowed && <div>➕ You may bring a plus-one</div>}
+                  {e.description && <div style={{ color: "#374151", marginTop: 4 }}>{e.description}</div>}
                   {e.hostMessage && <div style={{ color: "#374151", fontStyle: "italic", marginTop: 4 }}>"{e.hostMessage}"</div>}
                 </div>
+
+                {e.hostAudio && <AudioInvite src={e.hostAudio} />}
+
+                {e.rsvpClosed && !done && (
+                  <div style={{ marginTop: 12, padding: 12, borderRadius: 10, background: "#fef3c7", color: "#92400e", textAlign: "center", fontSize: 13, fontWeight: 700 }}>
+                    RSVPs for this event have closed.
+                  </div>
+                )}
 
                 {/* Quick links */}
                 <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
@@ -166,18 +195,65 @@ const GuestRsvpScreen = () => {
                       </div>
 
                       {form.response !== "DECLINE" && (
-                        <div style={{ display: "flex", gap: 12 }}>
-                          <div style={{ flex: 1 }}>
-                            <label style={labelStyle}>How many coming?</label>
-                            <input style={inputStyle} type="number" min="1" value={form.partySize} onChange={(e2) => set("partySize", Math.max(1, Number(e2.target.value) || 1))} />
+                        <>
+                          <div style={{ display: "flex", gap: 12 }}>
+                            <div style={{ flex: 1 }}>
+                              <label style={labelStyle}>How many coming?{e.maxPerInvitee ? ` (max ${e.maxPerInvitee})` : ""}</label>
+                              <input style={inputStyle} type="number" min="1" max={e.maxPerInvitee || undefined} value={form.partySize}
+                                onChange={(e2) => {
+                                  let n = Math.max(1, Number(e2.target.value) || 1);
+                                  if (e.maxPerInvitee) n = Math.min(n, e.maxPerInvitee);
+                                  set("partySize", n);
+                                }} />
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <label style={labelStyle}>Food preference</label>
+                              <select style={inputStyle} value={form.foodPref} onChange={(e2) => set("foodPref", e2.target.value)}>
+                                {FOOD_PREFS.map((f) => <option key={f || "any"} value={f}>{f ? f.replace("-", " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "Any"}</option>)}
+                              </select>
+                            </div>
                           </div>
-                          <div style={{ flex: 1 }}>
-                            <label style={labelStyle}>Food preference</label>
-                            <select style={inputStyle} value={form.foodPref} onChange={(e2) => set("foodPref", e2.target.value)}>
-                              {FOOD_PREFS.map((f) => <option key={f || "any"} value={f}>{f ? f.replace("-", " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "Any"}</option>)}
-                            </select>
+
+                          <div style={{ display: "flex", gap: 12 }}>
+                            <div style={{ flex: 1 }}>
+                              <label style={labelStyle}>Allergies / dietary notes</label>
+                              <input style={inputStyle} value={form.allergies} onChange={(e2) => set("allergies", e2.target.value)} placeholder="e.g. Nut allergy" />
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <label style={labelStyle}>Arrival time</label>
+                              <input style={inputStyle} value={form.arrivalTime} onChange={(e2) => set("arrivalTime", e2.target.value)} placeholder="e.g. 7:30 PM" />
+                            </div>
                           </div>
-                        </div>
+
+                          {e.kidsAllowed && (
+                            <div>
+                              <label style={labelStyle}>Kids in your group</label>
+                              <input style={inputStyle} type="number" min="0" value={form.kidsCount} onChange={(e2) => set("kidsCount", Math.max(0, Number(e2.target.value) || 0))} placeholder="0" />
+                            </div>
+                          )}
+
+                          <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, cursor: "pointer" }}>
+                            <input type="checkbox" checked={form.parkingNeeded} onChange={(e2) => set("parkingNeeded", e2.target.checked)} />
+                            I'll need parking for a vehicle
+                          </label>
+
+                          <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, cursor: "pointer" }}>
+                            <input type="checkbox" checked={form.accommodationNeeded} onChange={(e2) => set("accommodationNeeded", e2.target.checked)} />
+                            I'll need accommodation
+                          </label>
+
+                          {e.dressCode && (
+                            <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, cursor: "pointer" }}>
+                              <input type="checkbox" checked={form.dressConfirm} onChange={(e2) => set("dressConfirm", e2.target.checked)} />
+                              I'll follow the dress code ({e.dressCode})
+                            </label>
+                          )}
+
+                          <div>
+                            <label style={labelStyle}>Song request (optional)</label>
+                            <input style={inputStyle} value={form.songRequest} onChange={(e2) => set("songRequest", e2.target.value)} placeholder="A song you'd love to hear" />
+                          </div>
+                        </>
                       )}
 
                       <div>
@@ -185,9 +261,9 @@ const GuestRsvpScreen = () => {
                         <textarea style={{ ...inputStyle, minHeight: 64, resize: "vertical" }} value={form.note} onChange={(e2) => set("note", e2.target.value)} placeholder="Anything you'd like the host to know" />
                       </div>
 
-                      <button type="button" onClick={submit} disabled={submitting}
-                        style={{ padding: "13px", borderRadius: 12, border: "none", background: ACCENT, color: "#fff", fontWeight: 800, fontSize: 15, cursor: submitting ? "default" : "pointer", opacity: submitting ? 0.7 : 1 }}>
-                        {submitting ? "Sending…" : "Send RSVP"}
+                      <button type="button" onClick={submit} disabled={submitting || e.rsvpClosed}
+                        style={{ padding: "13px", borderRadius: 12, border: "none", background: ACCENT, color: "#fff", fontWeight: 800, fontSize: 15, cursor: (submitting || e.rsvpClosed) ? "default" : "pointer", opacity: (submitting || e.rsvpClosed) ? 0.6 : 1 }}>
+                        {e.rsvpClosed ? "RSVPs closed" : submitting ? "Sending…" : "Send RSVP"}
                       </button>
                     </div>
                   </div>
@@ -202,6 +278,55 @@ const GuestRsvpScreen = () => {
         </div>
       )}
     </DataState>
+  );
+};
+
+/**
+ * Host's voice note on the invite. Tries to auto-play on open; browsers that block
+ * autoplay-with-sound show a "tap to play" state. A toggle lets the guest mute/unmute.
+ */
+const AudioInvite = ({ src }) => {
+  const audioRef = useRef(null);
+  const [muted, setMuted] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+
+  // Attempt to start playback with sound as soon as the clip mounts.
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    el.muted = false;
+    const p = el.play();
+    if (p && typeof p.catch === "function") p.catch(() => setBlocked(true));
+  }, [src]);
+
+  const toggle = () => {
+    const el = audioRef.current;
+    if (!el) return;
+    if (blocked) {
+      // First gesture after a blocked autoplay → start playing with sound.
+      el.muted = false;
+      el.play().then(() => { setBlocked(false); setMuted(false); }).catch(() => {});
+      return;
+    }
+    const next = !muted;
+    el.muted = next;
+    setMuted(next);
+    if (!next && el.paused) el.play().catch(() => {});
+  };
+
+  const label = blocked ? "Tap to play host's voice"
+    : muted ? "Muted — tap to unmute" : "Playing — tap to mute";
+
+  return (
+    <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 12, border: `1px solid ${ACCENT}33`, background: "#f5f3ff" }}>
+      <audio ref={audioRef} src={src} autoPlay playsInline preload="auto" />
+      <button type="button" onClick={toggle} aria-label={label}
+        style={{ flexShrink: 0, width: 40, height: 40, borderRadius: 999, border: "none", background: ACCENT, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {muted || blocked ? <FaVolumeMute size={16} /> : <FaVolumeUp size={16} />}
+      </button>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#4c1d95" }}>🎙️ A voice note from your host</div>
+      <div style={{ marginLeft: "auto", fontSize: 11, color: "#6B7280" }}>{label}</div>
+    </div>
   );
 };
 

@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
-import { FaArrowLeft, FaPlus, FaShareAlt, FaTrash, FaCheckCircle, FaFileInvoice } from "react-icons/fa";
+import { FaArrowLeft, FaPlus, FaShareAlt, FaTrash, FaCheckCircle, FaFileInvoice, FaEye, FaPen, FaLink, FaBuilding } from "react-icons/fa";
 import { outstandingService } from "../../services/outstandingService";
 import { useToast } from "../../context/ToastContext";
 import { useCustomerModern } from "../../context/CustomerModernContext";
@@ -61,9 +61,9 @@ const InvoiceListScreen = () => {
         return;
       }
       const invoice = res.data;
-      const ownerName = userData?.name || userData?.firstName || "";
-      const ownerMobile = userData?.mobile || userData?.mobileNumber || "";
-      const pdfBlob = generateInvoicePdfBlob({ invoice, ownerName, ownerMobile });
+      const ownerName = invoice.owner?.name || userData?.name || userData?.firstName || "";
+      const ownerMobile = invoice.owner?.mobile || userData?.mobile || userData?.mobileNumber || "";
+      const pdfBlob = await generateInvoicePdfBlob({ invoice, ownerName, ownerMobile });
       const fileName = getInvoicePdfFileName(invoice);
       const shareText = getInvoiceShareText({ invoice, ownerName });
 
@@ -107,6 +107,19 @@ const InvoiceListScreen = () => {
     else showToast(res.message || "Delete failed", "error");
   };
 
+  const linkOutstanding = async (id) => {
+    if (!window.confirm("ही invoice customer च्या outstanding balance मध्ये जोडायची?")) return;
+    setBusyId(id);
+    const res = await outstandingService.linkInvoiceToOutstanding(id);
+    setBusyId(null);
+    if (res.success) {
+      showToast("Outstanding ला link झाली", "success");
+      load();
+    } else {
+      showToast(res.message || "Link failed", "error");
+    }
+  };
+
   return (
     <div className="ol-page ol-invoice-page">
       <div className="ol-ledger-header">
@@ -131,6 +144,15 @@ const InvoiceListScreen = () => {
         </span>
       </button>
 
+      <button
+        type="button"
+        className="ol-org-edit-link"
+        style={{ margin: "0 4px 12px" }}
+        onClick={() => navigate(`/customer/app/outstanding/business-profile`)}
+      >
+        <FaBuilding /> Business profile &amp; logo
+      </button>
+
       {loading ? (
         <div className="ol-list">{[0, 1].map((i) => <div key={i} className="ol-item ol-skeleton" />)}</div>
       ) : invoices.length === 0 ? (
@@ -153,12 +175,26 @@ const InvoiceListScreen = () => {
                   <div className="ol-inv-card-right">
                     <div className="ol-inv-total">{formatINR(inv.total)}</div>
                     <span className={`ol-inv-status ${sm.cls}`}>{sm.label}</span>
+                    {inv.linked && <span className="ol-inv-status is-outstanding">Outstanding</span>}
                   </div>
                 </div>
                 <div className="ol-inv-actions">
+                  <button type="button" onClick={() => navigate(`/customer/app/outstanding/${customerId}/invoice/${inv.id}`)} disabled={busyId === inv.id}>
+                    <FaEye /> View
+                  </button>
+                  {inv.editable && (
+                    <button type="button" onClick={() => navigate(`/customer/app/outstanding/${customerId}/invoice/${inv.id}/edit`)} disabled={busyId === inv.id}>
+                      <FaPen /> Edit
+                    </button>
+                  )}
                   <button type="button" onClick={() => shareInvoice(inv.id)} disabled={busyId === inv.id}>
                     <FaShareAlt /> Share
                   </button>
+                  {!inv.linked && (
+                    <button type="button" onClick={() => linkOutstanding(inv.id)} disabled={busyId === inv.id}>
+                      <FaLink /> Link
+                    </button>
+                  )}
                   <button type="button" onClick={() => markPaid(inv)} disabled={busyId === inv.id} className={inv.status === "PAID" ? "is-active" : ""}>
                     <FaCheckCircle /> {inv.status === "PAID" ? "Paid" : "Mark paid"}
                   </button>

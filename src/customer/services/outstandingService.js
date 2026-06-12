@@ -1,4 +1,4 @@
-import { authDelete, authGet, authPost, authPut } from "./apiClient";
+import { authDelete, authGet, authPost, authPut, apiClient, parseApiResponse, getErrorMessage, CUSTOMER_STORAGE_KEYS } from "./apiClient";
 
 const BASE = "/api/customer/outstanding";
 
@@ -71,6 +71,8 @@ export const outstandingService = {
   // Invoices
   createInvoice: (payload) => authPost(`${BASE}/invoices`, payload),
 
+  updateInvoice: (id, payload) => authPut(`${BASE}/invoices/${id}`, payload),
+
   listInvoices: (customerId) =>
     authGet(`${BASE}/invoices`, customerId ? { customerId } : {}),
 
@@ -78,7 +80,32 @@ export const outstandingService = {
 
   updateInvoiceStatus: (id, status) => authPut(`${BASE}/invoices/${id}/status`, { status }),
 
+  linkInvoiceToOutstanding: (id) => authPost(`${BASE}/invoices/${id}/link-outstanding`, {}),
+
   deleteInvoice: (id) => authDelete(`${BASE}/invoices/${id}`),
+
+  // Business profile (seller's own organisation details, reused across invoices)
+  getBusinessProfile: () => authGet(`${BASE}/business-profile`),
+
+  saveBusinessProfile: async ({ orgName, address, gstNumber, logoFile }) => {
+    try {
+      const formData = new FormData();
+      if (orgName != null) formData.append("orgName", orgName);
+      if (address != null) formData.append("address", address);
+      if (gstNumber != null) formData.append("gstNumber", gstNumber);
+      if (logoFile) {
+        formData.append("logo", logoFile, `biz_logo_${Date.now()}.${logoFile.name?.split(".").pop() || "jpg"}`);
+      }
+      const token = localStorage.getItem(CUSTOMER_STORAGE_KEYS.sessionToken);
+      const response = await apiClient.put(`${BASE}/business-profile`, formData, {
+        headers: { "Content-Type": "multipart/form-data", access_token: token },
+        timeout: 20000,
+      });
+      return parseApiResponse(response);
+    } catch (error) {
+      return { success: false, message: getErrorMessage(error), data: null };
+    }
+  },
 
   // Online "Pay & settle": debtor clears a ledger via HDFC gateway; creditor's
   // wallet is credited and the ledger settles. Returns { orderId, paymentUrl }.
