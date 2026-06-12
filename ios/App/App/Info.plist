@@ -59,6 +59,8 @@
 	<string>VasBazaar uses speech recognition so you can add ReBill ledger entries by voice.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>VasBazaar needs the microphone to capture your voice when adding ReBill entries.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>VasBazaar needs your location to show nearby services and delivery options.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
