@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaSearch, FaMapMarkerAlt, FaTicketAlt, FaPlusCircle, FaQrcode } from "react-icons/fa";
+import { FaSearch, FaMapMarkerAlt, FaTicketAlt, FaPlusCircle, FaQrcode, FaGlassCheers } from "react-icons/fa";
 import { rybboService } from "../../services/rybboService";
 import DataState from "../../components/DataState";
 import EventCard from "./components/EventCard";
@@ -60,6 +60,9 @@ const RybboHomeScreen = () => {
           </button>
         </div>
         <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "2px 2px 10px", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+          <button type="button" onClick={() => navigate("/customer/app/rybbo/social")} style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 999, border: "none", background: "#7C3AED", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+            <FaGlassCheers /> Plan a party
+          </button>
           <button type="button" onClick={() => navigate("/customer/app/rybbo/list-your-show")} style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 999, border: "1px solid var(--cm-line, #E5E7EB)", background: "transparent", color: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
             <FaPlusCircle /> List your show
           </button>

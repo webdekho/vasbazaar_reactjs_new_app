@@ -100,6 +100,12 @@ const RybboTicketDetailsScreen = lazy(() => import("./pages/rybbo/TicketDetailsS
 const RybboQrScannerScreen = lazy(() => import("./pages/rybbo/QrScannerScreen"));
 const RybboOrganizerEventsScreen = lazy(() => import("./pages/rybbo/OrganizerEventsScreen"));
 const RybboEventScannersScreen = lazy(() => import("./pages/rybbo/EventScannersScreen"));
+// RYBBO Social (private events & guest RSVP)
+const RybboSocialHomeScreen = lazy(() => import("./pages/rybbo/social/SocialHomeScreen"));
+const RybboSocialCreateScreen = lazy(() => import("./pages/rybbo/social/CreateEventScreen"));
+const RybboSocialDashboardScreen = lazy(() => import("./pages/rybbo/social/EventDashboardScreen"));
+const RybboGuestRsvpScreen = lazy(() => import("./pages/rybbo/social/GuestRsvpScreen"));
+const RybboSocialScannerScreen = lazy(() => import("./pages/rybbo/social/SocialScannerScreen"));
 // Resibot 360 (VasBazaar Life)
 const ResibotDashboardScreen = lazy(() => import("./pages/resibot/ResibotDashboardScreen"));
 const ResibotReminderListScreen = lazy(() => import("./pages/resibot/ResibotReminderListScreen"));
@@ -189,6 +195,19 @@ const CustomerModernRoutes = () => {
               </Suspense>
             }
           />
+          {/* Public, login-free RYBBO Social invite + RSVP page. Rendered OUTSIDE
+              the AuthGuard so an invited guest (who may not have a VasBazaar
+              account) can view the invite and respond. */}
+          <Route
+            path="/rybbo/i/:token"
+            element={
+              <Suspense fallback={<RouteFallback />}>
+                <div className="customer-modern-protected" style={{ display: "block" }}>
+                  <RybboGuestRsvpScreen />
+                </div>
+              </Suspense>
+            }
+          />
           <Route
             path="/app"
             element={
@@ -254,6 +273,12 @@ const CustomerModernRoutes = () => {
             <Route path="rybbo/scan" element={<Suspense fallback={<RouteFallback />}><RybboQrScannerScreen /></Suspense>} />
             <Route path="rybbo/organizer/events" element={<Suspense fallback={<RouteFallback />}><RybboOrganizerEventsScreen /></Suspense>} />
             <Route path="rybbo/organizer/events/:id/scanners" element={<Suspense fallback={<RouteFallback />}><RybboEventScannersScreen /></Suspense>} />
+            {/* RYBBO Social (private events & guest RSVP) */}
+            <Route path="rybbo/social" element={<Suspense fallback={<RouteFallback />}><RybboSocialHomeScreen /></Suspense>} />
+            <Route path="rybbo/social/create" element={<Suspense fallback={<RouteFallback />}><RybboSocialCreateScreen /></Suspense>} />
+            <Route path="rybbo/social/event/:id" element={<Suspense fallback={<RouteFallback />}><RybboSocialDashboardScreen /></Suspense>} />
+            <Route path="rybbo/social/event/:id/edit" element={<Suspense fallback={<RouteFallback />}><RybboSocialCreateScreen /></Suspense>} />
+            <Route path="rybbo/social/event/:id/scan" element={<Suspense fallback={<RouteFallback />}><RybboSocialScannerScreen /></Suspense>} />
             {/* Resibot 360 (VasBazaar Life) */}
             <Route path="resibot" element={<Suspense fallback={<RouteFallback />}><ResibotDashboardScreen /></Suspense>} />
             <Route path="resibot/reminder/new" element={<Suspense fallback={<RouteFallback />}><ResibotReminderFormScreen /></Suspense>} />

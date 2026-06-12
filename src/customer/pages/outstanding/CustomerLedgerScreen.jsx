@@ -244,9 +244,9 @@ const CustomerLedgerScreen = () => {
   };
 
   const goBack = () => {
-    // Prefer real browser back; fall back to the outstanding list on deep links.
-    if (window.history.length > 1) navigate(-1);
-    else navigate("/customer/app/outstanding");
+    // Always return to the outstanding list (the group list this ledger opens from),
+    // not the raw browser-history entry which may be an unrelated deep link.
+    navigate("/customer/app/outstanding");
   };
 
   const onDateRangeChange = (field, value) => {
