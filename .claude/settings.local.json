@@ -45,7 +45,10 @@
       "Bash(sudo xcode-select:*)",
       "Bash(mdfind:*)",
       "Bash(xcodebuild:*)",
-      "Bash(git show:*)"
+      "Bash(git show:*)",
+      "Bash(pod install)",
+      "Bash(git ls-tree:*)",
+      "Bash(git rm:*)"
     ]
   }
 }

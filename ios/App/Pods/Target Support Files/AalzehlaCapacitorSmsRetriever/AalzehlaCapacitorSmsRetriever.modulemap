@@ -1,6 +1,0 @@
-framework module AalzehlaCapacitorSmsRetriever {
-  umbrella header "AalzehlaCapacitorSmsRetriever-umbrella.h"
-
-  export *
-  module * { export * }
-}

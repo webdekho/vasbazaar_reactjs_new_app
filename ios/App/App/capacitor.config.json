@@ -18,6 +18,7 @@
 		"ContactsPlugin",
 		"NativeAudio",
 		"SpeechRecognition",
+		"AppPlugin",
 		"CAPBrowserPlugin",
 		"CAPCameraPlugin",
 		"FilesystemPlugin",

@@ -482,13 +482,14 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
 
   useEffect(() => { advertisementService.getServiceAdvertisements().then((res) => { if (res.success && Array.isArray(res.data)) setBanners(res.data); }); }, []);
 
-  // Auto-load contacts on mount for native apps and PWA
+  // Auto-load contacts on mount for native apps (Android only - iOS requires user gesture per Apple guidelines 5.1.2)
   useEffect(() => {
     if (contactsLoadedRef.current) return;
 
     const autoLoadContacts = async () => {
-      // For native apps (Android/iOS)
-      if (Capacitor.isNativePlatform()) {
+      // For native apps - only auto-load on Android, NOT on iOS
+      // iOS App Store guideline 5.1.2 requires permissions to be requested only when user initiates the action
+      if (Capacitor.isNativePlatform() && Capacitor.getPlatform() !== "ios") {
         contactsLoadedRef.current = true;
         setContactsLoading(true);
         try {
@@ -528,10 +529,10 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
         return;
       }
 
-      // For PWA / Web with Contact Picker API support
-      if ("contacts" in navigator && "select" in navigator.contacts) {
-        // Don't auto-trigger on web as it requires user gesture
-        // Just mark as loaded so we don't try again
+      // For PWA / Web with Contact Picker API support or iOS native
+      // Mark as loaded so we don't try again - user will use import button
+      if (("contacts" in navigator && "select" in navigator.contacts) ||
+          (Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios")) {
         contactsLoadedRef.current = true;
       }
     };

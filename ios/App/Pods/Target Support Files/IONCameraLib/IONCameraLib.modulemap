@@ -1,6 +1,0 @@
-framework module IONCameraLib {
-  umbrella header "IONCameraLib-umbrella.h"
-
-  export *
-  module * { export * }
-}
