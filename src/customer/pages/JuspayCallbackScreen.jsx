@@ -185,6 +185,20 @@ const JuspayCallbackScreen = () => {
     verify();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Block browser "back" from landing on this payment-status page.
+  // The Juspay gateway redirect leaves this callback URL in history, so without
+  // this guard pressing Back (after moving forward) brings the user back here.
+  // Instead, send them to Home.
+  useEffect(() => {
+    // Push a sentinel entry so the first Back press triggers popstate here.
+    window.history.pushState(null, "", window.location.href);
+    const handlePopState = () => {
+      navigate("/customer/app/services", { replace: true });
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [navigate]);
+
   const handleRefundRequest = async (refundType) => {
     if (!txnId) {
       setRefundMessageType("error");

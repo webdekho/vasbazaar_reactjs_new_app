@@ -1,0 +1,60 @@
+/* Funky celebration background for personal-event dashboard.
+   Soft drifting colour glows + falling confetti. Pointer-events disabled so
+   it never blocks the UI; sits behind content via z-index. */
+
+.cel-wrap {
+  position: relative;
+  isolation: isolate; /* keep the -1 layer scoped to this wrapper */
+}
+
+.cel-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Three slow-moving coloured glows give the festive "party lights" feel. */
+.cel-glow {
+  position: absolute;
+  width: 46vmax;
+  height: 46vmax;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.35;
+  mix-blend-mode: screen;
+  animation: cel-float 14s ease-in-out infinite;
+}
+.cel-glow.g1 { background: radial-gradient(circle, #7C3AED, transparent 70%); top: -12vmax; left: -8vmax; animation-delay: 0s; }
+.cel-glow.g2 { background: radial-gradient(circle, #EC4899, transparent 70%); top: 18vmax; right: -14vmax; animation-delay: -4s; }
+.cel-glow.g3 { background: radial-gradient(circle, #F59E0B, transparent 70%); bottom: -16vmax; left: 14vmax; animation-delay: -8s; }
+
+@keyframes cel-float {
+  0%   { transform: translate(0, 0) scale(1); }
+  33%  { transform: translate(6vmax, 4vmax) scale(1.12); }
+  66%  { transform: translate(-4vmax, 8vmax) scale(0.95); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+
+/* Confetti: small squares that fall + spin on a loop. */
+.cel-confetti {
+  position: absolute;
+  top: -24px;
+  width: 9px;
+  height: 14px;
+  border-radius: 2px;
+  opacity: 0.9;
+  animation: cel-fall linear infinite;
+}
+
+@keyframes cel-fall {
+  0%   { transform: translateY(-10%) rotateZ(0deg); opacity: 0; }
+  10%  { opacity: 0.95; }
+  100% { transform: translateY(115vh) rotateZ(720deg); opacity: 0.9; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cel-glow, .cel-confetti { animation: none; }
+  .cel-confetti { display: none; }
+}

@@ -259,6 +259,71 @@ const CreateInvoiceScreen = () => {
           )}
         </div>
 
+        {/* ===== Customer (bill to) details ===== */}
+        <div className="ol-inv-opt">
+          <div className="ol-gst-title">Customer details</div>
+          <input
+            className="ol-inv-desc"
+            type="text"
+            value={customer?.customerName || ""}
+            placeholder="Customer name"
+            readOnly
+          />
+          <input
+            className="ol-inv-desc"
+            type="text"
+            value={customer?.customerMobile || ""}
+            placeholder="Mobile number"
+            readOnly
+            style={{ marginTop: 8 }}
+          />
+
+          {/* Customer GST number */}
+          <label className="ol-toggle-row" style={{ marginTop: 8 }}>
+            <span>Customer has GST number (B2B)</span>
+            <input type="checkbox" checked={b2b} onChange={(e) => setB2b(e.target.checked)} />
+          </label>
+          {b2b ? (
+            <input
+              className="ol-inv-desc"
+              type="text"
+              value={gstNumber}
+              onChange={(e) => setGstNumber(e.target.value.toUpperCase())}
+              placeholder="Customer GSTIN (e.g. 27ABCDE1234F1Z5)"
+              maxLength={20}
+              style={{ marginTop: 8 }}
+            />
+          ) : (
+            <div className="ol-b2c-hint">Billed as B2C (no GST number)</div>
+          )}
+        </div>
+
+        {/* ===== Outstanding vs paid invoice ===== */}
+        <div className="ol-inv-opt">
+          <div className="ol-gst-title">Save as</div>
+          <div className="ol-seg">
+            <button
+              type="button"
+              className={`ol-seg-btn ${addAsOutstanding ? "is-active" : ""}`}
+              onClick={() => setAddAsOutstanding(true)}
+            >
+              Add to Outstanding (Without Payment / Credit)
+            </button>
+            <button
+              type="button"
+              className={`ol-seg-btn ${!addAsOutstanding ? "is-active" : ""}`}
+              onClick={() => setAddAsOutstanding(false)}
+            >
+              Just an Invoice (With Payment)
+            </button>
+          </div>
+          <div className="ol-b2c-hint">
+            {addAsOutstanding
+              ? "This invoice's total is added to the customer's outstanding balance as credit, and a registered customer can view it on their login."
+              : "Records the sale and the payment in the customer's ledger without changing the outstanding balance."}
+          </div>
+        </div>
+
         <div className="ol-section-head-row">
           <h3 className="ol-section-head">Items</h3>
         </div>
@@ -343,52 +408,6 @@ const CreateInvoiceScreen = () => {
               )}
             </div>
           ))}
-        </div>
-
-        <div className="ol-inv-opt">
-          <label className="ol-toggle-row">
-            <span>Customer has GST number (B2B)</span>
-            <input type="checkbox" checked={b2b} onChange={(e) => setB2b(e.target.checked)} />
-          </label>
-          {b2b ? (
-            <input
-              className="ol-inv-desc"
-              type="text"
-              value={gstNumber}
-              onChange={(e) => setGstNumber(e.target.value.toUpperCase())}
-              placeholder="Customer GSTIN (e.g. 27ABCDE1234F1Z5)"
-              maxLength={20}
-              style={{ marginTop: 8 }}
-            />
-          ) : (
-            <div className="ol-b2c-hint">Billed as B2C (no GST number)</div>
-          )}
-        </div>
-
-        {/* ===== Outstanding vs plain invoice ===== */}
-        <div className="ol-inv-opt">
-          <div className="ol-gst-title">Save as</div>
-          <div className="ol-seg">
-            <button
-              type="button"
-              className={`ol-seg-btn ${addAsOutstanding ? "is-active" : ""}`}
-              onClick={() => setAddAsOutstanding(true)}
-            >
-              Add to outstanding
-            </button>
-            <button
-              type="button"
-              className={`ol-seg-btn ${!addAsOutstanding ? "is-active" : ""}`}
-              onClick={() => setAddAsOutstanding(false)}
-            >
-              Just an invoice
-            </button>
-          </div>
-          <div className="ol-b2c-hint">
-            {addAsOutstanding
-              ? "This invoice's total is added to the customer's outstanding balance, and a registered customer can view it on their login."
-              : "Creates the invoice only — the outstanding balance is not changed."}
-          </div>
         </div>
 
         <label className="ol-field">

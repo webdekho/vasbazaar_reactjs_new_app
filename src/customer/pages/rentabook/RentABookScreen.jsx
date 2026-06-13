@@ -10,6 +10,7 @@ import {
 import { useGeolocation } from "../../hooks/useGeolocation";
 import LocationPickerSheet from "../../components/LocationPickerSheet";
 import { isGoogleEnabled, googleReverseGeocode } from "../../services/placesService";
+import "./rentabook.css";
 
 const PLATFORM_FEE = 15;
 const OWNER_SHARE = 0.85; // platform keeps 15% commission on rent
@@ -18,7 +19,7 @@ const LIBRARY_KEY = "vb_rentabook_library"; // personal digital bookshelf
 
 // Reading shelves for the personal library.
 const SHELVES = [
-  { key: "want", label: "Want to read", color: "#2563EB", bg: "#EFF6FF" },
+  { key: "want", label: "Want to read", color: "#2563EB", bg: "var(--rb-accent-bg)" },
   { key: "reading", label: "Reading", color: "#CA8A04", bg: "#FEF9C3" },
   { key: "read", label: "Read", color: "#16a34a", bg: "#dcfce7" },
 ];
@@ -691,22 +692,22 @@ const RentABookScreen = () => {
     : view === "published" ? "Submitted" : "Rent a Book";
 
   return (
-    <div style={{ minHeight: "100%", background: "#F8FAFC", paddingBottom: 90 }}>
+    <div className="rb-root" style={{ minHeight: "100%", background: "var(--rb-page)", paddingBottom: 90 }}>
       <style>{"@keyframes rab-spin{to{transform:rotate(360deg)}}"}</style>
       {/* Header */}
       <div style={{
         position: "sticky", top: 0, zIndex: 10, display: "flex", alignItems: "center", gap: 12,
-        padding: "14px 16px", background: "#fff", borderBottom: "1px solid #eef2f7",
+        padding: "14px 16px", background: "var(--rb-surface)", borderBottom: "1px solid var(--rb-surface-2)",
       }}>
         <button type="button" onClick={goBack} aria-label="Back"
-          style={{ border: "none", background: "transparent", fontSize: 18, color: "#0f172a", cursor: "pointer", display: "flex" }}>
+          style={{ border: "none", background: "transparent", fontSize: 18, color: "var(--rb-text)", cursor: "pointer", display: "flex" }}>
           <FaArrowLeft />
         </button>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 9, background: "#E8F3FF", color: "#2563EB" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 9, background: "var(--rb-accent-bg)", color: "#2563EB" }}>
             <FaBook />
           </span>
-          <strong style={{ fontSize: 17, color: "#0f172a" }}>{headerTitle}</strong>
+          <strong style={{ fontSize: 17, color: "var(--rb-text)" }}>{headerTitle}</strong>
         </div>
         {view === "browse" && (
           <button type="button" onClick={startLend}
@@ -719,56 +720,56 @@ const RentABookScreen = () => {
       {view === "browse" && (
         <div style={{ padding: "12px 16px 16px" }}>
           {/* Compact search */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12 }}>
-            <FaSearch style={{ color: "#94a3b8" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", background: "var(--rb-surface)", border: "1px solid var(--rb-border)", borderRadius: 12 }}>
+            <FaSearch style={{ color: "var(--rb-muted)" }} />
             <input value={query} onChange={(e) => setQuery(e.target.value)}
               placeholder="Search title, author, ISBN, category, city"
-              style={{ flex: 1, border: "none", outline: "none", fontSize: 14, background: "transparent", color: "#0f172a" }} />
+              style={{ flex: 1, border: "none", outline: "none", fontSize: 14, background: "transparent", color: "var(--rb-text)" }} />
           </div>
 
           {/* Three nav chips — equal width, one line */}
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
             <button type="button" onClick={() => goTo("library")}
-              style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 6px", borderRadius: 12, border: "1px solid #c7d2fe", background: "#EEF2FF", color: "#4338ca", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", cursor: "pointer" }}>
+              style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 6px", borderRadius: 12, border: "1px solid var(--rb-info-indigo-bd)", background: "var(--rb-info-indigo-bg)", color: "var(--rb-info-indigo-tx)", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", cursor: "pointer" }}>
               <FaRegBookmark /> My Library
             </button>
             <button type="button" onClick={() => goTo("my-books")}
-              style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 6px", borderRadius: 12, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", cursor: "pointer" }}>
+              style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 6px", borderRadius: 12, border: "1px solid var(--rb-border)", background: "var(--rb-surface)", color: "var(--rb-text-2)", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", cursor: "pointer" }}>
               <FaBook /> My Listing{myBooks.length ? ` (${myBooks.length})` : ""}
             </button>
             <button type="button" onClick={() => goTo("history")}
-              style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 6px", borderRadius: 12, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", cursor: "pointer" }}>
+              style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 6px", borderRadius: 12, border: "1px solid var(--rb-border)", background: "var(--rb-surface)", color: "var(--rb-text-2)", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", cursor: "pointer" }}>
               <FaHistory /> History
             </button>
           </div>
 
           {/* Count + layout toggle */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 14 }}>
-            <div style={{ fontSize: 13, color: "#64748b" }}>{books.length} books available</div>
-            <div style={{ display: "flex", gap: 4, background: "#eef2f7", borderRadius: 10, padding: 3 }}>
+            <div style={{ fontSize: 13, color: "var(--rb-text-3)" }}>{books.length} books available</div>
+            <div style={{ display: "flex", gap: 4, background: "var(--rb-surface-2)", borderRadius: 10, padding: 3 }}>
               <LayoutBtn active={layout === "grid"} onClick={() => setLayout("grid")} aria="Grid view"><FaThLarge /></LayoutBtn>
               <LayoutBtn active={layout === "list"} onClick={() => setLayout("list")} aria="List view"><FaListUl /></LayoutBtn>
             </div>
           </div>
 
           {books.length === 0 ? (
-            <div style={{ textAlign: "center", color: "#94a3b8", padding: 32 }}>No books match “{query}”.</div>
+            <div style={{ textAlign: "center", color: "var(--rb-muted)", padding: 32 }}>No books match “{query}”.</div>
           ) : layout === "grid" ? (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 10 }}>
               {books.map((book) => (
                 <button key={book.id} type="button" onClick={() => openDetail(book)}
-                  style={{ display: "flex", flexDirection: "column", textAlign: "left", padding: 8, background: "#fff", border: "1px solid #eef2f7", borderRadius: 12, cursor: "pointer" }}>
+                  style={{ display: "flex", flexDirection: "column", textAlign: "left", padding: 8, background: "var(--rb-surface)", border: "1px solid var(--rb-surface-2)", borderRadius: 12, cursor: "pointer" }}>
                   <div style={{ width: "100%", display: "flex", justifyContent: "center", marginBottom: 8 }}>
                     <BookThumb book={book} w="100%" h={104} fz={26} zoomable />
                   </div>
-                  <div style={{ fontWeight: 700, color: "#0f172a", fontSize: 13, lineHeight: 1.25, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{book.title}</div>
-                  <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{book.author}</div>
+                  <div style={{ fontWeight: 700, color: "var(--rb-text)", fontSize: 13, lineHeight: 1.25, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{book.title}</div>
+                  <div style={{ fontSize: 11, color: "var(--rb-text-3)", marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{book.author}</div>
                   <div style={{ fontSize: 11 }}>
                     <RatingInline book={book} userRatings={userRatings} small />
                   </div>
                   <div style={{ marginTop: "auto", paddingTop: 6, display: "flex", alignItems: "baseline", gap: 3 }}>
                     <span style={{ fontWeight: 800, color: "#2563EB", fontSize: 14 }}>₹{fromPrice(book)}</span>
-                    <span style={{ fontSize: 10, color: "#94a3b8" }}>/day</span>
+                    <span style={{ fontSize: 10, color: "var(--rb-muted)" }}>/day</span>
                   </div>
                 </button>
               ))}
@@ -777,12 +778,12 @@ const RentABookScreen = () => {
             <div style={{ display: "grid", gap: 12, marginTop: 10 }}>
               {books.map((book) => (
                 <button key={book.id} type="button" onClick={() => openDetail(book)}
-                  style={{ display: "flex", gap: 12, textAlign: "left", padding: 12, background: "#fff", border: "1px solid #eef2f7", borderRadius: 14, cursor: "pointer" }}>
+                  style={{ display: "flex", gap: 12, textAlign: "left", padding: 12, background: "var(--rb-surface)", border: "1px solid var(--rb-surface-2)", borderRadius: 14, cursor: "pointer" }}>
                   <BookThumb book={book} w={56} h={76} fz={22} zoomable />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, color: "#0f172a", fontSize: 15 }}>{book.title}</div>
-                    <div style={{ fontSize: 12, color: "#64748b" }}>{book.author}</div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, fontSize: 12, color: "#475569", flexWrap: "wrap" }}>
+                    <div style={{ fontWeight: 700, color: "var(--rb-text)", fontSize: 15 }}>{book.title}</div>
+                    <div style={{ fontSize: 12, color: "var(--rb-text-3)" }}>{book.author}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, fontSize: 12, color: "var(--rb-text-2)", flexWrap: "wrap" }}>
                       <RatingInline book={book} userRatings={userRatings} />
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}><FaMapMarkerAlt /> {book.city}</span>
                       <span>{book.condition}</span>
@@ -790,7 +791,7 @@ const RentABookScreen = () => {
                   </div>
                   <div style={{ textAlign: "right", flexShrink: 0 }}>
                     <div style={{ fontWeight: 800, color: "#2563EB" }}>₹{fromPrice(book)}</div>
-                    <div style={{ fontSize: 11, color: "#94a3b8" }}>per day</div>
+                    <div style={{ fontSize: 11, color: "var(--rb-muted)" }}>per day</div>
                   </div>
                 </button>
               ))}
@@ -808,28 +809,28 @@ const RentABookScreen = () => {
       {view === "my-books" && (
         <div style={{ padding: 16 }}>
           <button type="button" onClick={startLend}
-            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 12, border: "1px dashed #2563EB", background: "#EFF6FF", color: "#2563EB", fontWeight: 600, cursor: "pointer" }}>
+            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 12, border: "1px dashed #2563EB", background: "var(--rb-accent-bg)", color: "#2563EB", fontWeight: 600, cursor: "pointer" }}>
             <FaPlusCircle /> List a new book
           </button>
 
           {myBooks.length === 0 ? (
-            <div style={{ textAlign: "center", color: "#94a3b8", padding: "48px 16px" }}>
+            <div style={{ textAlign: "center", color: "var(--rb-muted)", padding: "48px 16px" }}>
               <div style={{ fontSize: 36, marginBottom: 8 }}><FaBook /></div>
               You have not listed any books yet.
             </div>
           ) : (
             <div style={{ display: "grid", gap: 12, marginTop: 14 }}>
               {myBooks.map((book) => (
-                <div key={book.id} style={{ display: "flex", gap: 12, padding: 12, background: "#fff", border: "1px solid #eef2f7", borderRadius: 14 }}>
+                <div key={book.id} style={{ display: "flex", gap: 12, padding: 12, background: "var(--rb-surface)", border: "1px solid var(--rb-surface-2)", borderRadius: 14 }}>
                   <BookThumb book={book} w={50} h={68} fz={20} zoomable />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <div style={{ fontWeight: 700, color: "#0f172a", fontSize: 15 }}>{book.title}</div>
+                      <div style={{ fontWeight: 700, color: "var(--rb-text)", fontSize: 15 }}>{book.title}</div>
                       <StatusBadge status={book.status} />
                       <TypeBadge type={book.listingType} />
                     </div>
-                    <div style={{ fontSize: 12, color: "#64748b" }}>{book.author}{book.edition ? ` · ${book.edition}` : ""}</div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, fontSize: 12, color: "#475569", flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 12, color: "var(--rb-text-3)" }}>{book.author}{book.edition ? ` · ${book.edition}` : ""}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, fontSize: 12, color: "var(--rb-text-2)", flexWrap: "wrap" }}>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}><FaMapMarkerAlt /> {book.city}</span>
                       <span>{book.condition}</span>
                       {(book.listingType === "rent" || book.listingType === "both") && fromPrice(book) > 0 && (
@@ -847,11 +848,11 @@ const RentABookScreen = () => {
                     )}
                     <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                       <button type="button" onClick={() => startEdit(book)}
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 9, border: "1px solid #2563EB", background: "#fff", color: "#2563EB", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 9, border: "1px solid #2563EB", background: "var(--rb-surface)", color: "#2563EB", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                         <FaEdit /> Edit
                       </button>
                       <button type="button" onClick={() => deleteBook(book.id)}
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 9, border: "1px solid #fecaca", background: "#fff", color: "#dc2626", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 9, border: "1px solid #fecaca", background: "var(--rb-surface)", color: "#dc2626", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                         <FaTrashAlt /> Remove
                       </button>
                     </div>
@@ -871,12 +872,12 @@ const RentABookScreen = () => {
           {/* Field-completion progress — fills as the user completes fields */}
           <div style={{ marginTop: 14 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>Listing completeness</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--rb-text-2)" }}>Listing completeness</span>
               <span style={{ fontSize: 12, fontWeight: 700, color: completion.pct === 100 ? "#16a34a" : "#2563EB" }}>
                 {completion.pct}% · {completion.filled}/{completion.total} fields
               </span>
             </div>
-            <div style={{ height: 8, borderRadius: 999, background: "#eef2f7", overflow: "hidden" }}>
+            <div style={{ height: 8, borderRadius: 999, background: "var(--rb-surface-2)", overflow: "hidden" }}>
               <div style={{
                 width: `${completion.pct}%`, height: "100%", borderRadius: 999,
                 background: completion.pct === 100 ? "#16a34a" : "linear-gradient(90deg,#2563EB,#7C3AED)",
@@ -886,11 +887,11 @@ const RentABookScreen = () => {
           </div>
 
           <div style={{ marginTop: 14, marginBottom: 14 }}>
-            <h2 style={{ margin: "0 0 2px", fontSize: 18, color: "#0f172a" }}>{WIZARD_STEPS[step].title}</h2>
-            <div style={{ fontSize: 13, color: "#94a3b8" }}>{WIZARD_STEPS[step].hint}</div>
+            <h2 style={{ margin: "0 0 2px", fontSize: 18, color: "var(--rb-text)" }}>{WIZARD_STEPS[step].title}</h2>
+            <div style={{ fontSize: 13, color: "var(--rb-muted)" }}>{WIZARD_STEPS[step].hint}</div>
           </div>
 
-          <div style={{ background: "#fff", border: "1px solid #eef2f7", borderRadius: 16, padding: 16, display: "grid", gap: 14 }}>
+          <div style={{ background: "var(--rb-surface)", border: "1px solid var(--rb-surface-2)", borderRadius: 16, padding: 16, display: "grid", gap: 14 }}>
             {/* Step 0 — Photo + ISBN */}
             {step === 0 && (
               <>
@@ -898,9 +899,9 @@ const RentABookScreen = () => {
                 <button type="button" onClick={() => fileRef.current?.click()}
                   style={{
                     width: "100%", aspectRatio: "3 / 2", borderRadius: 14, cursor: "pointer", overflow: "hidden",
-                    border: form.photo ? "1px solid #e2e8f0" : "2px dashed #cbd5e1",
-                    background: form.photo ? `center/cover no-repeat url(${form.photo})` : "#F8FAFC",
-                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, color: "#64748b",
+                    border: form.photo ? "1px solid var(--rb-border)" : "2px dashed var(--rb-border-strong)",
+                    background: form.photo ? `center/cover no-repeat url(${form.photo})` : "var(--rb-page)",
+                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, color: "var(--rb-text-3)",
                   }}>
                   {!form.photo && (
                     <>
@@ -935,22 +936,22 @@ const RentABookScreen = () => {
                     <span style={{ fontSize: 11, color: "#dc2626", marginTop: 4, display: "block" }}>Lookup failed (check connection). You can still continue manually.</span>
                   )}
                   {isbnLookup.status !== "found" && (
-                    <span style={{ fontSize: 11, color: "#94a3b8", marginTop: 4, display: "block" }}>Optional — enter it and we auto-fill the rest.</span>
+                    <span style={{ fontSize: 11, color: "var(--rb-muted)", marginTop: 4, display: "block" }}>Optional — enter it and we auto-fill the rest.</span>
                   )}
                 </Field>
 
                 {/* Fetched details card — shows the full API response */}
                 {isbnLookup.status === "found" && isbnLookup.data && (
-                  <div style={{ background: "#F0F9FF", border: "1px solid #bae6fd", borderRadius: 14, padding: 14 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#0369a1", fontWeight: 700, fontSize: 13, marginBottom: 10 }}>
+                  <div style={{ background: "var(--rb-info-blue-bg)", border: "1px solid var(--rb-info-blue-bd)", borderRadius: 14, padding: 14 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--rb-info-blue-tx)", fontWeight: 700, fontSize: 13, marginBottom: 10 }}>
                       <FaCheckCircle /> Details found for this ISBN
                     </div>
                     <div style={{ display: "flex", gap: 12 }}>
                       <BookThumb book={{ photo: isbnLookup.data.thumbnail, title: isbnLookup.data.title }} w={64} h={88} fz={24} />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 800, color: "#0f172a", fontSize: 15 }}>{isbnLookup.data.title}</div>
-                        {isbnLookup.data.subtitle && <div style={{ fontSize: 12, color: "#475569" }}>{isbnLookup.data.subtitle}</div>}
-                        {isbnLookup.data.author && <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>by {isbnLookup.data.author}</div>}
+                        <div style={{ fontWeight: 800, color: "var(--rb-text)", fontSize: 15 }}>{isbnLookup.data.title}</div>
+                        {isbnLookup.data.subtitle && <div style={{ fontSize: 12, color: "var(--rb-text-2)" }}>{isbnLookup.data.subtitle}</div>}
+                        {isbnLookup.data.author && <div style={{ fontSize: 13, color: "var(--rb-text-3)", marginTop: 2 }}>by {isbnLookup.data.author}</div>}
                         <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                           {isbnLookup.data.publishedDate && <Pill>{String(isbnLookup.data.publishedDate).slice(0, 4)}</Pill>}
                           {isbnLookup.data.pageCount && <Pill>{isbnLookup.data.pageCount} pages</Pill>}
@@ -959,17 +960,17 @@ const RentABookScreen = () => {
                       </div>
                     </div>
                     {isbnLookup.data.publisher && (
-                      <div style={{ fontSize: 12, color: "#475569", marginTop: 10 }}>
+                      <div style={{ fontSize: 12, color: "var(--rb-text-2)", marginTop: 10 }}>
                         <strong>Publisher:</strong> {isbnLookup.data.publisher}
                       </div>
                     )}
                     {isbnLookup.data.categories?.length > 0 && (
-                      <div style={{ fontSize: 12, color: "#475569", marginTop: 4 }}>
+                      <div style={{ fontSize: 12, color: "var(--rb-text-2)", marginTop: 4 }}>
                         <strong>Categories:</strong> {isbnLookup.data.categories.join(", ")}
                       </div>
                     )}
                     {isbnLookup.data.description && (
-                      <p style={{ fontSize: 12, color: "#64748b", marginTop: 8, marginBottom: 0, display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                      <p style={{ fontSize: 12, color: "var(--rb-text-3)", marginTop: 8, marginBottom: 0, display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                         {isbnLookup.data.description}
                       </p>
                     )}
@@ -1022,8 +1023,8 @@ const RentABookScreen = () => {
                     <button key={c} type="button" onClick={() => setField("condition", c)}
                       style={{
                         padding: "16px 10px", borderRadius: 12, cursor: "pointer", fontWeight: 600, fontSize: 14,
-                        border: active ? "2px solid #2563EB" : "1px solid #e2e8f0",
-                        background: active ? "#EFF6FF" : "#fff", color: active ? "#2563EB" : "#475569",
+                        border: active ? "2px solid #2563EB" : "1px solid var(--rb-border)",
+                        background: active ? "var(--rb-accent-bg)" : "var(--rb-surface)", color: active ? "#2563EB" : "var(--rb-text-2)",
                         display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                       }}>
                       {active && <FaCheckCircle />} {c}
@@ -1038,15 +1039,15 @@ const RentABookScreen = () => {
               <>
                 {/* Listing type selector */}
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 6 }}>I want to</div>
-                  <div style={{ display: "flex", gap: 4, background: "#eef2f7", borderRadius: 12, padding: 4 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--rb-text-2)", marginBottom: 6 }}>I want to</div>
+                  <div style={{ display: "flex", gap: 4, background: "var(--rb-surface-2)", borderRadius: 12, padding: 4 }}>
                     {LISTING_TYPES.map((t) => {
                       const active = form.listingType === t.key;
                       return (
                         <button key={t.key} type="button" onClick={() => setField("listingType", t.key)}
                           style={{
                             flex: 1, padding: "10px 0", border: "none", borderRadius: 9, cursor: "pointer", fontWeight: 700, fontSize: 14,
-                            background: active ? "#fff" : "transparent", color: active ? "#2563EB" : "#94a3b8",
+                            background: active ? "var(--rb-surface)" : "transparent", color: active ? "#2563EB" : "var(--rb-muted)",
                             boxShadow: active ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
                           }}>
                           {t.label}
@@ -1066,12 +1067,12 @@ const RentABookScreen = () => {
                   />
                   <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                     <button type="button" onClick={handleUseCurrentLocation} disabled={locating}
-                      style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 12px", borderRadius: 10, border: "1px solid #2563EB", background: "#EFF6FF", color: "#2563EB", fontWeight: 600, fontSize: 13, cursor: locating ? "default" : "pointer" }}>
+                      style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 12px", borderRadius: 10, border: "1px solid #2563EB", background: "var(--rb-accent-bg)", color: "#2563EB", fontWeight: 600, fontSize: 13, cursor: locating ? "default" : "pointer" }}>
                       {locating ? <span style={spinStyle} /> : <FaLocationArrow />}
                       {locating ? "Locating…" : "Use current location"}
                     </button>
                     <button type="button" onClick={() => setLocPickerOpen(true)}
-                      style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 12px", borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                      style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 12px", borderRadius: 10, border: "1px solid var(--rb-border)", background: "var(--rb-surface)", color: "var(--rb-text-2)", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
                       <FaMapMarkerAlt /> Choose on map <FaChevronDown style={{ fontSize: 10 }} />
                     </button>
                   </div>
@@ -1081,23 +1082,23 @@ const RentABookScreen = () => {
                 {offersRent && (
                   <>
                     <div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 2 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--rb-text-2)", marginBottom: 2 }}>
                         Rent per day, by tier (₹/day) <span style={{ color: "#dc2626" }}>*</span>
                       </div>
-                      <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 8 }}>
+                      <div style={{ fontSize: 11, color: "var(--rb-muted)", marginBottom: 8 }}>
                         Charged slab-wise — e.g. 8 days = 7×(Day 1–7 rate) + 1×(Day 8–15 rate).
                       </div>
                       <div style={{ display: "grid", gap: 8 }}>
                         {RENT_SLOTS.map((slot) => (
                           <div key={slot.key} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <span style={{ flex: "0 0 92px", fontSize: 13, fontWeight: 600, color: "#475569" }}>{slot.label}</span>
+                            <span style={{ flex: "0 0 92px", fontSize: 13, fontWeight: 600, color: "var(--rb-text-2)" }}>{slot.label}</span>
                             <div style={{ position: "relative", flex: 1 }}>
-                              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: 13 }}>₹</span>
+                              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--rb-muted)", fontSize: 13 }}>₹</span>
                               <input style={{ ...inputStyle, paddingLeft: 26, paddingRight: 48 }} inputMode="numeric"
                                 value={form.slotPrices[slot.key]}
                                 onChange={(e) => setField("slotPrices", { ...form.slotPrices, [slot.key]: e.target.value.replace(/[^0-9]/g, "") })}
                                 placeholder={slot.placeholder} />
-                              <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: 11 }}>/day</span>
+                              <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: "var(--rb-muted)", fontSize: 11 }}>/day</span>
                             </div>
                           </div>
                         ))}
@@ -1105,12 +1106,12 @@ const RentABookScreen = () => {
                       {errors.slots && <span style={{ display: "block", fontSize: 11, color: "#dc2626", marginTop: 6 }}>{errors.slots}</span>}
                       {/* Owner-side worked example for a full 30 days */}
                       {RENT_SLOTS.some((s) => Number(form.slotPrices[s.key]) > 0) && (
-                        <div style={{ marginTop: 10, background: "#F8FAFC", borderRadius: 10, padding: "10px 12px" }}>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 4 }}>Example: a 30-day rental</div>
+                        <div style={{ marginTop: 10, background: "var(--rb-page)", borderRadius: 10, padding: "10px 12px" }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--rb-text-2)", marginBottom: 4 }}>Example: a 30-day rental</div>
                           {computeRent(30, form.slotPrices).rows.map((r) => (
                             <Row key={r.tier.key} label={`Day ${r.fromDay}–${r.toDay} · ${r.days} × ₹${r.rate}`} value={`₹${r.cost}`} />
                           ))}
-                          <div style={{ borderTop: "1px dashed #e2e8f0", margin: "6px 0" }} />
+                          <div style={{ borderTop: "1px dashed var(--rb-border)", margin: "6px 0" }} />
                           <Row label="Total for 30 days" value={`₹${computeRent(30, form.slotPrices).total}`} strong />
                         </div>
                       )}
@@ -1129,7 +1130,7 @@ const RentABookScreen = () => {
                     <Field label="Maximum rental days">
                       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                         <button type="button" onClick={() => setField("maxDays", Math.max(1, (Number(form.maxDays) || 30) - 1))}
-                          style={{ width: 38, height: 38, borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff", color: "#2563EB", fontSize: 18, fontWeight: 700, cursor: "pointer" }}>−</button>
+                          style={{ width: 38, height: 38, borderRadius: 10, border: "1px solid var(--rb-border)", background: "var(--rb-surface)", color: "#2563EB", fontSize: 18, fontWeight: 700, cursor: "pointer" }}>−</button>
                         <input
                           value={form.maxDays}
                           onChange={(e) => {
@@ -1140,17 +1141,17 @@ const RentABookScreen = () => {
                           inputMode="numeric"
                           style={{ ...inputStyle, textAlign: "center", flex: 1 }} />
                         <button type="button" onClick={() => setField("maxDays", Math.min(30, (Number(form.maxDays) || 30) + 1))}
-                          style={{ width: 38, height: 38, borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff", color: "#2563EB", fontSize: 18, fontWeight: 700, cursor: "pointer" }}>+</button>
+                          style={{ width: 38, height: 38, borderRadius: 10, border: "1px solid var(--rb-border)", background: "var(--rb-surface)", color: "#2563EB", fontSize: 18, fontWeight: 700, cursor: "pointer" }}>+</button>
                       </div>
-                      <span style={{ fontSize: 11, color: "#94a3b8", marginTop: 4, display: "block" }}>
+                      <span style={{ fontSize: 11, color: "var(--rb-muted)", marginTop: 4, display: "block" }}>
                         Renters can keep the book up to {Number(form.maxDays) || 30} days. Platform max is 30.
                       </span>
                     </Field>
 
                     {/* Auto-sell provision */}
                     <button type="button" onClick={() => setField("autoSell", !form.autoSell)}
-                      style={{ display: "flex", gap: 10, alignItems: "flex-start", textAlign: "left", width: "100%", background: form.autoSell ? "#FFF7ED" : "#fff", border: `1px solid ${form.autoSell ? "#fed7aa" : "#e2e8f0"}`, borderRadius: 12, padding: "12px 14px", cursor: "pointer" }}>
-                      <span style={{ flexShrink: 0, marginTop: 1, width: 20, height: 20, borderRadius: 6, display: "inline-flex", alignItems: "center", justifyContent: "center", background: form.autoSell ? "#ea580c" : "#fff", border: form.autoSell ? "none" : "1.5px solid #cbd5e1", color: "#fff", fontSize: 12 }}>
+                      style={{ display: "flex", gap: 10, alignItems: "flex-start", textAlign: "left", width: "100%", background: form.autoSell ? "#FFF7ED" : "var(--rb-surface)", border: `1px solid ${form.autoSell ? "#fed7aa" : "var(--rb-border)"}`, borderRadius: 12, padding: "12px 14px", cursor: "pointer" }}>
+                      <span style={{ flexShrink: 0, marginTop: 1, width: 20, height: 20, borderRadius: 6, display: "inline-flex", alignItems: "center", justifyContent: "center", background: form.autoSell ? "#ea580c" : "var(--rb-surface)", border: form.autoSell ? "none" : "1.5px solid var(--rb-border-strong)", color: "#fff", fontSize: 12 }}>
                         {form.autoSell && <FaCheck />}
                       </span>
                       <span style={{ fontSize: 12, color: "#9a3412" }}>
@@ -1159,18 +1160,18 @@ const RentABookScreen = () => {
                     </button>
 
                     {full30Rent > 0 && (
-                      <div style={{ background: "#ECFDF5", border: "1px solid #bbf7d0", borderRadius: 12, padding: "12px 14px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, color: "#15803d", fontSize: 13, marginBottom: 8 }}>
+                      <div style={{ background: "var(--rb-info-green-bg)", border: "1px solid var(--rb-info-green-bd)", borderRadius: 12, padding: "12px 14px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, color: "var(--rb-info-green-tx)", fontSize: 13, marginBottom: 8 }}>
                           <FaRupeeSign /> Your earnings (full 30-day rental)
                         </div>
                         <Row label="Total rent collected" value={`₹${full30Rent}`} />
                         <Row label={`Platform fee (${Math.round((1 - OWNER_SHARE) * 100)}%)`} value={`− ₹${full30Rent - monthlyEarning}`} />
-                        <div style={{ borderTop: "1px dashed #bbf7d0", margin: "8px 0" }} />
+                        <div style={{ borderTop: "1px dashed var(--rb-info-green-bd)", margin: "8px 0" }} />
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontWeight: 800, color: "#15803d", fontSize: 14 }}>You receive</span>
-                          <span style={{ fontWeight: 800, color: "#15803d", fontSize: 16 }}>₹{monthlyEarning}</span>
+                          <span style={{ fontWeight: 800, color: "var(--rb-info-green-tx)", fontSize: 14 }}>You receive</span>
+                          <span style={{ fontWeight: 800, color: "var(--rb-info-green-tx)", fontSize: 16 }}>₹{monthlyEarning}</span>
                         </div>
-                        <div style={{ fontSize: 11, color: "#16a34a", marginTop: 6 }}>
+                        <div style={{ fontSize: 11, color: "var(--rb-info-green-tx)", marginTop: 6 }}>
                           Estimate for one 30-day rental. Shorter rentals earn proportionally less.
                         </div>
                       </div>
@@ -1196,22 +1197,22 @@ const RentABookScreen = () => {
                     )}
 
                     {/* Delivery breakdown — Shiprocket + premium + commission */}
-                    <div style={{ background: "#F8FAFC", border: "1px solid #e2e8f0", borderRadius: 12, padding: 14 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 700, color: "#0f172a", fontSize: 13, marginBottom: 8 }}>
+                    <div style={{ background: "var(--rb-page)", border: "1px solid var(--rb-border)", borderRadius: 12, padding: 14 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 700, color: "var(--rb-text)", fontSize: 13, marginBottom: 8 }}>
                         <FaTruck style={{ color: "#2563EB" }} /> Delivery charge
                       </div>
                       <Row label="Shiprocket shipping (est.)" value={`₹${delivery.base}`} />
                       <Row label="Handling premium" value={`₹${delivery.premium}`} />
                       <Row label={`Platform commission (${Math.round(DELIVERY_COMMISSION_PCT * 100)}%)`} value={`₹${delivery.commission}`} />
-                      <div style={{ borderTop: "1px dashed #e2e8f0", margin: "8px 0" }} />
+                      <div style={{ borderTop: "1px dashed var(--rb-border)", margin: "8px 0" }} />
                       <Row label="Delivery charged to buyer" value={`₹${buyerDelivery}`} strong />
-                      <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>
+                      <div style={{ fontSize: 11, color: "var(--rb-muted)", marginTop: 6 }}>
                         Final shipping is quoted live by Shiprocket at checkout (based on weight &amp; pincodes). This is an estimate.
                       </div>
                     </div>
 
                     {Number(form.sellPrice) > 0 && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#EFF6FF", border: "1px solid #bfdbfe", borderRadius: 12, padding: "12px 14px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--rb-accent-bg)", border: "1px solid #bfdbfe", borderRadius: 12, padding: "12px 14px" }}>
                         <span style={{ fontSize: 20, color: "#2563EB" }}><FaTags /></span>
                         <div>
                           <div style={{ fontWeight: 800, color: "#1d4ed8" }}>Buyer pays ₹{sellTotal}</div>
@@ -1230,22 +1231,22 @@ const RentABookScreen = () => {
                 <div style={{ display: "flex", gap: 14 }}>
                   <BookThumb book={form} w={70} h={96} fz={26} />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 800, fontSize: 16, color: "#0f172a" }}>{form.title || "Untitled book"}</div>
-                    <div style={{ color: "#64748b", fontSize: 13 }}>{form.author || "Unknown author"}</div>
+                    <div style={{ fontWeight: 800, fontSize: 16, color: "var(--rb-text)" }}>{form.title || "Untitled book"}</div>
+                    <div style={{ color: "var(--rb-text-3)", fontSize: 13 }}>{form.author || "Unknown author"}</div>
                     <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                       <Pill>{form.category}</Pill><Pill>{form.condition}</Pill><Pill>{form.language}</Pill>
                     </div>
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 6, marginTop: 6 }}><TypeBadge type={form.listingType} /></div>
-                <div style={{ background: "#F8FAFC", borderRadius: 12, padding: 14, marginTop: 4 }}>
+                <div style={{ background: "var(--rb-page)", borderRadius: 12, padding: 14, marginTop: 4 }}>
                   <Row label="City" value={form.city || "—"} />
                   {form.address && <Row label="Address" value={form.address} />}
                   {form.publisher && <Row label="Publisher" value={form.publisher} />}
                   {form.edition && <Row label="Edition" value={form.edition} />}
                   {form.isbn && <Row label="ISBN" value={form.isbn} />}
                   {offersRent && <>
-                    <div style={{ borderTop: "1px dashed #e2e8f0", margin: "10px 0" }} />
+                    <div style={{ borderTop: "1px dashed var(--rb-border)", margin: "10px 0" }} />
                     {RENT_SLOTS.map((s) => (
                       <Row key={s.key} label={`Rent · ${s.label}`} value={`₹${form.slotPrices[s.key] || 0}/day`} />
                     ))}
@@ -1256,7 +1257,7 @@ const RentABookScreen = () => {
                     <Row label="Est. monthly earnings" value={`≈ ₹${monthlyEarning}`} strong />
                   </>}
                   {offersSell && <>
-                    <div style={{ borderTop: "1px dashed #e2e8f0", margin: "10px 0" }} />
+                    <div style={{ borderTop: "1px dashed var(--rb-border)", margin: "10px 0" }} />
                     {Number(form.mrp) > 0 && <Row label="MRP" value={`₹${form.mrp}`} />}
                     <Row label="Selling price" value={`₹${form.sellPrice || 0}`} />
                     <Row label="Delivery (Shiprocket + premium + commission)" value={`₹${buyerDelivery}`} />
@@ -1265,9 +1266,9 @@ const RentABookScreen = () => {
                 </div>
 
                 {/* Admin approval notice */}
-                <div style={{ display: "flex", gap: 10, background: "#FFF7ED", border: "1px solid #fed7aa", borderRadius: 12, padding: "12px 14px" }}>
+                <div style={{ display: "flex", gap: 10, background: "var(--rb-info-amber-bg)", border: "1px solid var(--rb-info-amber-bd)", borderRadius: 12, padding: "12px 14px" }}>
                   <span style={{ fontSize: 18, color: "#ea580c", marginTop: 1 }}><FaCheckCircle /></span>
-                  <div style={{ fontSize: 12, color: "#9a3412" }}>
+                  <div style={{ fontSize: 12, color: "var(--rb-info-amber-tx)" }}>
                     Your listing will be sent to our team for a quick review. It goes live only after admin approval — usually within a few hours.
                   </div>
                 </div>
@@ -1278,7 +1279,7 @@ const RentABookScreen = () => {
           {/* Wizard nav */}
           <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
             <button type="button" onClick={prev}
-              style={{ flex: 1, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", borderRadius: 12, padding: "13px", fontWeight: 600, cursor: "pointer" }}>
+              style={{ flex: 1, border: "1px solid var(--rb-border)", background: "var(--rb-surface)", color: "var(--rb-text-2)", borderRadius: 12, padding: "13px", fontWeight: 600, cursor: "pointer" }}>
               {step === 0 ? "Cancel" : "Back"}
             </button>
             <button type="button" onClick={next}
@@ -1301,8 +1302,8 @@ const RentABookScreen = () => {
       {view === "published" && (
         <div style={{ padding: 24, textAlign: "center" }}>
           <div style={{ fontSize: 54, color: "#ea580c", marginBottom: 10 }}><FaCheckCircle /></div>
-          <h2 style={{ margin: "0 0 6px", color: "#0f172a" }}>Sent for approval!</h2>
-          <p style={{ color: "#64748b", fontSize: 14, maxWidth: 360, margin: "0 auto 4px" }}>
+          <h2 style={{ margin: "0 0 6px", color: "var(--rb-text)" }}>Sent for approval!</h2>
+          <p style={{ color: "var(--rb-text-3)", fontSize: 14, maxWidth: 360, margin: "0 auto 4px" }}>
             <strong>{form.title}</strong> has been submitted. Our team will review it and it will go live
             for readers near {form.city || "you"} once approved — usually within a few hours.
           </p>
@@ -1313,7 +1314,7 @@ const RentABookScreen = () => {
           )}
           <div style={{ display: "flex", gap: 10, maxWidth: 360, margin: "20px auto 0" }}>
             <button type="button" onClick={() => goTo("my-books")}
-              style={{ flex: 1, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", borderRadius: 12, padding: "12px", fontWeight: 600, cursor: "pointer" }}>
+              style={{ flex: 1, border: "1px solid var(--rb-border)", background: "var(--rb-surface)", color: "var(--rb-text-2)", borderRadius: 12, padding: "12px", fontWeight: 600, cursor: "pointer" }}>
               View my listings
             </button>
             <button type="button" onClick={startLend}
@@ -1326,12 +1327,12 @@ const RentABookScreen = () => {
 
       {view === "detail" && selected && (
         <div style={{ padding: 16 }}>
-          <div style={{ display: "flex", gap: 14, background: "#fff", border: "1px solid #eef2f7", borderRadius: 16, padding: 16 }}>
+          <div style={{ display: "flex", gap: 14, background: "var(--rb-surface)", border: "1px solid var(--rb-surface-2)", borderRadius: 16, padding: 16 }}>
             <BookThumb book={selected} w={80} h={108} fz={30} zoomable />
             <div style={{ flex: 1 }}>
-              <h2 style={{ margin: 0, fontSize: 18, color: "#0f172a" }}>{selected.title}</h2>
-              <div style={{ color: "#64748b", fontSize: 13 }}>{selected.author}</div>
-              <div style={{ display: "flex", gap: 10, marginTop: 8, fontSize: 12, color: "#475569", flexWrap: "wrap" }}>
+              <h2 style={{ margin: 0, fontSize: 18, color: "var(--rb-text)" }}>{selected.title}</h2>
+              <div style={{ color: "var(--rb-text-3)", fontSize: 13 }}>{selected.author}</div>
+              <div style={{ display: "flex", gap: 10, marginTop: 8, fontSize: 12, color: "var(--rb-text-2)", flexWrap: "wrap" }}>
                 <RatingInline book={selected} userRatings={userRatings} showCount />
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}><FaMapMarkerAlt /> {selected.city}</span>
               </div>
@@ -1350,13 +1351,13 @@ const RentABookScreen = () => {
           {/* Day chooser */}
           <div style={{ marginTop: 16 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <div style={{ fontWeight: 700, color: "#0f172a" }}>How many days?</div>
+              <div style={{ fontWeight: 700, color: "var(--rb-text)" }}>How many days?</div>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <button type="button" onClick={() => setDays((d) => Math.max(1, d - 1))}
-                  style={{ width: 34, height: 34, borderRadius: 9, border: "1px solid #e2e8f0", background: "#fff", color: "#2563EB", fontSize: 18, fontWeight: 700, cursor: "pointer" }}>−</button>
-                <span style={{ minWidth: 56, textAlign: "center", fontWeight: 800, color: "#0f172a" }}>{days} {days === 1 ? "day" : "days"}</span>
+                  style={{ width: 34, height: 34, borderRadius: 9, border: "1px solid var(--rb-border)", background: "var(--rb-surface)", color: "#2563EB", fontSize: 18, fontWeight: 700, cursor: "pointer" }}>−</button>
+                <span style={{ minWidth: 56, textAlign: "center", fontWeight: 800, color: "var(--rb-text)" }}>{days} {days === 1 ? "day" : "days"}</span>
                 <button type="button" onClick={() => setDays((d) => Math.min(selMaxDays, d + 1))}
-                  style={{ width: 34, height: 34, borderRadius: 9, border: "1px solid #e2e8f0", background: "#fff", color: "#2563EB", fontSize: 18, fontWeight: 700, cursor: "pointer" }}>+</button>
+                  style={{ width: 34, height: 34, borderRadius: 9, border: "1px solid var(--rb-border)", background: "var(--rb-surface)", color: "#2563EB", fontSize: 18, fontWeight: 700, cursor: "pointer" }}>+</button>
               </div>
             </div>
             {/* Quick presets (only those within this book's max) */}
@@ -1364,48 +1365,48 @@ const RentABookScreen = () => {
               {[7, 15, 30].filter((d) => d <= selMaxDays).map((d) => (
                 <button key={d} type="button" onClick={() => setDays(d)}
                   style={{ flex: 1, padding: "9px 0", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 13,
-                    border: days === d ? "2px solid #2563EB" : "1px solid #e2e8f0",
-                    background: days === d ? "#EFF6FF" : "#fff", color: days === d ? "#2563EB" : "#475569" }}>
+                    border: days === d ? "2px solid #2563EB" : "1px solid var(--rb-border)",
+                    background: days === d ? "var(--rb-accent-bg)" : "var(--rb-surface)", color: days === d ? "#2563EB" : "var(--rb-text-2)" }}>
                   {d} days
                 </button>
               ))}
             </div>
-            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>Max for this book: {selMaxDays} days</div>
+            <div style={{ fontSize: 11, color: "var(--rb-muted)", marginTop: 6 }}>Max for this book: {selMaxDays} days</div>
           </div>
 
           {/* Slab breakdown */}
-          <div style={{ marginTop: 16, background: "#fff", border: "1px solid #eef2f7", borderRadius: 14, padding: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 8 }}>Rent breakdown ({days} {days === 1 ? "day" : "days"})</div>
+          <div style={{ marginTop: 16, background: "var(--rb-surface)", border: "1px solid var(--rb-surface-2)", borderRadius: 14, padding: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--rb-text-2)", marginBottom: 8 }}>Rent breakdown ({days} {days === 1 ? "day" : "days"})</div>
             {rentBreakdown.rows.map((r) => (
               <Row key={r.tier.key}
                 label={`Day ${r.fromDay}–${r.toDay} · ${r.days} × ₹${r.rate}/day`}
                 value={`₹${r.cost}`} />
             ))}
-            <div style={{ borderTop: "1px dashed #e2e8f0", margin: "8px 0" }} />
+            <div style={{ borderTop: "1px dashed var(--rb-border)", margin: "8px 0" }} />
             <Row label="Rent subtotal" value={`₹${rentAmount}`} />
             <Row label="Security deposit (refundable)" value={`₹${selected.deposit}`} />
             <Row label="Platform fee" value={`₹${PLATFORM_FEE}`} />
-            <div style={{ borderTop: "1px dashed #e2e8f0", margin: "10px 0" }} />
+            <div style={{ borderTop: "1px dashed var(--rb-border)", margin: "10px 0" }} />
             <Row label="Total payable" value={`₹${total}`} strong />
-            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>
+            <div style={{ fontSize: 11, color: "var(--rb-muted)", marginTop: 6 }}>
               The {days}-day rental period starts once the book is delivered to you. ₹{selected.deposit} deposit is refunded after you return it to the owner. If not returned within {selMaxDays} days, it is treated as sold — your deposit becomes the purchase price.
             </div>
           </div>
 
           {/* Return reminder preference */}
-          <div style={{ marginTop: 16, background: "#fff", border: "1px solid #eef2f7", borderRadius: 14, padding: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>
+          <div style={{ marginTop: 16, background: "var(--rb-surface)", border: "1px solid var(--rb-surface-2)", borderRadius: 14, padding: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, color: "var(--rb-text)", marginBottom: 4 }}>
               <FaRegBell style={{ color: "#2563EB" }} /> Return reminder
             </div>
-            <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 10 }}>
+            <div style={{ fontSize: 12, color: "var(--rb-muted)", marginBottom: 10 }}>
               We&apos;ll remind you before the rental ends so you can return on time and get your deposit back.
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               {[1, 2, 3].map((d) => (
                 <button key={d} type="button" onClick={() => setReminderDays(d)}
                   style={{ flex: 1, padding: "9px 0", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 13,
-                    border: reminderDays === d ? "2px solid #2563EB" : "1px solid #e2e8f0",
-                    background: reminderDays === d ? "#EFF6FF" : "#fff", color: reminderDays === d ? "#2563EB" : "#475569" }}>
+                    border: reminderDays === d ? "2px solid #2563EB" : "1px solid var(--rb-border)",
+                    background: reminderDays === d ? "var(--rb-accent-bg)" : "var(--rb-surface)", color: reminderDays === d ? "#2563EB" : "var(--rb-text-2)" }}>
                   {d} day{d > 1 ? "s" : ""} before
                 </button>
               ))}
@@ -1422,11 +1423,11 @@ const RentABookScreen = () => {
       {view === "success" && selected && (
         <div style={{ padding: 24, textAlign: "center" }}>
           <div style={{ fontSize: 54, color: "#16a34a", marginBottom: 10 }}><FaCheckCircle /></div>
-          <h2 style={{ margin: "0 0 6px", color: "#0f172a" }}>Rental requested!</h2>
-          <p style={{ color: "#64748b", fontSize: 14, maxWidth: 360, margin: "0 auto 4px" }}>
+          <h2 style={{ margin: "0 0 6px", color: "var(--rb-text)" }}>Rental requested!</h2>
+          <p style={{ color: "var(--rb-text-3)", fontSize: 14, maxWidth: 360, margin: "0 auto 4px" }}>
             Your request for <strong>{selected.title}</strong> ({days} {days === 1 ? "day" : "days"}, ₹{rentAmount}) has been sent to the owner.
           </p>
-          <p style={{ color: "#64748b", fontSize: 13, maxWidth: 360, margin: "0 auto 10px" }}>
+          <p style={{ color: "var(--rb-text-3)", fontSize: 13, maxWidth: 360, margin: "0 auto 10px" }}>
             You will be notified once the owner approves. Your {days}-day period starts on delivery.
           </p>
           <p style={{ color: "#2563EB", fontSize: 12, fontWeight: 600, maxWidth: 360, margin: "0 auto 20px", display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -1434,7 +1435,7 @@ const RentABookScreen = () => {
           </p>
           <div style={{ display: "flex", gap: 10, maxWidth: 360, margin: "0 auto" }}>
             <button type="button" onClick={() => { setView("browse"); setSelected(null); }}
-              style={{ flex: 1, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", borderRadius: 12, padding: "12px", fontWeight: 600, cursor: "pointer" }}>
+              style={{ flex: 1, border: "1px solid var(--rb-border)", background: "var(--rb-surface)", color: "var(--rb-text-2)", borderRadius: 12, padding: "12px", fontWeight: 600, cursor: "pointer" }}>
               Browse more
             </button>
             <button type="button" onClick={() => navigate("/customer/app/home")}
@@ -1461,14 +1462,14 @@ const Stepper = ({ steps, current, onJump }) => (
             style={{
               width: 30, height: 30, borderRadius: "50%", flexShrink: 0, cursor: done ? "pointer" : "default",
               border: "none", fontSize: 13, fontWeight: 700,
-              background: done ? "#16a34a" : active ? "#2563EB" : "#e2e8f0",
-              color: done || active ? "#fff" : "#94a3b8",
+              background: done ? "#16a34a" : active ? "#2563EB" : "var(--rb-border)",
+              color: done || active ? "#fff" : "var(--rb-muted)",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
             {done ? <FaCheckCircle /> : i + 1}
           </button>
           {i < steps.length - 1 && (
-            <div style={{ flex: 1, height: 3, margin: "0 6px", borderRadius: 2, background: i < current ? "#16a34a" : "#e2e8f0" }} />
+            <div style={{ flex: 1, height: 3, margin: "0 6px", borderRadius: 2, background: i < current ? "#16a34a" : "var(--rb-border)" }} />
           )}
         </div>
       );
@@ -1530,8 +1531,8 @@ const LayoutBtn = ({ active, onClick, aria, children }) => (
     style={{
       display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 30,
       border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14,
-      background: active ? "#fff" : "transparent",
-      color: active ? "#2563EB" : "#94a3b8",
+      background: active ? "var(--rb-surface)" : "transparent",
+      color: active ? "#2563EB" : "var(--rb-muted)",
       boxShadow: active ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
     }}>
     {children}
@@ -1539,12 +1540,12 @@ const LayoutBtn = ({ active, onClick, aria, children }) => (
 );
 
 const Pill = ({ children }) => (
-  <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, background: "#F1F5F9", color: "#475569" }}>{children}</span>
+  <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, background: "var(--rb-surface-2)", color: "var(--rb-text-2)" }}>{children}</span>
 );
 
 const inputStyle = {
-  width: "100%", padding: "11px 12px", borderRadius: 10, border: "1px solid #e2e8f0",
-  fontSize: 14, color: "#0f172a", outline: "none", background: "#fff", boxSizing: "border-box",
+  width: "100%", padding: "11px 12px", borderRadius: 10, border: "1px solid var(--rb-border)",
+  fontSize: 14, color: "var(--rb-text)", outline: "none", background: "var(--rb-surface)", boxSizing: "border-box",
 };
 
 const spinStyle = {
@@ -1554,7 +1555,7 @@ const spinStyle = {
 
 const Field = ({ label, required, error, children, style }) => (
   <label style={{ display: "block", ...style }}>
-    <span style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 6 }}>
+    <span style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--rb-text-2)", marginBottom: 6 }}>
       {label}{required && <span style={{ color: "#dc2626" }}> *</span>}
     </span>
     {children}
@@ -1564,8 +1565,8 @@ const Field = ({ label, required, error, children, style }) => (
 
 const Row = ({ label, value, strong }) => (
   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0" }}>
-    <span style={{ fontSize: strong ? 15 : 13, color: strong ? "#0f172a" : "#475569", fontWeight: strong ? 800 : 400 }}>{label}</span>
-    <span style={{ fontSize: strong ? 16 : 13, color: strong ? "#2563EB" : "#0f172a", fontWeight: strong ? 800 : 600 }}>{value}</span>
+    <span style={{ fontSize: strong ? 15 : 13, color: strong ? "var(--rb-text)" : "var(--rb-text-2)", fontWeight: strong ? 800 : 400 }}>{label}</span>
+    <span style={{ fontSize: strong ? 16 : 13, color: strong ? "#2563EB" : "var(--rb-text)", fontWeight: strong ? 800 : 600 }}>{value}</span>
   </div>
 );
 
@@ -1574,7 +1575,7 @@ const RatingInline = ({ book, userRatings, showCount, small }) => {
   const { avg, count } = effectiveRating(book, userRatings);
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "#CA8A04", fontSize: small ? 11 : undefined }}>
-      <FaStar /> {avg.toFixed(1)}{showCount || !small ? <span style={{ color: "#94a3b8" }}> ({count})</span> : null}
+      <FaStar /> {avg.toFixed(1)}{showCount || !small ? <span style={{ color: "var(--rb-muted)" }}> ({count})</span> : null}
     </span>
   );
 };
@@ -1590,20 +1591,20 @@ const RateBox = ({ book, userRatings, onRate, onTakeaway }) => {
   useEffect(() => { setDraft(takeaway || ""); setEditing(false); }, [book.id, takeaway]);
 
   return (
-    <div style={{ marginTop: 16, background: "#fff", border: "1px solid #eef2f7", borderRadius: 14, padding: 16 }}>
+    <div style={{ marginTop: 16, background: "var(--rb-surface)", border: "1px solid var(--rb-surface-2)", borderRadius: 14, padding: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
-          <div style={{ fontWeight: 800, fontSize: 20, color: "#0f172a", display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ fontWeight: 800, fontSize: 20, color: "var(--rb-text)", display: "flex", alignItems: "center", gap: 6 }}>
             <FaStar style={{ color: "#CA8A04" }} /> {avg.toFixed(1)}
           </div>
-          <div style={{ fontSize: 12, color: "#94a3b8" }}>{count} ratings</div>
+          <div style={{ fontSize: 12, color: "var(--rb-muted)" }}>{count} ratings</div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 12, color: "#475569", marginBottom: 4 }}>{mine ? "Your rating" : "Rate this book"}</div>
+          <div style={{ fontSize: 12, color: "var(--rb-text-2)", marginBottom: 4 }}>{mine ? "Your rating" : "Rate this book"}</div>
           <div style={{ display: "flex", gap: 4 }}>
             {[1, 2, 3, 4, 5].map((s) => (
               <button key={s} type="button" onClick={() => onRate(s)} aria-label={`Rate ${s} star`}
-                style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 22, padding: 0, color: s <= mine ? "#F59E0B" : "#cbd5e1" }}>
+                style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 22, padding: 0, color: s <= mine ? "#F59E0B" : "var(--rb-border-strong)" }}>
                 <FaStar />
               </button>
             ))}
@@ -1613,12 +1614,12 @@ const RateBox = ({ book, userRatings, onRate, onTakeaway }) => {
 
       {mine > 0 && (
         <>
-          <div style={{ borderTop: "1px solid #f1f5f9", margin: "12px 0 0" }} />
+          <div style={{ borderTop: "1px solid var(--rb-surface-2)", margin: "12px 0 0" }} />
           {/* Existing takeaway, view mode */}
           {takeaway && !editing && (
             <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 4 }}>Your takeaway</div>
-              <div style={{ display: "flex", gap: 8, fontSize: 13, color: "#334155", background: "#F8FAFC", borderRadius: 10, padding: "10px 12px" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--rb-text-2)", marginBottom: 4 }}>Your takeaway</div>
+              <div style={{ display: "flex", gap: 8, fontSize: 13, color: "var(--rb-text-2)", background: "var(--rb-page)", borderRadius: 10, padding: "10px 12px" }}>
                 <FaLightbulb style={{ color: "#CA8A04", flexShrink: 0, marginTop: 2 }} />
                 <span style={{ flex: 1 }}>{takeaway}</span>
               </div>
@@ -1631,7 +1632,7 @@ const RateBox = ({ book, userRatings, onRate, onTakeaway }) => {
           {/* Add / edit mode */}
           {(!takeaway || editing) && (
             <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 6 }}>Add your takeaway</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--rb-text-2)", marginBottom: 6 }}>Add your takeaway</div>
               <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={3}
                 placeholder="What did this book teach you? Share a key idea for other readers…"
                 style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }} />
@@ -1642,7 +1643,7 @@ const RateBox = ({ book, userRatings, onRate, onTakeaway }) => {
                 </button>
                 {takeaway && (
                   <button type="button" onClick={() => { setDraft(takeaway); setEditing(false); }}
-                    style={{ border: "1px solid #e2e8f0", borderRadius: 10, padding: "9px 16px", background: "#fff", color: "#475569", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                    style={{ border: "1px solid var(--rb-border)", borderRadius: 10, padding: "9px 16px", background: "var(--rb-surface)", color: "var(--rb-text-2)", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
                     Cancel
                   </button>
                 )}
@@ -1668,39 +1669,39 @@ const TakeawaysSection = ({ book, userRatings }) => {
   const community = communityTakeaways(book.id);
   return (
     <div style={{ marginTop: 16 }}>
-      <div style={{ fontWeight: 700, color: "#0f172a", marginBottom: 10 }}>Reader takeaways</div>
+      <div style={{ fontWeight: 700, color: "var(--rb-text)", marginBottom: 10 }}>Reader takeaways</div>
       <div style={{ display: "grid", gap: 10 }}>
         {takeaway && (
-          <div style={{ display: "flex", gap: 10, background: "#EFF6FF", border: "1px solid #bfdbfe", borderRadius: 12, padding: 12 }}>
+          <div style={{ display: "flex", gap: 10, background: "var(--rb-accent-bg)", border: "1px solid #bfdbfe", borderRadius: 12, padding: 12 }}>
             <Avatar name="You" />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontWeight: 700, color: "#0f172a", fontSize: 13 }}>You</span>
+                <span style={{ fontWeight: 700, color: "var(--rb-text)", fontSize: 13 }}>You</span>
                 <span style={{ display: "inline-flex", gap: 1, color: "#F59E0B", fontSize: 11 }}>
                   {Array.from({ length: mine }).map((_, i) => <FaStar key={i} />)}
                 </span>
               </div>
-              <div style={{ fontSize: 13, color: "#334155", marginTop: 3 }}>{takeaway}</div>
+              <div style={{ fontSize: 13, color: "var(--rb-text-2)", marginTop: 3 }}>{takeaway}</div>
             </div>
           </div>
         )}
         {community.map((t, i) => (
-          <div key={i} style={{ display: "flex", gap: 10, background: "#fff", border: "1px solid #eef2f7", borderRadius: 12, padding: 12 }}>
+          <div key={i} style={{ display: "flex", gap: 10, background: "var(--rb-surface)", border: "1px solid var(--rb-surface-2)", borderRadius: 12, padding: 12 }}>
             <Avatar name={t.by} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontWeight: 700, color: "#0f172a", fontSize: 13 }}>{t.by}</span>
+                <span style={{ fontWeight: 700, color: "var(--rb-text)", fontSize: 13 }}>{t.by}</span>
                 <span style={{ display: "inline-flex", gap: 1, color: "#F59E0B", fontSize: 11 }}>
                   {Array.from({ length: t.stars }).map((_, k) => <FaStar key={k} />)}
                 </span>
               </div>
-              <div style={{ fontSize: 13, color: "#334155", marginTop: 3 }}>{t.text}</div>
+              <div style={{ fontSize: 13, color: "var(--rb-text-2)", marginTop: 3 }}>{t.text}</div>
             </div>
           </div>
         ))}
       </div>
       {!mine && (
-        <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 8 }}>
+        <div style={{ fontSize: 12, color: "var(--rb-muted)", marginTop: 8 }}>
           Rate this book above to add your own takeaway.
         </div>
       )}
@@ -1739,13 +1740,13 @@ const HistoryView = ({ readingHistory, lendingHistory }) => {
   return (
     <div style={{ padding: 16 }}>
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 4, background: "#eef2f7", borderRadius: 12, padding: 4 }}>
+      <div style={{ display: "flex", gap: 4, background: "var(--rb-surface-2)", borderRadius: 12, padding: 4 }}>
         {[{ k: "read", label: `Books read (${readingHistory.length})` }, { k: "lent", label: `Lent out (${lendingHistory.length})` }].map((t) => {
           const active = tab === t.k;
           return (
             <button key={t.k} type="button" onClick={() => setTab(t.k)}
               style={{ flex: 1, padding: "10px 0", border: "none", borderRadius: 9, cursor: "pointer", fontWeight: 700, fontSize: 13,
-                background: active ? "#fff" : "transparent", color: active ? "#2563EB" : "#94a3b8", boxShadow: active ? "0 1px 3px rgba(0,0,0,0.08)" : "none" }}>
+                background: active ? "var(--rb-surface)" : "transparent", color: active ? "#2563EB" : "var(--rb-muted)", boxShadow: active ? "0 1px 3px rgba(0,0,0,0.08)" : "none" }}>
               {t.label}
             </button>
           );
@@ -1755,18 +1756,18 @@ const HistoryView = ({ readingHistory, lendingHistory }) => {
       {tab === "read" && (
         <div style={{ display: "grid", gap: 12, marginTop: 14 }}>
           {readingHistory.map((b) => (
-            <div key={b.id} style={{ display: "flex", gap: 12, padding: 12, background: "#fff", border: "1px solid #eef2f7", borderRadius: 14 }}>
+            <div key={b.id} style={{ display: "flex", gap: 12, padding: 12, background: "var(--rb-surface)", border: "1px solid var(--rb-surface-2)", borderRadius: 14 }}>
               <BookThumb book={b} w={50} h={68} fz={20} zoomable />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, color: "#0f172a", fontSize: 15 }}>{b.title}</div>
-                <div style={{ fontSize: 12, color: "#64748b" }}>{b.author}</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, fontSize: 12, color: "#475569", flexWrap: "wrap" }}>
+                <div style={{ fontWeight: 700, color: "var(--rb-text)", fontSize: 15 }}>{b.title}</div>
+                <div style={{ fontSize: 12, color: "var(--rb-text-3)" }}>{b.author}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, fontSize: 12, color: "var(--rb-text-2)", flexWrap: "wrap" }}>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "#CA8A04" }}>
                     {Array.from({ length: b.rating }).map((_, i) => <FaStar key={i} />)}
                   </span>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><FaCalendarAlt /> {b.finishedOn}</span>
                 </div>
-                <span style={{ display: "inline-block", marginTop: 8, fontSize: 11, fontWeight: 600, color: "#475569", background: "#F1F5F9", padding: "2px 9px", borderRadius: 999 }}>
+                <span style={{ display: "inline-block", marginTop: 8, fontSize: 11, fontWeight: 600, color: "var(--rb-text-2)", background: "var(--rb-surface-2)", padding: "2px 9px", borderRadius: 999 }}>
                   {b.source}{b.days ? ` · ${b.days} days` : ""}
                 </span>
               </div>
@@ -1778,11 +1779,11 @@ const HistoryView = ({ readingHistory, lendingHistory }) => {
       {tab === "lent" && (
         <>
           {/* Earnings summary */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14, background: "#ECFDF5", border: "1px solid #bbf7d0", borderRadius: 12, padding: "12px 14px" }}>
-            <span style={{ fontSize: 22, color: "#16a34a" }}><FaRupeeSign /></span>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14, background: "var(--rb-info-green-bg)", border: "1px solid var(--rb-info-green-bd)", borderRadius: 12, padding: "12px 14px" }}>
+            <span style={{ fontSize: 22, color: "var(--rb-info-green-tx)" }}><FaRupeeSign /></span>
             <div>
-              <div style={{ fontWeight: 800, color: "#15803d" }}>₹{totalEarned} earned</div>
-              <div style={{ fontSize: 11, color: "#16a34a" }}>across {lendingHistory.length} rentals of your books</div>
+              <div style={{ fontWeight: 800, color: "var(--rb-info-green-tx)" }}>₹{totalEarned} earned</div>
+              <div style={{ fontSize: 11, color: "var(--rb-info-green-tx)" }}>across {lendingHistory.length} rentals of your books</div>
             </div>
           </div>
 
@@ -1792,7 +1793,7 @@ const HistoryView = ({ readingHistory, lendingHistory }) => {
             return (
               <div key={title} style={{ marginTop: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                  <div style={{ fontWeight: 700, color: "#0f172a", display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ fontWeight: 700, color: "var(--rb-text)", display: "flex", alignItems: "center", gap: 8 }}>
                     <FaBook style={{ color: "#2563EB" }} /> {title}
                   </div>
                   <span style={{ fontSize: 11, fontWeight: 700, color: "#7c3aed", background: "#F5F3FF", padding: "3px 9px", borderRadius: 999 }}>
@@ -1801,13 +1802,13 @@ const HistoryView = ({ readingHistory, lendingHistory }) => {
                 </div>
                 <div style={{ display: "grid", gap: 8 }}>
                   {rentals.map((h) => (
-                    <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: 12, background: "#fff", border: "1px solid #eef2f7", borderRadius: 12 }}>
+                    <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: 12, background: "var(--rb-surface)", border: "1px solid var(--rb-surface-2)", borderRadius: 12 }}>
                       <span style={{ width: 38, height: 38, borderRadius: "50%", background: "#EEF2FF", color: "#4F46E5", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 18 }}>
                         <FaUserCircle />
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, color: "#0f172a", fontSize: 14 }}>{h.renter}</div>
-                        <div style={{ fontSize: 11, color: "#94a3b8", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <div style={{ fontWeight: 600, color: "var(--rb-text)", fontSize: 14 }}>{h.renter}</div>
+                        <div style={{ fontSize: 11, color: "var(--rb-muted)", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}><FaMapMarkerAlt /> {h.city}</span>
                           <span>{h.from} → {h.to}</span>
                           <span>{h.days} days</span>
@@ -1826,7 +1827,7 @@ const HistoryView = ({ readingHistory, lendingHistory }) => {
             );
           })}
           {lendingHistory.length === 0 && (
-            <div style={{ textAlign: "center", color: "#94a3b8", padding: "40px 16px" }}>No rentals yet.</div>
+            <div style={{ textAlign: "center", color: "var(--rb-muted)", padding: "40px 16px" }}>No rentals yet.</div>
           )}
         </>
       )}
@@ -1911,14 +1912,14 @@ const LibraryView = () => {
   if (mode === "form") {
     return (
       <div style={{ padding: 16 }}>
-        <h2 style={{ margin: "0 0 14px", fontSize: 18, color: "#0f172a" }}>{form.id ? "Edit book" : "Add to my library"}</h2>
-        <div style={{ background: "#fff", border: "1px solid #eef2f7", borderRadius: 16, padding: 16, display: "grid", gap: 14 }}>
+        <h2 style={{ margin: "0 0 14px", fontSize: 18, color: "var(--rb-text)" }}>{form.id ? "Edit book" : "Add to my library"}</h2>
+        <div style={{ background: "var(--rb-surface)", border: "1px solid var(--rb-surface-2)", borderRadius: 16, padding: 16, display: "grid", gap: 14 }}>
           {/* Cover */}
           <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={onPhoto} style={{ display: "none" }} />
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
             <BookThumb book={form} w={64} h={88} fz={24} />
             <button type="button" onClick={() => fileRef.current?.click()}
-              style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff", color: "#2563EB", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+              style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: 10, border: "1px solid var(--rb-border)", background: "var(--rb-surface)", color: "#2563EB", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
               <FaCamera /> {form.photo ? "Change cover" : "Add cover"}
             </button>
             {form.photo && (
@@ -1950,15 +1951,15 @@ const LibraryView = () => {
 
           {/* Shelf */}
           <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 6 }}>Shelf</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--rb-text-2)", marginBottom: 6 }}>Shelf</div>
             <div style={{ display: "flex", gap: 8 }}>
               {SHELVES.map((s) => {
                 const active = form.shelf === s.key;
                 return (
                   <button key={s.key} type="button" onClick={() => setF("shelf", s.key)}
                     style={{ flex: 1, padding: "10px 0", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 13,
-                      border: active ? `2px solid ${s.color}` : "1px solid #e2e8f0",
-                      background: active ? s.bg : "#fff", color: active ? s.color : "#475569" }}>
+                      border: active ? `2px solid ${s.color}` : "1px solid var(--rb-border)",
+                      background: active ? s.bg : "var(--rb-surface)", color: active ? s.color : "var(--rb-text-2)" }}>
                     {s.label}
                   </button>
                 );
@@ -1968,11 +1969,11 @@ const LibraryView = () => {
 
           {/* Personal rating */}
           <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 6 }}>My rating</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--rb-text-2)", marginBottom: 6 }}>My rating</div>
             <div style={{ display: "flex", gap: 6 }}>
               {[1, 2, 3, 4, 5].map((s) => (
                 <button key={s} type="button" onClick={() => setF("rating", s === form.rating ? 0 : s)} aria-label={`${s} star`}
-                  style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 26, padding: 0, color: s <= form.rating ? "#F59E0B" : "#cbd5e1" }}>
+                  style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 26, padding: 0, color: s <= form.rating ? "#F59E0B" : "var(--rb-border-strong)" }}>
                   <FaStar />
                 </button>
               ))}
@@ -1989,7 +1990,7 @@ const LibraryView = () => {
 
         <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
           <button type="button" onClick={() => setMode("list")}
-            style={{ flex: 1, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", borderRadius: 12, padding: "13px", fontWeight: 600, cursor: "pointer" }}>
+            style={{ flex: 1, border: "1px solid var(--rb-border)", background: "var(--rb-surface)", color: "var(--rb-text-2)", borderRadius: 12, padding: "13px", fontWeight: 600, cursor: "pointer" }}>
             Cancel
           </button>
           <button type="button" onClick={save}
@@ -2005,7 +2006,7 @@ const LibraryView = () => {
   return (
     <div style={{ padding: 16 }}>
       <button type="button" onClick={openAdd}
-        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 12, border: "1px dashed #2563EB", background: "#EFF6FF", color: "#2563EB", fontWeight: 600, cursor: "pointer" }}>
+        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 12, border: "1px dashed #2563EB", background: "var(--rb-accent-bg)", color: "#2563EB", fontWeight: 600, cursor: "pointer" }}>
         <FaPlusCircle /> Add a book to my library
       </button>
 
@@ -2016,8 +2017,8 @@ const LibraryView = () => {
           return (
             <button key={s.key} type="button" onClick={() => setFilter(s.key)}
               style={{ flexShrink: 0, padding: "7px 14px", borderRadius: 999, cursor: "pointer", fontWeight: 600, fontSize: 13,
-                border: active ? "1px solid #2563EB" : "1px solid #e2e8f0",
-                background: active ? "#2563EB" : "#fff", color: active ? "#fff" : "#475569" }}>
+                border: active ? "1px solid #2563EB" : "1px solid var(--rb-border)",
+                background: active ? "#2563EB" : "var(--rb-surface)", color: active ? "#fff" : "var(--rb-text-2)" }}>
               {s.label} {counts[s.key] ? `(${counts[s.key]})` : ""}
             </button>
           );
@@ -2025,7 +2026,7 @@ const LibraryView = () => {
       </div>
 
       {shown.length === 0 ? (
-        <div style={{ textAlign: "center", color: "#94a3b8", padding: "48px 16px" }}>
+        <div style={{ textAlign: "center", color: "var(--rb-muted)", padding: "48px 16px" }}>
           <div style={{ fontSize: 36, marginBottom: 8 }}><FaRegBookmark /></div>
           {books.length === 0 ? "Your library is empty. Add the books you own." : "No books on this shelf yet."}
         </div>
@@ -2034,21 +2035,21 @@ const LibraryView = () => {
           {shown.map((b) => {
             const sm = shelfMeta(b.shelf);
             return (
-              <div key={b.id} style={{ display: "flex", gap: 12, padding: 12, background: "#fff", border: "1px solid #eef2f7", borderRadius: 14 }}>
+              <div key={b.id} style={{ display: "flex", gap: 12, padding: 12, background: "var(--rb-surface)", border: "1px solid var(--rb-surface-2)", borderRadius: 14 }}>
                 <BookThumb book={b} w={50} h={68} fz={20} zoomable />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <div style={{ fontWeight: 700, color: "#0f172a", fontSize: 15 }}>{b.title}</div>
+                    <div style={{ fontWeight: 700, color: "var(--rb-text)", fontSize: 15 }}>{b.title}</div>
                     <span style={{ fontSize: 10, fontWeight: 700, color: sm.color, background: sm.bg, padding: "2px 8px", borderRadius: 999 }}>{sm.label}</span>
                   </div>
-                  {b.author && <div style={{ fontSize: 12, color: "#64748b" }}>{b.author}</div>}
+                  {b.author && <div style={{ fontSize: 12, color: "var(--rb-text-3)" }}>{b.author}</div>}
                   {b.rating > 0 && (
                     <div style={{ display: "inline-flex", gap: 2, marginTop: 4, color: "#F59E0B", fontSize: 12 }}>
                       {Array.from({ length: b.rating }).map((_, i) => <FaStar key={i} />)}
                     </div>
                   )}
                   {b.takeaway && (
-                    <div style={{ display: "flex", gap: 6, marginTop: 6, fontSize: 12, color: "#475569", background: "#F8FAFC", borderRadius: 8, padding: "8px 10px" }}>
+                    <div style={{ display: "flex", gap: 6, marginTop: 6, fontSize: 12, color: "var(--rb-text-2)", background: "var(--rb-page)", borderRadius: 8, padding: "8px 10px" }}>
                       <FaLightbulb style={{ color: "#CA8A04", flexShrink: 0, marginTop: 2 }} />
                       <span>{b.takeaway}</span>
                     </div>
@@ -2057,18 +2058,18 @@ const LibraryView = () => {
                   <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                     {SHELVES.filter((s) => s.key !== b.shelf).map((s) => (
                       <button key={s.key} type="button" onClick={() => moveShelf(b.id, s.key)}
-                        style={{ fontSize: 11, padding: "4px 10px", borderRadius: 999, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        style={{ fontSize: 11, padding: "4px 10px", borderRadius: 999, border: "1px solid var(--rb-border)", background: "var(--rb-surface)", color: "var(--rb-text-2)", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
                         <FaBookOpen style={{ fontSize: 10 }} /> {s.label}
                       </button>
                     ))}
                   </div>
                   <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                     <button type="button" onClick={() => openEdit(b)}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 9, border: "1px solid #2563EB", background: "#fff", color: "#2563EB", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 9, border: "1px solid #2563EB", background: "var(--rb-surface)", color: "#2563EB", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                       <FaEdit /> Edit
                     </button>
                     <button type="button" onClick={() => remove(b.id)}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 9, border: "1px solid #fecaca", background: "#fff", color: "#dc2626", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 9, border: "1px solid #fecaca", background: "var(--rb-surface)", color: "#dc2626", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                       <FaTrashAlt /> Remove
                     </button>
                   </div>

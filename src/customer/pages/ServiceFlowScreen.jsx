@@ -125,6 +125,7 @@ const RechargePlansView = ({ contactName, mobile, operatorData: initialOperatorD
   });
   const [operatorData, setOperatorData] = useState(initialOperatorData);
   const [showOperatorSheet, setShowOperatorSheet] = useState(false);
+  const { showToast } = useToast();
 
   const matchedOperator = useMemo(() => {
     const code = operatorData?.opCode || operatorData?.operatorCode || "";
@@ -181,6 +182,16 @@ const RechargePlansView = ({ contactName, mobile, operatorData: initialOperatorD
   }, [allPlans, activeTab, search]);
 
   const handleSelectPlan = (plan) => {
+    // Client-side guard mirroring the backend operator rule (Helper.validateOperator):
+    // amount must fall within the operator's min/max range when both are configured.
+    // Catches invalid custom amounts here instead of failing at the payment screen.
+    const amount = Number(plan.rs);
+    const min = matchedOperator?.minAmount;
+    const max = matchedOperator?.maxAmount;
+    if (Number.isFinite(amount) && min != null && max != null && (amount < min || amount > max)) {
+      showToast(`Enter an amount between ₹${min} and ₹${max} for ${opName}.`, "error");
+      return;
+    }
     navigate("/customer/app/offers", {
       state: { type: "recharge", operatorId: matchedOperator?.id || "", amount: plan.rs, label: serviceData.name, validity: plan.validity, planDescription: plan.desc, mobile, contactName, opCode, circleCode, serviceId: serviceData.id, operatorName: opName, logo: opLogo },
     });

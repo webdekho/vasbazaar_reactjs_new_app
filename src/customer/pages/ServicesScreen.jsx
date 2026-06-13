@@ -329,12 +329,14 @@ const QuickAccessCard = ({ services = [] }) => {
         {recentServices.map((svc, i) => {
           const matched = getServiceMatch(svc);
           return (
-          <button
+          <div
             key={`recent-${svc.slug}`}
             className="cm-svc-item"
-            type="button"
+            role="button"
+            tabIndex={0}
             style={{ animationDelay: `${i * 40}ms`, alignItems: "flex-start", position: "relative" }}
             onClick={() => navigate(`/customer/app/services/${svc.slug}`)}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate(`/customer/app/services/${svc.slug}`); } }}
           >
             <div style={{ width: 52, height: 52, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6, position: "relative" }}>
               <ServiceIcon icon={matched.icon} iconUrl={matched.iconUrl} accentColor={matched.accentColor} highlightColor={matched.highlightColor} />
@@ -343,7 +345,7 @@ const QuickAccessCard = ({ services = [] }) => {
               </button>
             </div>
             <span className="cm-svc-label">{formatServiceLabel(svc.name)}</span>
-          </button>
+          </div>
           );
         })}
 

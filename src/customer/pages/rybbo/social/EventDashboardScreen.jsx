@@ -1,11 +1,39 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { FaArrowLeft, FaWhatsapp, FaCopy, FaEdit, FaBan, FaDownload, FaBell, FaUserPlus, FaQrcode } from "react-icons/fa";
+import { FaArrowLeft, FaWhatsapp, FaCopy, FaEdit, FaBan, FaDownload, FaBell, FaUserPlus, FaQrcode, FaAddressBook } from "react-icons/fa";
+import { Capacitor } from "@capacitor/core";
+import { Contacts } from "@capacitor-community/contacts";
 import { rybboSocialService, buildInviteUrl, buildWhatsappShare } from "../../../services/rybboSocialService";
 import DataState from "../../../components/DataState";
 import { useToast } from "../../../context/ToastContext";
+import "./celebration.css";
 
 const ACCENT = "#7C3AED";
+
+const CONFETTI_COLORS = ["#7C3AED", "#EC4899", "#F59E0B", "#10B981", "#3B82F6", "#EF4444"];
+// Pre-computed confetti pieces — spread across width with varied speed/delay so
+// the fall looks random without needing Math.random at runtime.
+const CONFETTI = Array.from({ length: 18 }, (_, i) => ({
+  left: (i * 5.6 + (i % 3) * 3) % 100,
+  delay: -((i * 0.7) % 6),
+  duration: 6 + (i % 5) * 1.4,
+  color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+}));
+
+const CelebrationBg = () => (
+  <div className="cel-bg" aria-hidden="true">
+    <span className="cel-glow g1" />
+    <span className="cel-glow g2" />
+    <span className="cel-glow g3" />
+    {CONFETTI.map((c, i) => (
+      <span
+        key={i}
+        className="cel-confetti"
+        style={{ left: `${c.left}%`, background: c.color, animationDelay: `${c.delay}s`, animationDuration: `${c.duration}s` }}
+      />
+    ))}
+  </div>
+);
 
 const RESPONSE_META = {
   ACCEPT: { label: "Going", color: "#16a34a" },
@@ -27,6 +55,7 @@ const EventDashboardScreen = () => {
   const [state, setState] = useState({ loading: true, error: "", event: null });
   const [inviteMobile, setInviteMobile] = useState("");
   const [inviting, setInviting] = useState(false);
+  const [pickingContact, setPickingContact] = useState(false);
 
   const load = async () => {
     const r = await rybboSocialService.getEvent(id);
@@ -74,6 +103,31 @@ const EventDashboardScreen = () => {
     URL.revokeObjectURL(url);
   };
 
+  const pickFromContacts = async () => {
+    if (pickingContact) return;
+    setPickingContact(true);
+    try {
+      const perm = await Contacts.requestPermissions();
+      if (perm.contacts !== "granted") {
+        showToast("Permission to access contacts was denied", "error");
+        return;
+      }
+      const result = await Contacts.pickContact({ projection: { name: true, phones: true } });
+      const picked = result?.contact;
+      if (!picked) return;
+      const digits = (picked.phones?.[0]?.number || "").replace(/\D/g, "").slice(-10);
+      if (digits.length === 10) {
+        setInviteMobile(digits);
+      } else {
+        showToast("Selected contact has no valid 10-digit number", "error");
+      }
+    } catch {
+      showToast("Could not open contacts", "error");
+    } finally {
+      setPickingContact(false);
+    }
+  };
+
   const sendInvite = async () => {
     const m = inviteMobile.replace(/\D/g, "");
     if (m.length < 10) { showToast("Enter a valid 10-digit mobile", "error"); return; }
@@ -96,7 +150,8 @@ const EventDashboardScreen = () => {
   return (
     <DataState loading={state.loading} error={state.error}>
       {e && (
-        <div style={{ width: "100%", padding: "0 0 28px" }}>
+        <div className="cel-wrap" style={{ width: "100%", padding: "0 0 28px" }}>
+          <CelebrationBg />
           <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px", borderBottom: "1px solid var(--cm-line, #E5E7EB)" }}>
             <button type="button" onClick={() => navigate("/customer/app/rybbo/social")} style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer" }}>
               <FaArrowLeft />
@@ -132,10 +187,17 @@ const EventDashboardScreen = () => {
                   <FaCopy /> Copy link
                 </button>
               </div>
-              {/* Invite an app user directly by mobile */}
+              {/* Invite by mobile — type a number or pick from the device contact list */}
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                <input value={inviteMobile} onChange={(ev) => setInviteMobile(ev.target.value)} type="tel" placeholder="Invite by mobile (VasBazaar user)"
+                <input value={inviteMobile} onChange={(ev) => setInviteMobile(ev.target.value)} type="tel" placeholder="Invite by mobile (track invitees)"
                   style={{ flex: 1, minWidth: 0, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--cm-line, #E5E7EB)", background: "var(--cm-card, #fff)", color: "var(--cm-ink, inherit)", fontSize: 13, outline: "none" }} />
+                {Capacitor.isNativePlatform() && (
+                  <button type="button" onClick={pickFromContacts} disabled={pickingContact || inviting}
+                    aria-label="Pick from contacts" title="Pick from contacts"
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "10px 12px", borderRadius: 10, border: `1px solid ${ACCENT}`, background: "transparent", color: ACCENT, fontWeight: 700, cursor: "pointer" }}>
+                    <FaAddressBook /> {pickingContact ? "…" : ""}
+                  </button>
+                )}
                 <button type="button" onClick={sendInvite} disabled={inviting}
                   style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 14px", borderRadius: 10, border: "none", background: ACCENT, color: "#fff", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
                   <FaUserPlus /> {inviting ? "…" : "Invite"}

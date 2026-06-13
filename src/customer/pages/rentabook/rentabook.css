@@ -1,0 +1,57 @@
+/* ============================================================
+   Rent a Book — theme tokens.
+
+   The screen renders inside `.customer-modern-app`, but several
+   sheets/modals use createPortal(..., document.body), which lives
+   OUTSIDE that wrapper. So the tokens are keyed on `data-theme`
+   (set by ThemeContext on <html>) instead of the wrapper class —
+   that way both the in-tree UI and the portalled modals switch.
+
+   Light values are identical to the original hard-coded colors,
+   so light mode is unchanged; only dark mode is new.
+   ============================================================ */
+
+:root,
+[data-theme="light"] {
+  --rb-page: #F8FAFC;        /* screen background */
+  --rb-surface: #FFFFFF;     /* cards, sheets, inputs, search bar */
+  --rb-surface-2: #EEF2F7;   /* subtle fills, tab strip, chips */
+  --rb-border: #E2E8F0;      /* hairline borders */
+  --rb-border-strong: #CBD5E1;
+  --rb-text: #0F172A;        /* primary text */
+  --rb-text-2: #475569;      /* secondary text */
+  --rb-text-3: #64748B;      /* tertiary text */
+  --rb-muted: #94A3B8;       /* placeholder / disabled icons */
+  --rb-accent-bg: #EFF6FF;   /* light-blue accent fills */
+
+  /* Info callout banners (bg / border / heading text) */
+  --rb-info-blue-bg: #F0F9FF;  --rb-info-blue-bd: #BAE6FD;  --rb-info-blue-tx: #0369A1;
+  --rb-info-green-bg: #ECFDF5; --rb-info-green-bd: #BBF7D0; --rb-info-green-tx: #15803D;
+  --rb-info-amber-bg: #FFF7ED; --rb-info-amber-bd: #FED7AA; --rb-info-amber-tx: #9A3412;
+  --rb-info-indigo-bg: #EEF2FF; --rb-info-indigo-bd: #C7D2FE; --rb-info-indigo-tx: #4338CA;
+}
+
+[data-theme="dark"] {
+  --rb-page: #0B0B0B;
+  --rb-surface: #171717;
+  --rb-surface-2: #202020;
+  --rb-border: #2A2A2A;
+  --rb-border-strong: #383838;
+  --rb-text: #F2F3F5;
+  --rb-text-2: #C5CBD4;
+  --rb-text-3: #9AA3AF;
+  --rb-muted: #6E767F;
+  --rb-accent-bg: rgba(37, 99, 235, 0.18);
+
+  --rb-info-blue-bg: #14242E;  --rb-info-blue-bd: #234A63;  --rb-info-blue-tx: #7CC4F2;
+  --rb-info-green-bg: #122A20; --rb-info-green-bd: #235C40; --rb-info-green-tx: #56D08A;
+  --rb-info-amber-bg: #2A1E12; --rb-info-amber-bd: #5C3D1E; --rb-info-amber-tx: #F0A868;
+  --rb-info-indigo-bg: rgba(99, 102, 241, 0.18); --rb-info-indigo-bd: #3A3A5C; --rb-info-indigo-tx: #A5B4FC;
+}
+
+/* Inline-styled <input>/<textarea> placeholders can't be themed via
+   the style attribute, so cover them here. */
+[data-theme="dark"] .rb-root input::placeholder,
+[data-theme="dark"] .rb-root textarea::placeholder {
+  color: var(--rb-muted);
+}
