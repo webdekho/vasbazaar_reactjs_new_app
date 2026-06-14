@@ -148,22 +148,6 @@ const RybboHomeScreen = () => {
           <CategoryTabs categories={state.categories} value={category} onChange={setCategory} />
         </div>
 
-        {featured.length > 0 && category === "all" && !search && (
-          <section className="rybbo-section">
-            <div className="rybbo-section-head">
-              <p>Featured drop</p>
-              <h2>Tonight's pulse in {city}</h2>
-            </div>
-            <div className="rybbo-featured-rail">
-              {featured.map((e) => (
-                <div key={e.id} className="rybbo-featured-card">
-                  <EventCard event={e} onClick={() => navigate(`/customer/app/rybbo/event/${e.slug}`)} />
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
         <div className="rybbo-section-head rybbo-results-head">
           <div>
             <p>{state.events.length} found</p>

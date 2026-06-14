@@ -8,6 +8,7 @@ import {
   isMandateActive,
   isMandatePending,
 } from "../services/mandateService";
+import { playSuccessSound } from "../services/audioService";
 
 const AutoPayCallbackScreen = () => {
   const navigate = useNavigate();
@@ -49,6 +50,7 @@ const AutoPayCallbackScreen = () => {
         if (response.success && isMandateActive(mandateStatus)) {
           setState("success");
           setMessage(apiMessage || "AutoPay mandate activated successfully.");
+          playSuccessSound().catch(() => {});
           setTimeout(() => {
             navigate("/customer/app/autopay", {
               replace: true,

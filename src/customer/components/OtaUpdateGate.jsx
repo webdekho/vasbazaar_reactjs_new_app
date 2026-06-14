@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { otaService } from "../services/otaService";
-import { BUILD_ID } from "../../generated/buildId";
+import { BUILD_ID, BUILD_TIME } from "../../generated/buildId";
 
 /**
  * OtaUpdateGate
@@ -81,6 +81,9 @@ const OtaUpdateGate = () => {
       return;
     }
     _otaCheckDone = true;
+
+    // Report this build's deploy time to the backend (all platforms, best-effort).
+    void otaService.reportDeployTime(BUILD_TIME);
 
     if (!otaService.isNative()) return;
 

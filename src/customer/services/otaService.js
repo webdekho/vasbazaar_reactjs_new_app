@@ -312,8 +312,32 @@ const runUpdateFlow = async ({ onStage, onProgress } = {}) => {
   return { success: true, updateAvailable: true, version: info.latestVersion };
 };
 
+/**
+ * Report this build's compiled BUILD_TIME to the backend so the admin
+ * Global Config panel can show "Customer app deployed". Public endpoint,
+ * no auth required. Best-effort and fired at most once per build id.
+ */
+const reportDeployTime = async (buildTime) => {
+  if (!buildTime) return { success: false };
+  const flagKey = `vb_customer_deploy_reported_${buildTime}`;
+  try {
+    if (localStorage.getItem(flagKey)) return { success: true };
+  } catch {}
+  try {
+    await apiClient.post("/api/dashboard/deploy-info", { app: "customer", buildTime });
+    try {
+      localStorage.setItem(flagKey, "1");
+    } catch {}
+    return { success: true };
+  } catch (error) {
+    // Leave the flag unset so the next load retries.
+    return { success: false, message: getErrorMessage(error) };
+  }
+};
+
 export const otaService = {
   checkUpdate,
+  reportDeployTime,
   getDownloadToken,
   downloadBinary,
   sha256OfBlob,

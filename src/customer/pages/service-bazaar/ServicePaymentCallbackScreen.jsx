@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaCheckCircle, FaTimesCircle, FaClock } from "react-icons/fa";
 import { getPaymentContext } from "../../services/juspayService";
 import { serviceBazaarService } from "../../services/serviceBazaarService";
+import { playSuccessSound } from "../../services/audioService";
 import "./service-bazaar.css";
 
 const STATE = { VERIFYING: "verifying", SUCCESS: "success", FAILED: "failed", PENDING: "pending" };
@@ -41,6 +42,7 @@ export default function ServicePaymentCallbackScreen() {
           const status = String(res?.data?.paymentStatus || "").toUpperCase();
           if (status === "PAID") {
             setState(STATE.SUCCESS);
+            playSuccessSound().catch(() => {});
             setTimeout(() => navigate(`/customer/app/service-bazaar/bookings/${localBookingId}`, { replace: true }), 1200);
             return;
           }

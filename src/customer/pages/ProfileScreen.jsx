@@ -15,9 +15,29 @@ import { useToast } from "../context/ToastContext";
 import { sanitizeBackendMessage } from "../utils/userMessages";
 import { captureProfilePhotoDataUrl, fileToDataUrl, shouldUseNativeCamera } from "../utils/profilePhoto";
 import { getProfilePhotoCandidates, saveProfilePhoto } from "../utils/profileAvatar";
+import { APP_VERSION } from "../../shared/constants/app";
+import { BUILD_TIME } from "../../generated/buildId";
 import ProfileAvatar from "../components/ProfileAvatar";
 import ProfilePhotoCropper from "../components/ProfilePhotoCropper";
 import ProfilePhotoPreview from "../components/ProfilePhotoPreview";
+
+// Last deployed time — stamped into the bundle at build by scripts/stamp-version.js.
+// Rendered in IST so the footer matches what users expect.
+const formatDeployedAt = (iso) => {
+  try {
+    return new Date(iso).toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  } catch {
+    return "";
+  }
+};
 
 const ProfileScreen = () => {
   const { userData, logout, setAuthSession } = useCustomerModern();
@@ -318,6 +338,14 @@ const ProfileScreen = () => {
             <FiChevronRight size={16} color={a.danger ? "#FF3B30" : "#6B6B6B"} />
           </div>
         ))}
+      </div>
+
+      {/* Version / last deployed */}
+      <div className="pf-version">
+        <span className="pf-version-app">App Version : v{APP_VERSION}</span>
+        {BUILD_TIME && (
+          <span className="pf-version-deployed">Last deployed : {formatDeployedAt(BUILD_TIME)}</span>
+        )}
       </div>
 
       <ProfilePhotoCropper

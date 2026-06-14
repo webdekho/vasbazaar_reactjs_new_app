@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { FaArrowLeft, FaWhatsapp, FaCopy, FaEdit, FaBan, FaDownload, FaBell, FaUserPlus, FaQrcode, FaAddressBook } from "react-icons/fa";
-import { Capacitor } from "@capacitor/core";
-import { Contacts } from "@capacitor-community/contacts";
-import { rybboSocialService, buildInviteUrl, buildWhatsappShare } from "../../../services/rybboSocialService";
+import { FaArrowLeft, FaWhatsapp, FaCopy, FaEdit, FaBan, FaDownload, FaBell, FaUserPlus, FaQrcode, FaAddressBook, FaSearch, FaTimes, FaCheck, FaMagic } from "react-icons/fa";
+import { rybboSocialService, buildInviteUrl, buildWhatsappShare, buildBannerAiUrl } from "../../../services/rybboSocialService";
+import { pickContacts, isUserCancelledError } from "../../rebuddy/contacts";
 import DataState from "../../../components/DataState";
 import { useToast } from "../../../context/ToastContext";
 import "./celebration.css";
@@ -55,7 +54,14 @@ const EventDashboardScreen = () => {
   const [state, setState] = useState({ loading: true, error: "", event: null });
   const [inviteMobile, setInviteMobile] = useState("");
   const [inviting, setInviting] = useState(false);
-  const [pickingContact, setPickingContact] = useState(false);
+  // Multi-select contact invite sheet
+  const [contactsOpen, setContactsOpen] = useState(false);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [allContacts, setAllContacts] = useState([]);
+  const [selectedMobiles, setSelectedMobiles] = useState(() => new Set());
+  const [contactSearch, setContactSearch] = useState("");
+  const [bulkInviting, setBulkInviting] = useState(false);
+  const [bannerOpen, setBannerOpen] = useState(false);
 
   const load = async () => {
     const r = await rybboSocialService.getEvent(id);
@@ -103,29 +109,54 @@ const EventDashboardScreen = () => {
     URL.revokeObjectURL(url);
   };
 
-  const pickFromContacts = async () => {
-    if (pickingContact) return;
-    setPickingContact(true);
+  // Fetch the device contact list, then open the multi-select sheet so the host
+  // can pick several people and invite them in one go.
+  const openContactPicker = async () => {
+    if (contactsLoading) return;
+    setContactsLoading(true);
     try {
-      const perm = await Contacts.requestPermissions();
-      if (perm.contacts !== "granted") {
-        showToast("Permission to access contacts was denied", "error");
-        return;
-      }
-      const result = await Contacts.pickContact({ projection: { name: true, phones: true } });
-      const picked = result?.contact;
-      if (!picked) return;
-      const digits = (picked.phones?.[0]?.number || "").replace(/\D/g, "").slice(-10);
-      if (digits.length === 10) {
-        setInviteMobile(digits);
-      } else {
-        showToast("Selected contact has no valid 10-digit number", "error");
-      }
-    } catch {
+      const list = await pickContacts();
+      if (!list.length) { showToast("No contacts with a valid mobile number found", "info"); return; }
+      setAllContacts(list);
+      setSelectedMobiles(new Set());
+      setContactSearch("");
+      setContactsOpen(true);
+    } catch (err) {
+      if (isUserCancelledError(err)) return;
+      if (err?.code === "permission_denied") { showToast("Permission to access contacts was denied", "error"); return; }
+      if (err?.code === "unsupported") { showToast("Contact picker isn't available on this device", "error"); return; }
       showToast("Could not open contacts", "error");
     } finally {
-      setPickingContact(false);
+      setContactsLoading(false);
     }
+  };
+
+  const toggleMobile = (mobile) => {
+    setSelectedMobiles((prev) => {
+      const next = new Set(prev);
+      if (next.has(mobile)) next.delete(mobile); else next.add(mobile);
+      return next;
+    });
+  };
+
+  // Invite every selected contact. Backend exposes only a single-mobile invite,
+  // so we fan out one request per contact and report an aggregate result.
+  const inviteSelected = async () => {
+    const mobiles = Array.from(selectedMobiles);
+    if (!mobiles.length) { showToast("Select at least one contact", "info"); return; }
+    setBulkInviting(true);
+    let ok = 0, fail = 0;
+    for (const m of mobiles) {
+      try {
+        const r = await rybboSocialService.inviteByMobile(id, m);
+        if (r.success) ok++; else fail++;
+      } catch { fail++; }
+    }
+    setBulkInviting(false);
+    setContactsOpen(false);
+    setSelectedMobiles(new Set());
+    showToast(`${ok} invite${ok === 1 ? "" : "s"} sent${fail ? `, ${fail} failed` : ""}`, ok ? "success" : "error");
+    load();
   };
 
   const sendInvite = async () => {
@@ -191,17 +222,23 @@ const EventDashboardScreen = () => {
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                 <input value={inviteMobile} onChange={(ev) => setInviteMobile(ev.target.value)} type="tel" placeholder="Invite by mobile (track invitees)"
                   style={{ flex: 1, minWidth: 0, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--cm-line, #E5E7EB)", background: "var(--cm-card, #fff)", color: "var(--cm-ink, inherit)", fontSize: 13, outline: "none" }} />
-                {Capacitor.isNativePlatform() && (
-                  <button type="button" onClick={pickFromContacts} disabled={pickingContact || inviting}
-                    aria-label="Pick from contacts" title="Pick from contacts"
-                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "10px 12px", borderRadius: 10, border: `1px solid ${ACCENT}`, background: "transparent", color: ACCENT, fontWeight: 700, cursor: "pointer" }}>
-                    <FaAddressBook /> {pickingContact ? "…" : ""}
-                  </button>
-                )}
+                <button type="button" onClick={openContactPicker} disabled={contactsLoading || inviting}
+                  aria-label="Invite from contacts" title="Invite from contacts"
+                  style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 12px", borderRadius: 10, border: `1px solid ${ACCENT}`, background: "transparent", color: ACCENT, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                  <FaAddressBook /> {contactsLoading ? "…" : "Contacts"}
+                </button>
                 <button type="button" onClick={sendInvite} disabled={inviting}
                   style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 14px", borderRadius: 10, border: "none", background: ACCENT, color: "#fff", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
                   <FaUserPlus /> {inviting ? "…" : "Invite"}
                 </button>
+              </div>
+              {/* AI invite banner — lets the host pick Claude or ChatGPT, then opens it with a prompt pre-filled from this event's details */}
+              <button type="button" onClick={() => setBannerOpen(true)}
+                style={{ display: "inline-flex", width: "100%", boxSizing: "border-box", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px", marginTop: 10, borderRadius: 10, border: "none", background: "linear-gradient(135deg, #7C3AED, #EC4899)", color: "#fff", fontWeight: 700, cursor: "pointer" }}>
+                <FaMagic /> Create invite banner
+              </button>
+              <div style={{ fontSize: 11, color: "var(--cm-muted, #6B7280)", marginTop: 6, textAlign: "center" }}>
+                Opens Claude with your event details ready — generate &amp; tweak a banner, then screenshot to share.
               </div>
             </div>
 
@@ -321,6 +358,91 @@ const EventDashboardScreen = () => {
               )}
             </div>
           </div>
+
+          {/* Multi-select contact invite sheet */}
+          {contactsOpen && (() => {
+            const q = contactSearch.trim().toLowerCase();
+            const filtered = q
+              ? allContacts.filter((c) => (c.name || "").toLowerCase().includes(q) || c.mobile.includes(q))
+              : allContacts;
+            return (
+              <div onClick={() => !bulkInviting && setContactsOpen(false)}
+                style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 1000 }}>
+                <div onClick={(ev) => ev.stopPropagation()}
+                  style={{ width: "100%", maxWidth: 520, maxHeight: "82vh", background: "var(--cm-card, #fff)", color: "var(--cm-ink, inherit)", borderRadius: "16px 16px 0 0", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                  <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--cm-line, #E5E7EB)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ fontSize: 15, fontWeight: 700 }}>Invite from contacts</div>
+                    <button type="button" onClick={() => !bulkInviting && setContactsOpen(false)} aria-label="Close"
+                      style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>
+                      <FaTimes />
+                    </button>
+                  </div>
+                  <div style={{ padding: "10px 16px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 10, border: "1px solid var(--cm-line, #E5E7EB)" }}>
+                      <FaSearch style={{ color: "var(--cm-muted, #6B7280)" }} />
+                      <input value={contactSearch} onChange={(ev) => setContactSearch(ev.target.value)} placeholder="Search name or number"
+                        style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", color: "inherit", fontSize: 13 }} />
+                    </div>
+                  </div>
+                  <div style={{ flex: 1, overflowY: "auto", padding: "0 8px 8px" }}>
+                    {filtered.length === 0 ? (
+                      <div style={{ padding: 24, textAlign: "center", fontSize: 13, color: "var(--cm-muted, #6B7280)" }}>No contacts found.</div>
+                    ) : filtered.map((c) => {
+                      const checked = selectedMobiles.has(c.mobile);
+                      return (
+                        <button key={c.mobile} type="button" onClick={() => toggleMobile(c.mobile)}
+                          style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "10px 8px", background: "transparent", border: "none", borderBottom: "1px solid var(--cm-line, #F3F4F6)", cursor: "pointer", textAlign: "left", color: "inherit" }}>
+                          <span style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${checked ? ACCENT : "var(--cm-line, #D1D5DB)"}`, background: checked ? ACCENT : "transparent", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 11 }}>
+                            {checked ? <FaCheck /> : null}
+                          </span>
+                          <span style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{ display: "block", fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</span>
+                            <span style={{ display: "block", fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>{c.mobile}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div style={{ padding: "12px 16px", borderTop: "1px solid var(--cm-line, #E5E7EB)" }}>
+                    <button type="button" onClick={inviteSelected} disabled={bulkInviting || selectedMobiles.size === 0}
+                      style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 10, border: "none", background: selectedMobiles.size ? ACCENT : "var(--cm-line, #D1D5DB)", color: "#fff", fontWeight: 700, cursor: selectedMobiles.size ? "pointer" : "default" }}>
+                      <FaUserPlus /> {bulkInviting ? "Inviting…" : `Invite ${selectedMobiles.size || ""} guest${selectedMobiles.size === 1 ? "" : "s"}`.replace(/\s+/g, " ").trim()}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Banner AI provider chooser */}
+          {bannerOpen && (
+            <div onClick={() => setBannerOpen(false)}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 1000 }}>
+              <div onClick={(ev) => ev.stopPropagation()}
+                style={{ width: "100%", maxWidth: 380, background: "var(--cm-card, #fff)", color: "var(--cm-ink, inherit)", borderRadius: 16, padding: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                  <div style={{ fontSize: 16, fontWeight: 800 }}>Create invite banner</div>
+                  <button type="button" onClick={() => setBannerOpen(false)} aria-label="Close"
+                    style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>
+                    <FaTimes />
+                  </button>
+                </div>
+                <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)", marginBottom: 16 }}>
+                  Pick an AI — it opens with your event details ready. Generate the banner, then screenshot to share.
+                </div>
+                <div style={{ display: "grid", gap: 10 }}>
+                  <a href={buildBannerAiUrl("claude", e, inviteUrl)} target="_blank" rel="noreferrer" onClick={() => setBannerOpen(false)}
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px", borderRadius: 10, background: "#D77655", color: "#fff", fontWeight: 700, textDecoration: "none" }}>
+                    <FaMagic /> Use Claude
+                  </a>
+                  <a href={buildBannerAiUrl("chatgpt", e, inviteUrl)} target="_blank" rel="noreferrer" onClick={() => setBannerOpen(false)}
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px", borderRadius: 10, background: "#10A37F", color: "#fff", fontWeight: 700, textDecoration: "none" }}>
+                    <FaMagic /> Use ChatGPT
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </DataState>

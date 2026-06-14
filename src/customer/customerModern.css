@@ -11636,6 +11636,13 @@
 .pf-action--danger .pf-action-label { color: #FF3B30; }
 .pf-action-label { flex: 1; margin-left: 12px; font-size: 14px; font-weight: 600; color: #FFFFFF; }
 
+/* Version / last deployed footer */
+.pf-version { display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 8px 0 4px; }
+.pf-version-app { font-size: 12px; font-weight: 600; color: #9CA3AF; }
+.pf-version-deployed { font-size: 11px; color: #6B7280; }
+.theme-light .pf-version-app { color: #64748B; }
+.theme-light .pf-version-deployed { color: #94A3B8; }
+
 /* Crop Modal */
 .pf-crop-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; padding: 16px; }
 .pf-crop-modal { width: min(100%, 380px); background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 24px; padding: 20px; }
@@ -20473,7 +20480,7 @@
   height: 100dvh;
   min-height: 100dvh;
   max-height: 100dvh;
-  padding: max(8px, env(safe-area-inset-top)) 14px calc(86px + env(safe-area-inset-bottom));
+  padding: max(8px, env(safe-area-inset-top)) 14px calc(12px + env(safe-area-inset-bottom));
   background: #07080C;
   color: #F5F7FA;
   overflow: hidden;
@@ -20754,13 +20761,10 @@
 
 /* ── Sticky action bar ── */
 .sx2-actionbar {
-  position: fixed; left: 0; right: 0;
-  bottom: 0;
-  padding: 8px 14px calc(8px + env(safe-area-inset-bottom));
+  margin-top: auto;
+  padding: 10px 0 calc(2px + env(safe-area-inset-bottom));
   display: flex; gap: 10px;
-  background: linear-gradient(180deg, rgba(7,8,12,0) 0%, rgba(7,8,12,0.85) 35%, rgba(7,8,12,0.96) 100%);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  flex-shrink: 0;
   z-index: 20;
 }
 .sx2-act {
@@ -20868,9 +20872,6 @@
 }
 .theme-light .sx2-refer-body small { color: #6B7280; }
 .theme-light .sx2-refer > svg:last-child { color: #94A3B8; }
-.theme-light .sx2-actionbar {
-  background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.92) 35%, #FFFFFF 100%);
-}
 .theme-light .sx2-act--ghost {
   background: #F1F5F9;
   border: 1px solid #E5E7EB;

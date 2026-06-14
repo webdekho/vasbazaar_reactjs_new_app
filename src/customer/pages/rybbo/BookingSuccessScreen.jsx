@@ -1,12 +1,20 @@
+import { useEffect } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FaCheckCircle } from "react-icons/fa";
 import { QRCodeSVG } from "qrcode.react";
+import { playSuccessSound } from "../../services/audioService";
 
 const BookingSuccessScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { bookingId } = useParams();
   const booking = location.state?.booking;
+
+  useEffect(() => {
+    let handle;
+    playSuccessSound().then((h) => { handle = h; }).catch(() => {});
+    return () => { if (handle?.stop) handle.stop(); };
+  }, []);
 
   return (
     <div style={{ padding: "24px 16px", maxWidth: 560, margin: "0 auto", textAlign: "center" }}>
