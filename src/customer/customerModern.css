@@ -2679,6 +2679,20 @@
   min-height: 170px;
 }
 
+/*
+  Banner image slides: reserve height with a padding-based aspect ratio instead
+  of relying on `aspect-ratio`. iOS Safari unreliably collapses a flex item whose
+  height comes ONLY from `aspect-ratio` when all its children are absolutely
+  positioned (as the banner image + blurred bg are), leaving the banner mis-sized
+  on iPhones. padding-top is resolved against the slide's width and behaves
+  correctly on every iOS version, keeping the 16:7 proportion on any screen.
+*/
+.cm-slider-slide--banner {
+  aspect-ratio: auto;
+  height: 0;
+  padding-top: 43.75%; /* 7 / 16 */
+}
+
 /* Image always fills the slide — cover ensures no gaps */
 .cm-slider-img {
   position: absolute;

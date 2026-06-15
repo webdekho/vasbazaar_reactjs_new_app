@@ -496,22 +496,13 @@ const OtpScreen = () => {
             </form>
           ) : (
             <form className="cm-auth-form" onSubmit={submit}>
-              {/* Hidden input for iOS OTP autofill - captures full OTP then distributes to visible inputs */}
-              <input
-                type="text"
-                name="otp-autofill"
-                autoComplete="one-time-code"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={6}
-                style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 0, height: 0 }}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, "").slice(0, 6);
-                  if (value.length > 0) {
-                    handleOtpChange(0, value);
-                  }
-                }}
-              />
+              {/*
+                iOS OTP autofill works ONLY on a real, visible, focusable input that
+                carries autocomplete="one-time-code". A hidden 0x0 / pointer-events:none
+                input is ignored by iOS QuickType, and having two competing one-time-code
+                fields suppresses the suggestion entirely. So we keep a single autofill
+                target: the first visible OTP box (maxLength=6) distributes the full code.
+              */}
               <div className={`cm-auth-otp-grid${shake ? " cm-shake" : ""}`}>
                 {otp.map((digit, index) => (
                   <input
