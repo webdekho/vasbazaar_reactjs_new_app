@@ -342,6 +342,20 @@ const ListYourShowScreen = () => {
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
+  // Host taps a seat in the preview to block/unblock it. Reserved / unavailable /
+  // sold seats are left untouched — only available <-> blocked toggles.
+  const toggleBlockSeat = (seat) => {
+    if (!seat || (seat.status !== "available" && seat.status !== "blocked")) return;
+    const label = String(seat.label).trim().toUpperCase();
+    setForm((f) => {
+      const tokens = csvTokens(f.blockedSeats);
+      const next = tokens.includes(label)
+        ? tokens.filter((t) => t !== label)
+        : [...tokens, label];
+      return { ...f, blockedSeats: next.join(", ") };
+    });
+  };
+
   const fileInputRef = useRef(null);
   const handleBannerChange = async (e) => {
     const file = e.target.files?.[0];
@@ -629,7 +643,7 @@ const ListYourShowScreen = () => {
             </select>
           </div>
           <Field label="City *" value={form.city} onChange={set("city")} placeholder="Mumbai / Pune …" />
-          <Field label="Expected date" value={form.expectedDate} onChange={set("expectedDate")} type="date" />
+          <Field label="Event Date" value={form.expectedDate} onChange={set("expectedDate")} type="date" />
 
           {/* ── Venue & map ─────────────────────────────────────── */}
           <div style={sectionCard}>
@@ -725,7 +739,7 @@ const ListYourShowScreen = () => {
               <MiniStat label="Marked unavailable" value={unavailableCount} />
               <MiniStat label="Booking mode" value={form.seatingType.replace("_", " ")} />
             </div>
-            <SeatPreview groups={previewGroups} seatingType={form.seatingType} />
+            <SeatPreview groups={previewGroups} seatingType={form.seatingType} onSeatClick={toggleBlockSeat} />
           </div>
 
           {/* ── Ticket categories ──────────────────────────────── */}
@@ -1002,8 +1016,9 @@ const MiniStat = ({ label, value }) => (
   </div>
 );
 
-const SeatPreview = ({ groups, seatingType }) => {
+const SeatPreview = ({ groups, seatingType, onSeatClick }) => {
   const hasSeats = groups.some((group) => group.seats.length > 0);
+  const clickable = typeof onSeatClick === "function";
   return (
     <div style={{ border: "1px solid var(--cm-line, #E5E7EB)", borderRadius: 12, padding: 10, overflow: "hidden" }}>
       <div style={{ height: 26, borderRadius: "8px 8px 18px 18px", background: "linear-gradient(90deg, #111827, #334155)", color: "#fff", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 800, marginBottom: 10 }}>
@@ -1015,12 +1030,17 @@ const SeatPreview = ({ groups, seatingType }) => {
             <div key={group.label} style={{ display: "grid", gridTemplateColumns: seatingType === "TABLE_SEATING" ? "76px 1fr" : "44px 1fr", gap: 8, alignItems: "center" }}>
               <div style={{ fontSize: 11, fontWeight: 800, color: "var(--cm-muted, #6B7280)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{group.label}</div>
               <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                {group.seats.map((seat) => (
-                  <span key={seat.label} title={`${seat.label} · ${seat.status}`}
-                    style={{ width: seatingType === "TABLE_SEATING" ? 28 : 24, height: 24, borderRadius: seatingType === "TABLE_SEATING" ? "50%" : 6, background: STATUS_COLORS[seat.status], color: "#fff", display: "grid", placeItems: "center", fontSize: 8.5, fontWeight: 800 }}>
-                    {seat.label.replace(/^TABLE/i, "T").slice(-3)}
-                  </span>
-                ))}
+                {group.seats.map((seat) => {
+                  const toggleable = clickable && (seat.status === "available" || seat.status === "blocked");
+                  return (
+                    <button key={seat.label} type="button" disabled={!toggleable}
+                      onClick={() => toggleable && onSeatClick(seat)}
+                      title={toggleable ? `${seat.label} · ${seat.status} (tap to ${seat.status === "blocked" ? "unblock" : "block"})` : `${seat.label} · ${seat.status}`}
+                      style={{ width: seatingType === "TABLE_SEATING" ? 28 : 24, height: 24, padding: 0, border: seat.status === "blocked" ? "1.5px solid #fff" : "none", borderRadius: seatingType === "TABLE_SEATING" ? "50%" : 6, background: STATUS_COLORS[seat.status], color: "#fff", display: "grid", placeItems: "center", fontSize: 8.5, fontWeight: 800, cursor: toggleable ? "pointer" : "default", transition: "transform 0.12s ease" }}>
+                      {seat.label.replace(/^TABLE/i, "T").slice(-3)}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ))}
@@ -1028,6 +1048,11 @@ const SeatPreview = ({ groups, seatingType }) => {
       ) : (
         <div style={{ padding: "14px 8px", textAlign: "center", fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>
           Add capacity or ticket categories to preview the layout.
+        </div>
+      )}
+      {clickable && hasSeats && (
+        <div style={{ marginTop: 8, fontSize: 10.5, color: "var(--cm-muted, #6B7280)" }}>
+          Tap a green seat to block it for guests. Tap again to unblock.
         </div>
       )}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 10 }}>

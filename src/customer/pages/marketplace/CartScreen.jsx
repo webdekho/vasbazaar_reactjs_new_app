@@ -52,6 +52,33 @@ const CartScreen = () => {
       : null
   );
 
+  // Fulfillment (Click & Collect): DELIVERY | PICKUP. Default to delivery.
+  const [fulfillmentType, setFulfillmentType] = useState("DELIVERY");
+  // Whether the store supports pickup/delivery. The cart metadata may not
+  // carry these flags, so we fetch the store on mount (see effect below).
+  const [pickupEnabled, setPickupEnabled] = useState(false);
+  const [deliveryEnabled, setDeliveryEnabled] = useState(true);
+
+  // Offers / coupons.
+  const [offers, setOffers] = useState([]);
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedOffer, setAppliedOffer] = useState(null); // { code, discount }
+  const [couponError, setCouponError] = useState(null);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
+
+  // Load available offers for the store on mount.
+  useEffect(() => {
+    if (!cart) return;
+    let cancelled = false;
+    marketplaceService.getStoreOffers(cart.storeId).then((res) => {
+      if (cancelled || !res?.success || !Array.isArray(res.data)) return;
+      setOffers(res.data);
+    });
+    return () => { cancelled = true; };
+  }, [cart]);
+
+  const isPickup = fulfillmentType === "PICKUP";
+
   // Fetch store coords if we don't have them in the cart (older carts may
   // have been started before lat/lng were captured).
   useEffect(() => {
@@ -67,6 +94,26 @@ const CartScreen = () => {
     });
     return () => { cancelled = true; };
   }, [cart, storeCoords]);
+
+  // Fetch store fulfillment flags on mount. The cart's store metadata may not
+  // include deliveryEnabled/pickupEnabled, so pull them from the store record.
+  // (Separate from the coords effect because that one is skipped once coords
+  // are already known from the cart.)
+  useEffect(() => {
+    if (!cart) return;
+    let cancelled = false;
+    marketplaceService.getStore(cart.storeId).then((res) => {
+      if (cancelled || !res?.success || !res.data) return;
+      const d = res.data;
+      if (d.pickupEnabled != null) setPickupEnabled(!!d.pickupEnabled);
+      if (d.deliveryEnabled != null) setDeliveryEnabled(!!d.deliveryEnabled);
+      // If only pickup is supported, default the toggle to pickup.
+      if (d.deliveryEnabled === false && d.pickupEnabled) {
+        setFulfillmentType("PICKUP");
+      }
+    });
+    return () => { cancelled = true; };
+  }, [cart]);
 
   // Reverse geocode the captured coordinates into a readable address using
   // OpenStreetMap Nominatim. Free, no API key — but please be polite with usage.
@@ -116,6 +163,46 @@ const CartScreen = () => {
     return `${km.toFixed(km < 10 ? 1 : 0)} km`;
   };
 
+  // Apply the entered coupon code by validating it against the current
+  // subtotal. On success we store { code, discount }; otherwise show message.
+  const applyCoupon = async (codeArg) => {
+    const code = String(codeArg ?? couponCode).trim();
+    if (!code) { setCouponError("Enter a coupon code"); return; }
+    if (validatingCoupon) return;
+    setCouponError(null);
+    setValidatingCoupon(true);
+    const res = await marketplaceService.validateOffer({
+      storeId: cart.storeId,
+      code,
+      subtotal: totals.subtotal,
+    });
+    setValidatingCoupon(false);
+    if (!res.success) {
+      setCouponError(res.message || "Couldn't validate coupon");
+      return;
+    }
+    const d = res.data || {};
+    if (d.valid) {
+      setAppliedOffer({ code: d.code || code, discount: Number(d.discount || 0) });
+      setCouponCode(d.code || code);
+      setCouponError(null);
+    } else {
+      setAppliedOffer(null);
+      setCouponError(d.message || "Coupon not applicable");
+    }
+  };
+
+  const removeCoupon = () => {
+    setAppliedOffer(null);
+    setCouponCode("");
+    setCouponError(null);
+  };
+
+  const tapOfferChip = (offer) => {
+    setCouponCode(offer.code);
+    applyCoupon(offer.code);
+  };
+
   if (!cart || totals.count === 0) {
     return (
       <div className="mkt">
@@ -142,6 +229,13 @@ const CartScreen = () => {
   const minOrder = Number(cart.minOrderValue || 0);
   const belowMin = totals.subtotal < minOrder;
 
+  // Pickup has no delivery charge. Any extra order charge (packing, taxes…) is
+  // whatever the cart's total adds on top of subtotal + delivery.
+  const orderCharge = Math.max(0, totals.total - totals.subtotal - totals.deliveryCharges);
+  const effectiveDelivery = isPickup ? 0 : totals.deliveryCharges;
+  const discount = appliedOffer ? Number(appliedOffer.discount || 0) : 0;
+  const payTotal = Math.max(0, totals.subtotal + effectiveDelivery + orderCharge - discount);
+
   const captureLocation = () => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
@@ -167,7 +261,8 @@ const CartScreen = () => {
 
   const placeOrder = async (method = "ONLINE") => {
     if (placing) return;
-    if (!address.trim()) { setError("Please enter delivery address"); return; }
+    // Delivery requires an address; pickup does not (collect from store).
+    if (!isPickup && !address.trim()) { setError("Please enter delivery address"); return; }
     const orderMobile = String(userData?.mobile || userData?.mobileNumber || "").trim();
     if (!orderMobile || !/^\d{10}$/.test(orderMobile)) {
       setError("Your account mobile is missing. Please re-login and try again.");
@@ -180,11 +275,13 @@ const CartScreen = () => {
     const payload = {
       storeId: cart.storeId,
       items: items.map((i) => ({ itemId: i.id, quantity: i.qty })),
-      deliveryAddress: address.trim(),
+      deliveryAddress: isPickup ? "" : address.trim(),
       contactMobile: orderMobile,
       paymentMethod: method,
+      fulfillmentType,
+      ...(appliedOffer?.code ? { offerCode: appliedOffer.code } : {}),
       ...(method === "ONLINE" ? { returnUrl: buildMarketplaceReturnUrl() } : {}),
-      ...(coords ? { deliveryLat: coords.lat, deliveryLng: coords.lng } : {}),
+      ...(coords && !isPickup ? { deliveryLat: coords.lat, deliveryLng: coords.lng } : {}),
     };
 
     const res = await marketplaceService.placeOrder(payload);
@@ -312,6 +409,67 @@ const CartScreen = () => {
       ) : (
         <>
           <div className="mkt-form">
+            {pickupEnabled && (
+              <>
+                <div className="mkt-form-section-title">How would you like it?</div>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    background: "var(--cm-surface, #1a1a1a)",
+                    border: "1px solid var(--cm-border, #2a2a2a)",
+                    borderRadius: 12,
+                    padding: 4,
+                    marginBottom: 14,
+                  }}
+                >
+                  {[
+                    { key: "DELIVERY", label: "Home Delivery", disabled: !deliveryEnabled },
+                    { key: "PICKUP", label: "Store Pickup", disabled: false },
+                  ].map((opt) => {
+                    const active = fulfillmentType === opt.key;
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        disabled={opt.disabled}
+                        onClick={() => !opt.disabled && setFulfillmentType(opt.key)}
+                        style={{
+                          flex: 1,
+                          padding: "10px 8px",
+                          borderRadius: 9,
+                          border: "none",
+                          cursor: opt.disabled ? "not-allowed" : "pointer",
+                          fontSize: 13,
+                          fontWeight: 600,
+                          opacity: opt.disabled ? 0.4 : 1,
+                          background: active ? "var(--cm-primary, #22c55e)" : "transparent",
+                          color: active ? "#fff" : "var(--cm-ink)",
+                          transition: "background 0.15s",
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {isPickup ? (
+              <div className="mkt-loc-card" style={{ marginBottom: 14 }}>
+                <div className="mkt-loc-card-row">
+                  <FaStore size={12} className="mkt-loc-card-icon" />
+                  <div className="mkt-loc-card-body">
+                    <div className="mkt-loc-card-title">Collect from store — no delivery charge</div>
+                    <div className="mkt-loc-card-text">
+                      Pick up your order at <strong style={{ color: "var(--cm-ink)" }}>{cart.storeName}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
             <div className="mkt-form-section-title">Delivery Address</div>
             <div className="mkt-field">
               <label className="mkt-field-label">Full Address</label>
@@ -368,11 +526,100 @@ const CartScreen = () => {
                 </div>
               </div>
             )}
+              </>
+            )}
+
+            {/* Coupons / Offers */}
+            <div className="mkt-form-section-title">Apply coupon</div>
+            {!appliedOffer ? (
+              <>
+                <div style={{ display: "flex", gap: 8, marginBottom: offers.length ? 10 : 4 }}>
+                  <input
+                    className="mkt-textarea"
+                    style={{ flex: 1, minHeight: 0, height: 42, padding: "0 12px", resize: "none", textTransform: "uppercase" }}
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                    placeholder="Enter coupon code"
+                  />
+                  <button
+                    type="button"
+                    className="mkt-btn mkt-btn--secondary"
+                    onClick={() => applyCoupon()}
+                    disabled={validatingCoupon}
+                    style={{ width: "auto", padding: "0 18px", height: 42 }}
+                  >
+                    {validatingCoupon ? "…" : "Apply"}
+                  </button>
+                </div>
+                {offers.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
+                    {offers.map((o) => (
+                      <button
+                        key={o.id}
+                        type="button"
+                        onClick={() => tapOfferChip(o)}
+                        style={{
+                          textAlign: "left",
+                          background: "var(--cm-surface, #1a1a1a)",
+                          border: `1px dashed ${o.isFlash ? "#f59e0b" : "var(--cm-primary, #22c55e)"}`,
+                          borderRadius: 10,
+                          padding: "8px 10px",
+                          cursor: "pointer",
+                          maxWidth: "100%",
+                        }}
+                      >
+                        <div style={{ fontSize: 12, fontWeight: 700, color: o.isFlash ? "#f59e0b" : "var(--cm-primary, #22c55e)" }}>
+                          {o.code}{o.isFlash ? " ⚡" : ""}
+                        </div>
+                        <div style={{ fontSize: 11, color: "var(--cm-ink)" }}>{o.title}</div>
+                        {o.description && (
+                          <div style={{ fontSize: 10, color: "var(--cm-muted)" }}>{o.description}</div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  background: "rgba(34,197,94,0.12)",
+                  border: "1px solid var(--cm-primary, #22c55e)",
+                  borderRadius: 10,
+                  padding: "10px 12px",
+                  marginBottom: 6,
+                }}
+              >
+                <span style={{ color: "var(--cm-primary, #22c55e)", fontSize: 13, fontWeight: 600 }}>
+                  Coupon {appliedOffer.code} applied – you save ₹{discount.toFixed(0)}
+                </span>
+                <button
+                  type="button"
+                  onClick={removeCoupon}
+                  aria-label="Remove coupon"
+                  style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: 0 }}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+            {couponError && <div className="mkt-error-text" style={{ marginBottom: 6 }}>{couponError}</div>}
 
             <div className="mkt-summary" style={{ margin: 0 }}>
               <div className="mkt-summary-row"><span>Subtotal</span><span>₹{totals.subtotal.toFixed(0)}</span></div>
-              <div className="mkt-summary-row"><span>Delivery</span><span>{totals.deliveryCharges > 0 ? `₹${totals.deliveryCharges.toFixed(0)}` : "Free"}</span></div>
-              <div className="mkt-summary-row mkt-summary-row--total"><span>Pay total</span><span>₹{totals.total.toFixed(0)}</span></div>
+              <div className="mkt-summary-row"><span>Delivery</span><span>{isPickup ? "Free (pickup)" : (effectiveDelivery > 0 ? `₹${effectiveDelivery.toFixed(0)}` : "Free")}</span></div>
+              {orderCharge > 0 && (
+                <div className="mkt-summary-row"><span>Other charges</span><span>₹{orderCharge.toFixed(0)}</span></div>
+              )}
+              {discount > 0 && (
+                <div className="mkt-summary-row" style={{ color: "var(--cm-primary, #22c55e)" }}>
+                  <span>Coupon discount</span><span>−₹{discount.toFixed(0)}</span>
+                </div>
+              )}
+              <div className="mkt-summary-row mkt-summary-row--total"><span>Pay total</span><span>₹{payTotal.toFixed(0)}</span></div>
             </div>
 
             {error && <div className="mkt-error-text">{error}</div>}
@@ -396,7 +643,7 @@ const CartScreen = () => {
                   "Placing order…"
                 ) : (
                   <>
-                    <span>Pay ₹{totals.total.toFixed(0)} via</span>
+                    <span>Pay ₹{payTotal.toFixed(0)} via</span>
                     <img
                       src="https://webdekho.in/images/vasbazaar.png"
                       alt="vasbazaar"

@@ -15,17 +15,24 @@ import {
   FaUser,
   FaReceipt,
   FaRupeeSign,
+  FaStar,
+  FaTag,
+  FaQrcode,
+  FaHandHolding,
 } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
 import "./marketplace.css";
 
-const STATUS_FLOW = ["PLACED", "ACCEPTED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED"];
+const DELIVERY_STATUS_FLOW = ["PLACED", "ACCEPTED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED"];
+const PICKUP_STATUS_FLOW = ["PLACED", "ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "PICKED_UP"];
 const STATUS_LABEL = {
   PLACED: "Order placed",
   ACCEPTED: "Accepted",
   PREPARING: "Preparing",
   OUT_FOR_DELIVERY: "Out for delivery",
   DELIVERED: "Delivered",
+  READY_FOR_PICKUP: "Ready for pickup",
+  PICKED_UP: "Picked up",
   CANCELLED: "Cancelled",
   REJECTED: "Rejected",
 };
@@ -35,6 +42,8 @@ const STATUS_ICON = {
   PREPARING: FaBoxOpen,
   OUT_FOR_DELIVERY: FaTruck,
   DELIVERED: FaCheckCircle,
+  READY_FOR_PICKUP: FaStore,
+  PICKED_UP: FaHandHolding,
   CANCELLED: FaTimesCircle,
 };
 
@@ -68,6 +77,25 @@ const itemTotal = (it) =>
 
 const CONFETTI_COLORS = ["#00E5A0", "#3B82F6", "#A855F7", "#FFD700", "#FF6B6B", "#06B6D4"];
 
+// Interactive / read-only 1-5 star selector. Pass readOnly to disable input.
+const StarRating = ({ value = 0, onChange, size = 26, readOnly = false }) => (
+  <div style={{ display: "inline-flex", gap: 6 }}>
+    {[1, 2, 3, 4, 5].map((n) => (
+      <FaStar
+        key={n}
+        size={size}
+        onClick={readOnly ? undefined : () => onChange?.(n)}
+        style={{
+          cursor: readOnly ? "default" : "pointer",
+          color: n <= value ? "#fbbf24" : "var(--cm-line)",
+          transition: "color .15s",
+        }}
+        aria-label={`${n} star`}
+      />
+    ))}
+  </div>
+);
+
 const OrderDetailScreen = () => {
   const { orderId } = useParams();
   const navigate = useNavigate();
@@ -83,6 +111,17 @@ const OrderDetailScreen = () => {
   const [celebrate, setCelebrate] = useState(initialCelebrate);
   const celebrateFiredRef = useRef(false);
 
+  // Ratings & reviews
+  const [reviewState, setReviewState] = useState(null); // { canReview, alreadyReviewed, review }
+  const [rating, setRating] = useState(0);
+  const [productRating, setProductRating] = useState(0);
+  const [deliveryRating, setDeliveryRating] = useState(0);
+  const [packagingRating, setPackagingRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [reviewError, setReviewError] = useState("");
+  const [reviewThanks, setReviewThanks] = useState(false);
+
   const load = useCallback(async () => {
     const res = await marketplaceService.getMyOrder(orderId);
     setLoading(false);
@@ -94,8 +133,52 @@ const OrderDetailScreen = () => {
         sessionStorage.setItem(seenKey, "1");
         setCelebrate(true);
       }
+      // Once the order is completed, load review eligibility / existing review.
+      const st = res.data?.orderStatus;
+      if (st === "DELIVERED" || st === "PICKED_UP") {
+        try {
+          const rev = await marketplaceService.getOrderReviewState(orderId);
+          if (rev?.success) setReviewState(rev.data);
+        } catch {
+          // non-fatal — review section just stays hidden
+        }
+      }
     }
   }, [orderId]);
+
+  const submitReview = useCallback(async () => {
+    if (!rating) {
+      setReviewError("Please select an overall rating.");
+      return;
+    }
+    setSubmitting(true);
+    setReviewError("");
+    try {
+      const res = await marketplaceService.createReview({
+        orderId,
+        rating,
+        productRating: productRating || undefined,
+        deliveryRating: deliveryRating || undefined,
+        packagingRating: packagingRating || undefined,
+        comment: comment.trim() || undefined,
+      });
+      if (res?.success) {
+        setReviewThanks(true);
+        setReviewState((prev) => ({
+          ...(prev || {}),
+          canReview: false,
+          alreadyReviewed: true,
+          review: { rating, productRating, deliveryRating, packagingRating, comment: comment.trim() },
+        }));
+      } else {
+        setReviewError(res?.message || "Could not submit review. Please try again.");
+      }
+    } catch {
+      setReviewError("Could not submit review. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }, [orderId, rating, productRating, deliveryRating, packagingRating, comment]);
 
   useEffect(() => {
     load();
@@ -151,6 +234,8 @@ const OrderDetailScreen = () => {
     );
   }
 
+  const isPickup = order.fulfillmentType === "PICKUP";
+  const STATUS_FLOW = isPickup ? PICKUP_STATUS_FLOW : DELIVERY_STATUS_FLOW;
   const statusIdx = STATUS_FLOW.indexOf(order.orderStatus);
   const isCancelled = order.orderStatus === "CANCELLED";
   const isRejected = order.orderStatus === "REJECTED";
@@ -291,6 +376,57 @@ const OrderDetailScreen = () => {
           </div>
         </div>
 
+        {/* Click & Collect pickup code */}
+        {isPickup && order.pickupCode &&
+          ["ACCEPTED", "PREPARING", "READY_FOR_PICKUP"].includes(order.orderStatus) && (
+          <div
+            className="mkt-receipt-card no-print"
+            style={{
+              marginTop: 12,
+              textAlign: "center",
+              background: "linear-gradient(135deg, rgba(20,184,166,0.16), rgba(16,185,129,0.10))",
+              border: "1px solid rgba(20,184,166,0.4)",
+            }}
+          >
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                fontWeight: 800,
+                fontSize: 14,
+                color: "#14b8a6",
+              }}
+            >
+              <FaQrcode size={14} /> Show this code at the store
+            </div>
+            <div
+              style={{
+                fontFamily: "'Courier New', monospace",
+                fontSize: 40,
+                fontWeight: 800,
+                letterSpacing: 6,
+                color: "var(--cm-ink)",
+                margin: "10px 0 4px",
+              }}
+            >
+              {order.pickupCode}
+            </div>
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(order.pickupCode)}`}
+              alt="Pickup QR code"
+              width={160}
+              height={160}
+              style={{ borderRadius: 10, background: "#fff", padding: 8, marginTop: 6 }}
+            />
+            {order.orderStatus === "READY_FOR_PICKUP" && (
+              <div style={{ marginTop: 8, fontSize: 12, color: "#14b8a6", fontWeight: 700 }}>
+                Your order is ready for pickup!
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Customer & delivery */}
         <div className="mkt-receipt-card" style={{ marginTop: 12 }}>
           <div className="mkt-receipt-section-title">Bill To</div>
@@ -369,9 +505,12 @@ const OrderDetailScreen = () => {
             </div>
           )}
           {discount > 0 && (
-            <div className="mkt-receipt-row" style={{ color: "#34d399" }}>
-              <span>Discount</span>
-              <span>-{inr(discount)}</span>
+            <div className="mkt-receipt-row" style={{ color: "#34d399", fontWeight: 600 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <FaTag size={11} />
+                Coupon{order.offerCode ? ` (${order.offerCode})` : ""}
+              </span>
+              <span>− {inr(discount)}</span>
             </div>
           )}
           <div className="mkt-receipt-row mkt-receipt-row--total">
@@ -468,6 +607,115 @@ const OrderDetailScreen = () => {
             </div>
           )}
         </div>
+
+        {/* Ratings & Reviews */}
+        {reviewState && (reviewThanks || reviewState.alreadyReviewed || reviewState.canReview) && (
+          <div className="mkt-receipt-card no-print" style={{ marginTop: 12 }}>
+            {reviewThanks ? (
+              <div style={{ textAlign: "center", padding: "8px 0" }}>
+                <FaCheckCircle size={28} style={{ color: "#34d399" }} />
+                <div style={{ fontWeight: 800, fontSize: 15, marginTop: 8 }}>
+                  Thanks for your feedback!
+                </div>
+                <div style={{ fontSize: 12, color: "var(--cm-muted)", marginTop: 4 }}>
+                  Your review helps other shoppers.
+                </div>
+              </div>
+            ) : reviewState.alreadyReviewed && reviewState.review ? (
+              <>
+                <div className="mkt-receipt-section-title">Your review</div>
+                <div style={{ marginTop: 8 }}>
+                  <StarRating value={Number(reviewState.review.rating || 0)} size={22} readOnly />
+                </div>
+                {reviewState.review.comment && (
+                  <div
+                    style={{
+                      marginTop: 10,
+                      fontSize: 13,
+                      color: "var(--cm-ink)",
+                      lineHeight: 1.5,
+                      fontStyle: "italic",
+                    }}
+                  >
+                    “{reviewState.review.comment}”
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="mkt-receipt-section-title">Rate your order</div>
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>
+                    Overall rating <span style={{ color: "#f87171" }}>*</span>
+                  </div>
+                  <StarRating value={rating} onChange={setRating} size={30} />
+                </div>
+
+                <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: 13, color: "var(--cm-muted)" }}>Product quality</span>
+                    <StarRating value={productRating} onChange={setProductRating} size={20} />
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: 13, color: "var(--cm-muted)" }}>
+                      {isPickup ? "Pickup experience" : "Delivery"}
+                    </span>
+                    <StarRating value={deliveryRating} onChange={setDeliveryRating} size={20} />
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: 13, color: "var(--cm-muted)" }}>Packaging</span>
+                    <StarRating value={packagingRating} onChange={setPackagingRating} size={20} />
+                  </div>
+                </div>
+
+                <textarea
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  placeholder="Share a few words about your experience (optional)"
+                  rows={3}
+                  style={{
+                    marginTop: 14,
+                    width: "100%",
+                    resize: "vertical",
+                    padding: 10,
+                    borderRadius: 10,
+                    border: "1px solid var(--cm-line)",
+                    background: "var(--cm-card, rgba(255,255,255,0.04))",
+                    color: "var(--cm-ink)",
+                    fontSize: 13,
+                    fontFamily: "inherit",
+                    boxSizing: "border-box",
+                  }}
+                />
+
+                {reviewError && (
+                  <div style={{ color: "#f87171", fontSize: 12, marginTop: 8 }}>{reviewError}</div>
+                )}
+
+                <button
+                  onClick={submitReview}
+                  disabled={submitting}
+                  style={{
+                    marginTop: 12,
+                    width: "100%",
+                    padding: "11px 14px",
+                    borderRadius: 10,
+                    border: "none",
+                    background: submitting
+                      ? "var(--cm-line)"
+                      : "linear-gradient(135deg, #14b8a6, #10b981)",
+                    color: "#fff",
+                    fontWeight: 800,
+                    fontSize: 14,
+                    cursor: submitting ? "default" : "pointer",
+                  }}
+                >
+                  {submitting ? "Submitting…" : "Submit review"}
+                </button>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Footer */}
         <div className="mkt-receipt-footer">

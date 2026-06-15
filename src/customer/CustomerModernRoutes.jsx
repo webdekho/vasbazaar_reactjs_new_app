@@ -143,6 +143,9 @@ const StoreTimingsScreen = lazy(() => import("./pages/marketplace/StoreTimingsSc
 const MyMarketplaceOrdersScreen = lazy(() => import("./pages/marketplace/MyOrdersScreen"));
 const MarketplaceOrderDetailScreen = lazy(() => import("./pages/marketplace/OrderDetailScreen"));
 const StoreOrdersScreen = lazy(() => import("./pages/marketplace/StoreOrdersScreen"));
+const StoreOffersScreen = lazy(() => import("./pages/marketplace/StoreOffersScreen"));
+const StoreAnalyticsScreen = lazy(() => import("./pages/marketplace/StoreAnalyticsScreen"));
+const StoreReviewsScreen = lazy(() => import("./pages/marketplace/StoreReviewsScreen"));
 const MarketplacePaymentCallbackScreen = lazy(() => import("./pages/marketplace/MarketplacePaymentCallbackScreen"));
 
 /** Lightweight loading fallback for lazy-loaded routes */
@@ -318,6 +321,9 @@ const CustomerModernRoutes = () => {
             <Route path="marketplace/my-orders" element={<Suspense fallback={<RouteFallback />}><MyMarketplaceOrdersScreen /></Suspense>} />
             <Route path="marketplace/orders/:orderId" element={<Suspense fallback={<RouteFallback />}><MarketplaceOrderDetailScreen /></Suspense>} />
             <Route path="marketplace/store-orders" element={<Suspense fallback={<RouteFallback />}><StoreOrdersScreen /></Suspense>} />
+            <Route path="marketplace/my-store/offers" element={<Suspense fallback={<RouteFallback />}><StoreOffersScreen /></Suspense>} />
+            <Route path="marketplace/my-store/analytics" element={<Suspense fallback={<RouteFallback />}><StoreAnalyticsScreen /></Suspense>} />
+            <Route path="marketplace/my-store/reviews" element={<Suspense fallback={<RouteFallback />}><StoreReviewsScreen /></Suspense>} />
             <Route path="marketplace/payment-callback" element={<Suspense fallback={<RouteFallback />}><MarketplacePaymentCallbackScreen /></Suspense>} />
             <Route path="*" element={<Navigate to="/customer/app/services" replace />} />
           </Route>

@@ -134,6 +134,51 @@ export const marketplaceService = {
   checkOrderPayment: (orderId) =>
     authGet(`/api/customer/marketplace/orders/${orderId}/check-payment`),
 
+  // ===== Ratings & Reviews =====
+  getStoreReviews: (storeId, { pageNumber = 0, pageSize = 10 } = {}) =>
+    authGet(`/api/customer/marketplace/stores/${storeId}/reviews`, { pageNumber, pageSize }),
+
+  createReview: (payload) => authPost("/api/customer/marketplace/reviews", payload),
+
+  getOrderReviewState: (orderId) =>
+    authGet(`/api/customer/marketplace/orders/${orderId}/review-state`),
+
+  // Merchant: reviews on my store + reply
+  getMyStoreReviews: () => authGet("/api/customer/marketplace/store/my/reviews"),
+
+  replyToReview: (reviewId, reply) =>
+    authPost(`/api/customer/marketplace/reviews/${reviewId}/reply`, { reply }),
+
+  // ===== Offers & Promotions =====
+  getStoreOffers: (storeId) => authGet(`/api/customer/marketplace/stores/${storeId}/offers`),
+
+  validateOffer: ({ storeId, code, subtotal }) =>
+    authPost("/api/customer/marketplace/offers/validate", { storeId, code, subtotal }),
+
+  // Merchant offer CRUD
+  getMyOffers: () => authGet("/api/customer/marketplace/store/my/offers"),
+
+  createOffer: (payload) => authPost("/api/customer/marketplace/store/my/offers", payload),
+
+  updateOffer: (payload) => authPut("/api/customer/marketplace/store/my/offers", payload),
+
+  deleteOffer: (id) => authDelete(`/api/customer/marketplace/store/my/offers/${id}`),
+
+  toggleOffer: (id, isActive) =>
+    authPut(`/api/customer/marketplace/store/my/offers/${id}/toggle-active?isActive=${isActive}`, {}),
+
+  // ===== Click & Collect =====
+  verifyPickup: (orderId, code) =>
+    authPost(`/api/customer/marketplace/seller/orders/${orderId}/verify-pickup`, { code }),
+
+  // Merchant: enable/disable delivery & pickup without re-approval
+  updateFulfillmentModes: ({ deliveryEnabled, pickupEnabled }) =>
+    authPut("/api/customer/marketplace/store/my/fulfillment", { deliveryEnabled, pickupEnabled }),
+
+  // ===== Merchant Analytics =====
+  getMyStoreAnalytics: (days = 30) =>
+    authGet("/api/customer/marketplace/store/my/analytics", { days }),
+
   // ===== Image upload =====
   uploadImage: async (file, purpose) => {
     try {

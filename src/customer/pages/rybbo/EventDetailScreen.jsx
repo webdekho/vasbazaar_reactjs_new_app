@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { FaArrowLeft, FaCalendarAlt, FaClock, FaMapMarkerAlt, FaStar, FaShare, FaRegImage } from "react-icons/fa";
+import { FaArrowLeft, FaCalendarAlt, FaClock, FaMapMarkerAlt, FaStar, FaShare, FaRegImage, FaTicketAlt } from "react-icons/fa";
 import { rybboService } from "../../services/rybboService";
 import DataState from "../../components/DataState";
 
@@ -43,98 +43,118 @@ const EventDetailScreen = () => {
     navigate(`/customer/app/rybbo/event/${state.event.slug}/seats`, { state: { event: state.event, showtime: selectedShowtime } });
   };
 
+  const event = state.event;
+  const hasPoster = event?.poster && !posterFailed;
+
   return (
     <DataState loading={state.loading} error={state.error}>
-      {state.event && (
-        <div style={{ paddingBottom: 90, width: "100%" }}>
-          {/* Hero poster */}
-          <div style={{ position: "relative" }}>
-            {state.event.poster && !posterFailed ? (
-              <img src={state.event.poster} alt={state.event.title} onError={() => setPosterFailed(true)}
-                style={{ width: "100%", height: 300, objectFit: "cover", display: "block" }} />
-            ) : (
-              <div style={{ width: "100%", height: 300, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, color: "#fff", background: "linear-gradient(135deg, #40E0D0 0%, #007BFF 100%)" }}>
-                <FaRegImage size={48} style={{ opacity: 0.85 }} />
-                <span style={{ fontSize: 18, fontWeight: 800, textAlign: "center", padding: "0 24px" }}>{state.event.title}</span>
-              </div>
-            )}
-            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,0.4) 0%, transparent 40%, rgba(0,0,0,0.85) 100%)" }} />
-            <button type="button" onClick={() => navigate(-1)} style={{ position: "absolute", top: 14, left: 14, width: 38, height: 38, borderRadius: 19, background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", cursor: "pointer" }}>
+      {event && (
+        <div className="rbd-page">
+          {/* Hero */}
+          <header className="rbd-hero">
+            {hasPoster && <div className="rbd-hero-glow" style={{ backgroundImage: `url(${event.poster})` }} aria-hidden="true" />}
+            <div className="rbd-hero-art">
+              {hasPoster ? (
+                <img src={event.poster} alt={event.title} onError={() => setPosterFailed(true)} className="rbd-hero-img" />
+              ) : (
+                <div className="rbd-hero-placeholder">
+                  <span className="rbd-hero-placeholder-orb" aria-hidden="true" />
+                  <FaRegImage size={42} />
+                  <span className="rbd-hero-placeholder-title">{event.title}</span>
+                </div>
+              )}
+              <div className="rbd-hero-shade" aria-hidden="true" />
+            </div>
+
+            <button type="button" onClick={() => navigate(-1)} className="rbd-glass-btn rbd-glass-btn--left" aria-label="Go back">
               <FaArrowLeft />
             </button>
-            <button type="button" onClick={handleShare} style={{ position: "absolute", top: 14, right: 14, width: 38, height: 38, borderRadius: 19, background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", cursor: "pointer" }}>
+            <button type="button" onClick={handleShare} className="rbd-glass-btn rbd-glass-btn--right" aria-label="Share">
               <FaShare />
             </button>
-            <div style={{ position: "absolute", bottom: 14, left: 14, right: 14, color: "#fff" }}>
-              <div style={{ fontSize: 12, opacity: 0.9, marginBottom: 4 }}>{state.event.type} · {state.event.language}</div>
-              <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0, lineHeight: 1.2 }}>{state.event.title}</h1>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, fontSize: 13 }}>
-                <FaStar color="#F4A261" /> {state.event.rating} · <FaClock size={11} /> {state.event.durationMins} mins
+
+            <div className="rbd-hero-copy">
+              {(event.type || event.language) && (
+                <div className="rbd-hero-kicker">{[event.type, event.language].filter(Boolean).join(" · ")}</div>
+              )}
+              <h1 className="rbd-hero-title">{event.title}</h1>
+              <div className="rbd-hero-meta">
+                {event.rating != null && event.rating !== "" && (
+                  <span className="rbd-chip rbd-chip--rating"><FaStar /> {event.rating}</span>
+                )}
+                {event.durationMins ? (
+                  <span className="rbd-chip"><FaClock /> {event.durationMins} mins</span>
+                ) : null}
               </div>
             </div>
-          </div>
+          </header>
 
           {/* Body */}
-          <div style={{ padding: "16px 14px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--cm-muted, #6B7280)", marginBottom: 8 }}>
-              <FaMapMarkerAlt size={11} /> {state.event.venue}, {state.event.city}
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--cm-muted, #6B7280)", marginBottom: 16 }}>
-              <FaCalendarAlt size={11} /> {state.event.date} · {state.event.time}
+          <div className="rbd-body">
+            <div className="rbd-facts">
+              <div className="rbd-fact"><span className="rbd-fact-ic"><FaMapMarkerAlt /></span>{event.venue}, {event.city}</div>
+              <div className="rbd-fact"><span className="rbd-fact-ic"><FaCalendarAlt /></span>{event.date} · {event.time}</div>
             </div>
 
-            <h3 style={{ fontSize: 15, fontWeight: 700, margin: "12px 0 8px" }}>About</h3>
-            <p style={{ fontSize: 14, lineHeight: 1.6, color: "var(--cm-muted, #6B7280)", margin: 0 }}>{state.event.description}</p>
-
-            {state.event.artists?.length > 0 && (
-              <>
-                <h3 style={{ fontSize: 15, fontWeight: 700, margin: "20px 0 8px" }}>Cast</h3>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {state.event.artists.map((a) => (
-                    <span key={a} style={{ padding: "6px 12px", borderRadius: 999, border: "1px solid var(--cm-line, #E5E7EB)", fontSize: 12 }}>{a}</span>
-                  ))}
-                </div>
-              </>
+            {event.description && (
+              <section className="rbd-section">
+                <h3 className="rbd-h3">About</h3>
+                <p className="rbd-about">{event.description}</p>
+              </section>
             )}
 
-            <h3 style={{ fontSize: 15, fontWeight: 700, margin: "20px 0 8px" }}>Choose showtime</h3>
-            <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "2px 2px 6px", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
-              {state.event.showtimes.map((s) => {
-                const active = selectedShowtime?.id === s.id;
-                return (
-                  <button key={s.id} type="button" onClick={() => setSelectedShowtime(s)}
-                    style={{ flexShrink: 0, padding: "10px 14px", borderRadius: 10, border: `1px solid ${active ? "#007BFF" : "var(--cm-line, #E5E7EB)"}`, background: active ? "rgba(0,123,255,0.12)" : "transparent", color: "inherit", cursor: "pointer", textAlign: "left" }}>
-                    <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>{s.date}</div>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>{s.time}</div>
-                  </button>
-                );
-              })}
-            </div>
-
-            <h3 style={{ fontSize: 15, fontWeight: 700, margin: "20px 0 8px" }}>Pricing</h3>
-            <div style={{ display: "grid", gap: 8 }}>
-              {state.event.ticketCategories.map((tc) => (
-                <div key={tc.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", border: "1px solid var(--cm-line, #E5E7EB)", borderRadius: 10 }}>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>{tc.name}</div>
-                    <div style={{ fontSize: 11, color: "var(--cm-muted, #6B7280)" }}>{tc.available} available</div>
-                  </div>
-                  <strong style={{ color: "#007BFF" }}>₹{tc.price}</strong>
+            {event.artists?.length > 0 && (
+              <section className="rbd-section">
+                <h3 className="rbd-h3">Cast</h3>
+                <div className="rbd-tags">
+                  {event.artists.map((a) => <span key={a} className="rbd-tag">{a}</span>)}
                 </div>
-              ))}
-            </div>
+              </section>
+            )}
+
+            <section className="rbd-section">
+              <h3 className="rbd-h3">Choose showtime</h3>
+              <div className="rbd-showtimes">
+                {event.showtimes.map((s) => {
+                  const active = selectedShowtime?.id === s.id;
+                  return (
+                    <button key={s.id} type="button" onClick={() => setSelectedShowtime(s)}
+                      className={`rbd-show${active ? " is-active" : ""}`}>
+                      <span className="rbd-show-date">{s.date}</span>
+                      <span className="rbd-show-time">{s.time}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="rbd-section">
+              <h3 className="rbd-h3">Pricing</h3>
+              <div className="rbd-prices">
+                {event.ticketCategories.map((tc) => (
+                  <div key={tc.id} className="rbd-price">
+                    <div className="rbd-price-info">
+                      <div className="rbd-price-name">{tc.name}</div>
+                      <div className="rbd-price-avail">
+                        <span className="rbd-dot" /> {tc.available} available
+                      </div>
+                    </div>
+                    <div className="rbd-price-amt">₹{tc.price}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
           </div>
 
           {/* Sticky CTA */}
-          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 14px", background: "var(--cm-card, #FFFFFF)", borderTop: "1px solid var(--cm-line, #E5E7EB)", zIndex: 50 }}>
-            <div style={{ maxWidth: 900, margin: "0 auto", padding: "0 8px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <div>
-                <div style={{ fontSize: 11, color: "var(--cm-muted, #6B7280)" }}>Starts at</div>
-                <strong style={{ fontSize: 17 }}>₹{state.event.minPrice}</strong>
+          <div className="rbd-cta-bar">
+            <div className="rbd-cta-inner">
+              <div className="rbd-cta-price">
+                <span className="rbd-cta-label">Starts at</span>
+                <strong className="rbd-cta-amt">₹{event.minPrice}</strong>
               </div>
-              <button type="button" onClick={handleBook} disabled={!selectedShowtime}
-                style={{ flex: 1, maxWidth: 240, padding: "13px 22px", borderRadius: 10, border: "none", background: "#007BFF", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
-                Book tickets
+              <button type="button" onClick={handleBook} disabled={!selectedShowtime} className="rbd-cta-btn">
+                <FaTicketAlt /> Book tickets
               </button>
             </div>
           </div>
