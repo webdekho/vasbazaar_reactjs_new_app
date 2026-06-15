@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { FaArrowLeft, FaImage, FaTimes, FaMapMarkerAlt, FaMicrophone, FaStop, FaUpload, FaTrash } from "react-icons/fa";
+import { FaArrowLeft, FaTimes, FaMapMarkerAlt, FaMicrophone, FaStop, FaUpload, FaTrash } from "react-icons/fa";
 import { rybboSocialService } from "../../../services/rybboSocialService";
 import DataState from "../../../components/DataState";
 import { useToast } from "../../../context/ToastContext";
@@ -23,7 +23,6 @@ async function reverseGeocodeAddress(lat, lng) {
 }
 
 const ACCENT = "#7C3AED";
-const MAX_IMG_BYTES = 2 * 1024 * 1024;
 const MAX_IMAGES = 3;
 const MAX_AUDIO_BYTES = 3 * 1024 * 1024;   // ~3 MB cap for the host voice note
 const MAX_AUDIO_SECONDS = 60;              // auto-stop recording after a minute
@@ -154,7 +153,6 @@ const CreateEventScreen = () => {
   const { id } = useParams();
   const isEdit = Boolean(id);
   const { showToast } = useToast();
-  const fileRef = useRef(null);
 
   const [loading, setLoading] = useState(isEdit);
   const [loadError, setLoadError] = useState("");
@@ -168,6 +166,7 @@ const CreateEventScreen = () => {
     description: "", dressCode: "", dressCodePreset: "", foodPref: "",
     guestLimit: "", maxPerInvitee: "", rsvpDeadline: "",
     parkingInfo: "", kidsAllowed: false, plusOneAllowed: false, ageRestriction: "",
+    askParking: true, askAccommodation: true, askSong: true, askDrink: false,
     hostMessage: "", coverImages: [], hostAudio: "", isPublic: false, contributionAmount: "",
   });
 
@@ -211,6 +210,10 @@ const CreateEventScreen = () => {
         parkingInfo: e.parkingInfo || "",
         kidsAllowed: Boolean(e.kidsAllowed),
         plusOneAllowed: Boolean(e.plusOneAllowed),
+        askParking: e.askParking !== false,
+        askAccommodation: e.askAccommodation !== false,
+        askSong: e.askSong !== false,
+        askDrink: e.askDrink === true,
         ageRestriction: e.ageRestriction || "",
         hostMessage: e.hostMessage || "",
         // Prefer multi-image array; fall back to legacy single coverImage.
@@ -275,22 +278,6 @@ const CreateEventScreen = () => {
     reader.readAsDataURL(file);
   });
 
-  const onPickImages = async (fileList) => {
-    const files = Array.from(fileList || []);
-    if (!files.length) return;
-    const slots = MAX_IMAGES - form.coverImages.length;
-    if (slots <= 0) { showToast(`You can add up to ${MAX_IMAGES} images`, "error"); return; }
-    const oversized = files.some((f) => f.size > MAX_IMG_BYTES);
-    if (oversized) { showToast("Each image must be under 2 MB", "error"); return; }
-    if (files.length > slots) showToast(`Only ${slots} more image${slots > 1 ? "s" : ""} added (max ${MAX_IMAGES})`, "info");
-    const picked = await Promise.all(files.slice(0, slots).map(readFile));
-    setForm((p) => ({ ...p, coverImages: [...p.coverImages, ...picked].slice(0, MAX_IMAGES) }));
-  };
-
-  const removeImage = (i) => setForm((p) => ({
-    ...p,
-    coverImages: p.coverImages.filter((_, idx) => idx !== i),
-  }));
 
   const submit = async () => {
     if (!form.title.trim()) { showToast("Please enter an event name", "error"); return; }
@@ -322,6 +309,10 @@ const CreateEventScreen = () => {
       parkingInfo: form.parkingInfo.trim() || null,
       kidsAllowed: form.kidsAllowed,
       plusOneAllowed: form.plusOneAllowed,
+      askParking: form.askParking,
+      askAccommodation: form.askAccommodation,
+      askSong: form.askSong,
+      askDrink: form.askDrink,
       ageRestriction: form.ageRestriction || null,
       hostMessage: form.hostMessage.trim() || null,
       coverImages: form.coverImages,
@@ -351,33 +342,7 @@ const CreateEventScreen = () => {
         </div>
 
         <div style={{ padding: 16, display: "grid", gap: 16 }}>
-          {/* Cover images */}
-          <div>
-            <label style={labelStyle}>Cover images / theme (optional) — up to {MAX_IMAGES}</label>
-            {form.coverImages.length > 0 && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))", gap: 8, marginBottom: form.coverImages.length < MAX_IMAGES ? 8 : 0 }}>
-                {form.coverImages.map((img, i) => (
-                  <div key={i} style={{ position: "relative", aspectRatio: "1 / 1" }}>
-                    <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 10, background: "var(--cm-bg, #F3F4F6)", display: "block" }} />
-                    <button type="button" onClick={() => removeImage(i)} aria-label="Remove image"
-                      style={{ position: "absolute", top: 4, right: 4, width: 26, height: 26, borderRadius: 999, border: "none", background: "rgba(0,0,0,0.6)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <FaTimes size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            {form.coverImages.length < MAX_IMAGES && (
-              <button type="button" onClick={() => fileRef.current?.click()}
-                style={{ width: "100%", height: form.coverImages.length ? 88 : 120, borderRadius: 12, border: "1.5px dashed var(--cm-line, #D1D5DB)", background: "transparent", color: "var(--cm-muted, #6B7280)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer" }}>
-                <FaImage size={22} />
-                <span style={{ fontSize: 13 }}>Tap to add a photo (max 2 MB)</span>
-                <span style={{ fontSize: 11 }}>Portrait or landscape — both work · {form.coverImages.length}/{MAX_IMAGES} added</span>
-              </button>
-            )}
-            <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { onPickImages(e.target.files); e.target.value = ""; }} />
-          </div>
-
+          {/* Cover image is now added later from the event dashboard's "Create & upload invite banner". */}
           <div>
             <label style={labelStyle}>Event name *</label>
             <input style={inputStyle} value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="e.g. Aarav's 5th Birthday" />
@@ -518,6 +483,27 @@ const CreateEventScreen = () => {
             <input type="checkbox" checked={form.plusOneAllowed} onChange={(e) => set("plusOneAllowed", e.target.checked)} />
             Guests may bring a plus-one
           </label>
+
+          {/* Host picks which optional questions guests answer on the invite */}
+          <div>
+            <label style={labelStyle}>Ask guests on the invite</label>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, cursor: "pointer", marginTop: 4 }}>
+              <input type="checkbox" checked={form.askParking} onChange={(e) => set("askParking", e.target.checked)} />
+              Will you need parking?
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, cursor: "pointer", marginTop: 8 }}>
+              <input type="checkbox" checked={form.askAccommodation} onChange={(e) => set("askAccommodation", e.target.checked)} />
+              Will you need accommodation?
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, cursor: "pointer", marginTop: 8 }}>
+              <input type="checkbox" checked={form.askSong} onChange={(e) => set("askSong", e.target.checked)} />
+              Song request
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, cursor: "pointer", marginTop: 8 }}>
+              <input type="checkbox" checked={form.askDrink} onChange={(e) => set("askDrink", e.target.checked)} />
+              Will you have drinks (alcohol)?
+            </label>
+          </div>
 
           <div>
             <label style={labelStyle}>Contribution per guest (optional)</label>

@@ -9,16 +9,23 @@ const ACCENT = "#7C3AED";
 const SocialHomeScreen = () => {
   const navigate = useNavigate();
   const [state, setState] = useState({ loading: true, error: "", events: [] });
+  const [invites, setInvites] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const r = await rybboSocialService.getMyEvents();
+      const [r, inv] = await Promise.all([
+        rybboSocialService.getMyEvents(),
+        rybboSocialService.getMyInvites(),
+      ]);
       if (cancelled) return;
       setState({ loading: false, error: r.success ? "" : (r.message || "Could not load your events"), events: Array.isArray(r.data) ? r.data : [] });
+      setInvites(inv.success && Array.isArray(inv.data) ? inv.data : []);
     })();
     return () => { cancelled = true; };
   }, []);
+
+  const RESPONSE_LABEL = { ACCEPT: { t: "Going", c: "#16a34a" }, MAYBE: { t: "Maybe", c: "#f59e0b" }, DECLINE: { t: "Declined", c: "#ef4444" } };
 
   return (
     <DataState loading={state.loading} error={state.error}>
@@ -80,6 +87,34 @@ const SocialHomeScreen = () => {
                 );
               })}
             </div>
+          )}
+
+          {/* Events the user is invited to (RSVP'd) */}
+          {invites.length > 0 && (
+            <>
+              <h3 style={{ fontSize: 15, fontWeight: 700, margin: "22px 2px 10px" }}>Invited to</h3>
+              <div style={{ display: "grid", gap: 12 }}>
+                {invites.map((iv) => {
+                  const meta = RESPONSE_LABEL[iv.myResponse] || { t: iv.myResponse, c: "#6B7280" };
+                  return (
+                    <button key={iv.token} type="button" onClick={() => navigate(`/customer/rybbo/i/${iv.token}`)}
+                      style={{ display: "block", textAlign: "left", width: "100%", padding: 14, border: "1px solid var(--cm-line, #E5E7EB)", borderRadius: 12, background: "transparent", color: "inherit", cursor: "pointer", opacity: iv.cancelled ? 0.65 : 1 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                        <div style={{ fontWeight: 700, fontSize: 15 }}>{iv.title}</div>
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 999, background: iv.cancelled ? "#fee2e2" : "#ecfdf5", color: iv.cancelled ? "#b91c1c" : meta.c, whiteSpace: "nowrap" }}>
+                          {iv.cancelled ? "Cancelled" : meta.t}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)", marginTop: 4 }}>
+                        {iv.date}{iv.time ? ` · ${iv.time}` : ""}{iv.venue ? ` · ${iv.venue}` : ""}
+                      </div>
+                      {iv.hostName && <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)", marginTop: 2 }}>Hosted by {iv.hostName}</div>}
+                      <div style={{ fontSize: 12, color: ACCENT, fontWeight: 700, marginTop: 8 }}>Tap to view / edit your RSVP →</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
       </div>

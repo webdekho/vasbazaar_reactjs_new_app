@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import { FaCheckCircle, FaQuestionCircle, FaTimesCircle, FaMapMarkerAlt, FaCalendarPlus, FaWallet, FaMobileAlt, FaQrcode, FaVolumeUp, FaVolumeMute } from "react-icons/fa";
 import { rybboSocialService, buildContributionReturnUrl } from "../../../services/rybboSocialService";
@@ -7,6 +7,8 @@ import DataState from "../../../components/DataState";
 
 const ACCENT = "#7C3AED";
 const PAY_KEY = "rybbo_social_pay";
+const SESSION_KEY = "customerSessionToken";
+const draftKey = (token) => `vb_rsvp_draft_${token}`;
 
 const FOOD_PREFS = ["", "veg", "non-veg", "jain", "vegan", "eggless"];
 
@@ -32,14 +34,18 @@ const fmtDate = (iso) => {
 /** Public, login-free invite + RSVP page. Rendered OUTSIDE the AuthGuard. */
 const GuestRsvpScreen = () => {
   const { token } = useParams();
+  const navigate = useNavigate();
   const [state, setState] = useState({ loading: true, error: "", event: null });
+  const [verifiedHint, setVerifiedHint] = useState(false);
   const [form, setForm] = useState({
     guestName: "", guestMobile: "", response: "ACCEPT", partySize: 1, foodPref: "", note: "",
     allergies: "", dressConfirm: false, arrivalTime: "", parkingNeeded: false,
-    kidsCount: 0, accommodationNeeded: false, songRequest: "",
+    kidsCount: 0, accommodationNeeded: false, songRequest: "", drinks: false,
   });
   const [submitting, setSubmitting] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [done, setDone] = useState(null); // { message, response }
+  const [isEditing, setIsEditing] = useState(false); // editing an existing RSVP
 
   useEffect(() => {
     let cancelled = false;
@@ -47,6 +53,29 @@ const GuestRsvpScreen = () => {
       const r = await rybboSocialService.getPublicInvite(token);
       if (cancelled) return;
       setState({ loading: false, error: r.success ? "" : (r.message || "Invite not found"), event: r.success ? r.data : null });
+
+      // Logged-in user who already RSVP'd: prefill the form so they can edit it.
+      const mine = r.success ? r.data?.myRsvp : null;
+      if (mine) {
+        setForm((p) => ({
+          ...p,
+          guestName: mine.guestName ?? p.guestName,
+          guestMobile: mine.guestMobile ?? p.guestMobile,
+          response: mine.response ?? p.response,
+          partySize: mine.partySize ?? p.partySize,
+          foodPref: mine.foodPref ?? p.foodPref,
+          note: mine.note ?? p.note,
+          allergies: mine.allergies ?? p.allergies,
+          dressConfirm: !!mine.dressConfirm,
+          arrivalTime: mine.arrivalTime ?? p.arrivalTime,
+          parkingNeeded: !!mine.parkingNeeded,
+          kidsCount: mine.kidsCount ?? p.kidsCount,
+          accommodationNeeded: !!mine.accommodationNeeded,
+          songRequest: mine.songRequest ?? p.songRequest,
+          drinks: !!mine.drinks,
+        }));
+        setIsEditing(true);
+      }
 
       // Resume after returning from the UPI gateway (?pay=success|failed|pending).
       const pay = new URLSearchParams(window.location.search).get("pay");
@@ -58,6 +87,18 @@ const GuestRsvpScreen = () => {
           setDone({ response: "ACCEPT", message: "Welcome back!", resumePay: pay });
         }
         sessionStorage.removeItem(PAY_KEY);
+      }
+
+      // Returned from login (now verified): restore the RSVP draft so the guest
+      // just taps Send RSVP to confirm. The submit will then link it to their user.
+      if (localStorage.getItem(SESSION_KEY)) {
+        let draft = null;
+        try { draft = JSON.parse(sessionStorage.getItem(draftKey(token)) || "null"); } catch { draft = null; }
+        if (draft && typeof draft === "object") {
+          setForm((p) => ({ ...p, ...draft }));
+          setVerifiedHint(true);
+          sessionStorage.removeItem(draftKey(token));
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -88,12 +129,27 @@ const GuestRsvpScreen = () => {
 
   const submit = async () => {
     if (!form.guestName.trim()) { alert("Please enter your name"); return; }
-    if (!/^\d{10,}$/.test(form.guestMobile.replace(/\D/g, ""))) { alert("Please enter a valid mobile number"); return; }
+    const mobile = form.guestMobile.replace(/\D/g, "");
+    if (!/^\d{10,}$/.test(mobile)) { alert("Please enter a valid mobile number"); return; }
+
+    const accessToken = localStorage.getItem(SESSION_KEY) || "";
+    // Every RSVP must come from a verified VasBazaar account. If not logged in,
+    // stash the filled form, route through the standard OTP login, and come back
+    // here verified — the restore in the load effect brings the form back.
+    if (!accessToken) {
+      try {
+        sessionStorage.setItem(draftKey(token), JSON.stringify(form));
+        sessionStorage.setItem("vb_post_login_redirect", `/customer/rybbo/i/${token}`);
+      } catch { /* storage may be blocked */ }
+      navigate(`/customer/login?mobile=${mobile.slice(-10)}`);
+      return;
+    }
+
     setSubmitting(true);
-    const accessToken = localStorage.getItem("customerSessionToken") || "";
     const r = await rybboSocialService.submitRsvp(token, { ...form, accessToken });
     setSubmitting(false);
     if (!r.success) { alert(r.message || "Could not submit your RSVP"); return; }
+    setVerifiedHint(false);
     setDone({ message: r.data?.message || "Your RSVP has been recorded.", response: form.response });
   };
 
@@ -101,13 +157,19 @@ const GuestRsvpScreen = () => {
     <DataState loading={state.loading} error={state.error}>
       {e && (
         <div style={{ maxWidth: 560, margin: "0 auto", padding: "0 0 40px", minHeight: "100vh", background: "#fff", color: "#1A1A2E" }}>
-          {/* Cover */}
-          <div style={{ position: "relative", height: 180, background: e.coverImage ? `url(${e.coverImage}) center/cover` : `linear-gradient(135deg, ${ACCENT}, #5B21B6)` }}>
+          {/* Cover — tap to view the full invite image */}
+          <div onClick={() => e.coverImage && setLightboxOpen(true)}
+            style={{ position: "relative", height: 180, cursor: e.coverImage ? "zoom-in" : "default", background: e.coverImage ? `url(${e.coverImage}) center/cover` : `linear-gradient(135deg, ${ACCENT}, #5B21B6)` }}>
             <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0.05))" }} />
             <div style={{ position: "absolute", bottom: 12, left: 16, right: 16, color: "#fff" }}>
               <div style={{ fontSize: 12, opacity: 0.9, textTransform: "capitalize" }}>{e.eventType} invitation</div>
               <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.2 }}>{e.title}</div>
             </div>
+            {e.coverImage && (
+              <div style={{ position: "absolute", top: 10, right: 12, background: "rgba(0,0,0,0.45)", color: "#fff", fontSize: 11, fontWeight: 600, padding: "4px 8px", borderRadius: 999 }}>
+                Tap to view
+              </div>
+            )}
           </div>
 
           <div style={{ padding: 16 }}>
@@ -232,15 +294,19 @@ const GuestRsvpScreen = () => {
                             </div>
                           )}
 
-                          <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, cursor: "pointer" }}>
-                            <input type="checkbox" checked={form.parkingNeeded} onChange={(e2) => set("parkingNeeded", e2.target.checked)} />
-                            I'll need parking for a vehicle
-                          </label>
+                          {e.askParking !== false && (
+                            <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, cursor: "pointer" }}>
+                              <input type="checkbox" checked={form.parkingNeeded} onChange={(e2) => set("parkingNeeded", e2.target.checked)} />
+                              I'll need parking for a vehicle
+                            </label>
+                          )}
 
-                          <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, cursor: "pointer" }}>
-                            <input type="checkbox" checked={form.accommodationNeeded} onChange={(e2) => set("accommodationNeeded", e2.target.checked)} />
-                            I'll need accommodation
-                          </label>
+                          {e.askAccommodation !== false && (
+                            <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, cursor: "pointer" }}>
+                              <input type="checkbox" checked={form.accommodationNeeded} onChange={(e2) => set("accommodationNeeded", e2.target.checked)} />
+                              I'll need accommodation
+                            </label>
+                          )}
 
                           {e.dressCode && (
                             <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, cursor: "pointer" }}>
@@ -249,10 +315,19 @@ const GuestRsvpScreen = () => {
                             </label>
                           )}
 
-                          <div>
-                            <label style={labelStyle}>Song request (optional)</label>
-                            <input style={inputStyle} value={form.songRequest} onChange={(e2) => set("songRequest", e2.target.value)} placeholder="A song you'd love to hear" />
-                          </div>
+                          {e.askDrink === true && (
+                            <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, cursor: "pointer" }}>
+                              <input type="checkbox" checked={form.drinks} onChange={(e2) => set("drinks", e2.target.checked)} />
+                              I'll have drinks (alcohol)
+                            </label>
+                          )}
+
+                          {e.askSong !== false && (
+                            <div>
+                              <label style={labelStyle}>Song request (optional)</label>
+                              <input style={inputStyle} value={form.songRequest} onChange={(e2) => set("songRequest", e2.target.value)} placeholder="A song you'd love to hear" />
+                            </div>
+                          )}
                         </>
                       )}
 
@@ -261,10 +336,20 @@ const GuestRsvpScreen = () => {
                         <textarea style={{ ...inputStyle, minHeight: 64, resize: "vertical" }} value={form.note} onChange={(e2) => set("note", e2.target.value)} placeholder="Anything you'd like the host to know" />
                       </div>
 
+                      {verifiedHint && !e.rsvpClosed && (
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "#16a34a", textAlign: "center" }}>
+                          ✓ Verified — tap Send RSVP to confirm
+                        </div>
+                      )}
                       <button type="button" onClick={submit} disabled={submitting || e.rsvpClosed}
                         style={{ padding: "13px", borderRadius: 12, border: "none", background: ACCENT, color: "#fff", fontWeight: 800, fontSize: 15, cursor: (submitting || e.rsvpClosed) ? "default" : "pointer", opacity: (submitting || e.rsvpClosed) ? 0.6 : 1 }}>
-                        {e.rsvpClosed ? "RSVPs closed" : submitting ? "Sending…" : "Send RSVP"}
+                        {e.rsvpClosed ? "RSVPs closed" : submitting ? "Sending…" : (isEditing ? "Update RSVP" : "Send RSVP")}
                       </button>
+                      {!localStorage.getItem(SESSION_KEY) && !e.rsvpClosed && (
+                        <div style={{ fontSize: 11, color: "#6B7280", textAlign: "center" }}>
+                          You'll verify your number with an OTP to confirm your RSVP.
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -275,6 +360,19 @@ const GuestRsvpScreen = () => {
               Powered by RYBBO · VasBazaar
             </div>
           </div>
+
+          {/* Full invite image lightbox */}
+          {lightboxOpen && e.coverImage && (
+            <div onClick={() => setLightboxOpen(false)}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, zIndex: 1000, cursor: "zoom-out" }}>
+              <img src={e.coverImage} alt={e.title}
+                style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 8 }} />
+              <button type="button" onClick={() => setLightboxOpen(false)} aria-label="Close"
+                style={{ position: "absolute", top: 16, right: 16, width: 40, height: 40, borderRadius: 999, border: "none", background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: 20, cursor: "pointer" }}>
+                ✕
+              </button>
+            </div>
+          )}
         </div>
       )}
     </DataState>

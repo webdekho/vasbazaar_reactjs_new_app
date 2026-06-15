@@ -12,7 +12,9 @@ const LoginScreen = () => {
   const { theme } = useTheme();
   const [searchParams] = useSearchParams();
   const urlCode = searchParams.get("code") || "";
-  const [mobileNumber, setMobileNumber] = useState("");
+  // Prefill the number when arriving from a flow that already knows it (e.g. an
+  // RSVP invite that routes the guest here to verify before submitting).
+  const [mobileNumber, setMobileNumber] = useState(() => (searchParams.get("mobile") || "").replace(/\D/g, "").slice(-10));
   const [status, setStatus] = useState(() => {
     const reason = sessionStorage.getItem("vb_logout_reason");
     if (reason) { sessionStorage.removeItem("vb_logout_reason"); return { type: "error", message: reason }; }
@@ -29,7 +31,7 @@ const LoginScreen = () => {
       let dest = "/customer/app";
       try {
         const saved = sessionStorage.getItem("vb_post_login_redirect");
-        if (saved && saved.startsWith("/customer/app")) {
+        if (saved && (saved.startsWith("/customer/app") || saved.startsWith("/customer/rybbo/"))) {
           dest = saved;
           sessionStorage.removeItem("vb_post_login_redirect");
         }

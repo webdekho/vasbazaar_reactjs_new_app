@@ -143,7 +143,9 @@ const OtpScreen = () => {
     let dest = "/customer/app/services";
     try {
       const saved = sessionStorage.getItem("vb_post_login_redirect");
-      if (saved && saved.startsWith("/customer/app")) {
+      // Allow returning to the in-app shell or a public RYBBO invite (the invite
+      // page lives outside the AuthGuard at /customer/rybbo/i/:token).
+      if (saved && (saved.startsWith("/customer/app") || saved.startsWith("/customer/rybbo/"))) {
         dest = saved;
         sessionStorage.removeItem("vb_post_login_redirect");
       }
