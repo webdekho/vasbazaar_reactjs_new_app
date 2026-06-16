@@ -127,22 +127,24 @@ const InvoiceListScreen = () => {
           <FaArrowLeft />
         </button>
         <div className="ol-ledger-id">
-          <div className="ol-ledger-name"><span className="ol-ledger-name-text">Invoices</span></div>
-          <div className="ol-ledger-mobile">Create &amp; share GST-ready bills</div>
+          <div className="ol-ledger-name"><span className="ol-ledger-name-text">{customerId ? "Invoices" : "All Invoices"}</span></div>
+          <div className="ol-ledger-mobile">{customerId ? "Create & share GST-ready bills" : "Every invoice you've created"}</div>
         </div>
       </div>
 
-      <button
-        className="ol-inv-new-btn"
-        type="button"
-        onClick={() => navigate(`/customer/app/outstanding/${customerId}/invoice/new`)}
-      >
-        <span className="ol-inv-new-ic"><FaPlus /></span>
-        <span className="ol-inv-new-copy">
-          <b>New invoice</b>
-          <small>Bill this customer in seconds</small>
-        </span>
-      </button>
+      {customerId && (
+        <button
+          className="ol-inv-new-btn"
+          type="button"
+          onClick={() => navigate(`/customer/app/outstanding/${customerId}/invoice/new`)}
+        >
+          <span className="ol-inv-new-ic"><FaPlus /></span>
+          <span className="ol-inv-new-copy">
+            <b>New invoice</b>
+            <small>Bill this customer in seconds</small>
+          </span>
+        </button>
+      )}
 
       <button
         type="button"
@@ -165,11 +167,15 @@ const InvoiceListScreen = () => {
         <div className="ol-inv-list">
           {invoices.map((inv) => {
             const sm = STATUS_META[inv.status] || STATUS_META.DRAFT;
+            const invCustomerId = customerId || inv.customerId;
             return (
               <div className={`ol-inv-card ${sm.cls}`} key={inv.id}>
                 <div className="ol-inv-card-top">
                   <div>
                     <div className="ol-inv-no">{inv.invoiceNo}</div>
+                    {!customerId && inv.customerName ? (
+                      <div className="ol-inv-sub"><b>{inv.customerName}</b></div>
+                    ) : null}
                     <div className="ol-inv-sub">{formatDate(inv.invoiceDate)}{inv.dueDate ? ` · Due ${formatDate(inv.dueDate)}` : ""}</div>
                   </div>
                   <div className="ol-inv-card-right">
@@ -179,11 +185,11 @@ const InvoiceListScreen = () => {
                   </div>
                 </div>
                 <div className="ol-inv-actions">
-                  <button type="button" onClick={() => navigate(`/customer/app/outstanding/${customerId}/invoice/${inv.id}`)} disabled={busyId === inv.id}>
+                  <button type="button" onClick={() => navigate(`/customer/app/outstanding/${invCustomerId}/invoice/${inv.id}`)} disabled={busyId === inv.id}>
                     <FaEye /> View
                   </button>
                   {inv.editable && (
-                    <button type="button" onClick={() => navigate(`/customer/app/outstanding/${customerId}/invoice/${inv.id}/edit`)} disabled={busyId === inv.id}>
+                    <button type="button" onClick={() => navigate(`/customer/app/outstanding/${invCustomerId}/invoice/${inv.id}/edit`)} disabled={busyId === inv.id}>
                       <FaPen /> Edit
                     </button>
                   )}

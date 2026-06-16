@@ -11,12 +11,21 @@ const NEXT_STATUS = {
   PREPARING: "OUT_FOR_DELIVERY",
   OUT_FOR_DELIVERY: "DELIVERED",
 };
+// Pickup orders follow a different progression: no out-for-delivery/delivered.
+// PICKED_UP is reached via the verify-pickup code, not a plain status button.
+const NEXT_STATUS_PICKUP = {
+  ACCEPTED: "PREPARING",
+  PREPARING: "READY_FOR_PICKUP",
+};
+const isPickup = (o) => o?.fulfillmentType === "PICKUP";
 
 const STATUS_TONE = {
   PLACED: { bg: "rgba(245, 158, 11, 0.12)", color: "#f59e0b" },
   ACCEPTED: { bg: "rgba(20, 184, 166, 0.12)", color: "#14b8a6" },
   PREPARING: { bg: "rgba(59, 130, 246, 0.12)", color: "#3b82f6" },
   OUT_FOR_DELIVERY: { bg: "rgba(139, 92, 246, 0.12)", color: "#8b5cf6" },
+  READY_FOR_PICKUP: { bg: "rgba(45, 212, 191, 0.14)", color: "#2dd4bf" },
+  PICKED_UP: { bg: "rgba(16, 185, 129, 0.12)", color: "#10b981" },
   DELIVERED: { bg: "rgba(16, 185, 129, 0.12)", color: "#10b981" },
   REJECTED: { bg: "rgba(239, 68, 68, 0.12)", color: "#ef4444" },
   CANCELLED: { bg: "rgba(148, 163, 184, 0.18)", color: "#64748b" },
@@ -45,6 +54,10 @@ const StoreOrdersScreen = () => {
   // Default range = last 30 days so the page is useful out of the box.
   const [fromDate, setFromDate] = useState(isoDaysAgo(30));
   const [toDate, setToDate] = useState(todayIso());
+  // Verify-pickup local UI state, keyed by order id.
+  const [pickupCodes, setPickupCodes] = useState({}); // { [orderId]: "123456" }
+  const [verifyMsg, setVerifyMsg] = useState({});      // { [orderId]: { type, text } }
+  const [verifying, setVerifying] = useState({});      // { [orderId]: bool }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -118,11 +131,30 @@ const StoreOrdersScreen = () => {
   };
 
   const advance = async (order) => {
-    const next = NEXT_STATUS[order.orderStatus];
+    const map = isPickup(order) ? NEXT_STATUS_PICKUP : NEXT_STATUS;
+    const next = map[order.orderStatus];
     if (!next) return;
     const res = await marketplaceService.updateOrderStatus(order.id, next);
     if (res.success) load();
     else setError(res.message);
+  };
+
+  const verifyPickup = async (order) => {
+    const code = (pickupCodes[order.id] || "").trim();
+    if (code.length < 4) {
+      setVerifyMsg((m) => ({ ...m, [order.id]: { type: "error", text: "Enter the customer's pickup code" } }));
+      return;
+    }
+    setVerifying((v) => ({ ...v, [order.id]: true }));
+    const res = await marketplaceService.verifyPickup(order.id, code);
+    setVerifying((v) => ({ ...v, [order.id]: false }));
+    if (res.success) {
+      setVerifyMsg((m) => ({ ...m, [order.id]: { type: "success", text: res.message || "Pickup verified" } }));
+      setPickupCodes((c) => ({ ...c, [order.id]: "" }));
+      load();
+    } else {
+      setVerifyMsg((m) => ({ ...m, [order.id]: { type: "error", text: res.message || "Incorrect pickup code" } }));
+    }
   };
 
   const cancel = async (order) => {
@@ -226,18 +258,47 @@ const StoreOrdersScreen = () => {
             Showing {filteredOrders.length} of {orders.length} orders
           </div>
           {filteredOrders.map((o) => {
-            const next = NEXT_STATUS[o.orderStatus];
+            const pickup = isPickup(o);
+            const next = (pickup ? NEXT_STATUS_PICKUP : NEXT_STATUS)[o.orderStatus];
+            const discount = Number(o.discount || 0);
+            const vMsg = verifyMsg[o.id];
             return (
               <div key={o.id} style={{ background: "var(--cm-card)", borderRadius: 14, padding: 14, marginBottom: 10, border: "1px solid var(--cm-line)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div>
-                    <div style={{ fontSize: 11, color: "var(--cm-muted)" }}>{o.orderNo}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <div style={{ fontSize: 11, color: "var(--cm-muted)" }}>{o.orderNo}</div>
+                      {pickup && (
+                        <span
+                          title="Store pickup — customer collects this order"
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 800,
+                            letterSpacing: 0.4,
+                            padding: "2px 8px",
+                            borderRadius: 6,
+                            background: "rgba(139, 92, 246, 0.14)",
+                            color: "#8b5cf6",
+                            border: "1px solid rgba(139, 92, 246, 0.35)",
+                          }}
+                        >
+                          PICKUP
+                        </span>
+                      )}
+                    </div>
                     <div style={{ fontWeight: 700, marginTop: 2 }}>{o.userId?.name || "Customer"}</div>
                     <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>{o.contactMobile} · {formatDate(o.placedAt || o.date)}</div>
                   </div>
                   <strong>₹{Number(o.totalAmount || 0).toFixed(0)}</strong>
                 </div>
-                <div style={{ marginTop: 6, fontSize: 12, color: "var(--cm-muted)" }}>{o.deliveryAddress}</div>
+                <div style={{ marginTop: 6, fontSize: 12, color: "var(--cm-muted)" }}>
+                  {pickup ? "Store pickup" : o.deliveryAddress}
+                  {discount > 0 && (
+                    <span style={{ color: "#10b981", fontWeight: 600 }}>
+                      {" · Coupon ₹"}{discount.toFixed(0)}{o.offerCode ? ` (${o.offerCode})` : ""}
+                    </span>
+                  )}
+                </div>
                 {o.rejectionReason && (
                   <div style={{ marginTop: 6, fontSize: 12, color: "#ef4444" }}>
                     Rejection reason: {o.rejectionReason}
@@ -261,16 +322,53 @@ const StoreOrdersScreen = () => {
                         <button onClick={() => accept(o)} className="mkt-btn mkt-btn--primary" style={{ width: "auto", padding: "6px 12px", fontSize: 12 }}>Accept</button>
                       </>
                     )}
-                    {o.orderStatus !== "CANCELLED" && o.orderStatus !== "DELIVERED" && o.orderStatus !== "REJECTED" && o.orderStatus !== "PLACED" && (
+                    {o.orderStatus !== "CANCELLED" && o.orderStatus !== "DELIVERED" && o.orderStatus !== "PICKED_UP" && o.orderStatus !== "REJECTED" && o.orderStatus !== "PLACED" && (
                       <button onClick={() => cancel(o)} className="mkt-btn mkt-btn--secondary" style={{ width: "auto", padding: "6px 12px", fontSize: 12 }}>Cancel</button>
                     )}
                     {next && (
                       <button onClick={() => advance(o)} className="mkt-btn mkt-btn--primary" style={{ width: "auto", padding: "6px 12px", fontSize: 12 }}>
-                        Mark {next.replace(/_/g, " ")}
+                        {next === "READY_FOR_PICKUP" ? "Mark ready for pickup" : `Mark ${next.replace(/_/g, " ")}`}
                       </button>
                     )}
                   </div>
                 </div>
+
+                {pickup && o.orderStatus === "READY_FOR_PICKUP" && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--cm-line)" }}>
+                    <div style={{ fontSize: 11, color: "var(--cm-muted)", marginBottom: 6 }}>
+                      Ask the customer for their 6-digit pickup code to complete this order.
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={6}
+                        placeholder="Pickup code"
+                        className="mkt-input"
+                        value={pickupCodes[o.id] || ""}
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/\D/g, "").slice(0, 6);
+                          setPickupCodes((c) => ({ ...c, [o.id]: v }));
+                          setVerifyMsg((m) => ({ ...m, [o.id]: undefined }));
+                        }}
+                        style={{ width: 120, letterSpacing: 2, fontWeight: 700, textAlign: "center" }}
+                      />
+                      <button
+                        onClick={() => verifyPickup(o)}
+                        disabled={verifying[o.id]}
+                        className="mkt-btn mkt-btn--primary"
+                        style={{ width: "auto", padding: "8px 14px", fontSize: 12, opacity: verifying[o.id] ? 0.7 : 1 }}
+                      >
+                        {verifying[o.id] ? "Verifying…" : "Verify & complete pickup"}
+                      </button>
+                    </div>
+                    {vMsg && (
+                      <div style={{ marginTop: 6, fontSize: 12, color: vMsg.type === "success" ? "#10b981" : "#ef4444" }}>
+                        {vMsg.text}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}

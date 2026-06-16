@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaPlus, FaPencilAlt, FaTrash, FaStore, FaCamera, FaCheckCircle, FaTimesCircle, FaClock, FaBan, FaEdit, FaRegClock, FaChevronRight, FaPowerOff, FaChevronDown, FaChevronUp, FaToggleOn, FaToggleOff } from "react-icons/fa";
+import { FaArrowLeft, FaPlus, FaPencilAlt, FaTrash, FaStore, FaCamera, FaCheckCircle, FaTimesCircle, FaClock, FaBan, FaEdit, FaRegClock, FaChevronRight, FaPowerOff, FaChevronDown, FaChevronUp, FaToggleOn, FaToggleOff, FaTags, FaChartLine, FaStar, FaTruck, FaShoppingBag } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
 import "./marketplace.css";
 
@@ -44,6 +44,28 @@ const MyStoreManageScreen = () => {
   }, [navigate]);
 
   useEffect(() => { load(); }, [load]);
+
+  const [fulfillSaving, setFulfillSaving] = useState(false);
+  const [fulfillMsg, setFulfillMsg] = useState(null);
+
+  const handleFulfillmentChange = async (next) => {
+    // Backend rule: at least one mode must stay enabled.
+    if (!next.deliveryEnabled && !next.pickupEnabled) {
+      setFulfillMsg({ type: "error", text: "Keep at least one fulfillment mode enabled." });
+      return;
+    }
+    setFulfillMsg(null);
+    setFulfillSaving(true);
+    const res = await marketplaceService.updateFulfillmentModes(next);
+    setFulfillSaving(false);
+    if (res.success) {
+      setStore((p) => ({ ...p, ...next }));
+      setFulfillMsg({ type: "success", text: "Fulfillment updated" });
+      setTimeout(() => setFulfillMsg(null), 2500);
+    } else {
+      setFulfillMsg({ type: "error", text: res.message || "Failed to update" });
+    }
+  };
 
   const handleToggleOpen = async () => {
     const next = !(store.isOpen);
@@ -236,6 +258,91 @@ const MyStoreManageScreen = () => {
             orders={recentOrders}
             onSeeAll={() => navigate("/customer/app/marketplace/store-orders")}
           />
+        )}
+
+        {canManageItems && activeTab === "orders" && (
+          <>
+            {/* === Store management shortcuts === */}
+            <div className="mkt-form-section-title" style={{ margin: "20px 0 8px" }}>Manage store</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {[
+                { icon: FaTags, title: "Offers & Promotions", sub: "Flat, percent & BOGO promo codes", to: "/customer/app/marketplace/my-store/offers" },
+                { icon: FaChartLine, title: "Analytics", sub: "Revenue, orders & top items", to: "/customer/app/marketplace/my-store/analytics" },
+                { icon: FaStar, title: "Reviews", sub: "Read & reply to customer reviews", to: "/customer/app/marketplace/my-store/reviews" },
+              ].map((it) => {
+                const Icon = it.icon;
+                return (
+                  <div
+                    key={it.to}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => navigate(it.to)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate(it.to); } }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 12, padding: 14,
+                      borderRadius: 14, border: "1px solid var(--cm-line)",
+                      background: "var(--cm-card)", color: "var(--cm-ink)", cursor: "pointer",
+                    }}
+                  >
+                    <div style={{ width: 42, height: 42, borderRadius: 12, display: "grid", placeItems: "center", background: "linear-gradient(135deg, #40E0D0, #007BFF)", color: "#fff", flexShrink: 0 }}>
+                      <Icon size={16} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700 }}>{it.title}</div>
+                      <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>{it.sub}</div>
+                    </div>
+                    <FaChevronRight size={12} color="var(--cm-muted)" />
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* === Fulfillment modes === */}
+            <div className="mkt-form-section-title" style={{ margin: "20px 0 8px" }}>Fulfillment</div>
+            <div style={{ borderRadius: 14, border: "1px solid var(--cm-line)", background: "var(--cm-card)", overflow: "hidden" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: 14, borderBottom: "1px solid var(--cm-line)" }}>
+                <div style={{ width: 38, height: 38, borderRadius: 10, display: "grid", placeItems: "center", background: "rgba(20,184,166,0.12)", color: "#14b8a6", flexShrink: 0 }}>
+                  <FaTruck size={15} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--cm-ink)" }}>Home delivery</div>
+                  <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>Deliver orders to customers</div>
+                </div>
+                <button
+                  type="button"
+                  disabled={fulfillSaving}
+                  onClick={() => handleFulfillmentChange({ deliveryEnabled: !store.deliveryEnabled, pickupEnabled: !!store.pickupEnabled })}
+                  style={{ background: "none", border: "none", cursor: fulfillSaving ? "not-allowed" : "pointer", color: store.deliveryEnabled ? "#14b8a6" : "var(--cm-muted)", padding: 2 }}
+                  title={store.deliveryEnabled ? "Disable delivery" : "Enable delivery"}
+                >
+                  {store.deliveryEnabled ? <FaToggleOn size={26} /> : <FaToggleOff size={26} />}
+                </button>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: 14 }}>
+                <div style={{ width: 38, height: 38, borderRadius: 10, display: "grid", placeItems: "center", background: "rgba(0,123,255,0.12)", color: "#007BFF", flexShrink: 0 }}>
+                  <FaShoppingBag size={15} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--cm-ink)" }}>Store pickup</div>
+                  <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>Customers collect from your store</div>
+                </div>
+                <button
+                  type="button"
+                  disabled={fulfillSaving}
+                  onClick={() => handleFulfillmentChange({ deliveryEnabled: !!store.deliveryEnabled, pickupEnabled: !store.pickupEnabled })}
+                  style={{ background: "none", border: "none", cursor: fulfillSaving ? "not-allowed" : "pointer", color: store.pickupEnabled ? "#14b8a6" : "var(--cm-muted)", padding: 2 }}
+                  title={store.pickupEnabled ? "Disable pickup" : "Enable pickup"}
+                >
+                  {store.pickupEnabled ? <FaToggleOn size={26} /> : <FaToggleOff size={26} />}
+                </button>
+              </div>
+            </div>
+            {fulfillMsg && (
+              <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: fulfillMsg.type === "success" ? "#059669" : "#dc2626" }}>
+                {fulfillMsg.text}
+              </div>
+            )}
+          </>
         )}
       </div>
 

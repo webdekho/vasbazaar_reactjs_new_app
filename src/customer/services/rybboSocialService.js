@@ -66,10 +66,17 @@ export const buildInviteUrl = (token) =>
  * the prompt pre-filled, so the host can generate a polished invite banner from
  * their own event details. claude.ai prefills the composer from the `?q=` param.
  */
-export const buildBannerPrompt = (event, inviteUrl) => {
+export const buildBannerPrompt = (event, inviteUrl, provider = "claude") => {
   const title = (event.title || "").trim();
+  // ChatGPT can render a raster image directly; ask it to do so. Claude renders an
+  // HTML/SVG artifact that the host screenshots — but it must be the FINISHED poster,
+  // never an interactive editor with form fields.
+  const opening =
+    provider === "chatgpt"
+      ? `Generate an image: a premium, modern event invitation poster in a 4:5 vertical format, 1080 × 1350 pixels, suitable for sharing on WhatsApp and Instagram.`
+      : `Create a premium, modern event invitation poster in a 4:5 vertical format, 1080 × 1350 pixels, suitable for sharing on WhatsApp and Instagram.`;
   const lines = [
-    `Create a premium, modern event invitation poster in a 4:5 vertical format, 1080 × 1350 pixels, suitable for sharing on WhatsApp and Instagram.`,
+    opening,
     ``,
     `Design style:`,
     ``,
@@ -122,7 +129,11 @@ export const buildBannerPrompt = (event, inviteUrl) => {
     `* No watermark`,
     `* Ultra-high-resolution, polished professional event invitation design`,
     ``,
-    `Render it as a single self-contained HTML file (inline CSS) artifact so I can preview it, then let me tweak the colours and wording.`,
+    // Hard constraint: the output must be the FINISHED poster, not a tool to build one.
+    `Important: produce only the final, ready-to-share poster. Do NOT build an editor, form, input fields, colour pickers, tabs, buttons, or any interactive controls, and do not add explanations around it.`,
+    provider === "chatgpt"
+      ? `Output the poster directly as a downloadable image.`
+      : `Render it as a single, self-contained, full-bleed HTML artifact (inline CSS) sized exactly 1080 × 1350 px that fills the whole canvas edge-to-edge, so I can screenshot it as a finished poster.`,
   ].filter((l) => l !== null);
   return lines.join("\n");
 };
@@ -132,7 +143,7 @@ export const buildBannerPrompt = (event, inviteUrl) => {
  * Both Claude and ChatGPT prefill the composer from the `?q=` query param.
  */
 export const buildBannerAiUrl = (provider, event, inviteUrl) => {
-  const q = encodeURIComponent(buildBannerPrompt(event, inviteUrl));
+  const q = encodeURIComponent(buildBannerPrompt(event, inviteUrl, provider));
   return provider === "chatgpt"
     ? `https://chatgpt.com/?q=${q}`
     : `https://claude.ai/new?q=${q}`;

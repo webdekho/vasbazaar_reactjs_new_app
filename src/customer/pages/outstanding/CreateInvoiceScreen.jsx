@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { FaArrowLeft, FaPlus, FaTrash, FaBuilding, FaPen } from "react-icons/fa";
+import { FaArrowLeft, FaPlus, FaTrash, FaBuilding, FaPen, FaSave } from "react-icons/fa";
 import { outstandingService } from "../../services/outstandingService";
 import { useToast } from "../../context/ToastContext";
 
@@ -117,6 +117,25 @@ const CreateInvoiceScreen = () => {
   };
   const addItem = () => setItems((prev) => [...prev, emptyItem()]);
   const removeItem = (index) => setItems((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
+
+  const [savingOrg, setSavingOrg] = useState(false);
+  const saveOrg = async () => {
+    if (!orgName.trim() && !orgAddress.trim() && !orgGstNumber.trim()) {
+      showToast("Organisation details भरा", "info");
+      return;
+    }
+    setSavingOrg(true);
+    const res = await outstandingService.saveBusinessProfile({
+      orgName: orgName.trim(),
+      address: orgAddress.trim(),
+      gstNumber: orgGstNumber.trim().toUpperCase(),
+    });
+    setSavingOrg(false);
+    showToast(
+      res.success ? "Organisation details सेव्ह झाले" : (res.message || "सेव्ह करता आले नाही"),
+      res.success ? "success" : "error"
+    );
+  };
 
   const GST_TYPES = ["SGST", "CGST", "IGST"];
   const lineAmount = (it) => Number(it.quantity || 0) * Number(it.rate || 0);
@@ -246,13 +265,23 @@ const CreateInvoiceScreen = () => {
                 maxLength={20}
                 style={{ marginTop: 8 }}
               />
-              <button
-                type="button"
-                className="ol-org-edit-link"
-                onClick={() => navigate(`/customer/app/outstanding/business-profile`)}
-              >
-                <FaPen /> Edit saved business profile &amp; logo
-              </button>
+              <div className="ol-org-actions">
+                <button
+                  type="button"
+                  className="ol-org-edit-link"
+                  onClick={() => navigate(`/customer/app/outstanding/business-profile`)}
+                >
+                  <FaPen /> Edit saved business profile &amp; logo
+                </button>
+                <button
+                  type="button"
+                  className="ol-org-save-link"
+                  onClick={saveOrg}
+                  disabled={savingOrg}
+                >
+                  <FaSave /> {savingOrg ? "Saving…" : "Save organisation"}
+                </button>
+              </div>
             </div>
           ) : (
             <div className="ol-b2c-hint">Invoice will be created without your organisation header.</div>
