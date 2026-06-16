@@ -18,6 +18,50 @@ const bytesToBase64 = (bytes) => {
 const isSecureContext = () =>
   typeof window !== "undefined" && window.crypto && window.crypto.subtle;
 
+/* ── Public Key Cache (localStorage - lifetime) ── */
+const PUBLIC_KEY_CACHE_KEY = "vasbazaar_public_key";
+
+const getCachedPublicKey = () => {
+  try {
+    const cached = localStorage.getItem(PUBLIC_KEY_CACHE_KEY);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed?.publicKey) {
+        return parsed;
+      }
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return null;
+};
+
+const setCachedPublicKey = (data) => {
+  try {
+    localStorage.setItem(PUBLIC_KEY_CACHE_KEY, JSON.stringify(data));
+  } catch {
+    // Ignore storage errors
+  }
+};
+
+const fetchPublicKey = async () => {
+  // Try to get from localStorage first
+  const cached = getCachedPublicKey();
+  if (cached) {
+    return cached;
+  }
+
+  // Fetch from API and cache for lifetime
+  const keyResponse = await guestGet("/login/getPublicKey");
+  if (!keyResponse.success || !keyResponse.data?.publicKey) {
+    throw new Error(keyResponse.message || "Unable to fetch public key");
+  }
+
+  // Cache the response
+  setCachedPublicKey(keyResponse.data);
+  return keyResponse.data;
+};
+
 /* ── Encrypt with Web Crypto (HTTPS) ── */
 const encryptWithWebCrypto = async (payload, publicKeyPem) => {
   const pemContent = publicKeyPem
@@ -68,12 +112,9 @@ const encryptWithForge = (payload, publicKeyPem) => {
 
 /* ── Main encryption function ── */
 const encryptRechargePayload = async (payload) => {
-  const keyResponse = await guestGet("/login/getPublicKey");
-  if (!keyResponse.success || !keyResponse.data?.publicKey) {
-    throw new Error(keyResponse.message || "Unable to fetch public key");
-  }
-
-  const rawKey = keyResponse.data.publicKey;
+  // Get public key from localStorage cache or fetch from API
+  const keyData = await fetchPublicKey();
+  const rawKey = keyData.publicKey;
   const publicKeyPem = rawKey.includes("BEGIN PUBLIC KEY")
     ? rawKey
     : `-----BEGIN PUBLIC KEY-----\n${rawKey.match(/.{1,64}/g).join("\n")}\n-----END PUBLIC KEY-----`;

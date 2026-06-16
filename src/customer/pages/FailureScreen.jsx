@@ -32,6 +32,7 @@ const FailureScreen = () => {
   const initialStatus = state.status === "pending" ? "pending" : "failed";
   const [currentStatus, setCurrentStatus] = useState(initialStatus);
   const [currentMessage, setCurrentMessage] = useState(state.message || "");
+  const [currentIsPaid, setCurrentIsPaid] = useState(state.isPaid === true || state.is_paid === true);
   const [poll, setPoll] = useState({ active: false, attempt: 0, nextInSec: 0, error: "" });
   const pollTimerRef = useRef(null);
   const tickTimerRef = useRef(null);
@@ -41,7 +42,7 @@ const FailureScreen = () => {
 
   const isPending = currentStatus === "pending";
   const isWalletPay = state.payType === "wallet";
-  const isPaid = state.isPaid === true || state.is_paid === true;
+  const isPaid = currentIsPaid;
   const isBill = state.type === "bill";
   const productLabel = isBill ? "Bill payment" : "Recharge";
   const txnId = state.txnId || state.orderId || "";
@@ -105,7 +106,9 @@ const FailureScreen = () => {
     if (tickTimerRef.current) { clearInterval(tickTimerRef.current); tickTimerRef.current = null; }
   };
 
-  const scheduleNextCheck = (attempt, delayMs) => {
+  // Start countdown only - does NOT auto-trigger status check when countdown ends
+  // User must click "Check Now" button manually
+  const startCountdown = (attempt, delayMs) => {
     const startedAt = Date.now();
     setPoll({ active: true, attempt, nextInSec: Math.ceil(delayMs / 1000), error: "" });
     if (tickTimerRef.current) clearInterval(tickTimerRef.current);
@@ -115,9 +118,10 @@ const FailureScreen = () => {
       if (remaining === 0 && tickTimerRef.current) {
         clearInterval(tickTimerRef.current);
         tickTimerRef.current = null;
+        // Countdown complete - enable button by setting active: false
+        setPoll((p) => ({ ...p, active: false }));
       }
     }, 1000);
-    pollTimerRef.current = setTimeout(() => performStatusCheck(attempt + 1), delayMs);
   };
 
   const performStatusCheck = async (attempt) => {
@@ -165,6 +169,11 @@ const FailureScreen = () => {
         clearTimers();
         setCurrentStatus("failed");
         setCurrentMessage(resp?.data?.message || `${productLabel} could not be completed.`);
+        // Update isPaid from API response
+        const apiIsPaid = resp?.data?.is_paid === true || resp?.data?.isPaid === true;
+        if (apiIsPaid) {
+          setCurrentIsPaid(true);
+        }
         setPoll({ active: false, attempt, nextInSec: 0, error: "" });
         return;
       }
@@ -173,14 +182,16 @@ const FailureScreen = () => {
         setPoll({ active: false, attempt, nextInSec: 0, error: "" });
         return;
       }
-      scheduleNextCheck(attempt, POLL_INTERVAL_MS);
+      // Start countdown - user must click "Check Now" when countdown ends
+      startCountdown(attempt, POLL_INTERVAL_MS);
     } catch (e) {
       if (!isMountedRef.current) return;
       if (attempt >= MAX_POLL_ATTEMPTS) {
         setPoll({ active: false, attempt, nextInSec: 0, error: "Could not reach server." });
         return;
       }
-      scheduleNextCheck(attempt, POLL_INTERVAL_MS);
+      // Start countdown - user must click "Check Now" when countdown ends
+      startCountdown(attempt, POLL_INTERVAL_MS);
     } finally {
       inFlightRef.current = false;
     }
@@ -189,7 +200,8 @@ const FailureScreen = () => {
   useEffect(() => {
     isMountedRef.current = true;
     if (initialStatus === "pending" && txnId) {
-      scheduleNextCheck(0, POLL_INTERVAL_MS);
+      // One automatic check on page load, then user must click "Check Now"
+      performStatusCheck(0);
     }
     return () => {
       isMountedRef.current = false;
@@ -299,8 +311,8 @@ const FailureScreen = () => {
             <div className="sx2-poll-text">
               {poll.active && poll.nextInSec === 0
                 ? `Checking status… (${Math.min(poll.attempt, MAX_POLL_ATTEMPTS)}/${MAX_POLL_ATTEMPTS})`
-                : poll.active
-                  ? `Auto check in ${poll.nextInSec}s · Attempt ${Math.min(poll.attempt + 1, MAX_POLL_ATTEMPTS)}/${MAX_POLL_ATTEMPTS}`
+                : poll.active && poll.nextInSec > 0
+                  ? `Check available in ${poll.nextInSec}s · Attempt ${Math.min(poll.attempt + 1, MAX_POLL_ATTEMPTS)}/${MAX_POLL_ATTEMPTS}`
                   : poll.attempt >= MAX_POLL_ATTEMPTS
                     ? `Status not confirmed after ${MAX_POLL_ATTEMPTS} checks.`
                     : "Tap Check Now to verify status."}

@@ -217,6 +217,37 @@ const ProtectedShell = () => {
     };
   }, [navigate]);
 
+  // Global Android back button handler
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    const backButtonListener = App.addListener('backButton', () => {
+      const currentPath = window.location.pathname;
+
+      // Home screen pe back = DO NOTHING (no exit, no navigation)
+      if (currentPath === '/customer/app/services' ||
+          currentPath === '/customer/app' ||
+          currentPath === '/customer/app/') {
+        // Simply ignore back button on home screen
+        return;
+      }
+
+      // Result screens se directly home pe jao, history clear karo
+      const resultScreens = ['/customer/app/success', '/customer/app/failure', '/customer/app/payment-callback', '/customer/app/autopay-callback'];
+      if (resultScreens.some(screen => currentPath.startsWith(screen))) {
+        navigate('/customer/app/services', { replace: true });
+        return;
+      }
+
+      // Other screens pe normal back behavior
+      window.history.back();
+    });
+
+    return () => {
+      backButtonListener.remove();
+    };
+  }, [navigate]);
+
   const handleProfilePhotoClick = async () => {
     if (!shouldUseNativeCamera()) {
       fileInputRef.current?.click();

@@ -892,7 +892,7 @@ const SuccessScreen = () => {
         <button type="button" className="sx2-act sx2-act--ghost" onClick={handleShare}>
           <FaShareAlt /> Share
         </button>
-        <button type="button" className="sx2-act sx2-act--primary" onClick={() => navigate("/customer/app/services")}>
+        <button type="button" className="sx2-act sx2-act--primary" onClick={() => navigate("/customer/app/services", { replace: true })}>
           Done <FiArrowRight />
         </button>
       </div>
