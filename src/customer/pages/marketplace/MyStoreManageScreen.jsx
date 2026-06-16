@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaPlus, FaPencilAlt, FaTrash, FaStore, FaCamera, FaCheckCircle, FaTimesCircle, FaClock, FaBan, FaEdit, FaRegClock, FaChevronRight, FaPowerOff, FaChevronDown, FaChevronUp, FaToggleOn, FaToggleOff, FaTags, FaChartLine, FaStar, FaTruck, FaShoppingBag } from "react-icons/fa";
+import { FaArrowLeft, FaPlus, FaPencilAlt, FaTrash, FaStore, FaCamera, FaCheckCircle, FaTimesCircle, FaClock, FaBan, FaEdit, FaRegClock, FaChevronRight, FaPowerOff, FaChevronDown, FaChevronUp, FaToggleOn, FaToggleOff, FaTags, FaChartLine, FaStar, FaTruck, FaShoppingBag, FaFileCsv, FaBook } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
+import { parseVariants, variantDimensions } from "./variantUtils";
 import "./marketplace.css";
 
 const STATUS_META = {
@@ -10,6 +11,12 @@ const STATUS_META = {
   REJECTED: { cls: "mkt-status--rejected", icon: FaTimesCircle, label: "Rejected", text: "Your submission was not approved. Please update your profile and resubmit." },
   FINAL_REJECTED: { cls: "mkt-status--rejected", icon: FaBan, label: "Permanently Rejected", text: "Your store has been permanently rejected. You cannot edit or resubmit this profile." },
   SUSPENDED: { cls: "mkt-status--suspended", icon: FaBan, label: "Suspended", text: "Your store is temporarily suspended." },
+};
+
+const CATEGORY_STATUS_BADGE = {
+  APPROVED: { label: "Available", bg: "rgba(16,185,129,0.14)", color: "#10b981" },
+  PENDING: { label: "Pending approval", bg: "rgba(245,158,11,0.16)", color: "#f59e0b" },
+  REJECTED: { label: "Rejected", bg: "rgba(239,68,68,0.14)", color: "#ef4444" },
 };
 
 const MyStoreManageScreen = () => {
@@ -22,6 +29,89 @@ const MyStoreManageScreen = () => {
   const [showItemForm, setShowItemForm] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState("orders");
+  const [bulkImporting, setBulkImporting] = useState(false);
+  const [bulkResult, setBulkResult] = useState(null);
+  const bulkFileInput = useRef(null);
+
+  // Minimal CSV parser: first row is the header, supports quoted cells.
+  const parseCsv = (text) => {
+    const rows = [];
+    let row = [], cell = "", inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (inQuotes) {
+        if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+        else if (c === '"') inQuotes = false;
+        else cell += c;
+      } else if (c === '"') inQuotes = true;
+      else if (c === ",") { row.push(cell); cell = ""; }
+      else if (c === "\n" || c === "\r") {
+        if (c === "\r" && text[i + 1] === "\n") i++;
+        row.push(cell); cell = "";
+        if (row.some((x) => x.trim() !== "")) rows.push(row);
+        row = [];
+      } else cell += c;
+    }
+    if (cell !== "" || row.length) { row.push(cell); if (row.some((x) => x.trim() !== "")) rows.push(row); }
+    if (rows.length < 2) return [];
+    const headers = rows[0].map((h) => h.trim());
+    return rows.slice(1).map((r) => {
+      const obj = {};
+      headers.forEach((h, idx) => { obj[h] = (r[idx] ?? "").trim(); });
+      return obj;
+    });
+  };
+
+  const handleBulkFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (bulkFileInput.current) bulkFileInput.current.value = "";
+    if (!file) return;
+    setBulkResult(null);
+    setError(null);
+    try {
+      const text = await file.text();
+      const rows = parseCsv(text);
+      if (!rows.length) { setError("CSV is empty or missing a header row"); return; }
+      if (rows.length > 1000) { setError("Max 1000 rows per import"); return; }
+      setBulkImporting(true);
+      const res = await marketplaceService.bulkAddItems(rows);
+      setBulkImporting(false);
+      if (res.success) {
+        setBulkResult(res.data || { message: res.message });
+        load();
+      } else {
+        setError(res.message || "Import failed");
+      }
+    } catch (ex) {
+      setBulkImporting(false);
+      setError("Could not read the CSV file");
+    }
+  };
+
+  // Build and download a sample CSV the seller can fill in and re-upload.
+  const downloadSampleCsv = (e) => {
+    e?.stopPropagation();
+    const headers = ["name", "sellingPrice", "mrp", "offerPrice", "sku", "barcode", "hsn", "taxRate", "unit", "stockQty", "description", "imageUrl"];
+    const sample = [
+      ["Aashirvaad Atta 5kg", "245", "260", "239", "ATTA-5KG", "8901234567890", "1101", "5", "kg", "50", "Whole wheat atta 5 kg pack", ""],
+      ["Tata Salt 1kg", "28", "30", "", "SALT-1KG", "", "2501", "0", "kg", "120", "Iodised salt 1 kg", ""],
+    ];
+    // Quote any cell with comma/quote/newline; double-up inner quotes.
+    const esc = (v) => {
+      const s = String(v ?? "");
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const csv = [headers, ...sample].map((row) => row.map(esc).join(",")).join("\r\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "vasbazaar_items_sample.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -269,6 +359,7 @@ const MyStoreManageScreen = () => {
                 { icon: FaTags, title: "Offers & Promotions", sub: "Flat, percent & BOGO promo codes", to: "/customer/app/marketplace/my-store/offers" },
                 { icon: FaChartLine, title: "Analytics", sub: "Revenue, orders & top items", to: "/customer/app/marketplace/my-store/analytics" },
                 { icon: FaStar, title: "Reviews", sub: "Read & reply to customer reviews", to: "/customer/app/marketplace/my-store/reviews" },
+                { icon: FaBook, title: "Khata / Credit", sub: "Customer credit ledger & reminders", to: "/customer/app/marketplace/my-store/khata" },
               ].map((it) => {
                 const Icon = it.icon;
                 return (
@@ -386,6 +477,55 @@ const MyStoreManageScreen = () => {
               </div>
               <FaChevronRight size={12} color="var(--cm-muted)" />
             </div>
+          </div>
+
+          {/* === Bulk import (CSV) === */}
+          <div style={{ padding: "8px 14px 0" }}>
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => !bulkImporting && bulkFileInput.current?.click()}
+              onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !bulkImporting) { e.preventDefault(); bulkFileInput.current?.click(); } }}
+              style={{
+                display: "flex", alignItems: "center", gap: 12, padding: 14, borderRadius: 14,
+                border: "1.5px dashed #14b8a6", background: "rgba(20, 184, 166, 0.06)",
+                color: "var(--cm-ink)", cursor: bulkImporting ? "wait" : "pointer",
+              }}
+            >
+              <div style={{ width: 42, height: 42, borderRadius: 12, display: "grid", placeItems: "center", background: "linear-gradient(135deg, #14b8a6, #0d9488)", color: "#fff", flexShrink: 0 }}>
+                <FaFileCsv size={16} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>{bulkImporting ? "Importing…" : "Bulk import items (CSV)"}</div>
+                <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>
+                  Columns: name, sellingPrice, mrp, offerPrice, sku, barcode, hsn, taxRate, unit, stockQty, description, imageUrl
+                </div>
+              </div>
+              <FaChevronRight size={12} color="var(--cm-muted)" />
+              <input ref={bulkFileInput} type="file" accept=".csv,text/csv" hidden onChange={handleBulkFile} />
+            </div>
+            <button
+              type="button"
+              onClick={downloadSampleCsv}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6, marginTop: 8,
+                background: "none", border: "none", padding: 0,
+                color: "#14b8a6", fontSize: 12, fontWeight: 600, cursor: "pointer",
+              }}
+            >
+              <FaFileCsv size={12} /> Download sample CSV
+            </button>
+            {bulkResult && (
+              <div style={{ marginTop: 8, padding: 10, borderRadius: 10, background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.3)", fontSize: 12 }}>
+                <div style={{ fontWeight: 700, color: "#10b981" }}>{bulkResult.message || `${bulkResult.created} imported`}</div>
+                {Array.isArray(bulkResult.errors) && bulkResult.errors.length > 0 && (
+                  <ul style={{ margin: "6px 0 0", paddingLeft: 16, color: "#ef4444" }}>
+                    {bulkResult.errors.slice(0, 8).map((er, i) => <li key={i}>{er}</li>)}
+                    {bulkResult.errors.length > 8 && <li>…and {bulkResult.errors.length - 8} more</li>}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
 
           {/* === Listed Items section === */}
@@ -518,8 +658,8 @@ const CategoriesTab = () => {
           <FaPlus size={16} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700 }}>Add item category</div>
-          <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>Group your items (e.g. Fruits, Dairy, Snacks)</div>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>Propose a new category</div>
+          <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>New names go to admin for approval, then become available to all sellers</div>
         </div>
         <FaChevronRight size={12} color="var(--cm-muted)" />
       </div>
@@ -541,28 +681,38 @@ const CategoriesTab = () => {
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {categories.map((cat) => {
               const isExpanded = expandedId === cat.id;
+              const status = String(cat.status || "APPROVED").toUpperCase();
+              const isApproved = status === "APPROVED";
+              const badge = CATEGORY_STATUS_BADGE[status] || CATEGORY_STATUS_BADGE.APPROVED;
               return (
                 <div key={cat.id} style={{ borderRadius: 12, border: "1px solid var(--cm-line)", background: "var(--cm-card)", overflow: "hidden" }}>
                   {/* Category row */}
                   <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px" }}>
                     {cat.iconUrl && <img src={cat.iconUrl} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: "cover" }} />}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--cm-ink)" }}>{cat.name}</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--cm-ink)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        {cat.name}
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 6, background: badge.bg, color: badge.color }}>{badge.label}</span>
+                      </div>
                       <div style={{ fontSize: 11, color: "var(--cm-muted)" }}>
-                        Order: {cat.sortOrder ?? 0} · {cat.isActive ? "Active" : "Inactive"}
+                        {isApproved ? "Shared catalog" : (cat.rejectionReason ? `Reason: ${cat.rejectionReason}` : "Awaiting admin approval")}
                       </div>
                     </div>
-                    <button onClick={() => handleToggleCategory(cat.id, cat.isActive)} style={{ background: "none", border: "none", cursor: "pointer", color: cat.isActive ? "#14b8a6" : "var(--cm-muted)", padding: 4 }} title={cat.isActive ? "Deactivate" : "Activate"}>
-                      {cat.isActive ? <FaToggleOn size={18} /> : <FaToggleOff size={18} />}
-                    </button>
-                    <button onClick={() => { setEditingCategory(cat); setShowAddCategory(true); }} style={{ background: "none", border: "none", color: "#007BFF", cursor: "pointer", padding: 4 }}><FaPencilAlt size={12} /></button>
-                    <button onClick={() => handleDeleteCategory(cat.id)} style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", padding: 4 }}><FaTrash size={12} /></button>
-                    <button onClick={() => setExpandedId(isExpanded ? null : cat.id)} style={{ background: "none", border: "none", color: "var(--cm-muted)", cursor: "pointer", padding: 4 }}>
-                      {isExpanded ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
-                    </button>
+                    {/* Sellers can only manage their own un-approved proposals; approved ones are shared & read-only */}
+                    {!isApproved && (
+                      <>
+                        <button onClick={() => { setEditingCategory(cat); setShowAddCategory(true); }} style={{ background: "none", border: "none", color: "#007BFF", cursor: "pointer", padding: 4 }}><FaPencilAlt size={12} /></button>
+                        <button onClick={() => handleDeleteCategory(cat.id)} style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", padding: 4 }}><FaTrash size={12} /></button>
+                      </>
+                    )}
+                    {isApproved && (
+                      <button onClick={() => setExpandedId(isExpanded ? null : cat.id)} style={{ background: "none", border: "none", color: "var(--cm-muted)", cursor: "pointer", padding: 4 }}>
+                        {isExpanded ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
+                      </button>
+                    )}
                   </div>
-                  {/* Subcategories panel */}
-                  {isExpanded && (
+                  {/* Subcategories panel — only under approved categories */}
+                  {isExpanded && isApproved && (
                     <SubcategoriesPanel categoryId={cat.id} categoryName={cat.name} />
                   )}
                 </div>
@@ -631,7 +781,7 @@ const SubcategoriesPanel = ({ categoryId, categoryName }) => {
             background: "transparent", color: "#007BFF", fontSize: 11, fontWeight: 600, cursor: "pointer",
           }}
         >
-          <FaPlus size={9} /> Add
+          <FaPlus size={9} /> Propose
         </button>
       </div>
 
@@ -643,20 +793,29 @@ const SubcategoriesPanel = ({ categoryId, categoryName }) => {
         <div style={{ fontSize: 12, color: "var(--cm-muted)", padding: "8px 0" }}>No subcategories yet.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {subs.map((sub) => (
+          {subs.map((sub) => {
+            const status = String(sub.status || "APPROVED").toUpperCase();
+            const isApproved = status === "APPROVED";
+            const badge = CATEGORY_STATUS_BADGE[status] || CATEGORY_STATUS_BADGE.APPROVED;
+            return (
             <div key={sub.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--cm-line)", background: "var(--cm-card)" }}>
               {sub.iconUrl && <img src={sub.iconUrl} alt="" style={{ width: 22, height: 22, borderRadius: 4 }} />}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--cm-ink)" }}>{sub.name}</div>
-                <div style={{ fontSize: 10, color: "var(--cm-muted)" }}>Order: {sub.sortOrder ?? 0}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--cm-ink)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  {sub.name}
+                  {!isApproved && <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 5, background: badge.bg, color: badge.color }}>{badge.label}</span>}
+                </div>
+                <div style={{ fontSize: 10, color: "var(--cm-muted)" }}>{isApproved ? "Shared" : (sub.rejectionReason || "Awaiting approval")}</div>
               </div>
-              <button onClick={() => handleToggle(sub.id, sub.isActive)} style={{ background: "none", border: "none", cursor: "pointer", color: sub.isActive ? "#14b8a6" : "var(--cm-muted)", padding: 2 }}>
-                {sub.isActive ? <FaToggleOn size={14} /> : <FaToggleOff size={14} />}
-              </button>
-              <button onClick={() => { setEditingSub(sub); setShowAdd(true); }} style={{ background: "none", border: "none", color: "#007BFF", cursor: "pointer", padding: 2 }}><FaPencilAlt size={10} /></button>
-              <button onClick={() => handleDelete(sub.id)} style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", padding: 2 }}><FaTrash size={10} /></button>
+              {!isApproved && (
+                <>
+                  <button onClick={() => { setEditingSub(sub); setShowAdd(true); }} style={{ background: "none", border: "none", color: "#007BFF", cursor: "pointer", padding: 2 }}><FaPencilAlt size={10} /></button>
+                  <button onClick={() => handleDelete(sub.id)} style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", padding: 2 }}><FaTrash size={10} /></button>
+                </>
+              )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -878,12 +1037,91 @@ const ItemFormModal = ({ initial, onClose, onSaved }) => {
     description: initial?.description || "",
     sellingPrice: initial?.sellingPrice ?? "",
     mrp: initial?.mrp ?? "",
+    offerPrice: initial?.offerPrice ?? "",
+    sku: initial?.sku || "",
+    barcode: initial?.barcode || "",
+    hsn: initial?.hsn || "",
+    taxRate: initial?.taxRate ?? "",
     unit: initial?.unit || "",
+    unitMeasure: initial?.unitMeasure || "",
     stockQty: initial?.stockQty ?? 0,
+    lowStockThreshold: initial?.lowStockThreshold ?? "",
     imageUrl: initial?.imageUrl || "",
     storeItemCategoryId: initial?.storeItemCategoryId?.id || "",
     storeItemSubcategoryId: initial?.storeItemSubcategoryId?.id || "",
   }));
+  // Grouped, purchasable variants. Each row:
+  //   { options: { [dimension]: value }, price, mrp, stock, image, label }
+  // `options` powers Amazon-style grouped selectors (one chip group per
+  // dimension, e.g. Size / Colour). When no dimensions are defined the row uses
+  // a free-text `label` (legacy flat variants).
+  const initialVariants = parseVariants(initial?.variants);
+  const [dimensions, setDimensions] = useState(() => variantDimensions(initialVariants));
+  const [variants, setVariants] = useState(() =>
+    initialVariants.map((x) => ({
+      options: x.options && typeof x.options === "object" ? { ...x.options } : {},
+      label: x.label || "",
+      price: x.price ?? "",
+      mrp: x.mrp ?? "",
+      stock: x.stock ?? "",
+      image: x.image || "",
+    }))
+  );
+  const [variantImgLoading, setVariantImgLoading] = useState(null);
+
+  // Highlight services / assurances: [{ label, detail }]
+  const parseJsonArr = (raw) => {
+    try { const a = raw ? JSON.parse(raw) : []; return Array.isArray(a) ? a : []; } catch { return []; }
+  };
+  const [services, setServices] = useState(() =>
+    parseJsonArr(initial?.services).map((s) => ({ label: s.label || "", detail: s.detail || "" }))
+  );
+  const addService = () => setServices((s) => [...s, { label: "", detail: "" }]);
+  const updateService = (i, k, val) => setServices((s) => s.map((x, idx) => (idx === i ? { ...x, [k]: val } : x)));
+  const removeService = (i) => setServices((s) => s.filter((_, idx) => idx !== i));
+
+  // Offer cards: [{ title, description }]
+  const [offers, setOffers] = useState(() =>
+    parseJsonArr(initial?.offers).map((o) => ({ title: o.title || "", description: o.description || "" }))
+  );
+  const addOffer = () => setOffers((o) => [...o, { title: "", description: "" }]);
+  const updateOffer = (i, k, val) => setOffers((o) => o.map((x, idx) => (idx === i ? { ...x, [k]: val } : x)));
+  const removeOffer = (i) => setOffers((o) => o.filter((_, idx) => idx !== i));
+
+  const addDimension = () => setDimensions((d) => (d.length >= 3 ? d : [...d, ""]));
+  const updateDimension = (i, val) => setDimensions((d) => d.map((x, idx) => (idx === i ? val : x)));
+  const removeDimension = (i) =>
+    setDimensions((d) => {
+      const name = d[i];
+      setVariants((vs) => vs.map((v) => {
+        const o = { ...v.options }; delete o[name]; return { ...v, options: o };
+      }));
+      return d.filter((_, idx) => idx !== i);
+    });
+
+  const addVariant = () => setVariants((v) => [...v, { options: {}, label: "", price: "", mrp: "", stock: "", image: "" }]);
+  const updateVariant = (i, k, val) => setVariants((v) => v.map((x, idx) => (idx === i ? { ...x, [k]: val } : x)));
+  const updateVariantOption = (i, dim, val) =>
+    setVariants((v) => v.map((x, idx) => (idx === i ? { ...x, options: { ...x.options, [dim]: val } } : x)));
+  const removeVariant = (i) => setVariants((v) => v.filter((_, idx) => idx !== i));
+
+  const handleVariantImage = async (i, e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { setError("Image must be under 5 MB"); return; }
+    setVariantImgLoading(i);
+    const res = await marketplaceService.uploadImage(file, "item");
+    setVariantImgLoading(null);
+    if (res.success && res.data?.url) updateVariant(i, "image", res.data.url);
+    else setError(res.message || "Upload failed");
+  };
+
+  // Auto-label a variant from its option values, e.g. "1 kg / Red".
+  const variantLabel = useCallback((v) => {
+    const named = dimensions.filter(Boolean);
+    if (named.length) return named.map((d) => v.options?.[d]).filter((x) => x != null && x !== "").join(" / ");
+    return String(v.label || "").trim();
+  }, [dimensions]);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -897,10 +1135,13 @@ const ItemFormModal = ({ initial, onClose, onSaved }) => {
   const [showInlineAddCat, setShowInlineAddCat] = useState(false);
   const [showInlineAddSub, setShowInlineAddSub] = useState(false);
 
+  // Only APPROVED (shared) categories can be assigned to items.
+  const onlyApproved = (arr) => (Array.isArray(arr) ? arr.filter((x) => String(x.status || "APPROVED").toUpperCase() === "APPROVED") : []);
+
   const loadItemCategories = useCallback(() => {
     setLoadingCats(true);
     marketplaceService.getMyItemCategories()
-      .then((res) => { if (res.success) setItemCategories(Array.isArray(res.data) ? res.data : []); })
+      .then((res) => { if (res.success) setItemCategories(onlyApproved(res.data)); })
       .catch(() => {})
       .finally(() => setLoadingCats(false));
   }, []);
@@ -911,7 +1152,7 @@ const ItemFormModal = ({ initial, onClose, onSaved }) => {
     if (!form.storeItemCategoryId) { setItemSubcategories([]); return; }
     setLoadingSubs(true);
     marketplaceService.getMyItemSubcategories(form.storeItemCategoryId)
-      .then((res) => { if (res.success) setItemSubcategories(Array.isArray(res.data) ? res.data : []); })
+      .then((res) => { if (res.success) setItemSubcategories(onlyApproved(res.data)); })
       .catch(() => setItemSubcategories([]))
       .finally(() => setLoadingSubs(false));
   }, [form.storeItemCategoryId]);
@@ -936,14 +1177,59 @@ const ItemFormModal = ({ initial, onClose, onSaved }) => {
     if (!form.sellingPrice || Number(form.sellingPrice) <= 0) { setError("Valid selling price required"); return; }
     setError(null);
     setSaving(true);
+    if (form.offerPrice && Number(form.offerPrice) > Number(form.sellingPrice)) {
+      setError("Offer price cannot exceed selling price"); return;
+    }
+    // Clean variants: keep only rows with a resolvable label and a valid price.
+    const namedDims = dimensions.filter(Boolean);
+    const cleanVariants = variants
+      .map((v) => ({ ...v, _label: variantLabel(v) }))
+      .filter((v) => v._label && v.price !== "" && Number(v.price) > 0)
+      .map((v) => ({
+        label: v._label,
+        price: Number(v.price),
+        ...(v.mrp !== "" && v.mrp != null ? { mrp: Number(v.mrp) } : {}),
+        ...(v.stock !== "" && v.stock != null ? { stock: Number(v.stock) } : {}),
+        ...(v.image ? { image: v.image } : {}),
+        ...(namedDims.length
+          ? { options: namedDims.reduce((acc, d) => { if (v.options?.[d]) acc[d] = v.options[d]; return acc; }, {}) }
+          : {}),
+      }));
+    // Two variants must not share the same label, or the buyer/back-end can't tell them apart.
+    const labels = cleanVariants.map((v) => v.label.toLowerCase());
+    if (new Set(labels).size !== labels.length) {
+      setError("Two variants have the same options/label. Make each variant unique."); setSaving(false); return;
+    }
     const payload = {
       ...(initial ? { id: initial.id } : {}),
       name: form.name.trim(),
       description: form.description.trim() || null,
       sellingPrice: Number(form.sellingPrice),
       mrp: form.mrp ? Number(form.mrp) : null,
+      offerPrice: form.offerPrice ? Number(form.offerPrice) : null,
+      sku: form.sku.trim() || null,
+      barcode: form.barcode.trim() || null,
+      hsn: form.hsn.trim() || null,
+      taxRate: form.taxRate !== "" ? Number(form.taxRate) : null,
       unit: form.unit || null,
+      unitMeasure: form.unitMeasure.trim() || null,
       stockQty: form.stockQty ? Number(form.stockQty) : 0,
+      lowStockThreshold: form.lowStockThreshold !== "" ? Number(form.lowStockThreshold) : null,
+      variants: cleanVariants.length ? JSON.stringify(cleanVariants) : null,
+      services: (() => {
+        const clean = services
+          .map((s) => ({ label: String(s.label || "").trim(), detail: String(s.detail || "").trim() }))
+          .filter((s) => s.label)
+          .map((s) => (s.detail ? s : { label: s.label }));
+        return clean.length ? JSON.stringify(clean) : null;
+      })(),
+      offers: (() => {
+        const clean = offers
+          .map((o) => ({ title: String(o.title || "").trim(), description: String(o.description || "").trim() }))
+          .filter((o) => o.title)
+          .map((o) => (o.description ? o : { title: o.title }));
+        return clean.length ? JSON.stringify(clean) : null;
+      })(),
       imageUrl: form.imageUrl || null,
       isAvailable: true,
       storeItemCategoryId: form.storeItemCategoryId ? { id: form.storeItemCategoryId } : null,
@@ -992,6 +1278,30 @@ const ItemFormModal = ({ initial, onClose, onSaved }) => {
             <input className="mkt-input" inputMode="decimal" value={form.mrp} onChange={(e) => setField("mrp", e.target.value)} />
           </div>
           <div className="mkt-field">
+            <label className="mkt-field-label">Offer price (₹)</label>
+            <input className="mkt-input" inputMode="decimal" placeholder="Optional promo price below selling price" value={form.offerPrice} onChange={(e) => setField("offerPrice", e.target.value)} />
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <div className="mkt-field" style={{ flex: 1 }}>
+              <label className="mkt-field-label">SKU</label>
+              <input className="mkt-input" value={form.sku} onChange={(e) => setField("sku", e.target.value)} />
+            </div>
+            <div className="mkt-field" style={{ flex: 1 }}>
+              <label className="mkt-field-label">Barcode</label>
+              <input className="mkt-input" value={form.barcode} onChange={(e) => setField("barcode", e.target.value)} />
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <div className="mkt-field" style={{ flex: 1 }}>
+              <label className="mkt-field-label">HSN / SAC</label>
+              <input className="mkt-input" value={form.hsn} onChange={(e) => setField("hsn", e.target.value)} />
+            </div>
+            <div className="mkt-field" style={{ flex: 1 }}>
+              <label className="mkt-field-label">GST %</label>
+              <input className="mkt-input" inputMode="decimal" placeholder="e.g. 5, 12, 18" value={form.taxRate} onChange={(e) => setField("taxRate", e.target.value)} />
+            </div>
+          </div>
+          <div className="mkt-field">
             <label className="mkt-field-label">Unit</label>
             <select className="mkt-input" value={form.unit} onChange={(e) => setField("unit", e.target.value)}>
               <option value="">-- Select unit --</option>
@@ -1014,9 +1324,139 @@ const ItemFormModal = ({ initial, onClose, onSaved }) => {
             </select>
           </div>
           <div className="mkt-field">
-            <label className="mkt-field-label">Stock quantity</label>
-            <input className="mkt-input" inputMode="numeric" value={form.stockQty} onChange={(e) => setField("stockQty", e.target.value.replace(/\D/g, ""))} />
+            <label className="mkt-field-label">Unit measure</label>
+            <input
+              className="mkt-input"
+              type="text"
+              placeholder="e.g. 2, 500, 1.5"
+              value={form.unitMeasure}
+              onChange={(e) => setField("unitMeasure", e.target.value)}
+            />
+            <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: 4 }}>
+              Quantity per unit (e.g. 2 with unit "Kg" = 2 Kg per item).
+            </div>
           </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <div className="mkt-field" style={{ flex: 1 }}>
+              <label className="mkt-field-label">Stock quantity</label>
+              <input className="mkt-input" inputMode="numeric" value={form.stockQty} onChange={(e) => setField("stockQty", e.target.value.replace(/\D/g, ""))} />
+            </div>
+            <div className="mkt-field" style={{ flex: 1 }}>
+              <label className="mkt-field-label">Low-stock alert at</label>
+              <input className="mkt-input" inputMode="numeric" placeholder="e.g. 5" value={form.lowStockThreshold} onChange={(e) => setField("lowStockThreshold", e.target.value.replace(/\D/g, ""))} />
+            </div>
+          </div>
+
+          {/* Grouped variants (Amazon-style). Optional option dimensions (Size,
+              Colour…) + per-variant price / MRP / stock / image. */}
+          <div className="mkt-field">
+            <label className="mkt-field-label">Variants &amp; options (optional)</label>
+            <div style={{ fontSize: 11, color: "var(--cm-muted)", marginBottom: 8 }}>
+              Group a product into buyable options like Size (1 kg / 5 kg) or Colour. Define the option
+              types first, then add each variant with its own price. Leave empty if the product has none.
+            </div>
+
+            {/* Option dimensions */}
+            <div className="mkt-variant-dims">
+              {dimensions.map((d, i) => (
+                <div key={i} className="mkt-variant-dim-row">
+                  <input
+                    className="mkt-input"
+                    placeholder={`Option ${i + 1} name e.g. Size, Colour`}
+                    value={d}
+                    onChange={(e) => updateDimension(i, e.target.value)}
+                  />
+                  <button type="button" className="mkt-variant-del" onClick={() => removeDimension(i)} aria-label="Remove option type">×</button>
+                </div>
+              ))}
+              {dimensions.length < 3 && (
+                <button type="button" onClick={addDimension} className="mkt-btn mkt-btn--secondary" style={{ width: "auto", padding: "5px 10px", fontSize: 12 }}>
+                  + Add option type
+                </button>
+              )}
+            </div>
+
+            {/* Variant rows */}
+            {variants.map((v, i) => (
+              <div key={i} className="mkt-variant-card">
+                <div className="mkt-variant-card-head">
+                  <span className="mkt-variant-card-title">{variantLabel(v) || `Variant ${i + 1}`}</span>
+                  <button type="button" className="mkt-variant-del" onClick={() => removeVariant(i)} aria-label="Remove variant">×</button>
+                </div>
+                {dimensions.filter(Boolean).length > 0 ? (
+                  <div className="mkt-variant-opts">
+                    {dimensions.filter(Boolean).map((dim) => (
+                      <input
+                        key={dim}
+                        className="mkt-input"
+                        placeholder={dim}
+                        value={v.options?.[dim] || ""}
+                        onChange={(e) => updateVariantOption(i, dim, e.target.value)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <input className="mkt-input" placeholder="Label e.g. 500g" value={v.label} onChange={(e) => updateVariant(i, "label", e.target.value)} />
+                )}
+                <div className="mkt-variant-nums">
+                  <input className="mkt-input" inputMode="decimal" placeholder="₹ price *" value={v.price} onChange={(e) => updateVariant(i, "price", e.target.value)} />
+                  <input className="mkt-input" inputMode="decimal" placeholder="₹ MRP" value={v.mrp} onChange={(e) => updateVariant(i, "mrp", e.target.value)} />
+                  <input className="mkt-input" inputMode="numeric" placeholder="Stock" value={v.stock} onChange={(e) => updateVariant(i, "stock", e.target.value.replace(/\D/g, ""))} />
+                </div>
+                <label className="mkt-variant-img">
+                  <span>{variantImgLoading === i ? "Uploading…" : v.image ? "Change image" : "Add variant image (optional)"}</span>
+                  {v.image ? <img src={v.image} alt="" /> : null}
+                  <input type="file" accept="image/*" hidden onChange={(e) => handleVariantImage(i, e)} />
+                </label>
+              </div>
+            ))}
+            <button type="button" onClick={addVariant} className="mkt-btn mkt-btn--secondary" style={{ width: "auto", padding: "6px 12px", fontSize: 12 }}>
+              + Add variant
+            </button>
+          </div>
+
+          {/* Highlight services / assurances (e.g. 1 Year Warranty, Free Delivery). */}
+          <div className="mkt-field">
+            <label className="mkt-field-label">Services &amp; highlights (optional)</label>
+            <div style={{ fontSize: 11, color: "var(--cm-muted)", marginBottom: 8 }}>
+              Assurances shown on the product, like “1 Year Warranty”, “Free Delivery” or “7-day Replacement”.
+            </div>
+            {services.map((s, i) => (
+              <div key={i} className="mkt-variant-card">
+                <div className="mkt-variant-card-head">
+                  <span className="mkt-variant-card-title">{s.label.trim() || `Service ${i + 1}`}</span>
+                  <button type="button" className="mkt-variant-del" onClick={() => removeService(i)} aria-label="Remove service">×</button>
+                </div>
+                <input className="mkt-input" style={{ marginBottom: 6 }} placeholder="Title e.g. 1 Year Warranty" value={s.label} onChange={(e) => updateService(i, "label", e.target.value)} />
+                <input className="mkt-input" placeholder="Detail (optional) e.g. Brand warranty" value={s.detail} onChange={(e) => updateService(i, "detail", e.target.value)} />
+              </div>
+            ))}
+            <button type="button" onClick={addService} className="mkt-btn mkt-btn--secondary" style={{ width: "auto", padding: "6px 12px", fontSize: 12 }}>
+              + Add service
+            </button>
+          </div>
+
+          {/* Offer cards (e.g. Bank Offer, No Cost EMI, Cashback). */}
+          <div className="mkt-field">
+            <label className="mkt-field-label">Offers (optional)</label>
+            <div style={{ fontSize: 11, color: "var(--cm-muted)", marginBottom: 8 }}>
+              Promotional cards shown on the product, like “Bank Offer” or “No Cost EMI” with a short description.
+            </div>
+            {offers.map((o, i) => (
+              <div key={i} className="mkt-variant-card">
+                <div className="mkt-variant-card-head">
+                  <span className="mkt-variant-card-title">{o.title.trim() || `Offer ${i + 1}`}</span>
+                  <button type="button" className="mkt-variant-del" onClick={() => removeOffer(i)} aria-label="Remove offer">×</button>
+                </div>
+                <input className="mkt-input" style={{ marginBottom: 6 }} placeholder="Offer title e.g. Bank Offer" value={o.title} onChange={(e) => updateOffer(i, "title", e.target.value)} />
+                <textarea className="mkt-input" rows={2} placeholder="Description e.g. Upto ₹50 off on select cards" value={o.description} onChange={(e) => updateOffer(i, "description", e.target.value)} />
+              </div>
+            ))}
+            <button type="button" onClick={addOffer} className="mkt-btn mkt-btn--secondary" style={{ width: "auto", padding: "6px 12px", fontSize: 12 }}>
+              + Add offer
+            </button>
+          </div>
+
           {/* Category / Subcategory dropdowns with inline add */}
           <div className="mkt-field">
             <label className="mkt-field-label">Item Category</label>

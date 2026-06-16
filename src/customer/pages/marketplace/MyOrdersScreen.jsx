@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaStore, FaChevronRight } from "react-icons/fa";
+import { FaArrowLeft, FaStore, FaChevronRight, FaBook } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
 import "./marketplace.css";
 
@@ -41,6 +41,12 @@ const MyOrdersScreen = () => {
       <div className="mkt-header">
         <button className="mkt-header-back" onClick={() => navigate(-1)}><FaArrowLeft /></button>
         <h1 className="mkt-header-title">My Orders</h1>
+        <button
+          onClick={() => navigate("/customer/app/marketplace/my-khata")}
+          style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--cm-primary, #14b8a6)", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}
+        >
+          <FaBook size={13} /> My Khata
+        </button>
       </div>
 
       {loading ? (

@@ -75,6 +75,9 @@ export const marketplaceService = {
 
   addMyItem: (payload) => authPost("/api/customer/marketplace/store/my/items", payload),
 
+  // Bulk import: rows is an array of plain objects parsed from a CSV/Excel.
+  bulkAddItems: (rows) => authPost("/api/customer/marketplace/store/my/items/bulk", { rows }),
+
   updateMyItem: (payload) => authPut("/api/customer/marketplace/store/my/items", payload),
 
   deleteMyItem: (id) => authDelete(`/api/customer/marketplace/store/my/items/${id}`),
@@ -170,6 +173,26 @@ export const marketplaceService = {
   // ===== Click & Collect =====
   verifyPickup: (orderId, code) =>
     authPost(`/api/customer/marketplace/seller/orders/${orderId}/verify-pickup`, { code }),
+
+  // ===== Home delivery OTP =====
+  verifyDelivery: (orderId, code) =>
+    authPost(`/api/customer/marketplace/seller/orders/${orderId}/verify-delivery`, { code }),
+
+  // ===== Digital Khata (merchant side) =====
+  getMyStoreKhatas: () => authGet("/api/customer/marketplace/store/my/khata"),
+  createKhata: (payload) => authPost("/api/customer/marketplace/store/my/khata", payload),
+  getKhataStatement: (khataId) => authGet(`/api/customer/marketplace/store/my/khata/${khataId}`),
+  addKhataEntry: (khataId, payload) => authPost(`/api/customer/marketplace/store/my/khata/${khataId}/entry`, payload),
+  updateKhata: (khataId, payload) => authPut(`/api/customer/marketplace/store/my/khata/${khataId}`, payload),
+  remindKhata: (khataId) => authPost(`/api/customer/marketplace/store/my/khata/${khataId}/remind`, {}),
+
+  // ===== Digital Khata (customer side) =====
+  getMyKhatas: () => authGet("/api/customer/marketplace/khata/my"),
+  getMyKhataStatement: (khataId) => authGet(`/api/customer/marketplace/khata/my/${khataId}`),
+
+  // ===== Disputes / returns (customer side) =====
+  raiseDispute: (payload) => authPost("/api/customer/marketplace/disputes", payload),
+  getMyDisputes: () => authGet("/api/customer/marketplace/disputes/my"),
 
   // Merchant: enable/disable delivery & pickup without re-approval
   updateFulfillmentModes: ({ deliveryEnabled, pickupEnabled }) =>

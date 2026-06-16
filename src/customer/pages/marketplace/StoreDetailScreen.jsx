@@ -5,12 +5,18 @@ import { FiSearch } from "react-icons/fi";
 import { marketplaceService } from "../../services/marketplaceService";
 import { useMarketplaceCart } from "../../context/MarketplaceCartContext";
 import { shareStore } from "./shareStore";
+import { parseVariants, variantDimensions, dimensionValues, findVariantByOptions, minVariantPrice } from "./variantUtils";
 import "./marketplace.css";
 
 const StoreDetailScreen = () => {
   const { storeId } = useParams();
   const navigate = useNavigate();
-  const { addItem, decrementItem, getItemQty, totals, cart } = useMarketplaceCart();
+  const { addItem, decrementItem, getItemQty, getItemTotalQty, totals, cart } = useMarketplaceCart();
+
+  // Item whose variant picker sheet is open (null = closed).
+  const [variantItem, setVariantItem] = useState(null);
+
+  // Per-item chosen variant label (for items that define variants).
 
   const [store, setStore] = useState(null);
   const [items, setItems] = useState([]);
@@ -161,9 +167,9 @@ const StoreDetailScreen = () => {
     return result;
   }, [items, debouncedSearch, selectedCategoryId, selectedSubcategoryId]);
 
-  const handleAdd = useCallback((item) => {
+  const handleAdd = useCallback((item, variant) => {
     if (!store) return;
-    addItem(store, item);
+    addItem(store, item, variant ? { variant } : undefined);
   }, [addItem, store]);
 
   if (loading) {
@@ -442,8 +448,23 @@ const StoreDetailScreen = () => {
       ) : (
         <div className="mkt-item-grid">
           {filteredItems.map((item) => {
-            const qty = getItemQty(item.id);
+            const variants = parseVariants(item);
+            const hasVariants = variants.length > 0;
             const unavailable = item.isAvailable === false || closed;
+            // Variant items show a "From ₹X" price and open a grouped picker sheet;
+            // plain items keep the inline ADD / stepper.
+            const effPrice = hasVariants
+              ? minVariantPrice(variants)
+              : Number(item.offerPrice && Number(item.offerPrice) > 0 ? item.offerPrice : item.sellingPrice);
+            const strikePrice = hasVariants
+              ? null
+              : (item.offerPrice && Number(item.offerPrice) > 0 && Number(item.sellingPrice) > Number(item.offerPrice)
+                  ? Number(item.sellingPrice)
+                  : (item.mrp && Number(item.mrp) > Number(item.sellingPrice) ? Number(item.mrp) : null));
+            const qty = hasVariants ? getItemTotalQty(item.id) : getItemQty(item.id);
+            const extraCount =
+              ((() => { try { return JSON.parse(item.offers || "[]").length; } catch { return 0; } })()) +
+              ((() => { try { return JSON.parse(item.services || "[]").length; } catch { return 0; } })());
             return (
               <div key={item.id} className="mkt-item-card">
                 <div className="mkt-item-image">
@@ -453,13 +474,17 @@ const StoreDetailScreen = () => {
                   <p className="mkt-item-name">{item.name}</p>
                   <div className="mkt-item-row">
                     <div>
-                      <div className="mkt-item-price">₹{Number(item.sellingPrice).toFixed(0)}</div>
-                      {item.mrp && Number(item.mrp) > Number(item.sellingPrice) && (
-                        <div className="mkt-item-mrp">₹{Number(item.mrp).toFixed(0)}</div>
+                      <div className="mkt-item-price">{hasVariants ? "From " : ""}₹{Number(effPrice || 0).toFixed(0)}</div>
+                      {strikePrice && (
+                        <div className="mkt-item-mrp">₹{strikePrice.toFixed(0)}</div>
                       )}
                     </div>
                     {unavailable ? (
                       <span style={{ fontSize: 11, color: "#f87171" }}>N/A</span>
+                    ) : hasVariants ? (
+                      <button className="mkt-add-btn" onClick={() => setVariantItem(item)}>
+                        {qty > 0 ? `${qty} · OPTIONS` : "OPTIONS"}
+                      </button>
                     ) : qty === 0 ? (
                       <button className="mkt-add-btn" onClick={() => handleAdd(item)}>ADD</button>
                     ) : (
@@ -470,6 +495,20 @@ const StoreDetailScreen = () => {
                       </div>
                     )}
                   </div>
+                  {hasVariants && (
+                    <div style={{ fontSize: 11, color: "var(--cm-muted)" }}>
+                      {variants.length} option{variants.length > 1 ? "s" : ""}
+                    </div>
+                  )}
+                  {!hasVariants && extraCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setVariantItem(item)}
+                      style={{ background: "none", border: "none", padding: 0, marginTop: 2, fontSize: 11, color: "var(--cm-accent, #007BFF)", fontWeight: 600, cursor: "pointer" }}
+                    >
+                      Offers &amp; services ›
+                    </button>
+                  )}
                   {item.unit && (
                     <div style={{ fontSize: 11, color: "var(--cm-muted)" }}>{item.unit}</div>
                   )}
@@ -636,6 +675,187 @@ const StoreDetailScreen = () => {
           <div className="mkt-cart-bar-cta">View cart →</div>
         </div>
       )}
+
+      {variantItem && (
+        <VariantPickerSheet
+          store={store}
+          item={variantItem}
+          closed={closed}
+          onClose={() => setVariantItem(null)}
+          getItemQty={getItemQty}
+          addItem={addItem}
+          decrementItem={decrementItem}
+        />
+      )}
+    </div>
+  );
+};
+
+/**
+ * Amazon-style grouped variant picker. Renders one chip group per option
+ * dimension (Size / Colour …); legacy flat variants fall back to a single
+ * group of labels. The resolved variant drives price, MRP, stock and add/qty.
+ */
+const VariantPickerSheet = ({ store, item, closed, onClose, getItemQty, addItem, decrementItem }) => {
+  const variants = useMemo(() => parseVariants(item), [item]);
+  const dims = useMemo(() => variantDimensions(variants), [variants]);
+
+  const [selection, setSelection] = useState(() =>
+    dims.length ? { ...(variants[0]?.options || {}) } : {}
+  );
+  const [flatLabel, setFlatLabel] = useState(() => (dims.length ? null : variants[0]?.label || null));
+
+  const hasVar = variants.length > 0;
+  const selected = !hasVar
+    ? null
+    : dims.length
+      ? findVariantByOptions(variants, dims, selection)
+      : variants.find((v) => v.label === flatLabel) || null;
+
+  // A value is selectable if a variant exists for it given the other chosen dims.
+  const valueEnabled = (dim, val) =>
+    variants.some((v) =>
+      String(v.options?.[dim] ?? "") === String(val) &&
+      dims.filter((d) => d !== dim).every((d) => !selection[d] || String(v.options?.[d] ?? "") === String(selection[d]))
+    );
+
+  // Effective price/MRP: variant when present, else the item's own price.
+  const basePrice = Number(item.offerPrice && Number(item.offerPrice) > 0 ? item.offerPrice : item.sellingPrice);
+  const baseMrp = item.mrp && Number(item.mrp) > basePrice ? Number(item.mrp) : null;
+  const dispPrice = hasVar ? (selected ? Number(selected.price) : null) : basePrice;
+  const dispMrp = hasVar
+    ? (selected?.mrp && Number(selected.mrp) > Number(selected.price) ? Number(selected.mrp) : null)
+    : baseMrp;
+
+  const qty = hasVar ? (selected ? getItemQty(item.id, selected.label) : 0) : getItemQty(item.id);
+  const stock = hasVar && selected && selected.stock != null ? Number(selected.stock) : null;
+  const soldOut = stock != null && stock <= 0;
+  const canAdd = (hasVar ? !!selected : true) && !closed && item.isAvailable !== false && !soldOut;
+
+  const variant = hasVar && selected ? { label: selected.label, price: Number(selected.price), image: selected.image } : null;
+  const lineKey = hasVar && selected ? `${item.id}::${selected.label}` : `${item.id}`;
+
+  const parseArr = (raw) => { try { const a = raw ? JSON.parse(raw) : []; return Array.isArray(a) ? a : []; } catch { return []; } };
+  const offers = parseArr(item.offers);
+  const services = parseArr(item.services);
+
+  return (
+    <div className="mkt-vsheet-overlay" onClick={onClose}>
+      <div className="mkt-vsheet" onClick={(e) => e.stopPropagation()}>
+        <div className="mkt-vsheet-head">
+          <div className="mkt-vsheet-img">
+            {(selected?.image || item.imageUrl)
+              ? <img src={selected?.image || item.imageUrl} alt="" />
+              : <FaStore size={20} />}
+          </div>
+          <div style={{ flex: 1 }}>
+            <div className="mkt-vsheet-title">{item.name}</div>
+            {selected && <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>{selected.label}</div>}
+          </div>
+          <button className="mkt-header-back" onClick={onClose} aria-label="Close">×</button>
+        </div>
+
+        {hasVar && (dims.length > 0 ? (
+          dims.map((dim) => (
+            <div key={dim} className="mkt-vsheet-dim">
+              <div className="mkt-vsheet-dim-label">{dim}</div>
+              <div className="mkt-vopt-row">
+                {dimensionValues(variants, dim).map((val) => {
+                  const enabled = valueEnabled(dim, val);
+                  const active = String(selection[dim] ?? "") === String(val);
+                  return (
+                    <button
+                      key={val}
+                      className={`mkt-vopt${active ? " mkt-vopt--active" : ""}${enabled ? "" : " mkt-vopt--disabled"}`}
+                      disabled={!enabled}
+                      onClick={() => setSelection((p) => ({ ...p, [dim]: val }))}
+                    >
+                      {val}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="mkt-vsheet-dim">
+            <div className="mkt-vsheet-dim-label">Options</div>
+            <div className="mkt-vopt-row">
+              {variants.map((v) => (
+                <button
+                  key={v.label}
+                  className={`mkt-vopt${flatLabel === v.label ? " mkt-vopt--active" : ""}`}
+                  onClick={() => setFlatLabel(v.label)}
+                >
+                  {v.label} · ₹{Number(v.price).toFixed(0)}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        <div className="mkt-vsheet-pricerow">
+          {dispPrice != null ? (
+            <>
+              <span className="mkt-vsheet-price">₹{Number(dispPrice).toFixed(0)}</span>
+              {dispMrp && (
+                <span className="mkt-vsheet-mrp">₹{Number(dispMrp).toFixed(0)}</span>
+              )}
+            </>
+          ) : (
+            <span style={{ fontSize: 13, color: "var(--cm-muted)" }}>This combination isn't available</span>
+          )}
+        </div>
+        {stock != null && stock > 0 && stock <= 5 && (
+          <div className="mkt-vsheet-stock">Only {stock} left</div>
+        )}
+        {soldOut && <div className="mkt-vsheet-stock" style={{ color: "#f87171" }}>Out of stock</div>}
+
+        {qty === 0 ? (
+          <button
+            className="mkt-btn mkt-btn--primary"
+            disabled={!canAdd}
+            style={{ opacity: canAdd ? 1 : 0.5 }}
+            onClick={() => { addItem(store, item, { variant }); }}
+          >
+            {closed ? "Store closed" : "Add to cart"}
+          </button>
+        ) : (
+          <div className="mkt-stepper" style={{ alignSelf: "flex-start", width: "fit-content" }}>
+            <button className="mkt-stepper-btn" onClick={() => decrementItem(lineKey)} aria-label="Decrease"><FaMinus size={10} /></button>
+            <span className="mkt-stepper-qty">{qty}</span>
+            <button className="mkt-stepper-btn" disabled={!canAdd} onClick={() => addItem(store, item, { variant })} aria-label="Increase"><FaPlus size={10} /></button>
+          </div>
+        )}
+
+        {offers.length > 0 && (
+          <div className="mkt-isheet-sec">
+            <div className="mkt-isheet-sec-title">Offers</div>
+            <div className="mkt-offer-row">
+              {offers.map((o, i) => (
+                <div key={i} className="mkt-offer-card">
+                  <div className="mkt-offer-title">{o.title}</div>
+                  {o.description && <div className="mkt-offer-desc">{o.description}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {services.length > 0 && (
+          <div className="mkt-isheet-sec">
+            <div className="mkt-isheet-sec-title">Services</div>
+            <div className="mkt-service-row">
+              {services.map((s, i) => (
+                <div key={i} className="mkt-service-item">
+                  <div className="mkt-service-label">{s.label}</div>
+                  {s.detail && <div className="mkt-service-detail">{s.detail}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

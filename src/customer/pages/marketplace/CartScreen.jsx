@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaPlus, FaMinus, FaTrash, FaStore, FaMapMarkerAlt, FaClock } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
+import { userService } from "../../services/userService";
+import { FaWallet } from "react-icons/fa";
 import { useMarketplaceCart } from "../../context/MarketplaceCartContext";
 import { useCustomerModern } from "../../context/CustomerModernContext";
 import { savePaymentContext, extractPaymentUrl } from "../../services/juspayService";
@@ -35,14 +37,15 @@ const AVG_DELIVERY_SPEED_KMH = 22;
 
 const CartScreen = () => {
   const navigate = useNavigate();
-  const { cart, totals, addItem, decrementItem, removeItem, clearCart } = useMarketplaceCart();
+  const { cart, totals, addItem, decrementItem, removeItem, clearCart, lineKeyOf } = useMarketplaceCart();
   const { userData } = useCustomerModern();
 
   const [step, setStep] = useState("cart"); // cart | checkout
   const [address, setAddress] = useState("");
   const [coords, setCoords] = useState(null);
   const [placing, setPlacing] = useState(false);
-  const [placingMethod, setPlacingMethod] = useState(null); // "ONLINE" | "COD"
+  const [placingMethod, setPlacingMethod] = useState(null); // "ONLINE" | "COD" | "WALLET"
+  const [walletBalance, setWalletBalance] = useState(null); // null until loaded
   const [error, setError] = useState(null);
   const [resolvedAddress, setResolvedAddress] = useState(null);
   const [resolving, setResolving] = useState(false);
@@ -142,6 +145,23 @@ const CartScreen = () => {
       .finally(() => { if (!cancelled) setResolving(false); });
     return () => { cancelled = true; };
   }, [coords]);
+
+  // Load wallet balance once the customer reaches checkout, so we can show the
+  // available balance and gate the Pay-from-wallet button.
+  useEffect(() => {
+    if (step !== "checkout" || walletBalance !== null) return;
+    let alive = true;
+    (async () => {
+      try {
+        const res = await userService.getUserProfile();
+        const bal = parseFloat(res?.data?.balance ?? res?.data?.walletBalance ?? 0);
+        if (alive) setWalletBalance(isNaN(bal) ? 0 : bal);
+      } catch {
+        if (alive) setWalletBalance(0);
+      }
+    })();
+    return () => { alive = false; };
+  }, [step, walletBalance]);
 
   // Compute estimated delivery: preparation time (from store profile) +
   // travel time derived from distance between customer and store.
@@ -274,7 +294,7 @@ const CartScreen = () => {
 
     const payload = {
       storeId: cart.storeId,
-      items: items.map((i) => ({ itemId: i.id, quantity: i.qty })),
+      items: items.map((i) => ({ itemId: i.id, quantity: i.qty, ...(i.variantLabel ? { variantLabel: i.variantLabel } : {}) })),
       deliveryAddress: isPickup ? "" : address.trim(),
       contactMobile: orderMobile,
       paymentMethod: method,
@@ -317,7 +337,8 @@ const CartScreen = () => {
     });
     clearCart();
 
-    if (method === "COD") {
+    if (method === "COD" || method === "WALLET") {
+      // Both settle synchronously server-side (COD = pay later, WALLET = debited now).
       navigate(`/customer/app/marketplace/orders/${orderId}`, { replace: true, state: { celebrate: true } });
       return;
     }
@@ -358,24 +379,26 @@ const CartScreen = () => {
             <FaStore size={12} style={{ marginRight: 6 }} />
             From <strong style={{ color: "var(--cm-ink)" }}>{cart.storeName}</strong>
           </div>
-          {items.map((it) => (
-            <div key={it.id} className="mkt-cart-line">
+          {items.map((it) => {
+            const key = lineKeyOf(it);
+            return (
+            <div key={key} className="mkt-cart-line">
               <div className="mkt-cart-line-img">
                 {it.image ? <img src={it.image} alt="" /> : <FaStore size={20} />}
               </div>
               <div className="mkt-cart-line-info">
-                <p className="mkt-cart-line-name">{it.name}</p>
+                <p className="mkt-cart-line-name">{it.name}{it.variantLabel ? <span style={{ color: "var(--cm-muted)", fontWeight: 500 }}> · {it.variantLabel}</span> : null}</p>
                 <div className="mkt-cart-line-price">₹{Number(it.price).toFixed(0)} each</div>
                 <div className="mkt-stepper" style={{ marginTop: 6 }}>
-                  <button className="mkt-stepper-btn" onClick={() => decrementItem(it.id)}><FaMinus size={10} /></button>
+                  <button className="mkt-stepper-btn" onClick={() => decrementItem(key)}><FaMinus size={10} /></button>
                   <span className="mkt-stepper-qty">{it.qty}</span>
-                  <button className="mkt-stepper-btn" onClick={() => addItem({ id: cart.storeId, businessName: cart.storeName, deliveryCharges: cart.deliveryCharges, minOrderValue: cart.minOrderValue, deliveryTimeMinutes: cart.deliveryTimeMinutes, latitude: cart.storeLatitude, longitude: cart.storeLongitude }, { id: it.id, name: it.name, sellingPrice: it.price, imageUrl: it.image })}><FaPlus size={10} /></button>
+                  <button className="mkt-stepper-btn" onClick={() => addItem({ id: cart.storeId, businessName: cart.storeName, deliveryCharges: cart.deliveryCharges, minOrderValue: cart.minOrderValue, deliveryTimeMinutes: cart.deliveryTimeMinutes, latitude: cart.storeLatitude, longitude: cart.storeLongitude }, { id: it.id, name: it.name, sellingPrice: it.price, imageUrl: it.image }, it.variantLabel ? { variant: { label: it.variantLabel, price: it.price } } : undefined)}><FaPlus size={10} /></button>
                 </div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>₹{(Number(it.price) * it.qty).toFixed(0)}</div>
                 <button
-                  onClick={() => removeItem(it.id)}
+                  onClick={() => removeItem(key)}
                   style={{ background: "none", border: "none", color: "#f87171", marginTop: 8, cursor: "pointer" }}
                   aria-label="Remove"
                 >
@@ -383,7 +406,8 @@ const CartScreen = () => {
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
 
           <div className="mkt-summary">
             <div className="mkt-summary-row"><span>Subtotal</span><span>₹{totals.subtotal.toFixed(0)}</span></div>
@@ -632,6 +656,25 @@ const CartScreen = () => {
                 disabled={placing}
               >
                 {placing && placingMethod === "COD" ? "Placing…" : "Cash on Delivery"}
+              </button>
+              <button
+                type="button"
+                className="mkt-btn mkt-btn--secondary mkt-pay-wallet"
+                onClick={() => placeOrder("WALLET")}
+                disabled={placing || (walletBalance !== null && walletBalance < payTotal)}
+                title={walletBalance !== null && walletBalance < payTotal ? "Insufficient wallet balance" : undefined}
+              >
+                {placing && placingMethod === "WALLET" ? (
+                  "Paying…"
+                ) : (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
+                    <FaWallet size={13} />
+                    Pay from Wallet
+                    {walletBalance !== null && (
+                      <span style={{ fontSize: 11, opacity: 0.8 }}>(₹{walletBalance.toFixed(0)})</span>
+                    )}
+                  </span>
+                )}
               </button>
               <button
                 type="button"

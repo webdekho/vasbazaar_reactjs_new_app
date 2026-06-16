@@ -4,6 +4,11 @@ const STORAGE_KEY = "vb_marketplace_cart";
 
 const MarketplaceCartContext = createContext(null);
 
+// A cart line is keyed by item id plus the chosen variant label, so the same
+// product in two sizes occupies two independent lines.
+const lineKey = (itemId, variantLabel) =>
+  variantLabel ? `${itemId}::${variantLabel}` : `${itemId}`;
+
 const readCart = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -56,7 +61,22 @@ export const MarketplaceCartProvider = ({ children }) => {
     });
   }, []);
 
-  const addItem = useCallback((store, item, { confirmReplace } = {}) => {
+  // `variant` (optional): { label, price } — when present the line is priced at
+  // the variant price and tracked separately from the plain item.
+  const addItem = useCallback((store, item, { confirmReplace, variant } = {}) => {
+    const vLabel = variant?.label || null;
+    const unitPrice = vLabel
+      ? Number(variant.price)
+      : Number(item.offerPrice && Number(item.offerPrice) > 0 ? item.offerPrice : (item.sellingPrice || item.price || 0));
+    const key = lineKey(item.id, vLabel);
+    const makeLine = (qty) => ({
+      id: item.id,
+      name: item.name,
+      price: unitPrice,
+      image: item.imageUrl || null,
+      variantLabel: vLabel,
+      qty,
+    });
     if (cart && cart.storeId !== store.id) {
       const ok = typeof confirmReplace === "function" ? confirmReplace() : window.confirm(
         "Your cart already has items from a different store. Replace cart with items from this store?"
@@ -71,15 +91,7 @@ export const MarketplaceCartProvider = ({ children }) => {
         deliveryTimeMinutes: store.deliveryTimeMinutes || null,
       storeLatitude: store.latitude ?? null,
       storeLongitude: store.longitude ?? null,
-        items: {
-          [item.id]: {
-            id: item.id,
-            name: item.name,
-            price: Number(item.sellingPrice || item.price || 0),
-            image: item.imageUrl || null,
-            qty: 1,
-          },
-        },
+        items: { [key]: makeLine(1) },
       };
       setCart(next);
       return true;
@@ -95,20 +107,11 @@ export const MarketplaceCartProvider = ({ children }) => {
       storeLongitude: store.longitude ?? null,
         items: {},
       };
-      const existing = base.items[item.id];
+      const existing = base.items[key];
       const nextQty = existing ? existing.qty + 1 : 1;
       return {
         ...base,
-        items: {
-          ...base.items,
-          [item.id]: {
-            id: item.id,
-            name: item.name,
-            price: Number(item.sellingPrice || item.price || 0),
-            image: item.imageUrl || null,
-            qty: nextQty,
-          },
-        },
+        items: { ...base.items, [key]: makeLine(nextQty) },
       };
     });
     return true;
@@ -143,9 +146,18 @@ export const MarketplaceCartProvider = ({ children }) => {
 
   const clearCart = useCallback(() => setCart(null), []);
 
-  const getItemQty = useCallback((itemId) => {
+  // Qty for a specific item+variant; pass no variantLabel for the plain line.
+  const getItemQty = useCallback((itemId, variantLabel) => {
     if (!cart || !cart.items) return 0;
-    return cart.items[itemId]?.qty || 0;
+    return cart.items[lineKey(itemId, variantLabel)]?.qty || 0;
+  }, [cart]);
+
+  // Total qty across all variants of an item — used to show a combined badge.
+  const getItemTotalQty = useCallback((itemId) => {
+    if (!cart || !cart.items) return 0;
+    return Object.values(cart.items)
+      .filter((l) => l.id === itemId)
+      .reduce((s, l) => s + (l.qty || 0), 0);
   }, [cart]);
 
   return (
@@ -159,6 +171,8 @@ export const MarketplaceCartProvider = ({ children }) => {
         clearCart,
         startCart,
         getItemQty,
+        getItemTotalQty,
+        lineKeyOf: (line) => lineKey(line.id, line.variantLabel),
       }}
     >
       {children}

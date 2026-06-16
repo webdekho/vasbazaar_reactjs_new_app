@@ -755,6 +755,25 @@
   cursor: pointer;
   box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
 }
+.mkt-slider::-moz-range-progress {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, #40E0D0, #007BFF);
+}
+.mkt-slider-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--cm-muted);
+  margin-top: 6px;
+}
+.mkt-radius-manual {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+.mkt-radius-manual .mkt-input { max-width: 160px; }
 
 /* ===== Receipt ===== */
 .mkt-receipt-card {
@@ -2113,3 +2132,76 @@
   background: rgba(16, 185, 129, 0.18);
   color: #6ee7b7;
 }
+
+/* ===== Seller variant editor ===== */
+.mkt-variant-dims { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.mkt-variant-dim-row { display: flex; gap: 6px; align-items: center; }
+.mkt-variant-card {
+  border: 1px solid var(--cm-line);
+  border-radius: 12px;
+  padding: 10px;
+  margin-bottom: 8px;
+  background: var(--cm-bg-secondary);
+}
+.mkt-variant-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.mkt-variant-card-title { font-size: 13px; font-weight: 700; color: var(--cm-ink); }
+.mkt-variant-opts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.mkt-variant-opts .mkt-input { flex: 1 1 90px; }
+.mkt-variant-nums { display: flex; gap: 6px; margin-bottom: 8px; }
+.mkt-variant-nums .mkt-input { flex: 1; }
+.mkt-variant-del {
+  flex-shrink: 0; width: 32px; height: 32px; border-radius: 8px; border: none;
+  background: rgba(239,68,68,0.12); color: #ef4444; cursor: pointer; font-size: 16px;
+}
+.mkt-variant-img {
+  display: flex; align-items: center; gap: 8px; font-size: 12px;
+  color: var(--cm-accent, #007BFF); cursor: pointer;
+}
+.mkt-variant-img img { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; }
+
+/* ===== Buyer variant picker sheet ===== */
+.mkt-vsheet-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 120;
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.mkt-vsheet {
+  background: var(--cm-bg); width: 100%; max-width: 480px;
+  border-top-left-radius: 20px; border-top-right-radius: 20px;
+  max-height: 85vh; overflow-y: auto; padding: 16px 16px 24px;
+}
+.mkt-vsheet-head { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; }
+.mkt-vsheet-img { width: 56px; height: 56px; border-radius: 12px; object-fit: cover; background: var(--cm-bg-secondary); display: flex; align-items: center; justify-content: center; }
+.mkt-vsheet-img img { width: 100%; height: 100%; border-radius: 12px; object-fit: cover; }
+.mkt-vsheet-title { font-size: 15px; font-weight: 700; color: var(--cm-ink); }
+.mkt-vsheet-dim { margin-bottom: 14px; }
+.mkt-vsheet-dim-label { font-size: 12px; font-weight: 700; color: var(--cm-muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
+.mkt-vopt-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.mkt-vopt {
+  padding: 8px 14px; border-radius: 10px; border: 1.5px solid var(--cm-line);
+  background: var(--cm-bg); color: var(--cm-ink); font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.mkt-vopt--active { border-color: var(--cm-accent, #007BFF); background: rgba(0,123,255,0.08); }
+.mkt-vopt--disabled { opacity: .4; text-decoration: line-through; cursor: not-allowed; }
+.mkt-vsheet-pricerow { display: flex; align-items: baseline; gap: 8px; margin: 4px 0 16px; }
+.mkt-vsheet-price { font-size: 22px; font-weight: 800; color: var(--cm-ink); }
+.mkt-vsheet-mrp { font-size: 14px; color: var(--cm-muted); text-decoration: line-through; }
+.mkt-vsheet-stock { font-size: 12px; color: #f59e0b; margin-bottom: 12px; }
+
+/* ===== Buyer sheet: offers & services ===== */
+.mkt-isheet-sec { margin-top: 18px; }
+.mkt-isheet-sec-title { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; color: var(--cm-ink); margin-bottom: 10px; }
+.mkt-offer-row { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.mkt-offer-row::-webkit-scrollbar { display: none; }
+.mkt-offer-card {
+  flex: 0 0 70%; max-width: 240px; border: 1px solid var(--cm-line); border-radius: 12px;
+  padding: 12px; background: var(--cm-card);
+}
+.mkt-offer-title { font-size: 13px; font-weight: 700; color: var(--cm-ink); margin-bottom: 4px; }
+.mkt-offer-desc { font-size: 12px; color: var(--cm-muted); line-height: 1.4; }
+.mkt-service-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.mkt-service-item {
+  flex: 0 0 calc(33.333% - 7px); text-align: center; padding: 10px 6px;
+  border: 1px solid var(--cm-line); border-radius: 12px; background: var(--cm-card);
+}
+.mkt-service-label { font-size: 12px; font-weight: 600; color: var(--cm-ink); }
+.mkt-service-detail { font-size: 10px; color: var(--cm-muted); margin-top: 2px; }

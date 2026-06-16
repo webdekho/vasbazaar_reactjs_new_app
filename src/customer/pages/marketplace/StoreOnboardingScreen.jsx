@@ -434,7 +434,32 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
                 min="1" max="25" step="0.5"
                 value={form.servingRadiusKm}
                 onChange={(e) => setField("servingRadiusKm", Number(e.target.value))}
+                style={{
+                  background: `linear-gradient(to right, #40E0D0 0%, #007BFF ${((Number(form.servingRadiusKm) - 1) / 24) * 100}%, var(--cm-line) ${((Number(form.servingRadiusKm) - 1) / 24) * 100}%, var(--cm-line) 100%)`,
+                }}
               />
+              <div className="mkt-slider-scale">
+                <span>1 km</span>
+                <span>25 km</span>
+              </div>
+              <div className="mkt-radius-manual">
+                <label className="mkt-field-label" htmlFor="servingRadiusManual">Or set radius manually (km)</label>
+                <input
+                  id="servingRadiusManual"
+                  className="mkt-input"
+                  type="number"
+                  inputMode="decimal"
+                  min="1" max="25" step="0.5"
+                  value={form.servingRadiusKm}
+                  onChange={(e) => setField("servingRadiusKm", e.target.value)}
+                  onBlur={(e) => {
+                    let v = Number(e.target.value);
+                    if (!Number.isFinite(v) || v < 1) v = 1;
+                    if (v > 25) v = 25;
+                    setField("servingRadiusKm", v);
+                  }}
+                />
+              </div>
               <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: 4 }}>
                 Only customers within this radius from your store will see your listing.
               </div>
