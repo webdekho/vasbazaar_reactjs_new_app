@@ -264,6 +264,7 @@ const CustomerModernRoutes = () => {
             <Route path="outstanding/reminders" element={<Suspense fallback={<RouteFallback />}><ReminderQueueScreen /></Suspense>} />
             <Route path="outstanding/sms-settings" element={<Suspense fallback={<RouteFallback />}><SmsReminderListScreen /></Suspense>} />
             <Route path="outstanding/business-profile" element={<Suspense fallback={<RouteFallback />}><BusinessProfileScreen /></Suspense>} />
+            <Route path="outstanding/invoices" element={<Suspense fallback={<RouteFallback />}><InvoiceListScreen /></Suspense>} />
             <Route path="outstanding/:customerId" element={<Suspense fallback={<RouteFallback />}><CustomerLedgerScreen /></Suspense>} />
             <Route path="outstanding/:customerId/invoices" element={<Suspense fallback={<RouteFallback />}><InvoiceListScreen /></Suspense>} />
             <Route path="outstanding/:customerId/invoice/new" element={<Suspense fallback={<RouteFallback />}><CreateInvoiceScreen /></Suspense>} />

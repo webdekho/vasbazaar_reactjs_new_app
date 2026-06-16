@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaPlus, FaSearch, FaSyncAlt, FaUserCircle, FaInbox, FaBell, FaCommentDots, FaDownload, FaSpinner } from "react-icons/fa";
+import { FaArrowLeft, FaPlus, FaSearch, FaSyncAlt, FaUserCircle, FaInbox, FaBell, FaCommentDots, FaDownload, FaSpinner, FaFileInvoice } from "react-icons/fa";
 import { outstandingService } from "../../services/outstandingService";
 import { useToast } from "../../context/ToastContext";
 import { buildCsv, downloadCsv } from "../../utils/exportCsv";
@@ -189,6 +189,16 @@ const OutstandingListScreen = () => {
           onClick={exportAllCsv}
         >
           {exporting ? <FaSpinner className="ol-spin" /> : <FaDownload />}
+        </button>
+        <button
+          className="ol-hdr-pill ol-hdr-invoices"
+          type="button"
+          aria-label="All invoices"
+          title="All invoices"
+          disabled={subscriptionLocked}
+          onClick={() => !subscriptionLocked && navigate("/customer/app/outstanding/invoices")}
+        >
+          <FaFileInvoice />
         </button>
         <button
           className="ol-hdr-pill ol-hdr-sms"

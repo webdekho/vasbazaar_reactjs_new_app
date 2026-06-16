@@ -22580,6 +22580,33 @@
   cursor: pointer;
   padding: 0;
 }
+.ol-org-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+.ol-org-actions .ol-org-edit-link {
+  margin-top: 0;
+}
+.ol-org-save-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: #16a34a;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+.ol-org-save-link:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
 .ol-seg {
   display: flex;
   gap: 6px;
@@ -22600,9 +22627,9 @@
   cursor: pointer;
 }
 .ol-seg-btn.is-active {
-  background: #fff;
-  color: #1a1a2e;
-  box-shadow: 0 1px 4px rgba(15,23,42,0.12);
+  background: linear-gradient(135deg, #40E0D0, #007BFF);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(0,123,255,0.28);
 }
 
 /* ===== Business profile screen ===== */
@@ -22688,9 +22715,9 @@
 .customer-modern-app:not(.theme-light) .ol-seg { background: rgba(255,255,255,0.06); }
 .customer-modern-app:not(.theme-light) .ol-seg-btn { color: rgba(255,255,255,0.6); }
 .customer-modern-app:not(.theme-light) .ol-seg-btn.is-active {
-  background: rgba(255,255,255,0.16);
+  background: linear-gradient(135deg, #40E0D0, #007BFF);
   color: #fff;
-  box-shadow: none;
+  box-shadow: 0 2px 6px rgba(0,123,255,0.35);
 }
 .customer-modern-app:not(.theme-light) .ol-inv-status.is-outstanding {
   background: rgba(0,135,59,0.22);
@@ -23280,6 +23307,36 @@
 .ol-hdr-pill:disabled { opacity: 0.55; }
 .ol-hdr-sms { background: linear-gradient(135deg, #7c6cf0 0%, #6a3fc0 100%); box-shadow: 0 4px 12px rgba(106,63,192,0.3); }
 .ol-hdr-remind { background: linear-gradient(135deg, #fb8c5a 0%, #e8623a 100%); box-shadow: 0 4px 12px rgba(232,98,58,0.3); }
+.ol-hdr-invoices { background: linear-gradient(135deg, #40E0D0 0%, #007BFF 100%); box-shadow: 0 4px 12px rgba(0,123,255,0.3); }
+
+/* Compact, evenly-spaced action pills so all six fit on one row */
+.ol-list-page .ol-ledger-header {
+  gap: 6px;
+  padding-right: 12px;
+  flex-wrap: nowrap;
+}
+.ol-list-page .ol-ledger-header .ol-export-btn-pill,
+.ol-list-page .ol-ledger-header .ol-hdr-pill,
+.ol-list-page .ol-ledger-header .ol-renew-btn-pill,
+.ol-list-page .ol-ledger-header .ol-add-btn-pill {
+  width: 32px;
+  height: 32px;
+  font-size: 12.5px;
+  margin-left: 0;
+  margin-right: 0;
+  flex-shrink: 0;
+}
+/* First action pill owns the auto-margin; the rest sit beside it evenly. */
+.ol-list-page .ol-ledger-header .ol-export-btn-pill { margin-left: auto; }
+.ol-list-page .ol-ledger-id { flex: 1 1 auto; min-width: 44px; }
+.ol-list-page .ol-ledger-mobile { white-space: nowrap; }
+@media (max-width: 360px) {
+  .ol-list-page .ol-ledger-header { gap: 4px; padding-right: 10px; }
+  .ol-list-page .ol-ledger-header .ol-export-btn-pill,
+  .ol-list-page .ol-ledger-header .ol-hdr-pill,
+  .ol-list-page .ol-ledger-header .ol-renew-btn-pill,
+  .ol-list-page .ol-ledger-header .ol-add-btn-pill { width: 29px; height: 29px; font-size: 11.5px; }
+}
 
 /* Override the overly-airy summary in favor of hero-style on list */
 .ol-list-page .ol-summary { display: none; }

@@ -2,14 +2,70 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaArrowLeft, FaCheckCircle, FaImage, FaTimes, FaMapMarkerAlt, FaCrosshairs, FaPlus, FaTicketAlt, FaExternalLinkAlt, FaSearch, FaSpinner, FaMagic } from "react-icons/fa";
 import { rybboService } from "../../services/rybboService";
+import { useToast } from "../../context/ToastContext";
 import { buildBannerAiUrl, buildCanvaPrompt, CANVA_BANNER_URL } from "../../services/rybboSocialService";
 
 const MAX_BANNER_BYTES = 2 * 1024 * 1024; // 2 MB
 
-const newTicketCategory = () => ({
+const newTicketCategory = (rows = []) => ({
   id: `tc_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-  name: "", price: "", seats: "", entryGate: "", rowStart: "A", rowEnd: "A", seatsPerRow: "20",
+  name: "", price: "", seats: "", entryGate: "", rows,
 });
+
+// Row label by index: 0 → "A", 1 → "B" … 25 → "Z".
+const ALPHA = (i) => String.fromCharCode(65 + i);
+
+// Total seats across a row-based tier's explicit rows. Tolerates legacy/non-array
+// `rows` shapes (e.g. a saved { start, end, seatsPerRow } object) by normalising first.
+const tierRowSeats = (tc) =>
+  (Array.isArray(tc.rows) ? tc.rows : loadTierRows(tc)).reduce((s, r) => s + num(r.seats, 0), 0);
+
+// Row labels already claimed by OTHER tiers — a row can belong to only one tier.
+const rowsUsedByOtherTiers = (categories, idx) => {
+  const used = new Set();
+  (categories || []).forEach((c, i) => {
+    if (i === idx) return;
+    (c.rows || []).forEach((r) => r.label && used.add(String(r.label).toUpperCase()));
+  });
+  return used;
+};
+
+// Normalise a saved tier into the explicit rows array, accepting both the new
+// array shape and the legacy { start, end, seatsPerRow } range shape.
+const loadTierRows = (t) => {
+  if (Array.isArray(t.rows)) {
+    return t.rows.map((r) => ({ label: String(r.label || "").toUpperCase(), seats: String(r.seats ?? "") }));
+  }
+  if (Array.isArray(t.rows?.list)) {
+    return t.rows.list.map((r) => ({ label: String(r.label || "").toUpperCase(), seats: String(r.seats ?? "") }));
+  }
+  if (t.rows?.start || t.rowStart) {
+    const per = String(t.rows?.seatsPerRow ?? t.seatsPerRow ?? "20");
+    return rowLetters(t.rows?.start ?? t.rowStart, t.rows?.end ?? t.rowEnd ?? t.rows?.start ?? t.rowStart)
+      .map((label) => ({ label, seats: per }));
+  }
+  return [];
+};
+
+// First A–Z label not used by this tier or any other tier (null if all 26 taken).
+const nextFreeRow = (categories, idx) => {
+  const used = rowsUsedByOtherTiers(categories, idx);
+  (categories[idx]?.rows || []).forEach((r) => r.label && used.add(String(r.label).toUpperCase()));
+  for (let i = 0; i < 26; i++) if (!used.has(ALPHA(i))) return ALPHA(i);
+  return null;
+};
+
+// Selectable row letters for one row: free letters + this row's own current label.
+const availableRowOptions = (categories, idx, currentLabel) => {
+  const used = rowsUsedByOtherTiers(categories, idx);
+  (categories[idx]?.rows || []).forEach((r) => {
+    const l = String(r.label || "").toUpperCase();
+    if (l && l !== String(currentLabel || "").toUpperCase()) used.add(l);
+  });
+  const opts = [];
+  for (let i = 0; i < 26; i++) if (!used.has(ALPHA(i))) opts.push(ALPHA(i));
+  return opts;
+};
 
 const empty = {
   organizerName: "", contactEmail: "", contactMobile: "",
@@ -28,6 +84,8 @@ const empty = {
   complimentaryLimit: "",
   complimentaryApprovalMode: "HOST_DIRECT",
   complimentaryGuests: [],
+  complimentaryTeamMembers: [],
+  complimentaryTeamDraft: { name: "", mobile: "" },
   complimentaryDraft: {
     name: "", mobile: "", email: "", qty: "1", ticketType: "VIP Complimentary", ticketCategory: "", remarks: "",
   },
@@ -57,7 +115,7 @@ const COMPLIMENTARY_TYPES = [
   "Artist / Crew Pass",
 ];
 
-const newComplimentaryGuest = (draft, index) => ({
+const newComplimentaryGuest = (draft, index, status = "Generated") => ({
   id: `comp_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
   ticketId: `RYC-${Date.now().toString().slice(-6)}-${index + 1}`,
   name: draft.name.trim(),
@@ -67,7 +125,7 @@ const newComplimentaryGuest = (draft, index) => ({
   ticketType: draft.ticketType || "VIP Complimentary",
   ticketCategory: draft.ticketCategory || draft.ticketType || "VIP Complimentary",
   remarks: draft.remarks.trim(),
-  status: "Generated",
+  status,
   shareChannels: ["WhatsApp", "SMS"],
   seatOrZone: draft.ticketCategory || draft.ticketType || "VIP Complimentary",
   issuedAt: new Date().toISOString(),
@@ -99,7 +157,7 @@ const rowLetters = (start = "A", end = "A") => {
 
 const estimateCategorySeats = (tc, seatingType) => {
   if (seatingType === "ROW_BASED") {
-    return rowLetters(tc.rowStart, tc.rowEnd).length * num(tc.seatsPerRow, 0);
+    return tierRowSeats(tc);
   }
   return num(tc.seats, 0);
 };
@@ -118,6 +176,11 @@ const buildComplimentarySettings = (form) => ({
   scannedTickets: (form.complimentaryGuests || []).filter((guest) => guest.status === "Used / Scanned").length,
   cancelledTickets: (form.complimentaryGuests || []).filter((guest) => guest.status === "Cancelled").length,
   approvalMode: form.complimentaryApprovalMode,
+  teamMembers: (form.complimentaryTeamMembers || []).map((m) => ({
+    id: m.id,
+    name: String(m.name || "").trim(),
+    mobile: String(m.mobile || "").trim(),
+  })),
   guests: (form.complimentaryGuests || []).map((guest) => ({
     ...guest,
     issuedBy: form.organizerName || "Host",
@@ -141,7 +204,9 @@ const enrichTicketCategories = (form) => {
     seatingType,
     complimentary,
     entryGate: tc.entryGate || "",
-    rows: seatingType === "ROW_BASED" ? { start: tc.rowStart || "A", end: tc.rowEnd || "A", seatsPerRow: num(tc.seatsPerRow, 0) } : null,
+    rows: seatingType === "ROW_BASED"
+      ? (tc.rows || []).map((r) => ({ label: String(r.label || "").toUpperCase(), seats: num(r.seats, 0) }))
+      : null,
     tables: seatingType === "TABLE_SEATING" ? { tableCount: num(form.tableCount, 0), seatsPerTable: num(form.seatsPerTable, 0) } : null,
     blockedSeats: csvTokens(form.blockedSeats),
     reservedSeats: csvTokens(form.reservedSeats),
@@ -152,9 +217,32 @@ const enrichTicketCategories = (form) => {
 
 const buildSubmitPayload = (form) => ({
   ...form,
+  // Send null (not "") for empty dates so the backend's LocalDate parser doesn't
+  // throw "Text '' could not be parsed at index 0".
+  expectedDate: form.expectedDate ? form.expectedDate : null,
   totalCapacity: num(form.totalCapacity, 0),
   ticketCategories: enrichTicketCategories(form),
 });
+
+// Mandatory fields — checked client-side so the user gets a clear toast + red
+// highlight instead of a raw backend error.
+const REQUIRED_FIELDS = [
+  { key: "organizerName", label: "Organizer name" },
+  { key: "contactMobile", label: "Contact mobile" },
+  { key: "title", label: "Show title" },
+  { key: "city", label: "City" },
+  { key: "expectedDate", label: "Event Date" },
+];
+
+const validateForm = (form) => {
+  const missing = REQUIRED_FIELDS.filter((f) => !String(form[f.key] || "").trim());
+  if (missing.length === 0) return { fields: [], message: "" };
+  const message =
+    missing.length === 1
+      ? `${missing[0].label} is required.`
+      : `Please fill the required fields: ${missing.map((f) => f.label).join(", ")}.`;
+  return { fields: missing.map((f) => f.key), message };
+};
 
 const buildPreviewSeats = (form) => {
   const blocked = new Set(csvTokens(form.blockedSeats));
@@ -180,12 +268,19 @@ const buildPreviewSeats = (form) => {
   }
 
   if (form.seatingType === "ROW_BASED") {
-    const firstConfigured = form.ticketCategories.find((tc) => tc.rowStart || tc.rowEnd || tc.seatsPerRow) || {};
-    const rows = rowLetters(firstConfigured.rowStart || "A", firstConfigured.rowEnd || "D").slice(0, 8);
-    const seatsPerRow = Math.min(num(firstConfigured.seatsPerRow, 20), 24);
+    // Merge each tier's explicit rows so every configured row shows up.
+    const rowMap = new Map();
+    (form.ticketCategories || []).forEach((tc) => {
+      (tc.rows || []).forEach((r) => {
+        const label = String(r.label || "").toUpperCase();
+        if (!label || rowMap.has(label)) return;
+        rowMap.set(label, Math.min(num(r.seats, 20), 24));
+      });
+    });
+    const rows = Array.from(rowMap.keys()).sort().slice(0, 12);
     return rows.map((row) => ({
       label: row,
-      seats: Array.from({ length: seatsPerRow }, (_, i) => {
+      seats: Array.from({ length: rowMap.get(row) }, (_, i) => {
         const label = `${row}${i + 1}`;
         return { label, status: mark(label) };
       }),
@@ -203,13 +298,16 @@ const buildPreviewSeats = (form) => {
 
 const ListYourShowScreen = () => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const editIdFromUrl = searchParams.get("edit");
   const [form, setForm] = useState(empty);
+  const [invalidFields, setInvalidFields] = useState(new Set());
   const [editingId, setEditingId] = useState(null);
   const [editingStatus, setEditingStatus] = useState(null);
   const [submissions, setSubmissions] = useState([]);
-  const [error, setError] = useState("");
+  // Surface all errors as a toast. setError("") is a no-op (used to clear old inline state).
+  const setError = (msg) => { if (msg) showToast(msg, "error"); };
   const [submitting, setSubmitting] = useState(false);
   const [savingBanner, setSavingBanner] = useState(false);
   const [creativeStep, setCreativeStep] = useState(null);
@@ -273,6 +371,10 @@ const ListYourShowScreen = () => {
       complimentaryLimit: complimentary.limit ?? "",
       complimentaryApprovalMode: complimentary.approvalMode || "HOST_DIRECT",
       complimentaryGuests: Array.isArray(complimentary.guests) ? complimentary.guests : [],
+      complimentaryTeamMembers: Array.isArray(complimentary.teamMembers)
+        ? complimentary.teamMembers.map((m, i) => ({ id: m.id || `tm_edit_${i}`, name: str(m.name), mobile: str(m.mobile) }))
+        : [],
+      complimentaryTeamDraft: { name: "", mobile: "" },
       complimentaryDraft: {
         name: "", mobile: "", email: "", qty: "1", ticketType: "VIP Complimentary", ticketCategory: "", remarks: "",
       },
@@ -282,9 +384,7 @@ const ListYourShowScreen = () => {
         price: t.price ?? "",
         seats: t.seats ?? "",
         entryGate: str(t.entryGate),
-        rowStart: str(t.rows?.start ?? t.rowStart ?? "A"),
-        rowEnd: str(t.rows?.end ?? t.rowEnd ?? "A"),
-        seatsPerRow: t.rows?.seatsPerRow ?? t.seatsPerRow ?? "20",
+        rows: loadTierRows(t),
       })),
     });
     setError(""); setSuccess(false);
@@ -313,13 +413,21 @@ const ListYourShowScreen = () => {
   };
 
   const submit = async () => {
-    setError(""); setSubmitting(true);
+    setError("");
+    const { fields, message } = validateForm(form);
+    if (fields.length) {
+      setInvalidFields(new Set(fields));
+      showToast(message, "error");
+      return;
+    }
+    setInvalidFields(new Set());
+    setSubmitting(true);
     const payload = buildSubmitPayload(form);
     const r = editingId
       ? await rybboService.updateShow(editingId, payload)
       : await rybboService.submitShow(payload);
     setSubmitting(false);
-    if (!r.success) { setError(r.message || "Submission failed"); return; }
+    if (!r.success) { showToast(r.message || "Submission failed", "error"); return; }
     const submissionId = r.data?.id || editingId;
     setSuccess(true); loadMine();
     if (submissionId) {
@@ -340,7 +448,18 @@ const ListYourShowScreen = () => {
     loadMine();
   };
 
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const set = (k) => (e) => {
+    const { value } = e.target;
+    setForm((f) => ({ ...f, [k]: value }));
+    if (value && value.trim && value.trim()) {
+      setInvalidFields((prev) => {
+        if (!prev.has(k)) return prev;
+        const next = new Set(prev);
+        next.delete(k);
+        return next;
+      });
+    }
+  };
 
   // Host taps a seat in the preview to block/unblock it. Reserved / unavailable /
   // sold seats are left untouched — only available <-> blocked toggles.
@@ -431,11 +550,43 @@ const ListYourShowScreen = () => {
 
   // ── Ticket categories ───────────────────────────────────────────
   const addTicketCategory = () =>
-    setForm((f) => ({ ...f, ticketCategories: [...(f.ticketCategories || []), newTicketCategory()] }));
+    setForm((f) => {
+      const cats = f.ticketCategories || [];
+      // For row-based tiers seed one free row so a new tier never reuses an existing row.
+      let rows = [];
+      if (f.seatingType === "ROW_BASED") {
+        const free = nextFreeRow([...cats, { rows: [] }], cats.length);
+        rows = free ? [{ label: free, seats: "20" }] : [];
+      }
+      return { ...f, ticketCategories: [...cats, newTicketCategory(rows)] };
+    });
   const updateTicketCategory = (id, key, value) =>
     setForm((f) => ({
       ...f,
       ticketCategories: f.ticketCategories.map((tc) => tc.id === id ? { ...tc, [key]: value } : tc),
+    }));
+  // ── Per-tier row editing (row-based seating) ──
+  const addRowToTier = (id) =>
+    setForm((f) => {
+      const cats = f.ticketCategories;
+      const idx = cats.findIndex((tc) => tc.id === id);
+      if (idx < 0) return f;
+      const free = nextFreeRow(cats, idx);
+      if (!free) { setError("All rows A–Z are already assigned to a tier."); return f; }
+      const rows = [...(cats[idx].rows || []), { label: free, seats: "20" }];
+      return { ...f, ticketCategories: cats.map((tc, i) => i === idx ? { ...tc, rows } : tc) };
+    });
+  const removeRowFromTier = (id, rowIndex) =>
+    setForm((f) => ({
+      ...f,
+      ticketCategories: f.ticketCategories.map((tc) =>
+        tc.id === id ? { ...tc, rows: (tc.rows || []).filter((_, i) => i !== rowIndex) } : tc),
+    }));
+  const updateRowField = (id, rowIndex, key, value) =>
+    setForm((f) => ({
+      ...f,
+      ticketCategories: f.ticketCategories.map((tc) =>
+        tc.id === id ? { ...tc, rows: (tc.rows || []).map((r, i) => i === rowIndex ? { ...r, [key]: value } : r) } : tc),
     }));
   const removeTicketCategory = (id) =>
     setForm((f) => ({ ...f, ticketCategories: f.ticketCategories.filter((tc) => tc.id !== id) }));
@@ -444,7 +595,7 @@ const ListYourShowScreen = () => {
       ...f,
       seatingType: type,
       ticketCategories: f.ticketCategories.length ? f.ticketCategories : [
-        { ...newTicketCategory(), name: type === "GENERAL_ADMISSION" ? "General" : "VIP", price: type === "GENERAL_ADMISSION" ? "0" : "999", seats: type === "ROW_BASED" ? "" : "100", rowStart: "A", rowEnd: "D", seatsPerRow: "20", entryGate: type === "ZONE_BASED" ? "Gate 1" : "" },
+        { ...newTicketCategory(type === "ROW_BASED" ? [{ label: "A", seats: "20" }, { label: "B", seats: "20" }] : []), name: type === "GENERAL_ADMISSION" ? "General" : "VIP", price: type === "GENERAL_ADMISSION" ? "0" : "999", seats: type === "ROW_BASED" ? "" : "100", entryGate: type === "ZONE_BASED" ? "Gate 1" : "" },
         ...(type === "ZONE_BASED" ? [
           { ...newTicketCategory(), name: "Gold", price: "699", seats: "200", entryGate: "Gate 2" },
           { ...newTicketCategory(), name: "Silver", price: "399", seats: "200", entryGate: "Gate 3" },
@@ -471,6 +622,28 @@ const ListYourShowScreen = () => {
     });
   const setComplimentaryDraft = (key, value) =>
     setForm((f) => ({ ...f, complimentaryDraft: { ...f.complimentaryDraft, [key]: value } }));
+  // ── Team members (for "Team member requests, host approves" mode) ──
+  const setTeamDraft = (key, value) =>
+    setForm((f) => ({ ...f, complimentaryTeamDraft: { ...(f.complimentaryTeamDraft || { name: "", mobile: "" }), [key]: value } }));
+  const addTeamMember = () =>
+    setForm((f) => {
+      const draft = f.complimentaryTeamDraft || { name: "", mobile: "" };
+      const name = draft.name.trim();
+      const mobile = draft.mobile.trim();
+      if (!name || !mobile) { setError("Team member name and mobile are required."); return f; }
+      const members = f.complimentaryTeamMembers || [];
+      if (members.some((m) => String(m.mobile).trim() === mobile)) {
+        setError("This mobile number is already added as a team member.");
+        return f;
+      }
+      return {
+        ...f,
+        complimentaryTeamMembers: [...members, { id: `tm_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, name, mobile }],
+        complimentaryTeamDraft: { name: "", mobile: "" },
+      };
+    });
+  const removeTeamMember = (id) =>
+    setForm((f) => ({ ...f, complimentaryTeamMembers: (f.complimentaryTeamMembers || []).filter((m) => m.id !== id) }));
   const addComplimentaryGuest = () =>
     setForm((f) => {
       const draft = f.complimentaryDraft || empty.complimentaryDraft;
@@ -485,10 +658,13 @@ const ListYourShowScreen = () => {
         return f;
       }
       setError("");
+      // In "Team member requests, host approves" mode new entries start as a
+      // pending request the host must approve before a QR ticket is issued.
+      const status = f.complimentaryApprovalMode === "REQUEST_APPROVAL" ? "Pending Approval" : "Generated";
       return {
         ...f,
         complimentaryEnabled: true,
-        complimentaryGuests: [...f.complimentaryGuests, newComplimentaryGuest(draft, f.complimentaryGuests.length)],
+        complimentaryGuests: [...f.complimentaryGuests, newComplimentaryGuest(draft, f.complimentaryGuests.length, status)],
         complimentaryDraft: { ...empty.complimentaryDraft },
       };
     });
@@ -496,6 +672,19 @@ const ListYourShowScreen = () => {
     setForm((f) => ({
       ...f,
       complimentaryGuests: f.complimentaryGuests.map((guest) => guest.id === id ? { ...guest, [key]: value } : guest),
+    }));
+  // Host approval actions for pending team-member requests.
+  const approveComplimentaryGuest = (id) =>
+    setForm((f) => ({
+      ...f,
+      complimentaryGuests: f.complimentaryGuests.map((guest) =>
+        guest.id === id ? { ...guest, status: "Generated", approvedAt: new Date().toISOString() } : guest),
+    }));
+  const rejectComplimentaryGuest = (id) =>
+    setForm((f) => ({
+      ...f,
+      complimentaryGuests: f.complimentaryGuests.map((guest) =>
+        guest.id === id ? { ...guest, status: "Rejected" } : guest),
     }));
   const removeComplimentaryGuest = (id) =>
     setForm((f) => ({ ...f, complimentaryGuests: f.complimentaryGuests.filter((guest) => guest.id !== id) }));
@@ -507,25 +696,32 @@ const ListYourShowScreen = () => {
   const compLimit = num(form.complimentaryLimit, 0);
   const compUnused = Math.max(0, compLimit - compIssued);
   const paidAvailable = Math.max(0, num(form.totalCapacity || computedCapacity, 0) - compIssued);
+  const pendingApprovals = (form.complimentaryGuests || []).filter((g) => g.status === "Pending Approval").length;
+  // Complimentary guest details can only be issued once the event is approved.
+  const canIssueComplimentary = Boolean(editingId) && editingStatus === "APPROVED";
 
   if (creativeStep) {
     const promptEvent = showPromptEvent(creativeStep.form);
     return (
-      <div style={{ paddingBottom: 32, width: "100%" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px", borderBottom: "1px solid var(--cm-line, #E5E7EB)" }}>
-          <button type="button" onClick={() => setCreativeStep(null)} style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer" }}>
-            <FaArrowLeft />
-          </button>
-          <div style={{ fontSize: 16, fontWeight: 700 }}>Upload or create poster</div>
+      <div className="rybbo-lys" style={{ paddingBottom: 32, width: "100%" }}>
+        <style>{LYS_CSS}</style>
+        <div className="rybbo-hero" style={{ background: "linear-gradient(135deg, #6D28D9 0%, #2563EB 55%, #06B6D4 100%)", color: "#fff", padding: "18px 16px 22px" }}>
+          <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 12 }}>
+            <button type="button" onClick={() => setCreativeStep(null)} aria-label="Back"
+              style={{ background: "rgba(255,255,255,0.16)", border: "1px solid rgba(255,255,255,0.25)", color: "#fff", cursor: "pointer", width: 38, height: 38, borderRadius: 12, display: "grid", placeItems: "center" }}>
+              <FaArrowLeft />
+            </button>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "5px 11px", borderRadius: 999, background: "rgba(255,255,255,0.16)", border: "1px solid rgba(255,255,255,0.22)", fontSize: 11, fontWeight: 800, letterSpacing: 0.4 }}>
+              <FaMagic size={11} /> POSTER
+            </div>
+          </div>
+          <h1 style={{ position: "relative", zIndex: 1, margin: "14px 0 0", fontSize: 24, fontWeight: 900, letterSpacing: -0.4 }}>Upload or create poster</h1>
         </div>
-        <div style={{ padding: "16px 14px", display: "grid", gap: 12 }}>
+        <div style={{ padding: "18px 14px", display: "grid", gap: 12 }} className="rybbo-anim">
           {success && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", background: "rgba(34,197,94,0.12)", borderRadius: 8, color: "#22c55e", fontSize: 13 }}>
               <FaCheckCircle /> Details saved. Poster is optional and can be done now.
             </div>
-          )}
-          {error && (
-            <div style={{ padding: "10px 12px", background: "rgba(255,60,60,0.12)", borderRadius: 8, color: "#ff6b6b", fontSize: 13 }}>{error}</div>
           )}
           <div style={sectionCard}>
             <div style={sectionHead}>
@@ -549,21 +745,21 @@ const ListYourShowScreen = () => {
                 No poster uploaded yet.
               </div>
             )}
-            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={savingBanner}
-              style={{ display: "inline-flex", width: "100%", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 10, border: "1px solid #007BFF", background: "transparent", color: "#007BFF", fontWeight: 800, cursor: savingBanner ? "wait" : "pointer", opacity: savingBanner ? 0.7 : 1 }}>
+            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={savingBanner} className="rybbo-cta"
+              style={{ display: "inline-flex", width: "100%", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px", borderRadius: 14, border: "1.5px dashed #2563EB", background: "rgba(37,99,235,0.06)", color: "#2563EB", fontWeight: 800, cursor: savingBanner ? "wait" : "pointer", opacity: savingBanner ? 0.7 : 1 }}>
               <FaImage /> {savingBanner ? "Saving poster..." : creativeStep.bannerImage ? "Replace poster" : "Upload poster"}
             </button>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8 }}>
-              <a href={buildBannerAiUrl("claude", promptEvent, "")} target="_blank" rel="noreferrer"
-                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 10, background: "#D77655", color: "#fff", fontWeight: 800, textDecoration: "none" }}>
+              <a href={buildBannerAiUrl("claude", promptEvent, "")} target="_blank" rel="noreferrer" className="rybbo-cta"
+                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px", borderRadius: 14, background: "#D77655", color: "#fff", fontWeight: 800, textDecoration: "none", boxShadow: "0 10px 22px -14px #D77655" }}>
                 <FaMagic /> Claude
               </a>
-              <a href={buildBannerAiUrl("chatgpt", promptEvent, "")} target="_blank" rel="noreferrer"
-                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 10, background: "#10A37F", color: "#fff", fontWeight: 800, textDecoration: "none" }}>
+              <a href={buildBannerAiUrl("chatgpt", promptEvent, "")} target="_blank" rel="noreferrer" className="rybbo-cta"
+                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px", borderRadius: 14, background: "#10A37F", color: "#fff", fontWeight: 800, textDecoration: "none", boxShadow: "0 10px 22px -14px #10A37F" }}>
                 <FaMagic /> ChatGPT
               </a>
-              <button type="button" onClick={openCanvaForShow}
-                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 10, border: "none", background: "#00C4CC", color: "#fff", fontWeight: 800, cursor: "pointer" }}>
+              <button type="button" onClick={openCanvaForShow} className="rybbo-cta"
+                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px", borderRadius: 14, border: "none", background: "#00C4CC", color: "#fff", fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 22px -14px #00C4CC" }}>
                 <FaMagic /> Canva
               </button>
             </div>
@@ -571,8 +767,8 @@ const ListYourShowScreen = () => {
               Canva prompt is copied automatically. For Claude/ChatGPT, generate the poster, download/screenshot it, then upload it here.
             </div>
           </div>
-          <button type="button" onClick={() => { setCreativeStep(null); setForm(empty); setEditingId(null); setEditingStatus(null); }}
-            style={{ padding: 14, borderRadius: 10, border: "none", background: "#007BFF", color: "#fff", fontWeight: 800, fontSize: 15, cursor: "pointer" }}>
+          <button type="button" onClick={() => { setCreativeStep(null); setForm(empty); setEditingId(null); setEditingStatus(null); }} className="rybbo-cta"
+            style={{ padding: 15, borderRadius: 14, border: "none", background: "linear-gradient(135deg, #6D28D9, #2563EB 60%, #06B6D4)", color: "#fff", fontWeight: 800, fontSize: 15, cursor: "pointer", boxShadow: "0 12px 26px -12px rgba(37,99,235,0.6)" }}>
             Finish
           </button>
         </div>
@@ -581,36 +777,46 @@ const ListYourShowScreen = () => {
   }
 
   return (
-    <div style={{ paddingBottom: 32, width: "100%" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px", borderBottom: "1px solid var(--cm-line, #E5E7EB)" }}>
-        <button type="button" onClick={() => navigate(-1)} style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer" }}>
-          <FaArrowLeft />
-        </button>
-        <div style={{ fontSize: 16, fontWeight: 700 }}>{editingId ? "Edit submission" : "List your show on RYBBO"}</div>
+    <div className="rybbo-lys" style={{ paddingBottom: 32, width: "100%" }}>
+      <style>{LYS_CSS}</style>
+
+      {/* ── Gradient hero header ─────────────────────────────── */}
+      <div className="rybbo-hero" style={{ background: "linear-gradient(135deg, #6D28D9 0%, #2563EB 55%, #06B6D4 100%)", color: "#fff", padding: "18px 16px 22px" }}>
+        <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 12 }}>
+          <button type="button" onClick={() => navigate(-1)} aria-label="Back"
+            style={{ background: "rgba(255,255,255,0.16)", border: "1px solid rgba(255,255,255,0.25)", color: "#fff", cursor: "pointer", width: 38, height: 38, borderRadius: 12, display: "grid", placeItems: "center" }}>
+            <FaArrowLeft />
+          </button>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "5px 11px", borderRadius: 999, background: "rgba(255,255,255,0.16)", border: "1px solid rgba(255,255,255,0.22)", fontSize: 11, fontWeight: 800, letterSpacing: 0.4 }}>
+            <FaMagic size={11} /> RYBBO
+          </div>
+        </div>
+        <div style={{ position: "relative", zIndex: 1, marginTop: 14 }}>
+          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900, letterSpacing: -0.4, lineHeight: 1.15 }}>
+            {editingId ? "Edit your show" : "List your show"}
+          </h1>
+          <p style={{ margin: "8px 0 0", fontSize: 13, lineHeight: 1.5, color: "rgba(255,255,255,0.88)", maxWidth: 520 }}>
+            Organizing an event, play, sports match or activity? Submit the details — our team reviews and reaches out within 2–3 business days.
+          </p>
+        </div>
       </div>
 
-      <div style={{ padding: "16px 14px" }}>
-        <p style={{ fontSize: 13, color: "var(--cm-muted, #6B7280)", margin: "0 0 16px" }}>
-          Are you organizing an event, play, sports match or activity? Submit the details — our team will review and reach out within 2–3 business days.
-        </p>
+      <div style={{ padding: "18px 14px", display: "grid", gap: 12 }} className="rybbo-anim">
 
         {success && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", background: "rgba(34,197,94,0.12)", borderRadius: 8, color: "#22c55e", marginBottom: 14, fontSize: 13 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "12px 14px", background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 14, color: "#16a34a", fontSize: 13, fontWeight: 600 }}>
             <FaCheckCircle /> Submitted. We'll be in touch soon.
           </div>
         )}
-        {error && (
-          <div style={{ padding: "10px 12px", background: "rgba(255,60,60,0.12)", borderRadius: 8, color: "#ff6b6b", marginBottom: 14, fontSize: 13 }}>{error}</div>
-        )}
         {editingId && editingStatus && editingStatus !== "PENDING" && (
-          <div style={{ padding: "10px 12px", background: "rgba(244,162,97,0.14)", borderRadius: 8, color: "#F4A261", marginBottom: 14, fontSize: 13 }}>
+          <div style={{ padding: "12px 14px", background: "rgba(244,162,97,0.14)", border: "1px solid rgba(244,162,97,0.3)", borderRadius: 14, color: "#d97706", fontSize: 13 }}>
             This submission is currently <strong>{editingStatus}</strong>. Saving changes will send it back for review.
           </div>
         )}
 
         <div style={{ display: "grid", gap: 12 }}>
-          <Field label="Organizer name *" value={form.organizerName} onChange={set("organizerName")} placeholder="Your or company name" />
-          <Field label="Contact mobile *" value={form.contactMobile} onChange={set("contactMobile")} placeholder="10-digit mobile" inputMode="numeric" />
+          <Field label="Organizer name *" value={form.organizerName} onChange={set("organizerName")} placeholder="Your or company name" invalid={invalidFields.has("organizerName")} />
+          <Field label="Contact mobile *" value={form.contactMobile} onChange={set("contactMobile")} placeholder="10-digit mobile" inputMode="numeric" invalid={invalidFields.has("contactMobile")} />
           <Field label="Contact email" value={form.contactEmail} onChange={set("contactEmail")} placeholder="you@example.com" type="email" />
           <div style={sectionCard}>
             <div style={sectionHead}>
@@ -631,7 +837,7 @@ const ListYourShowScreen = () => {
               </div>
             )}
           </div>
-          <Field label="Show title *" value={form.title} onChange={set("title")} placeholder="e.g. Stand-up night with X" />
+          <Field label="Show title *" value={form.title} onChange={set("title")} placeholder="e.g. Stand-up night with X" invalid={invalidFields.has("title")} />
           <div>
             <label style={labelStyle}>Category *</label>
             <select value={form.category} onChange={set("category")} style={inputStyle}>
@@ -640,10 +846,11 @@ const ListYourShowScreen = () => {
               <option value="workshops">Workshops</option>
               <option value="sports">Sports</option>
               <option value="activities">Activities</option>
+              <option value="others">Others</option>
             </select>
           </div>
-          <Field label="City *" value={form.city} onChange={set("city")} placeholder="Mumbai / Pune …" />
-          <Field label="Event Date" value={form.expectedDate} onChange={set("expectedDate")} type="date" />
+          <Field label="City *" value={form.city} onChange={set("city")} placeholder="Mumbai / Pune …" invalid={invalidFields.has("city")} />
+          <Field label="Event Date *" value={form.expectedDate} onChange={set("expectedDate")} type="date" invalid={invalidFields.has("expectedDate")} />
 
           {/* ── Venue & map ─────────────────────────────────────── */}
           <div style={sectionCard}>
@@ -739,71 +946,120 @@ const ListYourShowScreen = () => {
               <MiniStat label="Marked unavailable" value={unavailableCount} />
               <MiniStat label="Booking mode" value={form.seatingType.replace("_", " ")} />
             </div>
-            <SeatPreview groups={previewGroups} seatingType={form.seatingType} onSeatClick={toggleBlockSeat} />
-          </div>
 
-          {/* ── Ticket categories ──────────────────────────────── */}
-          <div style={sectionCard}>
-            <div style={{ ...sectionHead, justifyContent: "space-between" }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                <FaTicketAlt color="#007BFF" />
-                Ticket categories
-              </span>
-              <button type="button" onClick={addTicketCategory}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 999, border: "1px solid #007BFF", background: "transparent", color: "#007BFF", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                <FaPlus size={10} /> Add tier
-              </button>
-            </div>
-            {form.ticketCategories.length === 0 ? (
-              <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>
-                Add custom tiers like <strong style={{ color: "var(--cm-ink, inherit)" }}>Silver, Gold, Platinum</strong> — set your own price and seat count.
+            {/* ── Ticket categories (above stage/entry) ──────────── */}
+            <div style={{ borderTop: "1px solid var(--cm-line, #E5E7EB)", paddingTop: 14, display: "grid", gap: 12 }}>
+              <div style={{ ...sectionHead, justifyContent: "space-between" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <FaTicketAlt color="#007BFF" />
+                  Ticket categories
+                </span>
+                <button type="button" onClick={addTicketCategory}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 999, border: "1px solid #007BFF", background: "transparent", color: "#007BFF", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                  <FaPlus size={10} /> Add tier
+                </button>
               </div>
-            ) : (
-              <div style={{ display: "grid", gap: 10 }}>
-                {form.ticketCategories.map((tc, idx) => (
-                  <div key={tc.id} style={{ padding: 10, borderRadius: 10, border: "1px solid var(--cm-line, #2A2A3A)", background: "transparent" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--cm-muted, #6B7280)" }}>Tier {idx + 1}</span>
-                      <button type="button" onClick={() => removeTicketCategory(tc.id)} aria-label="Remove tier"
-                        style={{ background: "transparent", border: "none", color: "var(--cm-muted, #6B7280)", cursor: "pointer", padding: 0 }}>
-                        <FaTimes size={12} />
-                      </button>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8 }}>
-                      <input type="text" value={tc.name}
-                        onChange={(e) => updateTicketCategory(tc.id, "name", e.target.value)}
-                        placeholder="Tier name (Silver)" style={inputStyle} />
-                      <input type="number" min="0" inputMode="decimal" value={tc.price}
-                        onChange={(e) => updateTicketCategory(tc.id, "price", e.target.value)}
-                        placeholder="Price ₹" style={inputStyle} />
-                      <input type="number" min="0" inputMode="numeric" value={tc.seats}
-                        onChange={(e) => updateTicketCategory(tc.id, "seats", e.target.value)}
-                        placeholder={form.seatingType === "ROW_BASED" ? "Auto" : "Seats"} style={inputStyle} />
-                    </div>
-                    {(form.seatingType === "ZONE_BASED" || form.seatingType === "ROW_BASED") && (
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8, marginTop: 8 }}>
-                        {form.seatingType === "ROW_BASED" && (
-                          <>
-                            <input type="text" maxLength={1} value={tc.rowStart}
-                              onChange={(e) => updateTicketCategory(tc.id, "rowStart", e.target.value.toUpperCase())}
-                              placeholder="Row from" style={inputStyle} />
-                            <input type="text" maxLength={1} value={tc.rowEnd}
-                              onChange={(e) => updateTicketCategory(tc.id, "rowEnd", e.target.value.toUpperCase())}
-                              placeholder="Row to" style={inputStyle} />
-                            <input type="number" min="1" inputMode="numeric" value={tc.seatsPerRow}
-                              onChange={(e) => updateTicketCategory(tc.id, "seatsPerRow", e.target.value)}
-                              placeholder="Seats / row" style={inputStyle} />
-                          </>
-                        )}
-                        <input type="text" value={tc.entryGate}
-                          onChange={(e) => updateTicketCategory(tc.id, "entryGate", e.target.value)}
-                          placeholder="Entry gate by zone" style={inputStyle} />
+              {form.ticketCategories.length === 0 ? (
+                <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>
+                  Add custom tiers like <strong style={{ color: "var(--cm-ink, inherit)" }}>Silver, Gold, Platinum</strong> — set your own price and seat count.
+                </div>
+              ) : (
+                <div style={{ display: "grid", gap: 10 }}>
+                  {form.ticketCategories.map((tc, idx) => (
+                    <div key={tc.id} style={{ padding: 10, borderRadius: 10, border: "1px solid var(--cm-line, #2A2A3A)", background: "transparent" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--cm-muted, #6B7280)" }}>Tier {idx + 1}</span>
+                        <button type="button" onClick={() => removeTicketCategory(tc.id)} aria-label="Remove tier"
+                          style={{ background: "transparent", border: "none", color: "var(--cm-muted, #6B7280)", cursor: "pointer", padding: 0 }}>
+                          <FaTimes size={12} />
+                        </button>
                       </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8 }}>
+                        <LabeledInput label="Tier name">
+                          <input type="text" value={tc.name}
+                            onChange={(e) => updateTicketCategory(tc.id, "name", e.target.value)}
+                            placeholder="Silver" style={inputStyle} />
+                        </LabeledInput>
+                        <LabeledInput label="Price ₹">
+                          <input type="number" min="0" inputMode="decimal" value={tc.price}
+                            onChange={(e) => updateTicketCategory(tc.id, "price", e.target.value)}
+                            placeholder="0" style={inputStyle} />
+                        </LabeledInput>
+                        {form.seatingType !== "ROW_BASED" && (
+                          <LabeledInput label="Seats">
+                            <input type="number" min="0" inputMode="numeric" value={tc.seats}
+                              onChange={(e) => updateTicketCategory(tc.id, "seats", e.target.value)}
+                              placeholder="100" style={inputStyle} />
+                          </LabeledInput>
+                        )}
+                      </div>
+                      {form.seatingType === "ROW_BASED" && (
+                        <>
+                          <div style={{ marginTop: 8 }}>
+                            <LabeledInput label="Entry gate">
+                              <input type="text" value={tc.entryGate}
+                                onChange={(e) => updateTicketCategory(tc.id, "entryGate", e.target.value)}
+                                placeholder="Gate 1" style={inputStyle} />
+                            </LabeledInput>
+                          </div>
+                          <div style={{ marginTop: 12 }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                              <label style={labelStyle}>Rows &amp; seats</label>
+                              <button type="button" onClick={() => addRowToTier(tc.id)} className="rybbo-cta"
+                                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 999, border: "1px solid #2563EB", background: "transparent", color: "#2563EB", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+                                <FaPlus size={9} /> Add row
+                              </button>
+                            </div>
+                            {(tc.rows || []).length === 0 ? (
+                              <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>
+                                No rows yet — tap <strong style={{ color: "var(--cm-ink, inherit)" }}>Add row</strong> to assign rows and their seat counts.
+                              </div>
+                            ) : (
+                              <div style={{ display: "grid", gap: 8 }}>
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 34px", gap: 8, fontSize: 10.5, fontWeight: 700, color: "var(--cm-muted, #6B7280)", textTransform: "uppercase", letterSpacing: 0.3 }}>
+                                  <span>Row</span><span>Seats in row</span><span />
+                                </div>
+                                {(tc.rows || []).map((r, ri) => (
+                                  <div key={ri} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 34px", gap: 8, alignItems: "center" }}>
+                                    <select value={r.label} onChange={(e) => updateRowField(tc.id, ri, "label", e.target.value)} style={inputStyle}>
+                                      {availableRowOptions(form.ticketCategories, idx, r.label).map((l) => (
+                                        <option key={l} value={l}>Row {l}</option>
+                                      ))}
+                                    </select>
+                                    <input type="number" min="1" inputMode="numeric" value={r.seats}
+                                      onChange={(e) => updateRowField(tc.id, ri, "seats", e.target.value)}
+                                      placeholder="20" style={inputStyle} />
+                                    <button type="button" onClick={() => removeRowFromTier(tc.id, ri)} aria-label={`Remove row ${r.label}`}
+                                      style={{ width: 34, height: 38, borderRadius: 10, border: "1px solid var(--cm-line, #E5E7EB)", background: "transparent", color: "#ef4444", cursor: "pointer", display: "grid", placeItems: "center" }}>
+                                      <FaTimes size={12} />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <div style={{ marginTop: 8, fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>
+                              {(tc.rows || []).length} row{(tc.rows || []).length === 1 ? "" : "s"} ={" "}
+                              <strong style={{ color: "#007BFF" }}>{estimateCategorySeats(tc, form.seatingType)} seats</strong>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                      {form.seatingType === "ZONE_BASED" && (
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8, marginTop: 8 }}>
+                          <LabeledInput label="Entry gate">
+                            <input type="text" value={tc.entryGate}
+                              onChange={(e) => updateTicketCategory(tc.id, "entryGate", e.target.value)}
+                              placeholder="Gate 1" style={inputStyle} />
+                          </LabeledInput>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <SeatPreview groups={previewGroups} seatingType={form.seatingType} onSeatClick={toggleBlockSeat} />
           </div>
 
           <div style={sectionCard}>
@@ -836,6 +1092,48 @@ const ListYourShowScreen = () => {
                     </select>
                   </div>
                 </div>
+
+                {form.complimentaryApprovalMode === "REQUEST_APPROVAL" && (
+                  <div style={{ padding: 12, borderRadius: 12, border: "1px solid var(--cm-line, #E5E7EB)", background: "rgba(0,123,255,0.04)", display: "grid", gap: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 800 }}>Team members</span>
+                      <span style={{ fontSize: 11, color: "var(--cm-muted, #6B7280)" }}>
+                        {(form.complimentaryTeamMembers || []).length} added
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11.5, color: "var(--cm-muted, #6B7280)", lineHeight: 1.45 }}>
+                      These people can request complimentary tickets; you approve before they are issued.
+                    </div>
+                    {(form.complimentaryTeamMembers || []).length > 0 && (
+                      <div style={{ display: "grid", gap: 6 }}>
+                        {form.complimentaryTeamMembers.map((m) => (
+                          <div key={m.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 10px", borderRadius: 10, border: "1px solid var(--cm-line, #E5E7EB)", background: "var(--cm-card, #fff)" }}>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.name}</div>
+                              <div style={{ fontSize: 11.5, color: "var(--cm-muted, #6B7280)" }}>{m.mobile}</div>
+                            </div>
+                            <button type="button" onClick={() => removeTeamMember(m.id)} aria-label={`Remove ${m.name}`}
+                              style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid var(--cm-line, #E5E7EB)", background: "transparent", color: "#ef4444", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                              <FaTimes size={11} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, alignItems: "stretch" }}>
+                      <input type="text" value={form.complimentaryTeamDraft?.name || ""}
+                        onChange={(e) => setTeamDraft("name", e.target.value)}
+                        placeholder="Member name" style={inputStyle} />
+                      <input type="tel" inputMode="numeric" value={form.complimentaryTeamDraft?.mobile || ""}
+                        onChange={(e) => setTeamDraft("mobile", e.target.value)}
+                        placeholder="Mobile number" style={inputStyle} />
+                      <button type="button" onClick={addTeamMember} className="rybbo-cta"
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0 14px", borderRadius: 10, border: "none", background: "#2563EB", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
+                        <FaPlus size={10} /> Add
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8 }}>
                   <MiniStat label="Quota" value={compLimit || "Open"} />
                   <MiniStat label="Issued" value={compIssued} />
@@ -843,6 +1141,17 @@ const ListYourShowScreen = () => {
                   <MiniStat label="Paid capacity left" value={paidAvailable} />
                 </div>
 
+                {!canIssueComplimentary ? (
+                  <div style={{ padding: 12, borderRadius: 12, border: "1px dashed var(--cm-line, #E5E7EB)", background: "rgba(120,130,160,0.05)", fontSize: 12, color: "var(--cm-muted, #6B7280)", lineHeight: 1.5 }}>
+                    These settings are saved with your event. You can <strong style={{ color: "var(--cm-ink, inherit)" }}>add complimentary guest details and issue QR tickets after the event is approved</strong>.
+                  </div>
+                ) : (
+                <>
+                {pendingApprovals > 0 && (
+                  <div style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #F59E0B", background: "rgba(245,158,11,0.1)", color: "#b45309", fontSize: 12.5, fontWeight: 700 }}>
+                    {pendingApprovals} request{pendingApprovals === 1 ? "" : "s"} waiting for your approval — review below.
+                  </div>
+                )}
                 <div style={{ padding: 10, borderRadius: 10, border: "1px solid var(--cm-line, #E5E7EB)", display: "grid", gap: 8 }}>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8 }}>
                     <input type="text" value={form.complimentaryDraft.name}
@@ -877,7 +1186,7 @@ const ListYourShowScreen = () => {
                       placeholder="Remark e.g. Sponsor Guest" style={inputStyle} />
                     <button type="button" onClick={addComplimentaryGuest}
                       style={{ padding: "10px 12px", borderRadius: 8, border: "none", background: "#22c55e", color: "#fff", fontWeight: 800, cursor: "pointer" }}>
-                      Generate QR Ticket
+                      {form.complimentaryApprovalMode === "REQUEST_APPROVAL" ? "Submit for approval" : "Generate QR Ticket"}
                     </button>
                   </div>
                   <div style={{ fontSize: 10.8, color: "var(--cm-muted, #6B7280)", lineHeight: 1.45 }}>
@@ -888,7 +1197,7 @@ const ListYourShowScreen = () => {
                 {form.complimentaryGuests.length > 0 && (
                   <div style={{ display: "grid", gap: 8 }}>
                     {form.complimentaryGuests.map((guest) => (
-                      <div key={guest.id} style={{ padding: 10, borderRadius: 10, border: "1px solid var(--cm-line, #E5E7EB)", display: "grid", gap: 8 }}>
+                      <div key={guest.id} style={{ padding: 10, borderRadius: 10, border: guest.status === "Pending Approval" ? "1px solid #F59E0B" : "1px solid var(--cm-line, #E5E7EB)", background: guest.status === "Pending Approval" ? "rgba(245,158,11,0.06)" : "transparent", display: "grid", gap: 8 }}>
                         <div style={{ display: "flex", gap: 8, justifyContent: "space-between", alignItems: "flex-start" }}>
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontSize: 13, fontWeight: 800 }}>{guest.name} · {guest.qty} ticket(s)</div>
@@ -902,22 +1211,40 @@ const ListYourShowScreen = () => {
                             <FaTimes size={12} />
                           </button>
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8 }}>
-                          <select value={guest.status} onChange={(e) => updateComplimentaryGuest(guest.id, "status", e.target.value)} style={inputStyle}>
-                            {["Generated", "Shared", "Accepted", "Used / Scanned", "Cancelled", "Expired"].map((status) => (
-                              <option key={status} value={status}>{status}</option>
-                            ))}
-                          </select>
-                          <button type="button" style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid #22c55e", background: "transparent", color: "#22c55e", fontWeight: 800, cursor: "pointer" }}>
-                            WhatsApp / SMS
-                          </button>
-                          <button type="button" style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--cm-line, #E5E7EB)", background: "transparent", color: "inherit", fontWeight: 800, cursor: "pointer" }}>
-                            PDF / Copy Link
-                          </button>
-                        </div>
+                        {guest.status === "Pending Approval" ? (
+                          <div style={{ display: "grid", gap: 8 }}>
+                            <div style={{ fontSize: 11.5, fontWeight: 800, color: "#d97706" }}>Pending your approval</div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                              <button type="button" onClick={() => approveComplimentaryGuest(guest.id)}
+                                style={{ padding: "10px 12px", borderRadius: 8, border: "none", background: "#22c55e", color: "#fff", fontWeight: 800, cursor: "pointer" }}>
+                                Approve &amp; issue QR
+                              </button>
+                              <button type="button" onClick={() => rejectComplimentaryGuest(guest.id)}
+                                style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid #ef4444", background: "transparent", color: "#ef4444", fontWeight: 800, cursor: "pointer" }}>
+                                Reject
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8 }}>
+                            <select value={guest.status} onChange={(e) => updateComplimentaryGuest(guest.id, "status", e.target.value)} style={inputStyle}>
+                              {["Generated", "Shared", "Accepted", "Used / Scanned", "Cancelled", "Rejected", "Expired"].map((status) => (
+                                <option key={status} value={status}>{status}</option>
+                              ))}
+                            </select>
+                            <button type="button" style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid #22c55e", background: "transparent", color: "#22c55e", fontWeight: 800, cursor: "pointer" }}>
+                              WhatsApp / SMS
+                            </button>
+                            <button type="button" style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--cm-line, #E5E7EB)", background: "transparent", color: "inherit", fontWeight: 800, cursor: "pointer" }}>
+                              PDF / Copy Link
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
+                )}
+                </>
                 )}
               </>
             )}
@@ -953,8 +1280,8 @@ const ListYourShowScreen = () => {
               Cancel
             </button>
           )}
-          <button type="button" onClick={submit} disabled={submitting}
-            style={{ flex: 1, padding: 14, borderRadius: 10, border: "none", background: "#007BFF", color: "#fff", fontWeight: 700, fontSize: 16, cursor: submitting ? "wait" : "pointer", opacity: submitting ? 0.7 : 1 }}>
+          <button type="button" onClick={submit} disabled={submitting} className="rybbo-cta"
+            style={{ flex: 1, padding: 15, borderRadius: 14, border: "none", background: "linear-gradient(135deg, #6D28D9, #2563EB 60%, #06B6D4)", color: "#fff", fontWeight: 800, fontSize: 16, letterSpacing: 0.2, cursor: submitting ? "wait" : "pointer", opacity: submitting ? 0.7 : 1, boxShadow: "0 12px 26px -12px rgba(37,99,235,0.6)" }}>
             {submitting ? "Saving…" : (editingId ? (editingStatus && editingStatus !== "PENDING" ? "Resubmit for review" : "Update submission") : "Submit for review")}
           </button>
         </div>
@@ -997,15 +1324,44 @@ const ListYourShowScreen = () => {
   );
 };
 
-const labelStyle = { fontSize: 12, fontWeight: 600, color: "var(--cm-muted, #6B7280)", marginBottom: 4, display: "block" };
-const inputStyle = { width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--cm-line, #E5E7EB)", background: "transparent", color: "inherit", fontSize: 14, fontFamily: "inherit" };
-const sectionCard = { padding: 14, borderRadius: 12, border: "1px solid var(--cm-line, #2A2A3A)", background: "transparent", display: "grid", gap: 10 };
-const sectionHead = { display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 700 };
+const labelStyle = { fontSize: 11.5, fontWeight: 700, color: "var(--cm-muted, #6B7280)", marginBottom: 6, display: "block", letterSpacing: 0.2 };
+const inputStyle = { width: "100%", padding: "12px 14px", borderRadius: 12, border: "1px solid var(--cm-line, #E5E7EB)", background: "var(--cm-input-bg, rgba(120,130,160,0.06))", color: "inherit", fontSize: 14.5, fontFamily: "inherit", outline: "none", transition: "border-color .15s ease, box-shadow .15s ease, background .15s ease" };
+const invalidInputStyle = { ...inputStyle, border: "1px solid #ef4444", boxShadow: "0 0 0 3px rgba(239,68,68,0.16)" };
+const sectionCard = { padding: 16, borderRadius: 18, border: "1px solid var(--cm-line, #E5E7EB)", background: "var(--cm-card, rgba(255,255,255,0.6))", boxShadow: "0 8px 24px -16px rgba(31,41,55,0.35)", display: "grid", gap: 12 };
+const sectionHead = { display: "flex", alignItems: "center", gap: 9, fontSize: 14.5, fontWeight: 800, letterSpacing: 0.1 };
 
-const Field = ({ label, value, onChange, type = "text", placeholder, inputMode }) => (
+// Scoped polish: focus rings, button hover lift, animated accent bar. Injected once.
+const LYS_CSS = `
+.rybbo-lys input:focus, .rybbo-lys select:focus, .rybbo-lys textarea:focus {
+  border-color: #6D28D9 !important;
+  box-shadow: 0 0 0 3px rgba(109,40,217,0.18) !important;
+  background: var(--cm-card, rgba(255,255,255,0.85)) !important;
+}
+.rybbo-lys .rybbo-cta { transition: transform .14s ease, box-shadow .14s ease, filter .14s ease; }
+.rybbo-lys .rybbo-cta:hover { transform: translateY(-1px); filter: brightness(1.04); }
+.rybbo-lys .rybbo-cta:active { transform: translateY(0); }
+.rybbo-lys .rybbo-hero { position: relative; overflow: hidden; }
+.rybbo-lys .rybbo-hero::after {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(120% 140% at 12% -10%, rgba(255,255,255,0.28), transparent 45%),
+              radial-gradient(90% 120% at 100% 0%, rgba(6,182,212,0.35), transparent 50%);
+  pointer-events: none;
+}
+@keyframes rybboFadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.rybbo-lys .rybbo-anim { animation: rybboFadeUp .35s ease both; }
+`;
+
+const Field = ({ label, value, onChange, type = "text", placeholder, inputMode, invalid }) => (
+  <div>
+    <label style={invalid ? { ...labelStyle, color: "#ef4444" } : labelStyle}>{label}</label>
+    <input type={type} value={value} onChange={onChange} placeholder={placeholder} inputMode={inputMode} style={invalid ? invalidInputStyle : inputStyle} />
+  </div>
+);
+
+const LabeledInput = ({ label, children }) => (
   <div>
     <label style={labelStyle}>{label}</label>
-    <input type={type} value={value} onChange={onChange} placeholder={placeholder} inputMode={inputMode} style={inputStyle} />
+    {children}
   </div>
 );
 
