@@ -70,8 +70,8 @@ const CartScreen = () => {
   // Subscription config.
   const [subFrequency, setSubFrequency] = useState("DAILY"); // DAILY | WEEKLY | MONTHLY | INTERVAL
   const [subDays, setSubDays] = useState([]); // ["MON", ...] for WEEKLY
-  const [subInterval, setSubInterval] = useState(15); // gap in days for INTERVAL
-  const [subAnchor, setSubAnchor] = useState("TODAY"); // TODAY | START — anchor for INTERVAL
+  const [subInterval] = useState(15); // gap in days for INTERVAL
+  const [subAnchor] = useState("TODAY"); // TODAY | START — anchor for INTERVAL
   const [subTime, setSubTime] = useState("09:00");
   const [subStartDate, setSubStartDate] = useState("");
   const [subEndDate, setSubEndDate] = useState("");
