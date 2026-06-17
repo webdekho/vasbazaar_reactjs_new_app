@@ -1002,7 +1002,7 @@ const PostpaidFlow = ({ serviceData, operators, navigate }) => {
                   )}
                   <div className="cm-contact-info">
                     <div className="cm-contact-name">{name}</div>
-                    <div className="cm-contact-number">Bharat BillPay</div>
+                    <div className="cm-contact-number">Bharat Connect</div>
                   </div>
                   {loading && selectedOp?.id === op.id ? <span className="cm-contact-loading" /> : <FaChevronRight style={{ color: "var(--cm-disabled, #6B6B6B)", fontSize: 12 }} />}
                 </button>

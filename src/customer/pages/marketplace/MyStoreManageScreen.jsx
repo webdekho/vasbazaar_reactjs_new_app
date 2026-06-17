@@ -635,11 +635,6 @@ const CategoriesTab = () => {
     else setError(res.message || "Delete failed");
   };
 
-  const handleToggleCategory = async (id, currentActive) => {
-    const res = await marketplaceService.toggleMyItemCategoryActive(id, !currentActive);
-    if (res.success) setCategories((p) => p.map((c) => c.id === id ? { ...c, isActive: !currentActive } : c));
-  };
-
   return (
     <div style={{ padding: "4px 14px 24px" }}>
       {/* Add Category CTA */}
@@ -759,11 +754,6 @@ const SubcategoriesPanel = ({ categoryId, categoryName }) => {
     const res = await marketplaceService.deleteMyItemSubcategory(id);
     if (res.success) setSubs((p) => p.filter((s) => s.id !== id));
     else setError(res.message || "Delete failed");
-  };
-
-  const handleToggle = async (id, currentActive) => {
-    const res = await marketplaceService.toggleMyItemSubcategoryActive(id, !currentActive);
-    if (res.success) setSubs((p) => p.map((s) => s.id === id ? { ...s, isActive: !currentActive } : s));
   };
 
   return (

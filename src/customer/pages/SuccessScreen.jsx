@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { FaShareAlt, FaCopy, FaWallet, FaGift, FaPercent, FaTag, FaUsers, FaSyncAlt, FaTimes } from "react-icons/fa";
+import { FaShareAlt, FaCopy, FaWallet, FaGift, FaPercent, FaTag, FaUsers, FaSyncAlt, FaTimes, FaFileDownload } from "react-icons/fa";
 import { FiArrowRight } from "react-icons/fi";
 import { useCustomerModern } from "../context/CustomerModernContext";
 import { useState, useEffect, useRef } from "react";
@@ -12,6 +12,7 @@ import {
   savePendingMandateContext,
 } from "../services/mandateService";
 import { playSuccessSound } from "../services/audioService";
+import { normalizeCcf } from "../utils/billReceiptPdf";
 
 const ScratchCashbackModal = ({ open, cashbackAmount, onClose, onRevealed }) => {
   const canvasRef = useRef(null);
@@ -566,8 +567,21 @@ const SuccessScreen = () => {
   const userMobile = userData?.mobile || userData?.mobileNumber || "";
 
   const txnId = data.txnId || data.statusPayload?.txnId || "--";
-  const refId = data.statusPayload?.refId || data.statusPayload?.ref_id || data.statusPayload?.referenceId || "--";
+  // B-Connect TXN ID (a.k.a. the 12-digit BBPS reference returned in the pay response).
+  const bConnectTxnId = data.statusPayload?.refId || data.statusPayload?.ref_id || data.statusPayload?.referenceId || data.bConnectTxnId || "--";
   const amount = Number(data.amount || 0);
+  // CCF (Customer Convenience Fee) — VasBazaar does not levy a convenience fee on
+  // bill payments, so this is 0; NPCI requires it be shown within the 0-25 range.
+  const ccf = normalizeCcf(data.ccf ?? data.statusPayload?.ccf ?? 0);
+  // Bill category (e.g. Electricity, DTH) for the receipt; only meaningful for bills.
+  const category = data.category || data.serviceName || data.service || data.label || "";
+  // Bharat Connect treatment (logo + receipt) applies to SERVICE payments —
+  // recharges & bills routed through PaymentScreen carry type/operatorId/serviceId.
+  // Other products (e.g. flight bookings) pass none of these, so they're excluded.
+  // When the screen is opened directly with no navigation state, fall back to a
+  // demo service view so the Bharat Connect treatment can be previewed/verified.
+  const isEmptyState = !location.state || Object.keys(location.state).length === 0;
+  const isService = Boolean(data.type || data.operatorId || data.serviceId) || isEmptyState;
   const paymentType = String(data.paymentType || "web").toUpperCase();
   const dateTime = new Date().toLocaleString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
   const cashback = data.statusPayload?.cashback || data.statusPayload?.cashbackAmount || data.cashbackValue || 0;
@@ -638,7 +652,7 @@ const SuccessScreen = () => {
   };
 
   const handleShare = async () => {
-    const shareText = `Payment of ₹${amount.toFixed(2)} completed successfully!\nTransaction ID: ${txnId}\nReference ID: ${refId}\nDate: ${dateTime}\n\nPowered by VasBazaar - Bharat Connect`;
+    const shareText = `Payment of ₹${amount.toFixed(2)} completed successfully!\nTransaction ID: ${txnId}\nB-Connect TXN ID: ${bConnectTxnId}\nDate: ${dateTime}\n\nPowered by VasBazaar - Bharat Connect`;
     const shareUrl = "https://web.vasbazaar.com";
 
     // Use Capacitor Share for native apps
@@ -799,7 +813,17 @@ const SuccessScreen = () => {
             <path className="sx2-check-path" d="M20 33 L29 42 L46 24" />
           </svg>
         </div>
-        <p className="sx2-eyebrow">Payment Successful</p>
+        <div className="sx2-eyebrow-row">
+          <p className="sx2-eyebrow">Payment Successful</p>
+          {isService && (
+            <img
+              src="/images/b-assured.png"
+              alt="Be-Assured"
+              className="sx2-ba-logo"
+              onError={(e) => { e.currentTarget.style.display = "none"; }}
+            />
+          )}
+        </div>
         <h1 className="sx2-amount">₹{amount.toFixed(2)}</h1>
         <p className="sx2-paid-to">
           Paid to <strong>{serviceName}</strong>
@@ -837,10 +861,10 @@ const SuccessScreen = () => {
             </dd>
           </div>
           <div className="sx2-row">
-            <dt>Reference ID</dt>
+            <dt>B-Connect TXN ID</dt>
             <dd>
-              <span className="sx2-mono">{refId}</span>
-              <button type="button" className="sx2-chip-btn" aria-label="Copy reference id" onClick={() => copyToClipboard(refId, "ref")}>
+              <span className="sx2-mono">{bConnectTxnId}</span>
+              <button type="button" className="sx2-chip-btn" aria-label="Copy B-Connect TXN ID" onClick={() => copyToClipboard(bConnectTxnId, "ref")}>
                 <FaCopy />
               </button>
             </dd>
@@ -849,6 +873,20 @@ const SuccessScreen = () => {
             <dt>Payment Method</dt>
             <dd>{paymentType}</dd>
           </div>
+          {isService && (
+            <>
+              {category && (
+                <div className="sx2-row">
+                  <dt>Category</dt>
+                  <dd>{category}</dd>
+                </div>
+              )}
+              <div className="sx2-row">
+                <dt>CCF</dt>
+                <dd>₹{ccf.toFixed(2)} · Submitted</dd>
+              </div>
+            </>
+          )}
           {autopayTarget && (
             <div className="sx2-row">
               <dt>{data.type === "bill" ? "Account / Bill No" : "Mobile Number"}</dt>
@@ -887,6 +925,13 @@ const SuccessScreen = () => {
         </span>
         <FiArrowRight />
       </button>
+
+      {isService && (
+        <button type="button" className="sx2-receipt-btn" onClick={() => navigate("/customer/app/receipt", { state: data })}>
+          <FaFileDownload />
+          View / Print Receipt
+        </button>
+      )}
 
       <div className="sx2-actionbar">
         <button type="button" className="sx2-act sx2-act--ghost" onClick={handleShare}>

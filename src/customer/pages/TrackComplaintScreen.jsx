@@ -67,7 +67,13 @@ const TrackComplaintScreen = () => {
         <img src="/images/bbps.svg" alt="Bharat Connect" className="tc-bbps-logo" />
       </div>
 
-      {/* Search form */}
+      {/* Complaint type indicator — tracking is for Transaction complaints only */}
+      <div className="tc-type-bar">
+        <span className="tc-type-label">Type of Complaint</span>
+        <span className="tc-type-value">Transaction</span>
+      </div>
+
+      {/* Search form — tracking strictly by Complaint ID (per NPCI guideline) */}
       <form className="tc-form" onSubmit={handleTrack}>
         <div className={`tc-field${focused ? " is-focused" : ""}`}>
           <label className="tc-label">Complaint ID</label>
@@ -75,7 +81,7 @@ const TrackComplaintScreen = () => {
             <FaSearch className="tc-input-icon" />
             <input
               className="tc-input"
-              placeholder="Enter Complaint ID or Transaction ID"
+              placeholder="Enter Complaint ID"
               value={complaintId}
               onChange={(e) => { setComplaintId(e.target.value.toUpperCase()); if (error) setError(""); }}
               onFocus={() => setFocused(true)}
@@ -120,16 +126,20 @@ const TrackComplaintScreen = () => {
 
             <h3 className="tc-modal-title">Complaint Status</h3>
 
-            {/* Details */}
+            {/* Details — NPCI fields: complaintAssigned, complaintId, complaintStatus */}
             <div className="tc-modal-details">
               <div className="tc-modal-row">
                 <span className="tc-modal-label">Complaint ID</span>
-                <span className="tc-modal-value">{result.txnId || result.id}</span>
+                <span className="tc-modal-value">{result.complaintId || result.trackingId || result.txnId || result.id}</span>
               </div>
               <div className="tc-modal-row">
-                <span className="tc-modal-label">Status</span>
+                <span className="tc-modal-label">Complaint Assigned</span>
+                <span className="tc-modal-value">{result.complaintAssigned || result.assignedTo || "Bharat Connect (BBPS)"}</span>
+              </div>
+              <div className="tc-modal-row">
+                <span className="tc-modal-label">Complaint Status</span>
                 <span className="tc-modal-status-badge" style={{ "--tc-color": getStatusConfig(result.status).color }}>
-                  {getStatusConfig(result.status).icon} {getStatusConfig(result.status).label}
+                  {getStatusConfig(result.status).icon} {result.complaintStatus || getStatusConfig(result.status).label}
                 </span>
               </div>
               {result.name && (

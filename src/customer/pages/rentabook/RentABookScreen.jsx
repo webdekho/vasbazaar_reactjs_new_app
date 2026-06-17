@@ -254,7 +254,6 @@ const BULK_FIELDS = [
   { key: "address", req: "optional" },
   { key: "availableFrom", req: "optional: YYYY-MM-DD" },
 ];
-const BULK_COLUMNS = BULK_FIELDS.map((f) => f.key);
 const bulkHeaderRow = () => BULK_FIELDS.map((f) => `${f.key} (${f.req})`);
 // Strip the "(required)/(optional…)" annotation from an uploaded header → key.
 const canonHeader = (h) => String(h).replace(/\(.*?\)/g, "").trim();

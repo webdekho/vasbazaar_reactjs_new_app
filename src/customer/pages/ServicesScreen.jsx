@@ -547,7 +547,9 @@ const ServicesScreen = () => {
               <FaSearch style={{ color: "var(--cm-disabled, #6B6B6B)", fontSize: 14, flexShrink: 0 }} />
               <span style={{ color: "var(--cm-disabled, #6B6B6B)", fontSize: 14 }}>Search services...</span>
             </div>
-            <img src="/images/bbps.svg" alt="Bharat Connect" className="cm-bc-logo" />
+            <div className="cm-bc-entry">
+              <img src="/images/bbps.svg" alt="Bharat Connect" className="cm-bc-logo" />
+            </div>
           </div>
         </div>
         <SkeletonGrid />
@@ -585,7 +587,9 @@ const ServicesScreen = () => {
                 onBlur={() => setSearchFocused(false)}
               />
             </div>
-            <img src="/images/bbps.svg" alt="Bharat Connect" className="cm-bc-logo" />
+            <div className="cm-bc-entry">
+              <img src="/images/bbps.svg" alt="Bharat Connect" className="cm-bc-logo" />
+            </div>
           </div>
         </div>
 
@@ -634,7 +638,12 @@ const ServicesScreen = () => {
 
         {/* Service icons grid - 4 per row */}
         <div id="services-grid-section" className={`cm-quick-access${query ? " is-searching" : ""}`}>
-          <div className="cm-quick-access-title">Services</div>
+          <div className="cm-services-title-row">
+            <div className="cm-quick-access-title">Services</div>
+            <div className="cm-bc-entry cm-bc-entry--inline">
+              <img src="/images/bbps.svg" alt="Bharat Connect" className="cm-bc-logo" />
+            </div>
+          </div>
         <div className="cm-services-grid-4" style={{ padding: "0 4px 8px", border: "none", boxShadow: "none", background: "transparent" }}>
           {filtered.length === 0 ? (
             <div className="cm-empty" style={{ gridColumn: "1 / -1", textAlign: "center", padding: 32 }}>No services matched your search.</div>

@@ -56,6 +56,7 @@ const ServiceFlowScreen = lazy(() => import("./pages/ServiceFlowScreen"));
 const OfferScreen = lazy(() => import("./pages/OfferScreen"));
 const PaymentScreen = lazy(() => import("./pages/PaymentScreen"));
 const SuccessScreen = lazy(() => import("./pages/SuccessScreen"));
+const ReceiptScreen = lazy(() => import("./pages/ReceiptScreen"));
 const PaymentResultPreview = lazy(() => import("./pages/PaymentResultPreview"));
 const WalletScreen = lazy(() => import("./pages/WalletScreen"));
 const NotificationsScreen = lazy(() => import("./pages/NotificationsScreen"));
@@ -236,6 +237,7 @@ const CustomerModernRoutes = () => {
             <Route path="qr" element={<Suspense fallback={<RouteFallback />}><QrStickerScreen /></Suspense>} />
             <Route path="payment-callback" element={<Suspense fallback={<RouteFallback />}><JuspayCallbackScreen /></Suspense>} />
             <Route path="success" element={<Suspense fallback={<RouteFallback />}><SuccessScreen /></Suspense>} />
+            <Route path="receipt" element={<Suspense fallback={<RouteFallback />}><ReceiptScreen /></Suspense>} />
             <Route path="failure" element={<Suspense fallback={<RouteFallback />}><FailureScreen /></Suspense>} />
             <Route path="preview/:kind" element={<Suspense fallback={<RouteFallback />}><PaymentResultPreview /></Suspense>} />
             <Route path="wallet" element={<Suspense fallback={<RouteFallback />}><WalletScreen /></Suspense>} />

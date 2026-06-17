@@ -1848,6 +1848,17 @@
 .cm-search-field-input::placeholder { color: #6B6B6B; }
 
 .cm-bc-logo { height: 40px; width: auto; flex-shrink: 0; object-fit: contain; }
+/* Bharat Connect "B" mnemonic at the entry of the Pay Bills section, with the
+   mandated "Bill Pay" caption below it (NPCI guideline). */
+.cm-bc-entry { display: flex; flex-direction: column; align-items: center; gap: 1px; flex-shrink: 0; }
+/* Services section title row with the Bharat Connect logo at the right corner */
+/* Offset scrollIntoView so the sticky topbar (incl. iOS safe-area notch) doesn't hide the first row */
+#services-grid-section { scroll-margin-top: calc(56px + env(safe-area-inset-top, 0px) + 12px); }
+
+.cm-services-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cm-bc-entry--inline { margin-left: auto; }
+.cm-bc-entry .cm-bc-logo { height: 34px; }
+.cm-bc-entry-caption { font-size: 0.6rem; font-weight: 700; color: var(--cm-accent, #0B5FBA); letter-spacing: 0.3px; line-height: 1; }
 
 .cm-services-grid-4 {
   display: grid;
@@ -5169,6 +5180,61 @@
   margin: 0;
 }
 
+/* ─── Bharat Connect logo (top-right) ─── */
+.fc-bbps-logo { height: 30px; width: auto; margin-left: auto; }
+
+/* ─── Complaint type radio (Transaction, pre-selected) ─── */
+.fc-radio {
+  display: inline-flex; align-items: center; gap: 10px;
+  cursor: default;
+}
+.fc-radio input { display: none; }
+.fc-radio-mark {
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 2px solid var(--cm-accent);
+  position: relative; flex-shrink: 0;
+}
+.fc-radio input:checked + .fc-radio-mark::after {
+  content: ""; position: absolute; inset: 3px;
+  border-radius: 50%; background: var(--cm-accent);
+}
+.fc-radio-text { font-size: 0.95rem; font-weight: 600; color: var(--cm-text); }
+
+/* ─── Basis toggle: B-Connect TXN ID vs Mobile + Date ─── */
+.fc-basis-tabs {
+  display: flex; gap: 8px;
+  background: color-mix(in srgb, var(--cm-accent) 8%, transparent);
+  border-radius: 12px; padding: 4px;
+}
+.fc-basis-tab {
+  flex: 1; height: 38px; border: none; border-radius: 9px;
+  background: transparent; color: var(--cm-disabled);
+  font-size: 0.85rem; font-weight: 600; cursor: pointer;
+  transition: all 0.15s ease;
+}
+.fc-basis-tab.is-active {
+  background: var(--cm-accent); color: #062B23;
+}
+
+/* ─── Registration response fields (complaintId / complaintAssigned) ─── */
+.fc-success-fields {
+  width: 100%; display: flex; flex-direction: column; gap: 8px;
+  background: color-mix(in srgb, var(--cm-accent) 8%, transparent);
+  border-radius: 14px; padding: 14px 16px;
+}
+.fc-success-field-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.fc-success-field-label { font-size: 0.8rem; color: var(--cm-disabled); }
+.fc-success-field-value { font-size: 0.9rem; font-weight: 700; color: var(--cm-text); text-align: right; word-break: break-all; }
+
+/* ─── Track existing complaint link ─── */
+.fc-track-link {
+  background: none; border: none; cursor: pointer;
+  color: var(--cm-accent); font-size: 0.85rem; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 6px;
+  justify-content: center; padding: 6px;
+}
+.fc-track-link svg { font-size: 0.65rem; }
+
 /* ─── Success Screen ─── */
 .fc-success {
   display: flex;
@@ -6920,6 +6986,14 @@
    TRACK COMPLAINT
    ═══════════════════════════════════════════════════════════════ */
 
+.tc-type-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  background: color-mix(in srgb, var(--cm-accent) 8%, transparent);
+  border-radius: 12px; padding: 12px 16px;
+}
+.tc-type-bar .tc-type-label { font-size: 0.8rem; color: var(--cm-disabled); }
+.tc-type-bar .tc-type-value { font-size: 0.9rem; font-weight: 700; color: var(--cm-accent); }
+
 .tc-page {
   display: flex;
   flex-direction: column;
@@ -7705,6 +7779,7 @@
    ═══════════════════════════════════════════════════════════════ */
 
 .st-page, .ap-page, .rf-page { display: flex; flex-direction: column; gap: 12px; padding: 0 0 24px; animation: cm-page-fadeIn 0.4s ease both; }
+.st-otp-hint { font-size: 0.72rem; color: var(--cm-disabled); margin: 6px 2px 0; }
 
 /* AutoPay tabs */
 .ap-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0; -webkit-overflow-scrolling: touch; }
@@ -12568,6 +12643,18 @@
   min-height: 220px;
 }
 
+/* Image banner slides match the carousel/customer-card height so the image always
+   fills the box (object-fit: cover) with no black gap below — on every handset size.
+   The flex track height is driven by the tallest slide (the customer card), so the
+   banner must stretch to it instead of using a fixed 16:7 padding-top box. */
+.cm-services-page .cm-slider-slide--banner {
+  aspect-ratio: unset;
+  height: auto;
+  padding-top: 0;
+  min-height: 220px;
+  align-self: stretch;
+}
+
 /* Enhanced slide transition — smooth 3D feel */
 .cm-slider-track {
   transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1) !important;
@@ -12654,6 +12741,11 @@
     aspect-ratio: unset !important;
   }
 
+  .cm-services-page .cm-slider-slide--banner {
+    min-height: 210px;
+    aspect-ratio: unset;
+  }
+
   .cm-slider-arrow--prev { left: 6px !important; }
   .cm-slider-arrow--next { right: 6px !important; }
   .cm-slider-arrow { width: 26px !important; height: 26px !important; font-size: 0.6rem !important; }
@@ -12663,6 +12755,7 @@
   .cm-services-page .cm-slider { border-radius: 14px !important; }
   .cm-services-page .cm-slider-slide { min-height: 125px; }
   .cm-services-page .cm-slider-slide--customer { min-height: 200px; aspect-ratio: unset !important; }
+  .cm-services-page .cm-slider-slide--banner { min-height: 200px; aspect-ratio: unset; }
 }
 
 /* Force images to fill — override everything */
@@ -20803,6 +20896,129 @@
   box-shadow: 0 12px 30px rgba(0,229,160,0.35);
 }
 
+/* Bharat Connect / Be-Assured branding strip on the bill receipt
+   (Bharat Connect on the left, Be-Assured pinned to the right corner) */
+.sx2-bc-strip {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px;
+  padding: 10px 4px 2px;
+  z-index: 20;
+}
+.sx2-bc-strip .sx2-bc-logo { height: 30px; width: auto; }
+.sx2-bc-strip .sx2-ba-logo { height: 68px; width: auto; margin-left: auto; }
+
+/* ═══════════════════════════════════════════════════════════════
+   BILL PAY RECEIPT (dedicated, printable)
+   ═══════════════════════════════════════════════════════════════ */
+.rcpt-page {
+  display: flex; flex-direction: column; gap: 16px;
+  padding: 16px 12px 32px; max-width: 880px; margin: 0 auto;
+  animation: cm-page-fadeIn 0.4s ease both;
+}
+.rcpt-back {
+  align-self: flex-start;
+  background: none; border: none; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+  color: var(--cm-text, #0F172A); font-size: 0.9rem; font-weight: 600;
+  padding: 6px 4px;
+}
+.rcpt-card {
+  background: #FFFFFF;
+  border: 1px solid #E8EDF3;
+  border-radius: 20px;
+  padding: 28px 28px 22px;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+  position: relative; overflow: hidden;
+}
+.rcpt-card::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 5px;
+  background: linear-gradient(90deg, #0B5FBA 0%, #00B8D9 100%);
+}
+.rcpt-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; padding-bottom: 18px; border-bottom: 1px dashed #E2E8F0; margin-bottom: 20px;
+}
+.rcpt-title {
+  margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: 0.5px;
+  color: #1E293B;
+}
+.rcpt-success {
+  margin-top: 8px; display: inline-flex; align-items: center; gap: 7px;
+  font-size: 0.9rem; font-weight: 700; color: #16A34A;
+}
+.rcpt-success svg { font-size: 0.95rem; }
+.rcpt-ba-logo { height: 128px; width: auto; flex-shrink: 0; }
+
+.rcpt-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0 36px;
+}
+.rcpt-col { display: flex; flex-direction: column; }
+.rcpt-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 13px 0; border-bottom: 1px solid #F1F5F9;
+}
+.rcpt-row-label { font-size: 0.85rem; color: #94A3B8; }
+.rcpt-row-value {
+  font-size: 0.92rem; font-weight: 700; color: #1E293B; text-align: right;
+  word-break: break-all; font-variant-numeric: tabular-nums;
+}
+.rcpt-row-value--ok { color: #16A34A; }
+.rcpt-foot {
+  margin-top: 20px; text-align: center; font-size: 0.72rem; color: #94A3B8;
+}
+
+.rcpt-actions { display: flex; gap: 12px; justify-content: center; }
+.rcpt-btn {
+  height: 46px; padding: 0 26px; border-radius: 12px; cursor: pointer;
+  font-size: 0.95rem; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  transition: transform 0.15s ease;
+}
+.rcpt-btn:active { transform: scale(0.97); }
+.rcpt-btn:disabled { opacity: 0.6; cursor: default; }
+.rcpt-btn--ghost { background: #EEF2F7; border: 1px solid #E2E8F0; color: #1E293B; }
+.rcpt-btn--primary {
+  background: linear-gradient(135deg, #0B5FBA 0%, #00B8D9 100%);
+  border: none; color: #FFFFFF;
+  box-shadow: 0 10px 24px rgba(11, 95, 186, 0.3);
+}
+
+@media (max-width: 620px) {
+  .rcpt-grid { grid-template-columns: 1fr; gap: 0; }
+  .rcpt-title { font-size: 1.25rem; }
+  .rcpt-ba-logo { height: 104px; }
+  .rcpt-actions { flex-direction: column; }
+  .rcpt-btn { width: 100%; }
+}
+
+/* Print: isolate the receipt card */
+@media print {
+  body * { visibility: hidden !important; }
+  .rcpt-print-area, .rcpt-print-area * { visibility: visible !important; }
+  .rcpt-print-area {
+    position: absolute; top: 0; left: 0; width: 100%;
+    box-shadow: none !important; border: none !important;
+  }
+  .rcpt-noprint { display: none !important; }
+}
+
+/* Download Receipt button */
+.sx2-receipt-btn {
+  margin-top: 10px;
+  width: 100%;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.06);
+  color: #F5F7FA;
+  font-size: 15px; font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  cursor: pointer; transition: transform 0.15s ease;
+  z-index: 20;
+}
+.sx2-receipt-btn:active { transform: scale(0.98); }
+.sx2-receipt-btn:disabled { opacity: 0.6; cursor: default; }
+
 /* Toast */
 .sx2-toast {
   position: fixed;
@@ -20835,8 +21051,7 @@
   color: #0F172A;
 }
 .theme-light .sx2-mesh,
-.theme-light .sx2-grain,
-.theme-light .sx2-confetti { display: none; }
+.theme-light .sx2-grain { display: none; }
 .theme-light .sx2-amount {
   background: linear-gradient(180deg, #0F172A 0%, #334155 100%);
   -webkit-background-clip: text; background-clip: text;
@@ -20897,6 +21112,94 @@
   border-color: rgba(15,23,42,0.2);
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   CUTTING-EDGE light success page
+   ═══════════════════════════════════════════════════════════════ */
+.theme-light .sx2-page {
+  background:
+    radial-gradient(1100px 480px at 50% -160px, rgba(0,184,217,0.12), transparent 70%),
+    radial-gradient(820px 420px at 115% 4%, rgba(0,229,160,0.12), transparent 70%),
+    radial-gradient(720px 420px at -10% 18%, rgba(99,102,241,0.08), transparent 70%),
+    linear-gradient(180deg, #F6FAFD 0%, #FFFFFF 46%);
+}
+
+/* Eyebrow + Be-Assured seal on one line: eyebrow centered, logo pinned right */
+.sx2-eyebrow-row {
+  position: relative; width: 100%;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 40px;
+}
+.sx2-eyebrow-row .sx2-eyebrow { margin: 0; }
+.sx2-eyebrow-row .sx2-ba-logo {
+  position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
+  height: 56px; width: auto;
+}
+
+/* Bold gradient success check badge (solid disc + white tick) */
+.theme-light .sx2-badge { width: 104px; height: 104px; margin-bottom: 12px; }
+.theme-light .sx2-check { width: 104px; height: 104px; }
+.theme-light .sx2-badge-glow {
+  inset: -26px;
+  background: radial-gradient(circle, rgba(0,200,120,0.42) 0%, transparent 62%);
+}
+.theme-light .sx2-check-ring {
+  fill: url(#sx2-grad); stroke: none; opacity: 1;
+  transform-box: fill-box; transform-origin: center;
+  animation: sx2-pop 0.55s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+/* Resting state is fully drawn (visible even with reduced motion); the
+   keyframe animates the tick in from hidden → drawn. */
+.theme-light .sx2-check-path {
+  stroke: #FFFFFF; stroke-width: 6; opacity: 1;
+  stroke-dasharray: 50; stroke-dashoffset: 0;
+  filter: drop-shadow(0 2px 3px rgba(2,43,35,0.25));
+  animation: sx2-tick-in 0.45s 0.4s cubic-bezier(0.65,0,0.35,1) both;
+}
+@keyframes sx2-tick-in { from { stroke-dashoffset: 50; } to { stroke-dashoffset: 0; } }
+
+/* Group Share/Done right below the receipt button (no push-to-bottom) */
+.theme-light .sx2-actionbar { margin-top: 12px; }
+
+/* Bigger, crisper amount */
+.theme-light .sx2-amount {
+  font-size: clamp(40px, 11vw, 56px);
+  letter-spacing: -2px;
+  background: linear-gradient(180deg, #0B5FBA 0%, #00B8D9 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.theme-light .sx2-eyebrow { font-size: 12px; letter-spacing: 0.18em; }
+
+/* Elevated glass ticket */
+.theme-light .sx2-ticket {
+  border-radius: 22px;
+  border: 1px solid rgba(15,23,42,0.07);
+  box-shadow: 0 22px 60px rgba(15,23,42,0.10), 0 2px 0 rgba(255,255,255,0.6) inset;
+  position: relative; overflow: hidden;
+}
+.theme-light .sx2-ticket::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+  background: linear-gradient(90deg, #00E5A0 0%, #00B8D9 55%, #0B5FBA 100%);
+}
+.theme-light .sx2-row dd .sx2-mono { letter-spacing: 0.3px; }
+
+/* Prominent, premium "View / Print Receipt" CTA */
+.theme-light .sx2-receipt-btn {
+  background: linear-gradient(135deg, #0B5FBA 0%, #00B8D9 100%);
+  border: none;
+  color: #FFFFFF;
+  font-weight: 700;
+  box-shadow: 0 14px 30px rgba(11,95,186,0.28);
+  letter-spacing: 0.2px;
+}
+.theme-light .sx2-receipt-btn:hover { filter: brightness(1.04); }
+.theme-light .sx2-receipt-btn svg { font-size: 1rem; }
+
+/* Crisper primary "Done" action */
+.theme-light .sx2-act--primary {
+  box-shadow: 0 14px 30px rgba(0,184,140,0.28);
+}
+
 /* ── Status icon (failure/pending) ── */
 .sx2-status-icon {
   position: relative; z-index: 1;
@@ -20912,6 +21215,14 @@
 @keyframes sx2-pop {
   0% { transform: scale(0); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
+}
+
+/* FailureScreen shows the app bottom nav — reserve space so its content sits
+   above the fixed nav and the nav stays pinned to the screen bottom on every
+   device height (instead of overlapping the page content). */
+.sx2-page--failure,
+.sx2-page--pending {
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
 }
 
 /* Failure/Pending variant tokens */
@@ -21070,6 +21381,67 @@
 }
 .theme-light .sx2-refund-title { color: #0F172A; }
 .theme-light .sx2-refund-desc { color: #6B7280; }
+
+/* Refund accepted popup */
+.sx2-refund-popup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(4, 6, 12, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: sx2-popup-fade 0.2s ease;
+}
+.sx2-refund-popup {
+  width: 100%;
+  max-width: 340px;
+  background: #14161F;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 28px 22px 24px;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  animation: sx2-popup-pop 0.25s ease;
+}
+.sx2-refund-popup-icon {
+  font-size: 52px;
+  color: #00C853;
+  line-height: 1;
+  margin-bottom: 14px;
+}
+.sx2-refund-popup-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #F5F7FA;
+}
+.sx2-refund-popup-text {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: rgba(245, 247, 250, 0.75);
+}
+.sx2-refund-popup-hint {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(245, 247, 250, 0.45);
+}
+.theme-light .sx2-refund-popup {
+  background: #FFFFFF;
+  border-color: #E5E7EB;
+}
+.theme-light .sx2-refund-popup-title { color: #0F172A; }
+.theme-light .sx2-refund-popup-text { color: #475569; }
+.theme-light .sx2-refund-popup-hint { color: #94A3B8; }
+@keyframes sx2-popup-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sx2-popup-pop {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
 
 /* Spinner utility (used by poll/refresh icons) */
 .sx-spin { animation: sx2-spin 0.9s linear infinite; }

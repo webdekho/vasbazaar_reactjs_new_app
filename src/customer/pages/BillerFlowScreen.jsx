@@ -267,7 +267,7 @@ const BillerList = ({ operators, myBillers = [], isLoading: listLoading, onSelec
                             </div>
                             <div className="bf-biller-info">
                               <span className="bf-biller-name">{name}</span>
-                              <span className="bf-biller-tag">Bharat BillPay</span>
+                              <span className="bf-biller-tag">Bharat Connect</span>
                             </div>
                             <span className="bf-mybiller-badge">★</span>
                             <span className="bf-biller-arrow">
@@ -309,7 +309,7 @@ const BillerList = ({ operators, myBillers = [], isLoading: listLoading, onSelec
                             </div>
                             <div className="bf-biller-info">
                               <span className="bf-biller-name">{name}</span>
-                              <span className="bf-biller-tag">Bharat BillPay</span>
+                              <span className="bf-biller-tag">Bharat Connect</span>
                             </div>
                             <span className="bf-biller-arrow">
                               <FaChevronRight />
@@ -677,7 +677,7 @@ const BillView = ({ biller, billData, amount, setAmount, onPay, onBack, isExact,
           />
           <div className="bf-hero-biller-meta">
             <div className="bf-hero-biller-name">{biller.operatorName || biller.name}</div>
-            <div className="bf-hero-biller-sub">Bharat Billpay</div>
+            <div className="bf-hero-biller-sub">Bharat Connect</div>
           </div>
         </div>
 

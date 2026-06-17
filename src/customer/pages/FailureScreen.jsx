@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { FaTimesCircle, FaClock, FaHome, FaRedo, FaWallet, FaSyncAlt, FaCopy, FaUniversity } from "react-icons/fa";
-import { FiArrowRight } from "react-icons/fi";
+import { FaTimesCircle, FaClock, FaWallet, FaSyncAlt, FaCopy, FaUniversity, FaCheckCircle } from "react-icons/fa";
 import { authPost } from "../services/apiClient";
 import { rechargeService } from "../services/rechargeService";
 
@@ -27,7 +26,9 @@ const FailureScreen = () => {
   const [refundLoading, setRefundLoading] = useState(null);
   const [refundMessage, setRefundMessage] = useState("");
   const [refundMessageType, setRefundMessageType] = useState("");
+  const [showRefundPopup, setShowRefundPopup] = useState(false);
   const [copied, setCopied] = useState("");
+  const refundNavTimerRef = useRef(null);
 
   const initialStatus = state.status === "pending" ? "pending" : "failed";
   const [currentStatus, setCurrentStatus] = useState(initialStatus);
@@ -89,6 +90,12 @@ const FailureScreen = () => {
             ? "Wallet refund request submitted successfully."
             : "Bank refund request submitted. May take up to 3 working days."
         );
+        // Show confirmation popup, then auto-redirect to home after 3 seconds
+        setShowRefundPopup(true);
+        if (refundNavTimerRef.current) clearTimeout(refundNavTimerRef.current);
+        refundNavTimerRef.current = setTimeout(() => {
+          navigate("/customer/app/services", { replace: true });
+        }, 3000);
       } else {
         setRefundMessageType("error");
         setRefundMessage(response.message || "Unable to submit refund request.");
@@ -106,8 +113,7 @@ const FailureScreen = () => {
     if (tickTimerRef.current) { clearInterval(tickTimerRef.current); tickTimerRef.current = null; }
   };
 
-  // Start countdown only - does NOT auto-trigger status check when countdown ends
-  // User must click "Check Now" button manually
+  // Start countdown, then AUTOMATICALLY run the next status check when it ends.
   const startCountdown = (attempt, delayMs) => {
     const startedAt = Date.now();
     setPoll({ active: true, attempt, nextInSec: Math.ceil(delayMs / 1000), error: "" });
@@ -118,8 +124,10 @@ const FailureScreen = () => {
       if (remaining === 0 && tickTimerRef.current) {
         clearInterval(tickTimerRef.current);
         tickTimerRef.current = null;
-        // Countdown complete - enable button by setting active: false
-        setPoll((p) => ({ ...p, active: false }));
+        // Countdown complete - auto-trigger the next status check
+        if (isMountedRef.current) {
+          performStatusCheck(Math.min(attempt + 1, MAX_POLL_ATTEMPTS));
+        }
       }
     }, 1000);
   };
@@ -206,15 +214,10 @@ const FailureScreen = () => {
     return () => {
       isMountedRef.current = false;
       clearTimers();
+      if (refundNavTimerRef.current) clearTimeout(refundNavTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const handleCheckNow = () => {
-    if (!txnId) return;
-    clearTimers();
-    performStatusCheck(Math.min(poll.attempt + 1, MAX_POLL_ATTEMPTS));
-  };
 
   const copyToClipboard = (text, label) => {
     if (!text) return;
@@ -312,19 +315,11 @@ const FailureScreen = () => {
               {poll.active && poll.nextInSec === 0
                 ? `Checking status… (${Math.min(poll.attempt, MAX_POLL_ATTEMPTS)}/${MAX_POLL_ATTEMPTS})`
                 : poll.active && poll.nextInSec > 0
-                  ? `Check available in ${poll.nextInSec}s · Attempt ${Math.min(poll.attempt + 1, MAX_POLL_ATTEMPTS)}/${MAX_POLL_ATTEMPTS}`
+                  ? `Re-checking in ${poll.nextInSec}s · Attempt ${Math.min(poll.attempt + 1, MAX_POLL_ATTEMPTS)}/${MAX_POLL_ATTEMPTS}`
                   : poll.attempt >= MAX_POLL_ATTEMPTS
-                    ? `Status not confirmed after ${MAX_POLL_ATTEMPTS} checks.`
-                    : "Tap Check Now to verify status."}
+                    ? `Status not confirmed after ${MAX_POLL_ATTEMPTS} checks. Check transaction history later.`
+                    : "Verifying payment status…"}
             </div>
-            <button
-              type="button"
-              className="sx2-poll-btn"
-              onClick={handleCheckNow}
-              disabled={poll.active}
-            >
-              Check Now
-            </button>
           </div>
           {poll.error && <div className="sx2-poll-error">{poll.error}</div>}
         </section>
@@ -371,20 +366,18 @@ const FailureScreen = () => {
         </section>
       )}
 
-      <div className="sx2-actionbar">
-        <button type="button" className="sx2-act sx2-act--ghost" onClick={() => navigate("/customer/app/services", { replace: true })}>
-          <FaHome /> Home
-        </button>
-        {isPending ? (
-          <button type="button" className="sx2-act sx2-act--primary" onClick={handleCheckNow} disabled={poll.active}>
-            <FaSyncAlt className={poll.active ? "sx-spin" : ""} /> Refresh
-          </button>
-        ) : (
-          <button type="button" className="sx2-act sx2-act--primary" onClick={() => navigate(-2)}>
-            <FaRedo /> Retry <FiArrowRight />
-          </button>
-        )}
-      </div>
+      {showRefundPopup && (
+        <div className="sx2-refund-popup-overlay" role="dialog" aria-modal="true">
+          <div className="sx2-refund-popup">
+            <div className="sx2-refund-popup-icon"><FaCheckCircle /></div>
+            <h3 className="sx2-refund-popup-title">Refund request accepted</h3>
+            <p className="sx2-refund-popup-text">
+              Your refund will be processed as soon as possible.
+            </p>
+            <p className="sx2-refund-popup-hint">Redirecting to home…</p>
+          </div>
+        </div>
+      )}
 
       {copied && <div className="sx2-toast">Copied!</div>}
     </div>
