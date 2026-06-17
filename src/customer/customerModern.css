@@ -12618,40 +12618,32 @@
    25. SLIDER — Professional Compact with Curved Edges
    ═══════════════════════════════════════════════════════════════ */
 
-/* Services page slider — compact with rounded corners */
+/* Services page slider — compact with rounded corners.
+   Width is capped on wide screens so a 16:9 box never becomes absurdly tall on
+   web/desktop; it stays a centered hero. On phones it spans the full content width. */
 .cm-services-page .cm-slider {
   border-radius: 18px !important;
   border: 1px solid #2A2A2A !important;
-  margin: 0 !important;
+  margin: 0 auto !important;
   width: 100% !important;
-  max-width: 100% !important;
+  max-width: 560px !important;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(64, 224, 208, 0.03) !important;
 }
 
-.cm-services-page .cm-slider-slide {
-  aspect-ratio: 16 / 7;
-  min-height: 160px;
-}
-
-.cm-services-page .cm-slider-slide--text {
-  aspect-ratio: auto;
-  min-height: 150px;
-}
-
+/* PERMANENT carousel sizing — ONE fixed 16:9 box for every slide on every platform
+   (web, mobile web, Android, iOS). Banner images uploaded at 16:9 fill it exactly via
+   object-fit:cover: no black gap, no top/bottom crop, no blurred bars. The customer
+   card adapts to the very same box, so all slides share identical dimensions and the
+   carousel never jumps height between slides. This is the single source of truth —
+   the per-breakpoint overrides below only tune the look, not the aspect ratio. */
+.cm-services-page .cm-slider-slide,
+.cm-services-page .cm-slider-slide--banner,
+.cm-services-page .cm-slider-slide--text,
 .cm-services-page .cm-slider-slide--customer {
-  aspect-ratio: unset !important;
-  min-height: 220px;
-}
-
-/* Image banner slides match the carousel/customer-card height so the image always
-   fills the box (object-fit: cover) with no black gap below — on every handset size.
-   The flex track height is driven by the tallest slide (the customer card), so the
-   banner must stretch to it instead of using a fixed 16:7 padding-top box. */
-.cm-services-page .cm-slider-slide--banner {
-  aspect-ratio: unset;
-  height: auto;
-  padding-top: 0;
-  min-height: 220px;
+  aspect-ratio: 16 / 9 !important;
+  min-height: 0 !important;
+  height: auto !important;
+  padding-top: 0 !important;
   align-self: stretch;
 }
 
@@ -12721,29 +12713,13 @@
   100% { left: 150%; }
 }
 
-/* Mobile adjustments — keep rounded */
+/* Mobile adjustments — keep rounded. The 16:9 aspect ratio is intentionally NOT
+   changed here so the box shape stays identical to web (full width on phones means
+   the slider is already full size). Only cosmetic radius/arrow tweaks below. */
 @media (max-width: 640px) {
   .cm-services-page .cm-slider {
     border-radius: 16px !important;
-  }
-
-  .cm-services-page .cm-slider-slide {
-    aspect-ratio: 16 / 8;
-    min-height: 145px;
-  }
-
-  .cm-services-page .cm-slider-slide--text {
-    min-height: 135px;
-  }
-
-  .cm-services-page .cm-slider-slide--customer {
-    min-height: 210px;
-    aspect-ratio: unset !important;
-  }
-
-  .cm-services-page .cm-slider-slide--banner {
-    min-height: 210px;
-    aspect-ratio: unset;
+    max-width: 100% !important;
   }
 
   .cm-slider-arrow--prev { left: 6px !important; }
@@ -12753,12 +12729,12 @@
 
 @media (max-width: 360px) {
   .cm-services-page .cm-slider { border-radius: 14px !important; }
-  .cm-services-page .cm-slider-slide { min-height: 125px; }
-  .cm-services-page .cm-slider-slide--customer { min-height: 200px; aspect-ratio: unset !important; }
-  .cm-services-page .cm-slider-slide--banner { min-height: 200px; aspect-ratio: unset; }
 }
 
-/* Force images to fill — override everything */
+/* The carousel box is a fixed 16:9 on every platform, so a 16:9 banner fills it
+   exactly via cover — no gap, no crop, no bars. cover (not contain) guarantees a
+   clean full fill even if a re-uploaded image is a touch off 16:9; the blurred
+   cm-slider-img-bg layer sits behind only as a safety net. */
 .cm-slider-img {
   object-fit: cover !important;
   object-position: center !important;
