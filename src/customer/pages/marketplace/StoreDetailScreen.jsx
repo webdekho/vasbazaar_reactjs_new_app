@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FaArrowLeft, FaStore, FaClock, FaRupeeSign, FaPlus, FaMinus, FaShareAlt, FaStar } from "react-icons/fa";
-import { FiSearch } from "react-icons/fi";
+import { FiSearch, FiGrid, FiList } from "react-icons/fi";
 import { marketplaceService } from "../../services/marketplaceService";
 import { useMarketplaceCart } from "../../context/MarketplaceCartContext";
 import { shareStore } from "./shareStore";
@@ -22,6 +22,7 @@ const StoreDetailScreen = () => {
   const [items, setItems] = useState([]);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [viewMode, setViewMode] = useState("grid"); // "grid" | "list"
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -30,10 +31,6 @@ const StoreDetailScreen = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [subcategories, setSubcategories] = useState([]);
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState(null);
-
-  // Offers strip
-  const [offers, setOffers] = useState([]);
-  const [copiedCode, setCopiedCode] = useState(null);
 
   // Ratings & reviews
   const [reviewSummary, setReviewSummary] = useState(null);
@@ -75,16 +72,6 @@ const StoreDetailScreen = () => {
     return () => clearTimeout(t);
   }, [search]);
 
-  // Fetch offers on mount
-  useEffect(() => {
-    marketplaceService.getStoreOffers(storeId)
-      .then((res) => {
-        if (res.success && Array.isArray(res.data)) setOffers(res.data);
-        else setOffers([]);
-      })
-      .catch(() => setOffers([]));
-  }, [storeId]);
-
   // Fetch first page of reviews on mount
   useEffect(() => {
     setReviewsLoading(true);
@@ -103,17 +90,6 @@ const StoreDetailScreen = () => {
       .finally(() => setReviewsLoading(false));
   }, [storeId]);
 
-  const handleCopyCode = useCallback((code) => {
-    if (!code) return;
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(code);
-      }
-    } catch (_e) { /* ignore */ }
-    setCopiedCode(code);
-    setTimeout(() => setCopiedCode((c) => (c === code ? null : c)), 1500);
-  }, []);
-
   const loadMoreReviews = useCallback(() => {
     const next = reviewPage + 1;
     setReviewsLoading(true);
@@ -129,14 +105,6 @@ const StoreDetailScreen = () => {
       .catch(() => {})
       .finally(() => setReviewsLoading(false));
   }, [storeId, reviewPage]);
-
-  const offerTitle = useCallback((o) => {
-    if (o.title) return o.title;
-    if (o.type === "PERCENT") return `${Number(o.value)}% OFF`;
-    if (o.type === "FLAT") return `₹${Number(o.value)} OFF`;
-    if (o.type === "BOGO") return "Buy 1 Get 1";
-    return "Offer";
-  }, []);
 
   const renderStars = useCallback((rating, size = 12) => {
     const r = Math.round(Number(rating) || 0);
@@ -197,6 +165,30 @@ const StoreDetailScreen = () => {
 
   const closed = store.isOpen === false;
 
+  // View toggle (grid / list) — rendered inline with the category chips.
+  const viewToggle = filteredItems.length > 0 ? (
+    <div className="mkt-view-toggle">
+      <button
+        type="button"
+        className={`mkt-view-btn${viewMode === "grid" ? " active" : ""}`}
+        onClick={() => setViewMode("grid")}
+        aria-label="Grid view"
+        aria-pressed={viewMode === "grid"}
+      >
+        <FiGrid size={16} />
+      </button>
+      <button
+        type="button"
+        className={`mkt-view-btn${viewMode === "list" ? " active" : ""}`}
+        onClick={() => setViewMode("list")}
+        aria-label="List view"
+        aria-pressed={viewMode === "list"}
+      >
+        <FiList size={16} />
+      </button>
+    </div>
+  ) : null;
+
   return (
     <div className="mkt">
       <div className="mkt-header">
@@ -213,122 +205,58 @@ const StoreDetailScreen = () => {
         </button>
       </div>
 
-      <div className="mkt-detail-banner">
-        {store.bannerUrl ? <img src={store.bannerUrl} alt="" /> : null}
-      </div>
+      {/* ===== Hero: banner with overlapping store-identity card ===== */}
+      <div className="mkt-hero">
+        <div className="mkt-detail-banner">
+          {store.bannerUrl ? <img src={store.bannerUrl} alt="" /> : null}
+          <div className="mkt-hero-scrim" />
+        </div>
 
-      <div className="mkt-detail-info">
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <h2 className="mkt-detail-title" style={{ margin: 0 }}>{store.businessName}</h2>
-          {Number(store.reviewCount) > 0 ? (
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 5,
-                padding: "3px 9px",
-                borderRadius: 999,
-                background: "rgba(251,191,36,0.15)",
-                color: "#fbbf24",
-                fontSize: 12,
-                fontWeight: 700,
-              }}
-            >
-              <FaStar size={11} />
-              {Number(store.avgRating || 0).toFixed(1)}
-              <span style={{ color: "var(--cm-muted)", fontWeight: 500 }}>
-                ({Number(store.reviewCount)} review{Number(store.reviewCount) > 1 ? "s" : ""})
-              </span>
-            </span>
-          ) : (
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                padding: "3px 9px",
-                borderRadius: 999,
-                background: "rgba(20,184,166,0.15)",
-                color: "#14b8a6",
-                fontSize: 12,
-                fontWeight: 700,
-              }}
-            >
-              New
-            </span>
-          )}
-        </div>
-        <div className="mkt-detail-meta">
-          {store.deliveryTimeMinutes && <span><FaClock />{store.deliveryTimeMinutes} min delivery</span>}
-          {Number(store.deliveryCharges) > 0
-            ? <span><FaRupeeSign />{Number(store.deliveryCharges).toFixed(0)} delivery</span>
-            : <span style={{ color: "#34d399" }}>Free delivery</span>}
-          {Number(store.minOrderValue) > 0 && <span>Min order ₹{Number(store.minOrderValue).toFixed(0)}</span>}
-          {closed && <span className="mkt-store-badge--closed">Closed</span>}
-        </div>
-        {store.addressLine1 && (
-          <div style={{ marginTop: 8, fontSize: 12, color: "var(--cm-muted)" }}>
-            {store.addressLine1}{store.city ? `, ${store.city}` : ""}
+        <div className="mkt-hero-card">
+          <div className="mkt-hero-avatar">
+            {store.logoUrl ? <img src={store.logoUrl} alt="" /> : <FaStore size={26} />}
+            <span className={`mkt-hero-dot ${closed ? "is-closed" : "is-open"}`} />
           </div>
-        )}
-      </div>
 
-      {/* Offers strip */}
-      {offers.length > 0 && (
-        <div style={{ padding: "12px 14px 0" }}>
-          <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
-            {offers.map((o) => {
-              const flash = !!o.isFlash;
-              return (
-                <div
-                  key={o.id}
-                  style={{
-                    flexShrink: 0,
-                    width: 180,
-                    padding: "12px 12px 10px",
-                    borderRadius: 14,
-                    border: `1px solid ${flash ? "rgba(245,158,11,0.6)" : "var(--cm-line)"}`,
-                    background: flash ? "rgba(245,158,11,0.12)" : "var(--cm-card)",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 8,
-                  }}
-                >
-                  <div style={{ fontSize: 14, fontWeight: 700, color: flash ? "#f59e0b" : "var(--cm-text, #fff)", display: "flex", alignItems: "center", gap: 4 }}>
-                    {flash && <span aria-hidden>⚡</span>}
-                    {offerTitle(o)}
-                  </div>
-                  {o.description && (
-                    <div style={{ fontSize: 11, color: "var(--cm-muted)", lineHeight: 1.3 }}>{o.description}</div>
-                  )}
-                  {o.code && (
-                    <button
-                      type="button"
-                      onClick={() => handleCopyCode(o.code)}
-                      style={{
-                        alignSelf: "flex-start",
-                        padding: "4px 10px",
-                        borderRadius: 8,
-                        border: `1px dashed ${flash ? "#f59e0b" : "var(--cm-line)"}`,
-                        background: "transparent",
-                        color: flash ? "#f59e0b" : "var(--cm-text, #fff)",
-                        fontSize: 11,
-                        fontWeight: 700,
-                        letterSpacing: 0.5,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {copiedCode === o.code ? "Copied!" : `${o.code} · Tap to copy`}
-                    </button>
-                  )}
-                  {Number(o.minOrderValue) > 0 && (
-                    <div style={{ fontSize: 10, color: "var(--cm-muted)" }}>Min ₹{Number(o.minOrderValue).toFixed(0)}</div>
-                  )}
-                </div>
-              );
-            })}
+          <div className="mkt-hero-body">
+            <div className="mkt-hero-title-row">
+              <h2 className="mkt-detail-title" style={{ margin: 0 }}>{store.businessName}</h2>
+              {Number(store.reviewCount) > 0 ? (
+                <span className="mkt-hero-rating">
+                  <FaStar size={11} />
+                  {Number(store.avgRating || 0).toFixed(1)}
+                  <span className="mkt-hero-rating-count">
+                    ({Number(store.reviewCount)})
+                  </span>
+                </span>
+              ) : (
+                <span className="mkt-hero-newbadge">New</span>
+              )}
+            </div>
+
+            <div className="mkt-detail-meta">
+              {store.deliveryTimeMinutes && (
+                <span className="mkt-meta-pill"><FaClock />{store.deliveryTimeMinutes} min</span>
+              )}
+              {Number(store.deliveryCharges) > 0
+                ? <span className="mkt-meta-pill"><FaRupeeSign />{Number(store.deliveryCharges).toFixed(0)} delivery</span>
+                : <span className="mkt-meta-pill mkt-meta-pill--free">Free delivery</span>}
+              {Number(store.minOrderValue) > 0 && (
+                <span className="mkt-meta-pill">Min ₹{Number(store.minOrderValue).toFixed(0)}</span>
+              )}
+              {closed && <span className="mkt-store-badge--closed">Closed</span>}
+            </div>
+
+            {store.addressLine1 && (
+              <div className="mkt-hero-address">
+                {store.addressLine1}{store.city ? `, ${store.city}` : ""}
+              </div>
+            )}
           </div>
         </div>
-      )}
+      </div>
+
+      {/* Coupons moved to the cart/payment page (Apply coupon section). */}
 
       <div className="mkt-search-bar" style={{ position: "static", paddingTop: 12 }}>
         <div className="mkt-search-input-wrap">
@@ -342,10 +270,11 @@ const StoreDetailScreen = () => {
         </div>
       </div>
 
-      {/* Category filter chips */}
+      {/* Category filter chips (with inline grid/list toggle on the right) */}
       {itemCategories.length > 0 && (
         <div style={{ padding: "8px 14px 0", display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none", flex: 1, minWidth: 0 }}>
             <button
               type="button"
               onClick={() => { setSelectedCategoryId(null); setSelectedSubcategoryId(null); }}
@@ -392,6 +321,8 @@ const StoreDetailScreen = () => {
                 </button>
               );
             })}
+          </div>
+          {viewToggle}
           </div>
           {/* Subcategory chips */}
           {selectedCategoryId && subcategories.length > 0 && (
@@ -443,10 +374,13 @@ const StoreDetailScreen = () => {
         </div>
       )}
 
+      {/* When there are no category chips, still show the toggle on its own row. */}
+      {itemCategories.length === 0 && viewToggle}
+
       {filteredItems.length === 0 ? (
         <div className="mkt-empty">No items available</div>
       ) : (
-        <div className="mkt-item-grid">
+        <div className={`mkt-item-grid${viewMode === "list" ? " mkt-item-grid--list" : ""}`}>
           {filteredItems.map((item) => {
             const variants = parseVariants(item);
             const hasVariants = variants.length > 0;
@@ -465,8 +399,9 @@ const StoreDetailScreen = () => {
             const extraCount =
               ((() => { try { return JSON.parse(item.offers || "[]").length; } catch { return 0; } })()) +
               ((() => { try { return JSON.parse(item.services || "[]").length; } catch { return 0; } })());
+            const groupCount = (() => { try { return JSON.parse(item.groupedItemIds || "[]").length; } catch { return 0; } })();
             return (
-              <div key={item.id} className="mkt-item-card">
+              <div key={item.id} className={`mkt-item-card${viewMode === "list" ? " mkt-item-card--list" : ""}`}>
                 <div className="mkt-item-image">
                   {item.imageUrl ? <img src={item.imageUrl} alt="" /> : <FaStore size={32} />}
                 </div>
@@ -500,13 +435,13 @@ const StoreDetailScreen = () => {
                       {variants.length} option{variants.length > 1 ? "s" : ""}
                     </div>
                   )}
-                  {!hasVariants && extraCount > 0 && (
+                  {!hasVariants && (extraCount > 0 || groupCount > 0) && (
                     <button
                       type="button"
                       onClick={() => setVariantItem(item)}
                       style={{ background: "none", border: "none", padding: 0, marginTop: 2, fontSize: 11, color: "var(--cm-accent, #007BFF)", fontWeight: 600, cursor: "pointer" }}
                     >
-                      Offers &amp; services ›
+                      {groupCount > 0 ? `View options (${groupCount + 1}) ›` : "Offers & services ›"}
                     </button>
                   )}
                   {item.unit && (
@@ -521,7 +456,7 @@ const StoreDetailScreen = () => {
 
       {/* Ratings & Reviews */}
       <div style={{ padding: "20px 14px 8px" }}>
-        <h3 style={{ margin: "0 0 14px", fontSize: 16, fontWeight: 700, color: "var(--cm-text, #fff)" }}>
+        <h3 style={{ margin: "0 0 14px", fontSize: 16, fontWeight: 700, color: "var(--cm-ink)" }}>
           Ratings &amp; Reviews
         </h3>
 
@@ -555,7 +490,7 @@ const StoreDetailScreen = () => {
                 }}
               >
                 <div style={{ textAlign: "center", flexShrink: 0 }}>
-                  <div style={{ fontSize: 34, fontWeight: 800, lineHeight: 1, color: "var(--cm-text, #fff)" }}>
+                  <div style={{ fontSize: 34, fontWeight: 800, lineHeight: 1, color: "var(--cm-ink)" }}>
                     {Number(reviewSummary.average || 0).toFixed(1)}
                   </div>
                   <div style={{ marginTop: 6 }}>{renderStars(reviewSummary.average, 13)}</div>
@@ -598,7 +533,7 @@ const StoreDetailScreen = () => {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       {renderStars(rv.rating, 11)}
-                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--cm-text, #fff)" }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--cm-ink)" }}>
                         {rv.userId?.name || "Customer"}
                       </span>
                     </div>
@@ -653,7 +588,7 @@ const StoreDetailScreen = () => {
                   borderRadius: 10,
                   border: "1px solid var(--cm-line)",
                   background: "var(--cm-card)",
-                  color: "var(--cm-text, #fff)",
+                  color: "var(--cm-ink)",
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: reviewsLoading ? "default" : "pointer",
@@ -680,6 +615,8 @@ const StoreDetailScreen = () => {
         <VariantPickerSheet
           store={store}
           item={variantItem}
+          allItems={items}
+          onOpenItem={setVariantItem}
           closed={closed}
           onClose={() => setVariantItem(null)}
           getItemQty={getItemQty}
@@ -696,9 +633,19 @@ const StoreDetailScreen = () => {
  * dimension (Size / Colour …); legacy flat variants fall back to a single
  * group of labels. The resolved variant drives price, MRP, stock and add/qty.
  */
-const VariantPickerSheet = ({ store, item, closed, onClose, getItemQty, addItem, decrementItem }) => {
+const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, onClose, getItemQty, addItem, decrementItem }) => {
   const variants = useMemo(() => parseVariants(item), [item]);
   const dims = useMemo(() => variantDimensions(variants), [variants]);
+
+  // Products grouped with this one (Amazon-style "other options"). Tapping a
+  // grouped product swaps the sheet to show that product instead.
+  const groupedProducts = useMemo(() => {
+    let ids = [];
+    try { const a = JSON.parse(item.groupedItemIds || "[]"); if (Array.isArray(a)) ids = a.map(Number); } catch { /* ignore */ }
+    if (!ids.length) return [];
+    const byId = new Map((allItems || []).map((it) => [it.id, it]));
+    return ids.map((id) => byId.get(id)).filter(Boolean);
+  }, [item, allItems]);
 
   const [selection, setSelection] = useState(() =>
     dims.length ? { ...(variants[0]?.options || {}) } : {}
@@ -794,6 +741,31 @@ const VariantPickerSheet = ({ store, item, closed, onClose, getItemQty, addItem,
           </div>
         ))}
 
+        {groupedProducts.length > 0 && (
+          <div className="mkt-vsheet-dim">
+            <div className="mkt-vsheet-dim-label">Other options</div>
+            <div className="mkt-group-row">
+              {groupedProducts.map((g) => {
+                const gPrice = Number(g.offerPrice && Number(g.offerPrice) > 0 ? g.offerPrice : g.sellingPrice) || 0;
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    className="mkt-group-chip"
+                    onClick={() => onOpenItem && onOpenItem(g)}
+                  >
+                    <span className="mkt-group-chip-img">
+                      {g.imageUrl ? <img src={g.imageUrl} alt="" /> : <FaStore size={16} />}
+                    </span>
+                    <span className="mkt-group-chip-name">{g.name}</span>
+                    <span className="mkt-group-chip-price">₹{gPrice.toFixed(0)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="mkt-vsheet-pricerow">
           {dispPrice != null ? (
             <>
@@ -835,6 +807,12 @@ const VariantPickerSheet = ({ store, item, closed, onClose, getItemQty, addItem,
               {offers.map((o, i) => (
                 <div key={i} className="mkt-offer-card">
                   <div className="mkt-offer-title">{o.title}</div>
+                  {Number(o.discountValue) > 0 && (
+                    <div className="mkt-offer-rule">
+                      {o.discountType === "percent" ? `${Number(o.discountValue)}% off` : `₹${Number(o.discountValue)} off`}
+                      {Number(o.minPurchase) > 0 ? ` on orders above ₹${Number(o.minPurchase)}` : ""}
+                    </div>
+                  )}
                   {o.description && <div className="mkt-offer-desc">{o.description}</div>}
                 </div>
               ))}

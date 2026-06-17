@@ -128,7 +128,7 @@ const AddCustomerModal = ({ onClose, onSaved }) => {
   return (
     <ModalShell title="Add credit customer" onClose={onClose}>
       <div className="mkt-field">
-        <label className="mkt-field-label">Customer mobile *</label>
+        <label className="mkt-field-label">Customer mobile <span className="mkt-req">*</span></label>
         <input className="mkt-input" inputMode="numeric" maxLength={10} value={mobile} onChange={(e) => setMobile(e.target.value.replace(/\D/g, "").slice(0, 10))} />
       </div>
       <div className="mkt-field">

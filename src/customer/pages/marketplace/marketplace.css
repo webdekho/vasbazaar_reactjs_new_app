@@ -254,36 +254,163 @@
   font-weight: 600;
 }
 
-/* ===== Store detail ===== */
+/* ===== Store detail hero ===== */
+.mkt-hero { position: relative; }
 .mkt-detail-banner {
   position: relative;
-  height: 160px;
-  background: linear-gradient(135deg, #007BFF 0%, #1e293b 100%);
+  height: 132px;
+  background:
+    radial-gradient(120% 140% at 12% 0%, rgba(64,224,208,0.55) 0%, rgba(64,224,208,0) 45%),
+    linear-gradient(135deg, #0a84ff 0%, #0b3b8c 55%, #0f172a 100%);
   overflow: hidden;
 }
 .mkt-detail-banner img { width: 100%; height: 100%; object-fit: cover; }
-.mkt-detail-info {
-  padding: 14px;
-  border-bottom: 1px solid var(--cm-line);
-  background: var(--cm-bg);
+/* Scrim so the card lip reads cleanly against any banner image */
+.mkt-hero-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.28) 100%);
+  pointer-events: none;
+}
+
+/* Floating identity card that overlaps the banner */
+.mkt-hero-card {
+  position: relative;
+  margin: -34px 14px 0;
+  padding: 14px 14px 14px;
+  display: flex;
+  gap: 14px;
+  background: var(--cm-card);
+  border: 1px solid var(--cm-line);
+  border-radius: 20px;
+  box-shadow: 0 12px 30px -16px rgba(15, 23, 42, 0.45);
+}
+
+.mkt-hero-avatar {
+  position: relative;
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: #fff;
+  background: linear-gradient(135deg, #40E0D0, #007BFF);
+  box-shadow: 0 8px 18px -8px rgba(0, 123, 255, 0.6);
+  /* lift the avatar so it kisses the banner edge */
+  margin-top: -32px;
+  border: 3px solid var(--cm-card);
+}
+.mkt-hero-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.mkt-hero-dot {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--cm-card);
+}
+.mkt-hero-dot.is-open { background: #22c55e; }
+.mkt-hero-dot.is-closed { background: #ef4444; }
+
+.mkt-hero-body { flex: 1; min-width: 0; }
+.mkt-hero-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
 }
 .mkt-detail-title {
-  font-size: 22px;
-  font-weight: 700;
-  margin: 0 0 6px 0;
+  font-size: 19px;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: -0.02em;
   color: var(--cm-ink);
 }
-.mkt-detail-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  font-size: 13px;
-  color: var(--cm-muted);
-}
-.mkt-detail-meta span {
+.mkt-hero-rating {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.16);
+  color: #f59e0b;
+  font-size: 12px;
+  font-weight: 800;
+}
+.mkt-hero-rating-count { color: var(--cm-muted); font-weight: 600; }
+.mkt-hero-newbadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(64,224,208,0.18), rgba(0,123,255,0.18));
+  color: #0d9488;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mkt-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.mkt-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--cm-bg-secondary);
+  border: 1px solid var(--cm-line);
+  color: var(--cm-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.mkt-meta-pill--free {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #16a34a;
+}
+.mkt-hero-address {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--cm-muted);
+  line-height: 1.35;
+}
+
+/* ===== View toggle (segmented control, inline with category chips) ===== */
+.mkt-view-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--cm-bg-secondary);
+  border: 1px solid var(--cm-line);
+}
+.mkt-view-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  color: var(--cm-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.mkt-view-btn.active {
+  color: #007BFF;
+  background: var(--cm-card);
+  box-shadow: 0 2px 6px -2px rgba(15, 23, 42, 0.35);
 }
 
 /* ===== Item grid ===== */
@@ -291,19 +418,56 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  padding: 12px 14px;
+  padding: 10px 14px;
+}
+/* Shorter image + tighter body so ~4 products fit above the fold on landing */
+.mkt-item-grid:not(.mkt-item-grid--list) .mkt-item-image {
+  aspect-ratio: 4 / 3;
+}
+.mkt-item-grid:not(.mkt-item-grid--list) .mkt-item-body {
+  padding: 8px 10px 10px;
+  gap: 6px;
+}
+/* List view: single column, horizontal cards */
+.mkt-item-grid--list {
+  grid-template-columns: 1fr;
+}
+.mkt-item-card--list {
+  flex-direction: row;
+}
+.mkt-item-card--list .mkt-item-image {
+  aspect-ratio: 1 / 1;
+  width: 96px;
+  flex-shrink: 0;
+}
+.mkt-item-card--list .mkt-item-body {
+  min-width: 0;
+}
+.mkt-item-card--list .mkt-item-name {
+  min-height: 0;
 }
 .mkt-item-card {
   background: var(--cm-card);
   border: 1px solid var(--cm-line);
-  border-radius: 14px;
+  border-radius: 16px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 6px 18px -14px rgba(15, 23, 42, 0.5);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .mkt-item-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 26px -16px rgba(15, 23, 42, 0.55);
+  }
 }
 .mkt-item-image {
+  position: relative;
   aspect-ratio: 1 / 1;
-  background: var(--cm-bg-secondary);
+  background:
+    radial-gradient(120% 120% at 30% 20%, rgba(64,224,208,0.12), rgba(0,123,255,0.05) 60%),
+    var(--cm-bg-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -330,7 +494,7 @@
   color: var(--cm-ink);
 }
 .mkt-item-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.mkt-item-price { font-weight: 700; font-size: 14px; color: var(--cm-ink); }
+.mkt-item-price { font-weight: 800; font-size: 15px; letter-spacing: -0.02em; color: var(--cm-ink); }
 .mkt-item-mrp {
   font-size: 11px;
   color: var(--cm-muted);
@@ -365,20 +529,23 @@
   border-bottom: 1px solid #007BFF;
 }
 .mkt-add-btn {
-  padding: 4px 14px;
-  height: 28px;
-  border-radius: 8px;
-  border: 1px solid #007BFF;
-  background: rgba(0, 123, 255, 0.08);
-  color: #007BFF;
-  font-weight: 700;
+  padding: 5px 16px;
+  height: 30px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, #40E0D0, #007BFF);
+  color: #fff;
+  font-weight: 800;
   font-size: 12px;
+  letter-spacing: 0.02em;
   cursor: pointer;
-  transition: background 0.12s ease;
+  box-shadow: 0 6px 14px -8px rgba(0, 123, 255, 0.8);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
 }
 @media (hover: hover) and (pointer: fine) {
-  .mkt-add-btn:hover { background: rgba(0, 123, 255, 0.18); }
+  .mkt-add-btn:hover { filter: brightness(1.05); box-shadow: 0 8px 18px -8px rgba(0, 123, 255, 0.9); }
 }
+.mkt-add-btn:active { transform: scale(0.96); }
 
 /* ===== Sticky cart bar ===== */
 .mkt-cart-bar {
@@ -418,6 +585,7 @@
   font-weight: 600;
   color: var(--cm-muted);
 }
+.mkt-req { color: #e11d48; }
 .mkt-input,
 .mkt-textarea,
 .mkt-select {
@@ -487,6 +655,28 @@
 @media (hover: hover) and (pointer: fine) {
   .mkt-btn--secondary:hover { border-color: #007BFF; }
 }
+/* Theme-coloured "add" buttons (Add variant / attribute / service / offer …) */
+.mkt-btn--add {
+  position: relative;
+  background: linear-gradient(135deg, rgba(64, 224, 208, 0.12) 0%, rgba(0, 123, 255, 0.12) 100%);
+  color: #007BFF;
+  border: 1px solid transparent;
+  background-origin: border-box;
+  box-shadow:
+    0 2px 8px rgba(0, 123, 255, 0.14),
+    inset 0 0 0 1px rgba(0, 123, 255, 0.28);
+  font-weight: 800;
+  transition: box-shadow 0.16s ease, transform 0.12s ease, background 0.16s ease;
+}
+.theme-dark .mkt-btn--add { color: #40E0D0; }
+@media (hover: hover) and (pointer: fine) {
+  .mkt-btn--add:hover {
+    background: linear-gradient(135deg, #40E0D0 0%, #007BFF 100%);
+    color: #fff;
+    box-shadow: 0 6px 16px rgba(0, 123, 255, 0.35);
+  }
+}
+.mkt-btn--add:active { transform: scale(0.97); }
 .mkt-btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
 
 .mkt-loc-card {
@@ -2176,6 +2366,15 @@
 .mkt-vsheet-dim { margin-bottom: 14px; }
 .mkt-vsheet-dim-label { font-size: 12px; font-weight: 700; color: var(--cm-muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
 .mkt-vopt-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.mkt-group-row { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.mkt-group-chip {
+  flex: 0 0 auto; width: 96px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 8px; border-radius: 12px; border: 1.5px solid var(--cm-line); background: var(--cm-card); cursor: pointer;
+}
+.mkt-group-chip-img { width: 56px; height: 56px; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: var(--cm-bg, #f1f5f9); color: var(--cm-muted); }
+.mkt-group-chip-img img { width: 100%; height: 100%; object-fit: cover; }
+.mkt-group-chip-name { font-size: 11px; font-weight: 600; text-align: center; line-height: 1.2; color: var(--cm-ink); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.mkt-group-chip-price { font-size: 12px; font-weight: 700; color: var(--cm-ink); }
 .mkt-vopt {
   padding: 8px 14px; border-radius: 10px; border: 1.5px solid var(--cm-line);
   background: var(--cm-bg); color: var(--cm-ink); font-size: 13px; font-weight: 600; cursor: pointer;
@@ -2197,6 +2396,7 @@
   padding: 12px; background: var(--cm-card);
 }
 .mkt-offer-title { font-size: 13px; font-weight: 700; color: var(--cm-ink); margin-bottom: 4px; }
+.mkt-offer-rule { display: inline-block; font-size: 12px; font-weight: 700; color: #0a7d34; background: #e7f6ec; border-radius: 6px; padding: 2px 8px; margin-bottom: 4px; }
 .mkt-offer-desc { font-size: 12px; color: var(--cm-muted); line-height: 1.4; }
 .mkt-service-row { display: flex; flex-wrap: wrap; gap: 10px; }
 .mkt-service-item {
@@ -2205,3 +2405,461 @@
 }
 .mkt-service-label { font-size: 12px; font-weight: 600; color: var(--cm-ink); }
 .mkt-service-detail { font-size: 10px; color: var(--cm-muted); margin-top: 2px; }
+
+/* ============================================================
+   ✦ CUTTING-EDGE REFRESH (v3) — premium glass + gradient mesh.
+   Appended last so it wins on source order at equal specificity.
+   Purely visual; JSX/state untouched. Works on light + dark.
+   ============================================================ */
+
+/* ---- Hero: aurora-glass header ---------------------------- */
+.mkt-v2 .mkt-hero {
+  padding: 16px 18px 18px;
+  margin: 10px 12px 0;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background:
+    radial-gradient(140% 120% at 100% -10%, rgba(0, 123, 255, 0.30), transparent 55%),
+    radial-gradient(120% 120% at -10% 0%, rgba(99, 102, 241, 0.26), transparent 55%),
+    radial-gradient(120% 140% at 50% 120%, rgba(64, 224, 208, 0.22), transparent 60%),
+    linear-gradient(180deg, #ffffff 0%, #eef2f9 100%);
+  box-shadow:
+    0 18px 44px rgba(15, 23, 42, 0.12),
+    0 2px 0 rgba(255, 255, 255, 0.7) inset;
+}
+.theme-dark .mkt-v2 .mkt-hero,
+.theme-light .mkt-v2 .mkt-hero { background-blend-mode: normal; }
+.theme-dark .mkt-v2 .mkt-hero {
+  border-color: rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(140% 120% at 100% -10%, rgba(0, 123, 255, 0.34), transparent 55%),
+    radial-gradient(120% 120% at -10% 0%, rgba(99, 102, 241, 0.30), transparent 55%),
+    radial-gradient(120% 140% at 50% 120%, rgba(64, 224, 208, 0.20), transparent 60%),
+    linear-gradient(180deg, var(--cm-card) 0%, var(--cm-bg) 100%);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+}
+/* drifting aurora sheen */
+.mkt-v2 .mkt-hero::before {
+  content: "";
+  position: absolute;
+  inset: -40% -10% auto -10%;
+  height: 160%;
+  z-index: -1;
+  background: conic-gradient(from 120deg at 50% 50%,
+    rgba(64, 224, 208, 0.0) 0deg,
+    rgba(0, 123, 255, 0.18) 90deg,
+    rgba(139, 92, 246, 0.18) 180deg,
+    rgba(64, 224, 208, 0.0) 300deg);
+  filter: blur(40px);
+  opacity: 0.8;
+  animation: mkt-aurora 14s linear infinite;
+  pointer-events: none;
+}
+@keyframes mkt-aurora { to { transform: rotate(360deg); } }
+.mkt-v2 .mkt-hero-blob--1 { background: #1e90ff; opacity: 0.42; }
+.mkt-v2 .mkt-hero-blob--2 { background: #7c3aed; opacity: 0.40; }
+
+/* Location chip — crisp glass */
+.mkt-v2 .mkt-loc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 48vw;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  color: var(--cm-ink);
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  cursor: pointer;
+  transition: transform 0.14s ease, box-shadow 0.18s ease;
+}
+.mkt-v2 .mkt-loc-chip:active { transform: scale(0.96); }
+.mkt-v2 .mkt-loc-chip .mkt-loc-chip-label {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.theme-dark .mkt-v2 .mkt-loc-chip {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* My Store / Sell — glossy gradient with shine sweep */
+.mkt-v2 .mkt-hero-action {
+  position: relative;
+  overflow: hidden;
+  padding: 8px 16px;
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg, #40E0D0 0%, #2f8bff 55%, #6a5cff 100%);
+  box-shadow:
+    0 8px 20px rgba(0, 123, 255, 0.42),
+    0 1px 0 rgba(255, 255, 255, 0.5) inset;
+}
+.mkt-v2 .mkt-hero-action::after {
+  content: "";
+  position: absolute;
+  top: 0; left: -60%;
+  width: 50%; height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  transform: skewX(-18deg);
+  animation: mkt-shine 3.6s ease-in-out infinite;
+}
+@keyframes mkt-shine {
+  0%, 60% { left: -60%; }
+  100% { left: 130%; }
+}
+
+/* Search — floating elevated glass with gradient focus ring */
+.mkt-v2 .mkt-hero-search {
+  margin-top: 14px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(14px) saturate(1.5);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  box-shadow:
+    0 10px 28px rgba(15, 23, 42, 0.10),
+    0 1px 0 rgba(255, 255, 255, 0.8) inset;
+  color: #2f8bff;
+}
+.theme-dark .mkt-v2 .mkt-hero-search {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.10);
+  color: var(--cm-accent);
+}
+.mkt-v2 .mkt-hero-search:focus-within {
+  border-color: transparent;
+  box-shadow:
+    0 0 0 2px #40E0D0,
+    0 0 0 4px rgba(0, 123, 255, 0.25),
+    0 12px 30px rgba(0, 123, 255, 0.22);
+}
+.mkt-v2 .mkt-hero-search-input { font-size: 13.5px; font-weight: 600; }
+
+/* ---- Quick filter chips — tactile glass ------------------- */
+.mkt-v2 .mkt-quickbar { padding: 12px 14px 4px; gap: 9px; }
+.mkt-v2 .mkt-quick-chip {
+  padding: 7px 13px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--cm-ink);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+  transition: transform 0.14s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+.mkt-v2 .mkt-quick-chip:active { transform: scale(0.95); }
+.theme-dark .mkt-v2 .mkt-quick-chip {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+.mkt-v2 .mkt-quick-chip.is-active {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(135deg, #40E0D0 0%, #2f8bff 60%, #6a5cff 100%);
+  box-shadow: 0 6px 18px rgba(0, 123, 255, 0.38);
+}
+
+/* ---- Section title — gradient accent bar ------------------ */
+.mkt-v2 .mkt-section-title {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 15px;
+  font-weight: 800;
+}
+.mkt-v2 .mkt-section-title::before {
+  content: "";
+  width: 4px;
+  height: 16px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #40E0D0, #2f8bff);
+  box-shadow: 0 0 10px rgba(0, 123, 255, 0.4);
+}
+
+/* ---- Store cards — premium, glowy, richer ----------------- */
+.mkt-v2 .mkt-store-grid { gap: 14px; padding: 4px 0 14px; }
+.mkt-v2 .mkt-store-card-v2 {
+  border-radius: 22px;
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  background: var(--cm-card);
+  box-shadow:
+    0 10px 26px rgba(15, 23, 42, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.6) inset;
+  transition: transform 0.22s cubic-bezier(.2,.8,.2,1), box-shadow 0.24s ease, border-color 0.2s ease;
+  animation: mkt-card-in 0.5s cubic-bezier(.2,.8,.2,1) both;
+}
+.theme-dark .mkt-v2 .mkt-store-card-v2 {
+  border-color: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.4);
+}
+@keyframes mkt-card-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.mkt-v2 .mkt-store-card-v2:hover {
+  transform: translateY(-4px);
+  border-color: rgba(0, 123, 255, 0.45);
+  box-shadow:
+    0 20px 40px rgba(0, 123, 255, 0.20),
+    0 0 0 1px rgba(0, 123, 255, 0.18);
+}
+
+/* Cover — vivid mesh + soft pattern */
+.mkt-v2 .mkt-store-cover { height: 92px; }
+.mkt-v2 .mkt-store-cover-fallback {
+  background:
+    radial-gradient(70% 90% at 18% 16%, rgba(255,255,255,0.30), transparent 55%),
+    radial-gradient(70% 90% at 86% 84%, rgba(255,255,255,0.18), transparent 55%),
+    linear-gradient(135deg, #2f8bff 0%, #6a5cff 55%, #8b5cf6 100%);
+}
+.mkt-v2 .mkt-store-cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1.4px);
+  background-size: 14px 14px;
+  opacity: 0.5;
+  pointer-events: none;
+}
+.mkt-v2 .mkt-store-cover img { position: relative; z-index: 1; }
+
+/* Closed — frosted, desaturated cover (clearer than flat opacity) */
+.mkt-v2 .mkt-store-card-v2.is-closed { opacity: 1; }
+.mkt-v2 .mkt-store-card-v2.is-closed .mkt-store-cover img,
+.mkt-v2 .mkt-store-card-v2.is-closed .mkt-store-cover-fallback {
+  filter: grayscale(0.55) brightness(0.92);
+}
+.mkt-v2 .mkt-store-card-v2.is-closed .mkt-store-body { opacity: 0.92; }
+
+/* Status & fast pills — crisper */
+.mkt-v2 .mkt-store-status-pill {
+  padding: 4px 11px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
+}
+.mkt-v2 .mkt-store-fast-pill {
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  box-shadow: 0 6px 14px rgba(239, 68, 68, 0.4);
+}
+
+/* Logo — floats over cover with ring + glow */
+.mkt-v2 .mkt-store-logo-overlay {
+  width: 50px;
+  height: 50px;
+  border-radius: 15px;
+  top: -25px;
+  border: 3px solid var(--cm-card);
+  box-shadow:
+    0 10px 22px rgba(15, 23, 42, 0.18),
+    0 0 0 1px rgba(0, 123, 255, 0.12);
+}
+
+/* Name + rating */
+.mkt-v2 .mkt-store-name-v2 { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
+.mkt-v2 .mkt-store-rating {
+  padding: 3px 9px;
+  border-radius: 8px;
+  font-weight: 800;
+  background: linear-gradient(135deg, rgba(34,197,94,0.16), rgba(16,185,129,0.16));
+  border: 1px solid rgba(16, 185, 129, 0.22);
+}
+
+/* Meta chips — softer, pill-shaped */
+.mkt-v2 .mkt-meta-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  background: rgba(15, 23, 42, 0.045);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  color: var(--cm-muted);
+}
+.theme-dark .mkt-v2 .mkt-meta-chip {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.mkt-v2 .mkt-meta-chip--free {
+  background: linear-gradient(135deg, rgba(16,185,129,0.16), rgba(5,150,105,0.16));
+  border-color: rgba(16, 185, 129, 0.28);
+  color: #059669;
+}
+
+/* Cart bar — deeper glow */
+.mkt-v2 .mkt-cart-bar-v2 {
+  border-radius: 20px;
+  background: linear-gradient(135deg, #0f172a 0%, #2f8bff 55%, #6a5cff 100%);
+  box-shadow: 0 18px 40px rgba(0, 123, 255, 0.45);
+}
+
+/* Respect reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .mkt-v2 .mkt-hero::before,
+  .mkt-v2 .mkt-hero-action::after { animation: none; }
+  .mkt-v2 .mkt-store-card-v2 { animation: none; }
+}
+
+/* ============================================================
+   ✦ v3.1 — playful filters + vibrant category tiles.
+   Each filter gets its own accent; each category tile shows
+   its colour always (not only when active).
+   ============================================================ */
+
+/* ---- Quick filters — colour-coded glass pills ------------- */
+.mkt-v2 .mkt-quickbar { padding: 14px 14px 6px; gap: 10px; }
+.mkt-v2 .mkt-quick-chip {
+  --chip: #2f8bff;
+  padding: 8px 15px;
+  gap: 7px;
+  font-weight: 800;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--chip) 32%, transparent);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--chip) 14%, #fff) 0%, #ffffff 100%);
+  color: #0f172a;
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--chip) 18%, transparent);
+}
+.mkt-v2 .mkt-quick-chip svg { color: var(--chip); transition: color 0.18s ease; }
+.mkt-v2 .mkt-quickbar .mkt-quick-chip:nth-of-type(1) { --chip: #10b981; } /* Free delivery */
+.mkt-v2 .mkt-quickbar .mkt-quick-chip:nth-of-type(2) { --chip: #f59e0b; } /* Under 30 min  */
+.mkt-v2 .mkt-quickbar .mkt-quick-chip:nth-of-type(3) { --chip: #2f8bff; } /* Open now      */
+.theme-dark .mkt-v2 .mkt-quick-chip {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--chip) 22%, transparent) 0%, rgba(255,255,255,0.04) 100%);
+  color: var(--cm-ink);
+  border-color: color-mix(in srgb, var(--chip) 40%, transparent);
+}
+.mkt-v2 .mkt-quick-chip.is-active {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--chip) 0%, color-mix(in srgb, var(--chip) 50%, #6a5cff) 100%);
+  box-shadow: 0 9px 22px color-mix(in srgb, var(--chip) 48%, transparent);
+}
+.mkt-v2 .mkt-quick-chip.is-active svg { color: #fff; }
+
+/* ---- Browse categories — vibrant 3-D tiles ---------------- */
+.mkt-v2 .mkt-cat-rail--modern { gap: 16px !important; padding: 8px 4px 16px !important; }
+.mkt-v2 .mkt-cat-tile--modern .mkt-cat-tile-avatar {
+  width: 64px !important;
+  height: 64px !important;
+  border-radius: 22px !important;
+  border: 1px solid color-mix(in srgb, var(--cat-accent, #6366f1) 30%, transparent) !important;
+  background:
+    radial-gradient(120% 110% at 26% 12%, rgba(255,255,255,0.95) 0%, transparent 52%),
+    linear-gradient(160deg,
+      color-mix(in srgb, var(--cat-accent, #6366f1) 26%, #ffffff) 0%,
+      color-mix(in srgb, var(--cat-accent, #6366f1) 12%, #ffffff) 100%) !important;
+  color: var(--cat-accent, #6366f1) !important;
+  box-shadow:
+    0 12px 22px color-mix(in srgb, var(--cat-accent, #6366f1) 24%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95) !important;
+}
+.theme-dark .mkt-v2 .mkt-cat-tile--modern .mkt-cat-tile-avatar {
+  border-color: color-mix(in srgb, var(--cat-accent, #6366f1) 45%, transparent) !important;
+  background:
+    radial-gradient(120% 110% at 26% 12%, rgba(255,255,255,0.18) 0%, transparent 52%),
+    linear-gradient(160deg,
+      color-mix(in srgb, var(--cat-accent, #6366f1) 38%, #0c0c14) 0%,
+      color-mix(in srgb, var(--cat-accent, #6366f1) 16%, #0c0c14) 100%) !important;
+  color: #fff !important;
+  box-shadow:
+    0 12px 24px color-mix(in srgb, var(--cat-accent, #6366f1) 36%, rgba(0,0,0,0.4)),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+}
+.mkt-v2 .mkt-cat-tile--modern .mkt-cat-tile-avatar > svg,
+.mkt-v2 .mkt-cat-tile--modern .mkt-cat-tile-avatar > img {
+  filter: drop-shadow(0 2px 5px color-mix(in srgb, var(--cat-accent, #6366f1) 45%, transparent));
+}
+/* Label — darker accent ink so it reads as part of the colour */
+.mkt-v2 .mkt-cat-tile--modern .mkt-cat-tile-label {
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  color: color-mix(in srgb, var(--cat-accent, #6366f1) 70%, var(--cm-ink)) !important;
+}
+
+/* Active tile — saturated fill, lift, glow ring (kept vivid) */
+.mkt-v2 .mkt-cat-tile--modern.is-active .mkt-cat-tile-avatar {
+  background:
+    radial-gradient(120% 120% at 30% 8%, rgba(255,255,255,0.30) 0%, transparent 55%),
+    linear-gradient(135deg,
+      var(--cat-accent, #6366f1) 0%,
+      color-mix(in srgb, var(--cat-accent, #6366f1) 55%, #6a5cff) 100%) !important;
+  color: #fff !important;
+  transform: translateY(-4px) !important;
+  box-shadow:
+    0 18px 30px color-mix(in srgb, var(--cat-accent, #6366f1) 48%, rgba(0,0,0,0.25)),
+    0 0 0 4px color-mix(in srgb, var(--cat-accent, #6366f1) 20%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+}
+.mkt-v2 .mkt-cat-tile--modern.is-active .mkt-cat-tile-avatar > svg,
+.mkt-v2 .mkt-cat-tile--modern.is-active .mkt-cat-tile-avatar > img {
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.3));
+}
+.mkt-v2 .mkt-cat-tile--modern.is-active .mkt-cat-tile-label {
+  color: color-mix(in srgb, var(--cat-accent, #6366f1) 80%, var(--cm-ink)) !important;
+  font-weight: 800 !important;
+}
+
+/* ============================================================
+   ✦ v3.2 — categories as horizontal filter-style chips
+   (no "Browse categories" title; same pill look as quick filters)
+   ============================================================ */
+.mkt-v2 .mkt-cat-section { padding-top: 4px; }
+.mkt-v2 .mkt-cat-chip-rail {
+  display: flex;
+  gap: 9px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 4px 0 6px;
+}
+.mkt-v2 .mkt-cat-chip-rail::-webkit-scrollbar { display: none; }
+.mkt-v2 .mkt-cat-chip {
+  --chip: var(--cat-accent, #6366f1);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  padding: 8px 15px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--chip) 32%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--chip) 14%, #fff) 0%, #ffffff 100%);
+  color: #0f172a;
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--chip) 16%, transparent);
+  transition: transform 0.14s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+.mkt-v2 .mkt-cat-chip svg { color: var(--chip); flex-shrink: 0; }
+.mkt-v2 .mkt-cat-chip:active { transform: scale(0.95); }
+.theme-dark .mkt-v2 .mkt-cat-chip {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--chip) 22%, transparent) 0%, rgba(255,255,255,0.04) 100%);
+  color: var(--cm-ink);
+  border-color: color-mix(in srgb, var(--chip) 40%, transparent);
+}
+.mkt-v2 .mkt-cat-chip.is-active {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--chip) 0%, color-mix(in srgb, var(--chip) 55%, #6a5cff) 100%);
+  box-shadow: 0 9px 22px color-mix(in srgb, var(--chip) 48%, transparent);
+}
+.mkt-v2 .mkt-cat-chip.is-active svg { color: #fff; }
+.mkt-v2 .mkt-cat-chip-img {
+  width: 16px; height: 16px; border-radius: 4px; object-fit: cover; flex-shrink: 0;
+}

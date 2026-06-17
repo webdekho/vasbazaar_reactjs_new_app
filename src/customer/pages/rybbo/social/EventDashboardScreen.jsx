@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { FaArrowLeft, FaWhatsapp, FaCopy, FaEdit, FaBan, FaDownload, FaBell, FaUserPlus, FaQrcode, FaAddressBook, FaSearch, FaTimes, FaCheck, FaMagic, FaImage, FaEye, FaEnvelope } from "react-icons/fa";
+import { FaArrowLeft, FaWhatsapp, FaCopy, FaEdit, FaBan, FaDownload, FaBell, FaUserPlus, FaQrcode, FaAddressBook, FaSearch, FaTimes, FaCheck, FaMagic, FaImage, FaEye, FaEnvelope, FaUsers } from "react-icons/fa";
 import { rybboSocialService, buildInviteUrl, buildInviteMessage, buildBannerAiUrl, buildCanvaPrompt, CANVA_BANNER_URL } from "../../../services/rybboSocialService";
 import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
@@ -60,6 +60,8 @@ const EventDashboardScreen = () => {
   const [state, setState] = useState({ loading: true, error: "", event: null });
   const [inviteMobile, setInviteMobile] = useState("");
   const [inviting, setInviting] = useState(false);
+  const [coHostMobile, setCoHostMobile] = useState("");
+  const [addingCoHost, setAddingCoHost] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [emailChips, setEmailChips] = useState([]);
   const [emailing, setEmailing] = useState(false);
@@ -425,6 +427,27 @@ const EventDashboardScreen = () => {
     setInviteMobile("");
   };
 
+  // Co-hosts — owner grants up to 2 extra people full management of this event.
+  const addCoHost = async () => {
+    const m = coHostMobile.replace(/\D/g, "");
+    if (m.length < 10) { showToast("Enter a valid 10-digit mobile", "error"); return; }
+    setAddingCoHost(true);
+    const r = await rybboSocialService.addCoHost(id, m);
+    setAddingCoHost(false);
+    if (!r.success) { showToast(r.message || "Could not add co-host", "error"); return; }
+    showToast(r.data?.message || "Co-host added", "success");
+    setCoHostMobile("");
+    load();
+  };
+
+  const removeCoHost = async (userId, name) => {
+    if (!window.confirm(`Remove ${name || "this co-host"}? They will lose access to this event.`)) return;
+    const r = await rybboSocialService.removeCoHost(id, userId);
+    if (!r.success) { showToast(r.message || "Could not remove co-host", "error"); return; }
+    showToast("Co-host removed", "success");
+    load();
+  };
+
   const cancelEvent = async () => {
     if (!window.confirm("Cancel this event? Guests who open the invite will see it as cancelled.")) return;
     const r = await rybboSocialService.cancelEvent(id);
@@ -464,6 +487,53 @@ const EventDashboardScreen = () => {
                 style={{ display: "inline-flex", alignItems: "center", gap: 8, alignSelf: "flex-start", padding: "8px 14px", borderRadius: 10, border: `1px solid ${ACCENT}`, background: "transparent", color: ACCENT, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
                 <FaEdit /> Edit event
               </button>
+            )}
+
+            {/* Co-hosts — host can grant up to 2 more people full management of this event */}
+            {(e.isOwner || (e.coHosts && e.coHosts.length > 0)) && (
+              <div style={{ border: "1px solid var(--cm-line, #E5E7EB)", borderRadius: 12, padding: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <FaUsers style={{ color: ACCENT }} />
+                  <span style={{ fontSize: 13, fontWeight: 700 }}>Co-hosts</span>
+                  <span style={{ fontSize: 11, color: "var(--cm-muted, #6B7280)" }}>({(e.coHosts || []).length}/2)</span>
+                </div>
+                <div style={{ fontSize: 11, color: "var(--cm-muted, #6B7280)", marginBottom: 10 }}>
+                  {e.isOwner
+                    ? "Add up to 2 VasBazaar users who can co-manage this event — edit details, invite guests and scan entries. Only you can cancel or delete it."
+                    : "You're a co-host for this event and can help manage it."}
+                </div>
+
+                {(e.coHosts || []).length > 0 && (
+                  <div style={{ display: "grid", gap: 8, marginBottom: e.isOwner ? 12 : 0 }}>
+                    {e.coHosts.map((c) => (
+                      <div key={c.userId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: "1px solid var(--cm-line, #E5E7EB)", borderRadius: 10 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name || c.mobile}</div>
+                          {c.name && <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>{c.mobile}</div>}
+                        </div>
+                        {e.isOwner && (
+                          <button type="button" onClick={() => removeCoHost(c.userId, c.name)} aria-label="Remove co-host"
+                            style={{ border: "1px solid #fecaca", background: "transparent", color: "#b91c1c", borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                            <FaTimes size={11} /> Remove
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {e.isOwner && e.status !== "CANCELLED" && (e.coHosts || []).length < 2 && (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input value={coHostMobile} onChange={(ev) => setCoHostMobile(ev.target.value)} inputMode="numeric"
+                      placeholder="Co-host mobile number" maxLength={10}
+                      style={{ flex: 1, minWidth: 0, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--cm-line, #E5E7EB)", background: "transparent", color: "inherit", fontSize: 13, outline: "none" }} />
+                    <button type="button" onClick={addCoHost} disabled={addingCoHost}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: 10, border: "none", background: ACCENT, color: "#fff", fontWeight: 700, fontSize: 13, cursor: addingCoHost ? "default" : "pointer", whiteSpace: "nowrap" }}>
+                      <FaUserPlus /> {addingCoHost ? "Adding…" : "Add"}
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Step indicator for the create → share → track flow (tap to jump) */}
@@ -727,7 +797,7 @@ const EventDashboardScreen = () => {
                   style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px", borderRadius: 10, border: "1px solid var(--cm-line, #E5E7EB)", background: "transparent", color: "inherit", fontWeight: 600, cursor: "pointer" }}>
                   <FaBell /> Copy reminder
                 </button>
-                {e.status !== "CANCELLED" && (
+                {e.status !== "CANCELLED" && e.isOwner && (
                   <button type="button" onClick={cancelEvent}
                     style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px", borderRadius: 10, border: "1px solid #fecaca", background: "transparent", color: "#b91c1c", fontWeight: 600, cursor: "pointer" }}>
                     <FaBan /> Cancel event

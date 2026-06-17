@@ -271,7 +271,7 @@ const OfferFormModal = ({ initial, onClose, onSaved }) => {
           </div>
 
           <div className="mkt-field">
-            <label className="mkt-field-label">Code *</label>
+            <label className="mkt-field-label">Code <span className="mkt-req">*</span></label>
             <input className="mkt-input" value={form.code} onChange={(e) => setField("code", e.target.value.toUpperCase().replace(/\s/g, ""))} placeholder="e.g. SAVE50" style={{ textTransform: "uppercase" }} />
           </div>
           <div className="mkt-field">

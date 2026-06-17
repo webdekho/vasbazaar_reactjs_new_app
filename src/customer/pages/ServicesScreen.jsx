@@ -521,6 +521,13 @@ const ServicesScreen = () => {
     }).slice(0, 20);
   }, [allOperators, query]);
 
+  // In-app products / modules (Resibot 360, Retail Bazaar, etc.) matching the query.
+  const filteredApps = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return quickAccessItems.filter((it) => !it.isScroll && it.label.toLowerCase().includes(q));
+  }, [query]);
+
   // Click a biller result → jump straight into BillerFlowScreen with the
   // biller pre-selected (prefill handling lives in BillerFlowScreen).
   const handleBillerClick = (biller) => {
@@ -573,11 +580,11 @@ const ServicesScreen = () => {
         {/* Combined customer card + banner slider */}
         {!query && <BannerSlider banners={banners} userData={userData} balances={balances} />}
 
-        {/* Search bar with Bharat Connect logo — between slider and services */}
+        {/* Search bar with inline Bharat Connect entry — tapping the logo jumps to the bill-pay services grid (Prepaid, Postpaid, DTH, Electricity…) */}
         <div className="cm-search-between">
           <div className="cm-search-with-bc">
             <div className={`cm-search-bar-row${searchFocused ? " is-focused" : ""}`}>
-              <FaSearch style={{ color: searchFocused ? "var(--cm-accent, #40E0D0)" : "var(--cm-disabled, #6B6B6B)", fontSize: 14, transition: "color 0.2s", flexShrink: 0 }} />
+              <FaSearch style={{ color: searchFocused ? "var(--cm-accent, #40E0D0)" : "var(--cm-disabled, #6B6B6B)", fontSize: 16, transition: "color 0.2s", flexShrink: 0 }} />
               <input
                 className="cm-search-field-input"
                 placeholder="Search services..."
@@ -587,9 +594,14 @@ const ServicesScreen = () => {
                 onBlur={() => setSearchFocused(false)}
               />
             </div>
-            <div className="cm-bc-entry">
+            <button
+              type="button"
+              className="cm-bc-entry cm-bc-entry--btn"
+              onClick={() => document.getElementById("services-grid-section")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              aria-label="Bharat Connect bill-pay services"
+            >
               <img src="/images/bbps.svg" alt="Bharat Connect" className="cm-bc-logo" />
-            </div>
+            </button>
           </div>
         </div>
 
@@ -598,6 +610,29 @@ const ServicesScreen = () => {
 
         {/* Upcoming Dues */}
         {!query && <UpcomingDuesSection dues={upcomingDues} />}
+
+        {/* Product / module search results (Resibot 360, Retail Bazaar, etc.) */}
+        {query && filteredApps.length > 0 && (
+          <div className="cm-quick-access">
+            <div className="cm-quick-access-title">Products</div>
+            <div className="cm-services-grid-4" style={{ padding: "0 4px 8px", border: "none", boxShadow: "none", background: "transparent" }}>
+              {filteredApps.map((item, i) => (
+                <button
+                  key={item.label}
+                  className="cm-svc-item"
+                  type="button"
+                  style={{ animationDelay: `${i * 30}ms`, alignItems: "flex-start" }}
+                  onClick={() => navigate(item.to)}
+                >
+                  <div style={{ width: 52, height: 52, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
+                    <ServiceIcon icon={item.icon} iconUrl={item.iconUrl} accentColor={item.color} highlightColor={item.color} />
+                  </div>
+                  <span className="cm-svc-label">{formatServiceLabel(item.label)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Biller search results (only while searching). Clicking one jumps
             into that biller's flow with the operator pre-selected. */}
@@ -637,6 +672,7 @@ const ServicesScreen = () => {
         )}
 
         {/* Service icons grid - 4 per row */}
+        {(!query || filtered.length > 0) && (
         <div id="services-grid-section" className={`cm-quick-access${query ? " is-searching" : ""}`}>
           <div className="cm-services-title-row">
             <div className="cm-quick-access-title">Services</div>
@@ -646,7 +682,7 @@ const ServicesScreen = () => {
           </div>
         <div className="cm-services-grid-4" style={{ padding: "0 4px 8px", border: "none", boxShadow: "none", background: "transparent" }}>
           {filtered.length === 0 ? (
-            <div className="cm-empty" style={{ gridColumn: "1 / -1", textAlign: "center", padding: 32 }}>No services matched your search.</div>
+            <div className="cm-empty" style={{ gridColumn: "1 / -1", textAlign: "center", padding: 32 }}>No services available.</div>
           ) : (
             filtered.map((service, i) => {
               const isPrepaid = service.slug === "prepaid";
@@ -678,6 +714,12 @@ const ServicesScreen = () => {
           )}
         </div>
         </div>
+        )}
+
+        {/* Nothing matched across products, billers, or services */}
+        {query && filtered.length === 0 && filteredBillers.length === 0 && filteredApps.length === 0 && (
+          <div className="cm-empty" style={{ textAlign: "center", padding: 32 }}>No results matched your search.</div>
+        )}
       </div>
     </DataState>
   );

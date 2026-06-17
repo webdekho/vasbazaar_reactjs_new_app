@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaPlus, FaPencilAlt, FaTrash, FaStore, FaCamera, FaCheckCircle, FaTimesCircle, FaClock, FaBan, FaEdit, FaRegClock, FaChevronRight, FaPowerOff, FaChevronDown, FaChevronUp, FaToggleOn, FaToggleOff, FaTags, FaChartLine, FaStar, FaTruck, FaShoppingBag, FaFileCsv, FaBook } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
+import { useToast } from "../../context/ToastContext";
 import { parseVariants, variantDimensions } from "./variantUtils";
+import BarcodeScannerModal from "../../components/BarcodeScannerModal";
 import "./marketplace.css";
 
 const STATUS_META = {
@@ -21,6 +23,7 @@ const CATEGORY_STATUS_BADGE = {
 
 const MyStoreManageScreen = () => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [store, setStore] = useState(null);
   const [items, setItems] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
@@ -91,10 +94,29 @@ const MyStoreManageScreen = () => {
   // Build and download a sample CSV the seller can fill in and re-upload.
   const downloadSampleCsv = (e) => {
     e?.stopPropagation();
-    const headers = ["name", "sellingPrice", "mrp", "offerPrice", "sku", "barcode", "hsn", "taxRate", "unit", "stockQty", "description", "imageUrl"];
+    // All columns supported by the manual "Add Item" form. Required: name, sellingPrice.
+    // imageUrls/variants/services/offers are JSON arrays; category/subcategory match by name.
+    const headers = [
+      "name", "sellingPrice", "mrp", "offerPrice", "sku", "barcode", "hsn", "taxRate",
+      "unit", "stockQty", "lowStockThreshold", "description", "imageUrl",
+      "imageUrls", "category", "subcategory", "variants", "services", "offers",
+    ];
     const sample = [
-      ["Aashirvaad Atta 5kg", "245", "260", "239", "ATTA-5KG", "8901234567890", "1101", "5", "kg", "50", "Whole wheat atta 5 kg pack", ""],
-      ["Tata Salt 1kg", "28", "30", "", "SALT-1KG", "", "2501", "0", "kg", "120", "Iodised salt 1 kg", ""],
+      [
+        "Aashirvaad Atta 5kg", "245", "260", "239", "ATTA-5KG", "8901234567890", "1101", "5",
+        "kg", "50", "10", "Whole wheat atta 5 kg pack", "https://cdn.example.com/atta.jpg",
+        '["https://cdn.example.com/atta-1.jpg","https://cdn.example.com/atta-2.jpg"]',
+        "Grocery", "Atta & Flour",
+        '[{"label":"5 kg","price":245,"mrp":260,"stock":50,"options":{"Weight":"5 kg"}},{"label":"10 kg","price":480,"mrp":510,"stock":20,"options":{"Weight":"10 kg"}}]',
+        '[{"label":"Free Delivery","detail":"On orders above ₹199"},{"label":"7-day Replacement"}]',
+        '[{"title":"Bank Offer","description":"₹20 off on select cards","discountType":"flat","discountValue":20,"minPurchase":200}]',
+      ],
+      [
+        "Tata Salt 1kg", "28", "30", "", "SALT-1KG", "", "2501", "0",
+        "kg", "120", "", "Iodised salt 1 kg", "",
+        "", "Grocery", "",
+        "", "", "",
+      ],
     ];
     // Quote any cell with comma/quote/newline; double-up inner quotes.
     const esc = (v) => {
@@ -160,8 +182,19 @@ const MyStoreManageScreen = () => {
   const handleToggleOpen = async () => {
     const next = !(store.isOpen);
     const res = await marketplaceService.toggleMyStoreOpen(next);
-    if (res.success) setStore({ ...store, isOpen: next });
-    else setError(res.message || "Failed to update");
+    if (res.success) {
+      setStore({ ...store, isOpen: next });
+      showToast(
+        next
+          ? "Store is now Open — customers can place orders"
+          : "Store is now Closed — customers can't place orders",
+        next ? "success" : "info"
+      );
+    } else {
+      const msg = res.message || "Failed to update store status";
+      setError(msg);
+      showToast(msg, "error");
+    }
   };
 
   // Truncate API time strings (e.g. "09:00:00") to "09:00" for window math.
@@ -246,6 +279,16 @@ const MyStoreManageScreen = () => {
             onClick={() => navigate("/customer/app/marketplace/my-store/timings")}
           >
             <FaRegClock size={14} />
+          </button>
+        )}
+        {canManageItems && (
+          <button
+            className="mkt-header-action"
+            title="Delivery slots"
+            aria-label="Delivery slots"
+            onClick={() => navigate("/customer/app/marketplace/my-store/delivery-slots")}
+          >
+            <FaTruck size={14} />
           </button>
         )}
         {canManageItems && (
@@ -498,7 +541,7 @@ const MyStoreManageScreen = () => {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 700 }}>{bulkImporting ? "Importing…" : "Bulk import items (CSV)"}</div>
                 <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>
-                  Columns: name, sellingPrice, mrp, offerPrice, sku, barcode, hsn, taxRate, unit, stockQty, description, imageUrl
+                  name &amp; sellingPrice required. Also supports mrp, offerPrice, sku, barcode, hsn, taxRate, unit, stockQty, lowStockThreshold, description, imageUrl, imageUrls, category, subcategory, variants, services, offers. Download the sample for the exact format.
                 </div>
               </div>
               <FaChevronRight size={12} color="var(--cm-muted)" />
@@ -599,6 +642,7 @@ const MyStoreManageScreen = () => {
       {showItemForm && (
         <ItemFormModal
           initial={editingItem}
+          allItems={items}
           onClose={() => { setShowItemForm(false); setEditingItem(null); }}
           onSaved={() => { setShowItemForm(false); setEditingItem(null); load(); }}
         />
@@ -616,6 +660,17 @@ const CategoriesTab = () => {
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
 
+  // Top-level subcategory management (mirrors categories). Subcategories are
+  // loaded across every approved category and shown as one flat, managed list.
+  const [allSubs, setAllSubs] = useState([]);
+  const [subsLoading, setSubsLoading] = useState(false);
+  const [showAddSub, setShowAddSub] = useState(false);
+  const [editingSub, setEditingSub] = useState(null);
+
+  const approvedCategories = useMemo(
+    () => categories.filter((c) => String(c.status || "APPROVED").toUpperCase() === "APPROVED"),
+    [categories]
+  );
 
   const loadCategories = useCallback(async () => {
     setLoading(true);
@@ -626,12 +681,39 @@ const CategoriesTab = () => {
     finally { setLoading(false); }
   }, []);
 
+  // Fetch subcategories for each approved category and merge into one list,
+  // tagging each with its parent category name for display.
+  const loadSubcategories = useCallback(async (cats) => {
+    const parents = (cats || []).filter((c) => String(c.status || "APPROVED").toUpperCase() === "APPROVED");
+    if (parents.length === 0) { setAllSubs([]); return; }
+    setSubsLoading(true);
+    try {
+      const results = await Promise.all(
+        parents.map((c) =>
+          marketplaceService.getMyItemSubcategories(c.id)
+            .then((r) => (r.success && Array.isArray(r.data) ? r.data.map((s) => ({ ...s, categoryId: c.id, categoryName: c.name })) : []))
+            .catch(() => [])
+        )
+      );
+      setAllSubs(results.flat());
+    } finally { setSubsLoading(false); }
+  }, []);
+
   useEffect(() => { loadCategories(); }, [loadCategories]);
+  // Reload the flat subcategory list whenever the category set changes.
+  useEffect(() => { loadSubcategories(categories); }, [categories, loadSubcategories]);
 
   const handleDeleteCategory = async (id) => {
     if (!window.confirm("Delete this category? All subcategories under it will also be deleted.")) return;
     const res = await marketplaceService.deleteMyItemCategory(id);
     if (res.success) { setCategories((p) => p.filter((c) => c.id !== id)); if (expandedId === id) setExpandedId(null); }
+    else setError(res.message || "Delete failed");
+  };
+
+  const handleDeleteSub = async (id) => {
+    if (!window.confirm("Delete this subcategory?")) return;
+    const res = await marketplaceService.deleteMyItemSubcategory(id);
+    if (res.success) setAllSubs((p) => p.filter((s) => s.id !== id));
     else setError(res.message || "Delete failed");
   };
 
@@ -717,12 +799,93 @@ const CategoriesTab = () => {
         )}
       </div>
 
+      {/* ===== Subcategories management (same pattern as categories) ===== */}
+      <div style={{ marginTop: 20 }}>
+        {/* Add Subcategory CTA */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => { if (approvedCategories.length) { setEditingSub(null); setShowAddSub(true); } }}
+          onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && approvedCategories.length) { e.preventDefault(); setEditingSub(null); setShowAddSub(true); } }}
+          style={{
+            display: "flex", alignItems: "center", gap: 12, padding: 14,
+            borderRadius: 14, border: "1.5px dashed #007BFF",
+            background: "rgba(20, 184, 166, 0.06)", color: "var(--cm-ink)",
+            cursor: approvedCategories.length ? "pointer" : "not-allowed",
+            opacity: approvedCategories.length ? 1 : 0.6,
+          }}
+        >
+          <div style={{ width: 42, height: 42, borderRadius: 12, display: "grid", placeItems: "center", background: "linear-gradient(135deg, #40E0D0, #007BFF)", color: "#fff", flexShrink: 0 }}>
+            <FaPlus size={16} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>Propose a new subcategory</div>
+            <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>
+              {approvedCategories.length
+                ? "Pick a parent category, then name the subcategory. Goes to admin for approval."
+                : "Get at least one category approved first, then add subcategories under it."}
+            </div>
+          </div>
+          <FaChevronRight size={12} color="var(--cm-muted)" />
+        </div>
+
+        {/* Subcategory list */}
+        <div style={{ marginTop: 12 }}>
+          <div className="mkt-form-section-title" style={{ margin: "0 0 8px" }}>
+            Item Subcategories <span style={{ color: "var(--cm-muted)", fontWeight: 500 }}>({allSubs.length})</span>
+          </div>
+          {subsLoading ? (
+            <div className="mkt-empty">Loading…</div>
+          ) : allSubs.length === 0 ? (
+            <div className="mkt-empty">No subcategories yet. Add one to organize items further.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {allSubs.map((sub) => {
+                const status = String(sub.status || "APPROVED").toUpperCase();
+                const isApproved = status === "APPROVED";
+                const badge = CATEGORY_STATUS_BADGE[status] || CATEGORY_STATUS_BADGE.APPROVED;
+                return (
+                  <div key={sub.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 12, border: "1px solid var(--cm-line)", background: "var(--cm-card)" }}>
+                    {sub.iconUrl && <img src={sub.iconUrl} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: "cover" }} />}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--cm-ink)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        {sub.name}
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 6, background: badge.bg, color: badge.color }}>{badge.label}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--cm-muted)" }}>
+                        Under <strong>{sub.categoryName}</strong>{isApproved ? "" : (sub.rejectionReason ? ` · ${sub.rejectionReason}` : " · Awaiting admin approval")}
+                      </div>
+                    </div>
+                    {!isApproved && (
+                      <>
+                        <button onClick={() => { setEditingSub(sub); setShowAddSub(true); }} style={{ background: "none", border: "none", color: "#007BFF", cursor: "pointer", padding: 4 }}><FaPencilAlt size={12} /></button>
+                        <button onClick={() => handleDeleteSub(sub.id)} style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", padding: 4 }}><FaTrash size={12} /></button>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Add/Edit Category Modal */}
       {showAddCategory && (
         <CategoryFormModal
           initial={editingCategory}
           onClose={() => { setShowAddCategory(false); setEditingCategory(null); }}
           onSaved={() => { setShowAddCategory(false); setEditingCategory(null); loadCategories(); }}
+        />
+      )}
+
+      {/* Add/Edit Subcategory Modal (top-level — shows parent category dropdown) */}
+      {showAddSub && (
+        <SubcategoryFormModal
+          categories={approvedCategories}
+          initial={editingSub}
+          onClose={() => { setShowAddSub(false); setEditingSub(null); }}
+          onSaved={() => { setShowAddSub(false); setEditingSub(null); loadSubcategories(categories); }}
         />
       )}
 
@@ -830,10 +993,17 @@ const CategoryFormModal = ({ initial, onClose, onSaved }) => {
     sortOrder: initial?.sortOrder ?? 0,
     isActive: initial?.isActive ?? true,
   });
+  // Optional subcategories proposed together with a brand-new category.
+  // (Editing an existing category keeps using the standalone "Propose" flow.)
+  const [subs, setSubs] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [uploading, setUploading] = useState(false);
   const fileInput = useRef(null);
+
+  const addSubRow = () => setSubs((p) => [...p, ""]);
+  const updateSubRow = (i, v) => setSubs((p) => p.map((s, idx) => (idx === i ? v : s)));
+  const removeSubRow = (i) => setSubs((p) => p.filter((_, idx) => idx !== i));
 
   const setField = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
@@ -852,16 +1022,31 @@ const CategoryFormModal = ({ initial, onClose, onSaved }) => {
     if (!form.name.trim()) { setError("Name is required"); return; }
     setError(null);
     setSaving(true);
-    const payload = {
-      ...(initial ? { id: initial.id } : {}),
-      name: form.name.trim(),
-      iconUrl: form.iconUrl || null,
-      sortOrder: Number(form.sortOrder) || 0,
-      isActive: form.isActive,
-    };
-    const res = initial
-      ? await marketplaceService.updateMyItemCategory(payload)
-      : await marketplaceService.createMyItemCategory(payload);
+    // Clean, de-duplicated subcategory names (new-category flow only).
+    const subNames = !initial
+      ? Array.from(new Set(subs.map((s) => s.trim()).filter(Boolean).map((s) => s)))
+      : [];
+    let res;
+    if (!initial && subNames.length > 0) {
+      res = await marketplaceService.createMyItemCategoryWithSubs({
+        name: form.name.trim(),
+        iconUrl: form.iconUrl || null,
+        sortOrder: Number(form.sortOrder) || 0,
+        isActive: form.isActive,
+        subcategories: subNames,
+      });
+    } else {
+      const payload = {
+        ...(initial ? { id: initial.id } : {}),
+        name: form.name.trim(),
+        iconUrl: form.iconUrl || null,
+        sortOrder: Number(form.sortOrder) || 0,
+        isActive: form.isActive,
+      };
+      res = initial
+        ? await marketplaceService.updateMyItemCategory(payload)
+        : await marketplaceService.createMyItemCategory(payload);
+    }
     setSaving(false);
     if (res.success) onSaved();
     else setError(res.message || "Save failed");
@@ -886,20 +1071,47 @@ const CategoryFormModal = ({ initial, onClose, onSaved }) => {
             </div>
           </div>
           <div className="mkt-field">
-            <label className="mkt-field-label">Category name *</label>
+            <label className="mkt-field-label">Category name <span className="mkt-req">*</span></label>
             <input className="mkt-input" value={form.name} onChange={(e) => setField("name", e.target.value)} placeholder="e.g. Fruits, Dairy, Snacks" />
           </div>
           <div className="mkt-field">
             <label className="mkt-field-label">Sort order</label>
             <input className="mkt-input" inputMode="numeric" value={form.sortOrder} onChange={(e) => setField("sortOrder", e.target.value.replace(/\D/g, ""))} />
           </div>
+
+          {/* Optional: propose subcategories together with the new category.
+              The standalone "Propose a new subcategory" flow stays available too. */}
+          {!initial && (
+            <div className="mkt-field">
+              <label className="mkt-field-label">Subcategories (optional)</label>
+              <div style={{ fontSize: 11, color: "var(--cm-muted)", marginBottom: 8 }}>
+                Add one or more subcategories under this category. They go to admin for approval along with the category.
+              </div>
+              {subs.map((s, i) => (
+                <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                  <input
+                    className="mkt-input"
+                    style={{ flex: 1 }}
+                    value={s}
+                    placeholder={`Subcategory ${i + 1} e.g. Citrus`}
+                    onChange={(e) => updateSubRow(i, e.target.value)}
+                  />
+                  <button type="button" className="mkt-variant-del" onClick={() => removeSubRow(i)} aria-label="Remove subcategory">×</button>
+                </div>
+              ))}
+              <button type="button" onClick={addSubRow} className="mkt-btn mkt-btn--add" style={{ width: "auto", padding: "6px 12px", fontSize: 12 }}>
+                + Add subcategory
+              </button>
+            </div>
+          )}
+
           <div className="mkt-field" style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input type="checkbox" checked={form.isActive} onChange={(e) => setField("isActive", e.target.checked)} id="cat-active" />
             <label htmlFor="cat-active" className="mkt-field-label" style={{ margin: 0 }}>Active</label>
           </div>
           {error && <div className="mkt-error-text">{error}</div>}
           <button className="mkt-btn mkt-btn--primary" onClick={submit} disabled={saving}>
-            {saving ? "Saving…" : initial ? "Save changes" : "Add category"}
+            {saving ? "Saving…" : initial ? "Save changes" : (subs.some((s) => s.trim()) ? "Add category & subcategories" : "Add category")}
           </button>
         </div>
       </div>
@@ -912,7 +1124,9 @@ const CategoryFormModal = ({ initial, onClose, onSaved }) => {
 // 1. With categoryId prop (called from SubcategoriesPanel inside an expanded category)
 // 2. With categories prop (called from CategoriesTab "Add item subcategory" button — shows category dropdown)
 const SubcategoryFormModal = ({ categoryId: fixedCategoryId, categoryName: fixedCategoryName, categories, initial, onClose, onSaved }) => {
-  const [selectedCategoryId, setSelectedCategoryId] = useState(fixedCategoryId || "");
+  const [selectedCategoryId, setSelectedCategoryId] = useState(
+    fixedCategoryId || initial?.storeItemCategoryId?.id || initial?.categoryId || ""
+  );
   const selectedCategoryName = fixedCategoryName || (categories || []).find((c) => c.id === selectedCategoryId)?.name || "";
 
   const [form, setForm] = useState({
@@ -976,7 +1190,7 @@ const SubcategoryFormModal = ({ categoryId: fixedCategoryId, categoryName: fixed
           {/* Show category dropdown when opened from top-level (no fixedCategoryId) */}
           {!fixedCategoryId && categories && (
             <div className="mkt-field">
-              <label className="mkt-field-label">Parent category *</label>
+              <label className="mkt-field-label">Parent category <span className="mkt-req">*</span></label>
               <select
                 className="mkt-input"
                 value={selectedCategoryId}
@@ -1000,7 +1214,7 @@ const SubcategoryFormModal = ({ categoryId: fixedCategoryId, categoryName: fixed
             </div>
           </div>
           <div className="mkt-field">
-            <label className="mkt-field-label">Subcategory name *</label>
+            <label className="mkt-field-label">Subcategory name <span className="mkt-req">*</span></label>
             <input className="mkt-input" value={form.name} onChange={(e) => setField("name", e.target.value)} placeholder="e.g. Citrus, Leafy Greens" />
           </div>
           <div className="mkt-field">
@@ -1021,7 +1235,28 @@ const SubcategoryFormModal = ({ categoryId: fixedCategoryId, categoryName: fixed
   );
 };
 
-const ItemFormModal = ({ initial, onClose, onSaved }) => {
+// Sample values shown as placeholders so sellers know an attribute holds a
+// concrete value (Colour → Red), not another attribute name.
+const EXAMPLE_VALUES = {
+  colour: "Red", color: "Red", size: "Large", weight: "1 kg",
+  ram: "8 GB", storage: "128 GB", material: "Cotton", flavour: "Mango", flavor: "Mango",
+};
+
+// Common option *values* sellers mistakenly type into the *attribute* box.
+// e.g. naming the attribute "Black" instead of "Colour".
+const VALUE_LIKE_NAMES = {
+  black: "Colour", white: "Colour", blue: "Colour", red: "Colour", green: "Colour",
+  yellow: "Colour", grey: "Colour", gray: "Colour", pink: "Colour", purple: "Colour",
+  orange: "Colour", brown: "Colour", silver: "Colour", gold: "Colour",
+  small: "Size", medium: "Size", large: "Size", xl: "Size", xxl: "Size", "x-large": "Size",
+  s: "Size", m: "Size", l: "Size",
+  "1kg": "Weight", "500g": "Weight", "1 kg": "Weight", "500 g": "Weight", "5kg": "Weight", "5 kg": "Weight",
+  cotton: "Material", silk: "Material", wool: "Material", leather: "Material",
+};
+// Returns the suggested attribute name if the entered text looks like a value.
+const valueLikeAttr = (name) => VALUE_LIKE_NAMES[String(name || "").trim().toLowerCase()] || null;
+
+const ItemFormModal = ({ initial, allItems = [], onClose, onSaved }) => {
   const [form, setForm] = useState(() => ({
     name: initial?.name || "",
     description: initial?.description || "",
@@ -1058,6 +1293,7 @@ const ItemFormModal = ({ initial, onClose, onSaved }) => {
     }))
   );
   const [variantImgLoading, setVariantImgLoading] = useState(null);
+  const [scanOpen, setScanOpen] = useState(false);
 
   // Highlight services / assurances: [{ label, detail }]
   const parseJsonArr = (raw) => {
@@ -1070,15 +1306,49 @@ const ItemFormModal = ({ initial, onClose, onSaved }) => {
   const updateService = (i, k, val) => setServices((s) => s.map((x, idx) => (idx === i ? { ...x, [k]: val } : x)));
   const removeService = (i) => setServices((s) => s.filter((_, idx) => idx !== i));
 
-  // Offer cards: [{ title, description }]
+  // Offer cards: [{ title, description, discountType, discountValue, minPurchase }]
   const [offers, setOffers] = useState(() =>
-    parseJsonArr(initial?.offers).map((o) => ({ title: o.title || "", description: o.description || "" }))
+    parseJsonArr(initial?.offers).map((o) => ({
+      title: o.title || "",
+      description: o.description || "",
+      discountType: o.discountType || "flat",
+      discountValue: o.discountValue ?? "",
+      minPurchase: o.minPurchase ?? "",
+    }))
   );
-  const addOffer = () => setOffers((o) => [...o, { title: "", description: "" }]);
+  const addOffer = () => setOffers((o) => [...o, { title: "", description: "", discountType: "flat", discountValue: "", minPurchase: "" }]);
+
+  // Linked products: this item can be grouped with other already-listed products.
+  // On the customer front, opening one product shows the group as swap-able options.
+  const [groupedItemIds, setGroupedItemIds] = useState(() => {
+    const raw = (() => { try { const a = JSON.parse(initial?.groupedItemIds || "[]"); return Array.isArray(a) ? a : []; } catch { return []; } })();
+    return raw.map(Number).filter((n) => !Number.isNaN(n));
+  });
+  const [groupPickerQuery, setGroupPickerQuery] = useState("");
+  const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
+  const addGroupedItem = (id) => setGroupedItemIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
+  const removeGroupedItem = (id) => setGroupedItemIds((ids) => ids.filter((x) => x !== id));
+  // Every other product in this store (excluding the one being edited).
+  const otherItems = useMemo(
+    () => (allItems || []).filter((it) => it.id !== initial?.id),
+    [allItems, initial]
+  );
+  // Currently-grouped products, resolved to full objects for display.
+  const groupedItems = useMemo(() => {
+    const byId = new Map(otherItems.map((it) => [it.id, it]));
+    return groupedItemIds.map((id) => byId.get(id)).filter(Boolean);
+  }, [otherItems, groupedItemIds]);
+  // Unselected products matching the search — shown inside the add dropdown.
+  const groupCandidates = useMemo(() => {
+    const q = groupPickerQuery.trim().toLowerCase();
+    return otherItems
+      .filter((it) => !groupedItemIds.includes(it.id))
+      .filter((it) => !q || String(it.name || "").toLowerCase().includes(q));
+  }, [otherItems, groupedItemIds, groupPickerQuery]);
   const updateOffer = (i, k, val) => setOffers((o) => o.map((x, idx) => (idx === i ? { ...x, [k]: val } : x)));
   const removeOffer = (i) => setOffers((o) => o.filter((_, idx) => idx !== i));
 
-  const addDimension = () => setDimensions((d) => (d.length >= 3 ? d : [...d, ""]));
+  const addDimension = () => setDimensions((d) => [...d, ""]);
   const updateDimension = (i, val) => setDimensions((d) => d.map((x, idx) => (idx === i ? val : x)));
   const removeDimension = (i) =>
     setDimensions((d) => {
@@ -1215,11 +1485,23 @@ const ItemFormModal = ({ initial, onClose, onSaved }) => {
       })(),
       offers: (() => {
         const clean = offers
-          .map((o) => ({ title: String(o.title || "").trim(), description: String(o.description || "").trim() }))
-          .filter((o) => o.title)
-          .map((o) => (o.description ? o : { title: o.title }));
+          .map((o) => {
+            const out = { title: String(o.title || "").trim() };
+            const desc = String(o.description || "").trim();
+            if (desc) out.description = desc;
+            const val = o.discountValue === "" || o.discountValue == null ? null : Number(o.discountValue);
+            if (val != null && !Number.isNaN(val) && val > 0) {
+              out.discountType = o.discountType === "percent" ? "percent" : "flat";
+              out.discountValue = val;
+              const min = o.minPurchase === "" || o.minPurchase == null ? null : Number(o.minPurchase);
+              if (min != null && !Number.isNaN(min) && min > 0) out.minPurchase = min;
+            }
+            return out;
+          })
+          .filter((o) => o.title);
         return clean.length ? JSON.stringify(clean) : null;
       })(),
+      groupedItemIds: groupedItemIds.length ? JSON.stringify(groupedItemIds) : null,
       imageUrl: form.imageUrl || null,
       isAvailable: true,
       storeItemCategoryId: form.storeItemCategoryId ? { id: form.storeItemCategoryId } : null,
@@ -1235,6 +1517,12 @@ const ItemFormModal = ({ initial, onClose, onSaved }) => {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
+      {scanOpen && (
+        <BarcodeScannerModal
+          onDetected={(code) => { setField("barcode", code); setScanOpen(false); }}
+          onClose={() => setScanOpen(false)}
+        />
+      )}
       <div style={{ background: "var(--cm-bg)", width: "100%", maxWidth: 480, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "90vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
         <div className="mkt-header" style={{ position: "sticky", top: 0 }}>
           <button className="mkt-header-back" onClick={onClose}>×</button>
@@ -1252,7 +1540,7 @@ const ItemFormModal = ({ initial, onClose, onSaved }) => {
             </div>
           </div>
           <div className="mkt-field">
-            <label className="mkt-field-label">Name *</label>
+            <label className="mkt-field-label">Name <span className="mkt-req">*</span></label>
             <input className="mkt-input" value={form.name} onChange={(e) => setField("name", e.target.value)} />
           </div>
           <div className="mkt-field">
@@ -1260,7 +1548,7 @@ const ItemFormModal = ({ initial, onClose, onSaved }) => {
             <textarea className="mkt-textarea" value={form.description} onChange={(e) => setField("description", e.target.value)} />
           </div>
           <div className="mkt-field">
-            <label className="mkt-field-label">Selling price (₹) *</label>
+            <label className="mkt-field-label">Selling price (₹) <span className="mkt-req">*</span></label>
             <input className="mkt-input" inputMode="decimal" value={form.sellingPrice} onChange={(e) => setField("sellingPrice", e.target.value)} />
           </div>
           <div className="mkt-field">
@@ -1273,12 +1561,23 @@ const ItemFormModal = ({ initial, onClose, onSaved }) => {
           </div>
           <div style={{ display: "flex", gap: 10 }}>
             <div className="mkt-field" style={{ flex: 1 }}>
-              <label className="mkt-field-label">SKU</label>
+              <label className="mkt-field-label">SKU (Internal Tracking code)</label>
               <input className="mkt-input" value={form.sku} onChange={(e) => setField("sku", e.target.value)} />
             </div>
             <div className="mkt-field" style={{ flex: 1 }}>
               <label className="mkt-field-label">Barcode</label>
-              <input className="mkt-input" value={form.barcode} onChange={(e) => setField("barcode", e.target.value)} />
+              <div style={{ display: "flex", gap: 6 }}>
+                <input className="mkt-input" style={{ flex: 1 }} value={form.barcode} onChange={(e) => setField("barcode", e.target.value)} />
+                <button
+                  type="button"
+                  onClick={() => setScanOpen(true)}
+                  className="mkt-btn mkt-btn--secondary"
+                  style={{ width: "auto", padding: "0 12px", display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}
+                  aria-label="Scan barcode with camera"
+                >
+                  <FaCamera size={13} /> Scan
+                </button>
+              </div>
             </div>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
@@ -1341,30 +1640,56 @@ const ItemFormModal = ({ initial, onClose, onSaved }) => {
               Colour…) + per-variant price / MRP / stock / image. */}
           <div className="mkt-field">
             <label className="mkt-field-label">Variants &amp; options (optional)</label>
-            <div style={{ fontSize: 11, color: "var(--cm-muted)", marginBottom: 8 }}>
-              Group a product into buyable options like Size (1 kg / 5 kg) or Colour. Define the option
-              types first, then add each variant with its own price. Leave empty if the product has none.
+            <div style={{ fontSize: 11, color: "var(--cm-muted)", marginBottom: 10 }}>
+              Sell one product in multiple options that each have their own price — like a shirt in different colours or rice in different weights. Leave this empty if the product has just one option.
             </div>
 
-            {/* Option dimensions */}
+            {/* Step 1 — Option types (attributes) */}
             <div className="mkt-variant-dims">
-              {dimensions.map((d, i) => (
-                <div key={i} className="mkt-variant-dim-row">
-                  <input
-                    className="mkt-input"
-                    placeholder={`Option ${i + 1} name e.g. Size, Colour`}
-                    value={d}
-                    onChange={(e) => updateDimension(i, e.target.value)}
-                  />
-                  <button type="button" className="mkt-variant-del" onClick={() => removeDimension(i)} aria-label="Remove option type">×</button>
-                </div>
-              ))}
-              {dimensions.length < 3 && (
-                <button type="button" onClick={addDimension} className="mkt-btn mkt-btn--secondary" style={{ width: "auto", padding: "5px 10px", fontSize: 12 }}>
-                  + Add option type
-                </button>
-              )}
+              <div className="mkt-field-label" style={{ marginBottom: 4 }}>Step 1 · Attribute name</div>
+              <div style={{ fontSize: 11, color: "var(--cm-muted)", marginBottom: 8 }}>
+                What changes between options? Enter the <b>type</b> here, not the value — e.g. <b>Colour</b> or <b>Size</b> (not “Black” or “1 kg”).
+              </div>
+              {dimensions.map((d, i) => {
+                const suggest = valueLikeAttr(d);
+                return (
+                  <div key={i} style={{ marginBottom: 6 }}>
+                    <div className="mkt-variant-dim-row">
+                      <input
+                        className="mkt-input"
+                        style={suggest ? { borderColor: "#f59e0b" } : undefined}
+                        placeholder="e.g. Colour, Size, Weight"
+                        value={d}
+                        onChange={(e) => updateDimension(i, e.target.value)}
+                      />
+                      <button type="button" className="mkt-variant-del" onClick={() => removeDimension(i)} aria-label="Remove attribute">×</button>
+                    </div>
+                    {suggest && (
+                      <div style={{ fontSize: 11, color: "#b45309", marginTop: 3, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <span>“{d.trim()}” looks like a value. Did you mean the attribute <b>{suggest}</b>, with “{d.trim()}” as a variant?</span>
+                        <button
+                          type="button"
+                          onClick={() => updateDimension(i, suggest)}
+                          style={{ background: "#fef3c7", border: "1px solid #f59e0b", color: "#92400e", borderRadius: 6, padding: "1px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                        >
+                          Use “{suggest}”
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <button type="button" onClick={addDimension} className="mkt-btn mkt-btn--add" style={{ width: "auto", padding: "5px 10px", fontSize: 12 }}>
+                + Add another attribute
+              </button>
             </div>
+
+            {/* Step 2 — Variants */}
+            {dimensions.filter(Boolean).length > 0 && (
+              <div className="mkt-field-label" style={{ margin: "12px 0 6px" }}>
+                Step 2 · Add each option (the actual values + price)
+              </div>
+            )}
 
             {/* Variant rows */}
             {variants.map((v, i) => (
@@ -1376,20 +1701,22 @@ const ItemFormModal = ({ initial, onClose, onSaved }) => {
                 {dimensions.filter(Boolean).length > 0 ? (
                   <div className="mkt-variant-opts">
                     {dimensions.filter(Boolean).map((dim) => (
-                      <input
-                        key={dim}
-                        className="mkt-input"
-                        placeholder={dim}
-                        value={v.options?.[dim] || ""}
-                        onChange={(e) => updateVariantOption(i, dim, e.target.value)}
-                      />
+                      <div key={dim} style={{ flex: 1, minWidth: 120 }}>
+                        <label className="mkt-field-label" style={{ display: "block", marginBottom: 3 }}>{dim}</label>
+                        <input
+                          className="mkt-input"
+                          placeholder={`e.g. ${EXAMPLE_VALUES[dim.trim().toLowerCase()] || "value"}`}
+                          value={v.options?.[dim] || ""}
+                          onChange={(e) => updateVariantOption(i, dim, e.target.value)}
+                        />
+                      </div>
                     ))}
                   </div>
                 ) : (
                   <input className="mkt-input" placeholder="Label e.g. 500g" value={v.label} onChange={(e) => updateVariant(i, "label", e.target.value)} />
                 )}
                 <div className="mkt-variant-nums">
-                  <input className="mkt-input" inputMode="decimal" placeholder="₹ price *" value={v.price} onChange={(e) => updateVariant(i, "price", e.target.value)} />
+                  <input className="mkt-input" inputMode="decimal" placeholder="Price *" value={v.price} onChange={(e) => updateVariant(i, "price", e.target.value)} />
                   <input className="mkt-input" inputMode="decimal" placeholder="₹ MRP" value={v.mrp} onChange={(e) => updateVariant(i, "mrp", e.target.value)} />
                   <input className="mkt-input" inputMode="numeric" placeholder="Stock" value={v.stock} onChange={(e) => updateVariant(i, "stock", e.target.value.replace(/\D/g, ""))} />
                 </div>
@@ -1400,9 +1727,88 @@ const ItemFormModal = ({ initial, onClose, onSaved }) => {
                 </label>
               </div>
             ))}
-            <button type="button" onClick={addVariant} className="mkt-btn mkt-btn--secondary" style={{ width: "auto", padding: "6px 12px", fontSize: 12 }}>
+            <button type="button" onClick={addVariant} className="mkt-btn mkt-btn--add" style={{ width: "auto", padding: "6px 12px", fontSize: 12 }}>
               + Add variant
             </button>
+          </div>
+
+          {/* Group with other already-listed products. Customer opens one product
+              and can swap between every product in the group. */}
+          <div className="mkt-field">
+            <label className="mkt-field-label">Group with other products (optional)</label>
+            <div style={{ fontSize: 11, color: "var(--cm-muted)", marginBottom: 8 }}>
+              Pick other products already listed in your store. On the customer side, opening any one of them shows the whole group as swap-able options below the product.
+            </div>
+            {otherItems.length === 0 ? (
+              <div style={{ fontSize: 12, color: "var(--cm-muted)", padding: "10px 12px", border: "1px dashed var(--cm-line)", borderRadius: 10 }}>
+                {initial
+                  ? "This is your only product so far. Add more products, then come back here to group them."
+                  : "You don’t have any other products yet. Save this one, add a few more, then edit any product to group them together."}
+              </div>
+            ) : (
+              <>
+                {/* Selected products as removable rows. */}
+                {groupedItems.map((it) => (
+                  <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: "1px solid var(--cm-line)", borderRadius: 10, marginBottom: 6 }}>
+                    <span style={{ width: 32, height: 32, borderRadius: 6, overflow: "hidden", flexShrink: 0, background: "var(--cm-card)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {it.imageUrl ? <img src={it.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : null}
+                    </span>
+                    <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{it.name}</span>
+                    <span style={{ fontSize: 12, color: "var(--cm-muted)" }}>₹{Number(it.sellingPrice || 0).toFixed(0)}</span>
+                    <button type="button" className="mkt-variant-del" onClick={() => removeGroupedItem(it.id)} aria-label="Remove from group">×</button>
+                  </div>
+                ))}
+
+                {/* + Add product → searchable dropdown of unselected products. */}
+                {!groupDropdownOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => { setGroupPickerQuery(""); setGroupDropdownOpen(true); }}
+                    className="mkt-btn mkt-btn--add"
+                    style={{ width: "auto", padding: "6px 12px", fontSize: 12 }}
+                  >
+                    + Add product
+                  </button>
+                ) : (
+                  <div style={{ border: "1px solid var(--cm-line)", borderRadius: 10, overflow: "hidden" }}>
+                    <div style={{ display: "flex", gap: 6, padding: 8, borderBottom: "1px solid var(--cm-line)" }}>
+                      <input
+                        className="mkt-input"
+                        autoFocus
+                        style={{ flex: 1 }}
+                        placeholder="Search product to add…"
+                        value={groupPickerQuery}
+                        onChange={(e) => setGroupPickerQuery(e.target.value)}
+                      />
+                      <button type="button" className="mkt-variant-del" onClick={() => setGroupDropdownOpen(false)} aria-label="Close">×</button>
+                    </div>
+                    <div style={{ maxHeight: 240, overflowY: "auto" }}>
+                      {groupCandidates.length === 0 ? (
+                        <div style={{ fontSize: 12, color: "var(--cm-muted)", padding: "10px 12px" }}>
+                          {groupPickerQuery.trim() ? "No matching products." : "All your products are already grouped."}
+                        </div>
+                      ) : (
+                        groupCandidates.map((it) => (
+                          <button
+                            type="button"
+                            key={it.id}
+                            onClick={() => { addGroupedItem(it.id); setGroupPickerQuery(""); }}
+                            style={{ display: "flex", width: "100%", alignItems: "center", gap: 10, padding: "8px 10px", borderBottom: "1px solid var(--cm-line)", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
+                          >
+                            <span style={{ width: 32, height: 32, borderRadius: 6, overflow: "hidden", flexShrink: 0, background: "var(--cm-card)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              {it.imageUrl ? <img src={it.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : null}
+                            </span>
+                            <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{it.name}</span>
+                            <span style={{ fontSize: 12, color: "var(--cm-muted)" }}>₹{Number(it.sellingPrice || 0).toFixed(0)}</span>
+                            <FaPlus size={11} color="var(--cm-accent, #007BFF)" />
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           {/* Highlight services / assurances (e.g. 1 Year Warranty, Free Delivery). */}
@@ -1421,7 +1827,7 @@ const ItemFormModal = ({ initial, onClose, onSaved }) => {
                 <input className="mkt-input" placeholder="Detail (optional) e.g. Brand warranty" value={s.detail} onChange={(e) => updateService(i, "detail", e.target.value)} />
               </div>
             ))}
-            <button type="button" onClick={addService} className="mkt-btn mkt-btn--secondary" style={{ width: "auto", padding: "6px 12px", fontSize: 12 }}>
+            <button type="button" onClick={addService} className="mkt-btn mkt-btn--add" style={{ width: "auto", padding: "6px 12px", fontSize: 12 }}>
               + Add service
             </button>
           </div>
@@ -1430,7 +1836,7 @@ const ItemFormModal = ({ initial, onClose, onSaved }) => {
           <div className="mkt-field">
             <label className="mkt-field-label">Offers (optional)</label>
             <div style={{ fontSize: 11, color: "var(--cm-muted)", marginBottom: 8 }}>
-              Promotional cards shown on the product, like “Bank Offer” or “No Cost EMI” with a short description.
+              Promotional cards shown on the product, like “Bank Offer” or “No Cost EMI”. Add a discount rule (flat ₹ or percent %, with optional minimum purchase) so the saving is applied.
             </div>
             {offers.map((o, i) => (
               <div key={i} className="mkt-variant-card">
@@ -1439,10 +1845,19 @@ const ItemFormModal = ({ initial, onClose, onSaved }) => {
                   <button type="button" className="mkt-variant-del" onClick={() => removeOffer(i)} aria-label="Remove offer">×</button>
                 </div>
                 <input className="mkt-input" style={{ marginBottom: 6 }} placeholder="Offer title e.g. Bank Offer" value={o.title} onChange={(e) => updateOffer(i, "title", e.target.value)} />
-                <textarea className="mkt-input" rows={2} placeholder="Description e.g. Upto ₹50 off on select cards" value={o.description} onChange={(e) => updateOffer(i, "description", e.target.value)} />
+                <textarea className="mkt-input" rows={2} style={{ marginBottom: 6 }} placeholder="Description e.g. Upto ₹50 off on select cards" value={o.description} onChange={(e) => updateOffer(i, "description", e.target.value)} />
+                <label className="mkt-field-label" style={{ fontSize: 11 }}>Discount rule</label>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <select className="mkt-input" style={{ flex: "0 0 110px" }} value={o.discountType} onChange={(e) => updateOffer(i, "discountType", e.target.value)}>
+                    <option value="flat">Flat ₹</option>
+                    <option value="percent">Percent %</option>
+                  </select>
+                  <input className="mkt-input" style={{ flex: 1 }} inputMode="decimal" placeholder={o.discountType === "percent" ? "e.g. 10 (%)" : "e.g. 50 (₹)"} value={o.discountValue} onChange={(e) => updateOffer(i, "discountValue", e.target.value)} />
+                  <input className="mkt-input" style={{ flex: 1 }} inputMode="decimal" placeholder="Min ₹ (opt)" value={o.minPurchase} onChange={(e) => updateOffer(i, "minPurchase", e.target.value)} />
+                </div>
               </div>
             ))}
-            <button type="button" onClick={addOffer} className="mkt-btn mkt-btn--secondary" style={{ width: "auto", padding: "6px 12px", fontSize: 12 }}>
+            <button type="button" onClick={addOffer} className="mkt-btn mkt-btn--add" style={{ width: "auto", padding: "6px 12px", fontSize: 12 }}>
               + Add offer
             </button>
           </div>

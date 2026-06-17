@@ -1669,7 +1669,7 @@
    3. SERVICES PAGE
    ═══════════════════════════════════════════════════════════════ */
 
-.cm-services-page { display: grid; gap: 8px; padding-bottom: 140px; }
+.cm-services-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding-bottom: 140px; overflow-x: hidden; }
 
 .cm-install-banner {
   display: flex;
@@ -1818,19 +1818,27 @@
 
 .cm-search-bar-row {
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: 12px;
+  gap: 14px;
+  padding: 15px 20px;
+  border-radius: 22px;
   border: 1px solid #2A2A2A;
   background: #1A1A1A;
-  transition: border-color 0.3s, box-shadow 0.3s;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.22), 0 3px 8px rgba(0, 0, 0, 0.12);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  will-change: transform;
+}
+
+.cm-search-bar-row:hover {
+  transform: translateY(-1px);
 }
 
 .cm-search-bar-row.is-focused {
+  transform: translateY(-2px);
   border-color: #007BFF;
-  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+  box-shadow: 0 0 0 4px rgba(0, 123, 255, 0.12), 0 14px 30px rgba(0, 0, 0, 0.26);
 }
 
 .cm-search-field-input {
@@ -1848,6 +1856,18 @@
 .cm-search-field-input::placeholder { color: #6B6B6B; }
 
 .cm-bc-logo { height: 40px; width: auto; flex-shrink: 0; object-fit: contain; }
+
+/* Clickable Bharat Connect entry sitting inline beside the search bar */
+.cm-bc-entry--btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.cm-bc-entry--btn:hover { transform: translateY(-1px); }
+.cm-bc-entry--btn:active { transform: scale(0.94); opacity: 0.85; }
 /* Bharat Connect "B" mnemonic at the entry of the Pay Bills section, with the
    mandated "Bill Pay" caption below it (NPCI guideline). */
 .cm-bc-entry { display: flex; flex-direction: column; align-items: center; gap: 1px; flex-shrink: 0; }
@@ -8155,6 +8175,7 @@
 /* ───────────── Services screen biller-search results ───────────── */
 .cm-biller-results {
   padding: 4px 4px 12px;
+  min-width: 0;
   animation: cm-svc-fade-in 0.25s ease;
 }
 .cm-biller-list {
@@ -8162,6 +8183,7 @@
   flex-direction: column;
   gap: 6px;
   margin-top: 8px;
+  min-width: 0;
 }
 .cm-biller-row {
   display: flex;
@@ -8175,6 +8197,9 @@
   transition: transform 0.15s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   text-align: left;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 .cm-biller-row:hover {
   border-color: rgba(64, 224, 208, 0.35);
@@ -9060,10 +9085,39 @@
 }
 
 /* Search bar */
+/* Premium elevated (soft 3D) search bar — light theme.
+   Directional drop shadow (below only) + bright top edge = clearly raised, not sunken. */
 .theme-light .cm-search-bar-row {
-  background: #FFFFFF;
-  border-color: #E5E7EB;
+  transform: translateY(-2px);
+  background: linear-gradient(180deg, #ffffff 0%, #f4f8ff 100%);
+  border-color: rgba(210, 216, 228, 0.7);
+  border-top-color: rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 16px 28px -8px rgba(31, 45, 75, 0.22),
+    0 6px 12px -4px rgba(31, 45, 75, 0.12),
+    inset 0 2px 0 rgba(255, 255, 255, 1);
 }
+
+.theme-light .cm-search-bar-row:hover {
+  transform: translateY(-4px);
+  box-shadow:
+    0 22px 36px -8px rgba(31, 45, 75, 0.26),
+    0 8px 16px -4px rgba(31, 45, 75, 0.14),
+    inset 0 2px 0 rgba(255, 255, 255, 1);
+}
+
+.theme-light .cm-search-bar-row.is-focused {
+  transform: translateY(-4px);
+  border-color: rgba(34, 193, 215, 0.55);
+  box-shadow:
+    0 22px 36px -8px rgba(31, 45, 75, 0.26),
+    0 8px 16px -4px rgba(31, 45, 75, 0.14),
+    0 0 0 4px rgba(34, 193, 215, 0.10),
+    inset 0 2px 0 rgba(255, 255, 255, 1);
+}
+
+.theme-light .cm-search-field-input { color: #252b3d; }
+.theme-light .cm-search-field-input::placeholder { color: #9ca3b2; opacity: 1; }
 
 .theme-light .cm-search-field-input {
   color: #1A1A2E;
@@ -9451,7 +9505,7 @@
   content: "";
   position: absolute;
   inset: -1px;
-  border-radius: 12px;
+  border-radius: 22px;
   background: linear-gradient(90deg, #40E0D0, #007BFF, #40E0D0);
   background-size: 200% auto;
   opacity: 0;
@@ -11910,7 +11964,9 @@
    ═══════════════════════════════════════════════════════════════ */
 
 .cm-screen-page { min-height: 100vh; }
-.cm-search-between { padding: 8px 16px; }
+/* No horizontal padding so the search bar's left/right edges line up with the
+   slider and Quick Access box (both sit flush at the page edge). */
+.cm-search-between { padding: 8px 0; }
 
 /* When searching — pack content at top, no gap between search bar and results */
 .cm-services-page.is-searching {
@@ -18517,10 +18573,6 @@
   .cm-plans-skeleton {
     padding-left: 0;
     padding-right: 0;
-  }
-
-  .cm-search-with-bc {
-    gap: 18px;
   }
 
   .cm-search-bar-row,

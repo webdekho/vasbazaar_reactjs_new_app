@@ -357,7 +357,7 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
         {step === 0 && (
           <>
             <div className="mkt-field">
-              <label className="mkt-field-label">Business name *</label>
+              <label className="mkt-field-label">Business name <span className="mkt-req">*</span></label>
               <input className="mkt-input" value={form.businessName} onChange={(e) => setField("businessName", e.target.value)} placeholder="e.g. Sharma General Store" />
             </div>
             <div className="mkt-field">
@@ -365,7 +365,7 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
               <input className="mkt-input" value={form.ownerName} onChange={(e) => setField("ownerName", e.target.value)} />
             </div>
             <div className="mkt-field">
-              <label className="mkt-field-label">Business mobile *</label>
+              <label className="mkt-field-label">Business mobile <span className="mkt-req">*</span></label>
               <input className="mkt-input" inputMode="numeric" value={form.mobile} onChange={(e) => setField("mobile", e.target.value.replace(/\D/g, "").slice(0, 10))} />
             </div>
             <div className="mkt-field">
@@ -391,7 +391,7 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
         {step === 1 && (
           <>
             <div className="mkt-field">
-              <label className="mkt-field-label">Address line 1 *</label>
+              <label className="mkt-field-label">Address line 1 <span className="mkt-req">*</span></label>
               <input className="mkt-input" value={form.addressLine1} onChange={(e) => setField("addressLine1", e.target.value)} />
             </div>
             <div className="mkt-field">
@@ -399,15 +399,15 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
               <input className="mkt-input" value={form.addressLine2} onChange={(e) => setField("addressLine2", e.target.value)} />
             </div>
             <div className="mkt-field">
-              <label className="mkt-field-label">City *</label>
+              <label className="mkt-field-label">City <span className="mkt-req">*</span></label>
               <input className="mkt-input" value={form.city} onChange={(e) => setField("city", e.target.value)} />
             </div>
             <div className="mkt-field">
-              <label className="mkt-field-label">State *</label>
+              <label className="mkt-field-label">State <span className="mkt-req">*</span></label>
               <input className="mkt-input" value={form.state} onChange={(e) => setField("state", e.target.value)} />
             </div>
             <div className="mkt-field">
-              <label className="mkt-field-label">Pincode *</label>
+              <label className="mkt-field-label">Pincode <span className="mkt-req">*</span></label>
               <input className="mkt-input" inputMode="numeric" value={form.pincode} onChange={(e) => setField("pincode", e.target.value.replace(/\D/g, "").slice(0, 6))} />
             </div>
             <button type="button" className="mkt-btn mkt-btn--secondary" onClick={captureLocation} disabled={geoLoading}>
@@ -465,7 +465,7 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
               </div>
             </div>
             <div className="mkt-field">
-              <label className="mkt-field-label">Delivery time (minutes) *</label>
+              <label className="mkt-field-label">Delivery time (minutes) <span className="mkt-req">*</span></label>
               <input className="mkt-input" inputMode="numeric" value={form.deliveryTimeMinutes} onChange={(e) => setField("deliveryTimeMinutes", e.target.value.replace(/\D/g, ""))} />
             </div>
             <div className="mkt-field">
@@ -500,7 +500,7 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
               <>
                 <div className="mkt-field" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   <div>
-                    <label className="mkt-field-label">Open time *</label>
+                    <label className="mkt-field-label">Open time <span className="mkt-req">*</span></label>
                     <input
                       type="time"
                       className="mkt-input"
@@ -509,7 +509,7 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
                     />
                   </div>
                   <div>
-                    <label className="mkt-field-label">Close time *</label>
+                    <label className="mkt-field-label">Close time <span className="mkt-req">*</span></label>
                     <input
                       type="time"
                       className="mkt-input"

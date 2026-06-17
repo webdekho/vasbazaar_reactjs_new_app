@@ -33,12 +33,14 @@ export const serviceBazaarService = {
   // ---- Discovery ----
   getCategories: () => authGet(`${BASE}/categories`),
 
-  searchProviders: ({ categoryId, pincode, city, search, pageNumber = 0, pageSize = 10 } = {}) =>
+  searchProviders: ({ categoryId, pincode, city, search, lat, lng, radiusKm, pageNumber = 0, pageSize = 10 } = {}) =>
     authGet(`${BASE}/providers`, {
       ...(categoryId ? { categoryId } : {}),
       ...(pincode ? { pincode } : {}),
       ...(city ? { city } : {}),
       ...(search ? { search } : {}),
+      ...(lat != null && lng != null ? { lat, lng } : {}),
+      ...(radiusKm ? { radiusKm } : {}),
       pageNumber,
       pageSize,
     }),
@@ -60,6 +62,9 @@ export const serviceBazaarService = {
 
   checkBookingPayment: (id) => authGet(`${BASE}/bookings/${id}/check-payment`),
 
+  // Owner-only: the live Start/End service OTP to read out to the provider.
+  getBookingOtp: (id) => authGet(`${BASE}/bookings/${id}/otp`),
+
   cancelBooking: (id, reason) => authDelete(`${BASE}/bookings/${id}`, { ...(reason ? { reason } : {}) }),
 
   // ---- Reviews ----
@@ -79,6 +84,14 @@ export const serviceBazaarService = {
 
   updateProviderBookingStatus: (id, status) =>
     authPut(`${BASE}/me/provider/bookings/${id}/status?status=${encodeURIComponent(status)}`, {}),
+
+  // Doorstep engine — provider live journey + Start/End OTP validation.
+  updateProviderFulfillment: (id, stage) =>
+    authPut(`${BASE}/me/provider/bookings/${id}/fulfillment?stage=${encodeURIComponent(stage)}`, {}),
+
+  providerStartService: (id, otp) => authPost(`${BASE}/me/provider/bookings/${id}/start`, { otp }),
+
+  providerCompleteService: (id, otp) => authPost(`${BASE}/me/provider/bookings/${id}/complete`, { otp }),
 
   // ---- Media ----
   uploadImage,

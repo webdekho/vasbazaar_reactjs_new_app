@@ -90,6 +90,10 @@ export const marketplaceService = {
 
   createMyItemCategory: (payload) => authPost("/api/customer/marketplace/store/my/item-categories", payload),
 
+  // Propose a category plus one or more subcategories in a single call.
+  createMyItemCategoryWithSubs: (payload) =>
+    authPost("/api/customer/marketplace/store/my/item-categories/with-subs", payload),
+
   updateMyItemCategory: (payload) => authPut("/api/customer/marketplace/store/my/item-categories", payload),
 
   deleteMyItemCategory: (id) => authDelete(`/api/customer/marketplace/store/my/item-categories/${id}`),
@@ -136,6 +140,38 @@ export const marketplaceService = {
 
   checkOrderPayment: (orderId) =>
     authGet(`/api/customer/marketplace/orders/${orderId}/check-payment`),
+
+  // ===== Recurring subscriptions =====
+  createSubscription: (payload) => authPost("/api/customer/marketplace/subscriptions", payload),
+
+  getMySubscriptions: () => authGet("/api/customer/marketplace/subscriptions/my"),
+
+  toggleSubscription: (id, active) =>
+    authPut(`/api/customer/marketplace/subscriptions/${id}/active?active=${active}`, {}),
+
+  cancelSubscription: (id) => authDelete(`/api/customer/marketplace/subscriptions/${id}`),
+
+  // Modify an existing subscription's cadence/time/payment/dates.
+  updateSubscription: (id, payload) =>
+    authPut(`/api/customer/marketplace/subscriptions/${id}`, payload),
+
+  // One-time move of the next delivery to { date, time }.
+  rescheduleSubscription: (id, payload) =>
+    authPost(`/api/customer/marketplace/subscriptions/${id}/reschedule`, payload),
+
+  // ===== Delivery slots =====
+  getStoreDeliverySlots: (storeId) => authGet(`/api/customer/marketplace/stores/${storeId}/delivery-slots`),
+
+  getMyDeliverySlots: () => authGet("/api/customer/marketplace/store/my/delivery-slots"),
+
+  createMyDeliverySlot: (payload) => authPost("/api/customer/marketplace/store/my/delivery-slots", payload),
+
+  updateMyDeliverySlot: (payload) => authPut("/api/customer/marketplace/store/my/delivery-slots", payload),
+
+  deleteMyDeliverySlot: (id) => authDelete(`/api/customer/marketplace/store/my/delivery-slots/${id}`),
+
+  toggleMyDeliverySlot: (id, isActive) =>
+    authPut(`/api/customer/marketplace/store/my/delivery-slots/${id}/toggle-active?isActive=${isActive}`, {}),
 
   // ===== Ratings & Reviews =====
   getStoreReviews: (storeId, { pageNumber = 0, pageSize = 10 } = {}) =>

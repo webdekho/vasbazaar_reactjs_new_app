@@ -136,6 +136,34 @@ const MarketplaceHomeScreen = () => {
   // denied/inaccurate location can still browse stores in any area.
   const [selectedLoc, setSelectedLoc] = useState(readSelectedLocation);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Human-readable name for the device GPS position (reverse-geocoded).
+  const [gpsLabel, setGpsLabel] = useState("");
+
+  // Reverse-geocode the device GPS coords into a place name so the chip shows
+  // e.g. "Kothrud, Pune" instead of a static "Current location".
+  useEffect(() => {
+    if (!geoCoords) { setGpsLabel(""); return; }
+    const ctrl = new AbortController();
+    const params = new URLSearchParams({
+      lat: String(geoCoords.lat),
+      lon: String(geoCoords.lng),
+      format: "jsonv2",
+      addressdetails: "1",
+      zoom: "16",
+    });
+    fetch(`https://nominatim.openstreetmap.org/reverse?${params.toString()}`, { signal: ctrl.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        const a = j?.address || {};
+        const primary = a.neighbourhood || a.suburb || a.village || a.town || a.city_district || a.road || a.amenity;
+        const city = a.city || a.town || a.village || a.county;
+        const label = [primary, city].filter(Boolean).filter((v, i, arr) => arr.indexOf(v) === i).join(", ")
+          || j?.display_name?.split(",").slice(0, 2).join(", ");
+        if (label) setGpsLabel(label);
+      })
+      .catch(() => { /* keep fallback label */ });
+    return () => ctrl.abort();
+  }, [geoCoords]);
 
   const coords = useMemo(() => {
     if (selectedLoc) return { lat: selectedLoc.lat, lng: selectedLoc.lng };
@@ -146,10 +174,10 @@ const MarketplaceHomeScreen = () => {
 
   const locationLabel = useMemo(() => {
     if (selectedLoc?.label) return selectedLoc.label;
-    if (geoCoords) return "Current location";
+    if (geoCoords) return gpsLabel || "Current location";
     if (geoError) return "Set location";
     return "Detecting…";
-  }, [selectedLoc, geoCoords, geoError]);
+  }, [selectedLoc, geoCoords, geoError, gpsLabel]);
 
   const handleSelectLocation = (place) => {
     const next = { lat: place.lat, lng: place.lng, label: place.label };
@@ -350,23 +378,14 @@ const MarketplaceHomeScreen = () => {
       {/* Categories — modern morphic rail */}
       {categories.length > 0 && (
         <div className="mkt-section mkt-cat-section">
-          <div className="mkt-section-head">
-            <h2 className="mkt-section-title">
-              Browse categories
-              <span className="mkt-cat-section-count">{categories.length + 1}</span>
-            </h2>
-          </div>
-          <div className="mkt-cat-rail mkt-cat-rail--modern">
+          <div className="mkt-cat-chip-rail">
             <button
-              className={`mkt-cat-tile mkt-cat-tile--modern${activeCategoryId == null ? " is-active" : ""}`}
+              className={`mkt-cat-chip${activeCategoryId == null ? " is-active" : ""}`}
               onClick={() => setActiveCategoryId(null)}
               style={{ "--cat-accent": "#6366f1" }}
             >
-              <span className="mkt-cat-tile-avatar">
-                <span className="mkt-cat-tile-ring" aria-hidden="true" />
-                <FaShoppingBag size={20} />
-              </span>
-              <span className="mkt-cat-tile-label">All</span>
+              <FaShoppingBag size={13} />
+              <span>All</span>
             </button>
             {categories.map((cat) => {
               const isActive = activeCategoryId === cat.id;
@@ -375,15 +394,12 @@ const MarketplaceHomeScreen = () => {
               return (
                 <button
                   key={cat.id}
-                  className={`mkt-cat-tile mkt-cat-tile--modern${isActive ? " is-active" : ""}`}
+                  className={`mkt-cat-chip${isActive ? " is-active" : ""}`}
                   onClick={() => setActiveCategoryId(cat.id)}
                   style={{ "--cat-accent": accent }}
                 >
-                  <span className="mkt-cat-tile-avatar">
-                    <span className="mkt-cat-tile-ring" aria-hidden="true" />
-                    {cat.iconUrl ? <img src={cat.iconUrl} alt="" /> : <Icon size={20} />}
-                  </span>
-                  <span className="mkt-cat-tile-label">{cat.name}</span>
+                  {cat.iconUrl ? <img src={cat.iconUrl} alt="" className="mkt-cat-chip-img" /> : <Icon size={13} />}
+                  <span>{cat.name}</span>
                 </button>
               );
             })}

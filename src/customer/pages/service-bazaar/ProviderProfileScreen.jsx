@@ -66,18 +66,26 @@ export default function ProviderProfileScreen() {
     } catch (_) { /* user dismissed share sheet */ }
   };
 
-  const submitBooking = async (paymentMethod) => {
+  const submitBooking = async () => {
     if (!bookingFor) return;
+    if (!form.scheduledAt) {
+      showToast("Please select a preferred date and time", "error");
+      return;
+    }
+    if (!form.serviceAddress.trim()) {
+      showToast("Service address is required", "error");
+      return;
+    }
     setSubmitting(true);
     const payload = {
       serviceOfferingId: bookingFor.id,
       bookingType: "REQUEST",
-      scheduledAt: form.scheduledAt ? form.scheduledAt : null,
+      scheduledAt: form.scheduledAt,
       serviceAddress: form.serviceAddress,
       customerNotes: form.customerNotes,
       subtotal: bookingFor.basePrice,
-      paymentMethod,
-      ...(paymentMethod === "ONLINE" ? { returnUrl: buildServiceReturnUrl() } : {}),
+      paymentMethod: "ONLINE",
+      returnUrl: buildServiceReturnUrl(),
     };
     const res = await serviceBazaarService.createBooking(payload);
     if (!res.success) {
@@ -90,21 +98,14 @@ export default function ProviderProfileScreen() {
     setBookingFor(null);
     setSubmitting(false);
 
-    if (paymentMethod === "ONLINE") {
-      const paymentUrl = extractPaymentUrl(res) || data.paymentUrl;
-      if (paymentUrl) {
-        await savePaymentContext({ flow: "serviceBazaar", bookingId: data.bookingId, bookingNo: data.bookingNo, amount: data.totalAmount });
-        await openPaymentGateway(paymentUrl);
-        return;
-      }
-      // Session couldn't be created — booking exists, let them pay/track from detail.
-      showToast("Couldn't start payment. You can retry from the booking.", "error");
-      navigate(`/customer/app/service-bazaar/bookings/${data.bookingId}`);
+    const paymentUrl = extractPaymentUrl(res) || data.paymentUrl;
+    if (paymentUrl) {
+      await savePaymentContext({ flow: "serviceBazaar", bookingId: data.bookingId, bookingNo: data.bookingNo, amount: data.totalAmount });
+      await openPaymentGateway(paymentUrl);
       return;
     }
 
-    showToast("Booking requested successfully", "success");
-    navigate(`/customer/app/service-bazaar/bookings/${data.bookingId}`);
+    showToast("Couldn't start payment. Please try again.", "error");
   };
 
   if (loading) return (
@@ -205,11 +206,8 @@ export default function ProviderProfileScreen() {
               <label>Notes (optional)</label>
               <textarea rows={2} value={form.customerNotes} onChange={(e) => setForm({ ...form, customerNotes: e.target.value })} />
             </div>
-            <button className="sb-btn block" disabled={submitting} onClick={() => submitBooking("ONLINE")}>
+            <button className="sb-btn block" disabled={submitting} onClick={submitBooking}>
               {submitting ? "Please wait…" : `Pay ₹${Number(bookingFor.basePrice || 0).toFixed(0)} online`}
-            </button>
-            <button className="sb-btn ghost block" style={{ marginTop: 8 }} disabled={submitting} onClick={() => submitBooking("AFTER")}>
-              Pay after service
             </button>
             <button className="sb-btn ghost block" style={{ marginTop: 8, border: "none" }} onClick={() => setBookingFor(null)}>Cancel</button>
           </div>

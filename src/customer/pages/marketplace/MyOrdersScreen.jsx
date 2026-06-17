@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaStore, FaChevronRight, FaBook } from "react-icons/fa";
+import { FaArrowLeft, FaStore, FaChevronRight, FaBook, FaSyncAlt } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
 import "./marketplace.css";
 
@@ -46,6 +46,12 @@ const MyOrdersScreen = () => {
           style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--cm-primary, #14b8a6)", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}
         >
           <FaBook size={13} /> My Khata
+        </button>
+        <button
+          onClick={() => navigate("/customer/app/marketplace/subscriptions")}
+          style={{ marginLeft: 14, background: "none", border: "none", color: "var(--cm-primary, #14b8a6)", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}
+        >
+          <FaSyncAlt size={12} /> Subscriptions
         </button>
       </div>
 
