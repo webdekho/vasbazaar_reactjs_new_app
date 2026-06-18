@@ -38,7 +38,7 @@ export default function ProviderHubScreen() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef(null);
   const [offeringModal, setOfferingModal] = useState(false);
-  const [oForm, setOForm] = useState({ title: "", description: "", basePrice: "", durationMinutes: "" });
+  const [oForm, setOForm] = useState({ id: null, title: "", description: "", basePrice: "", durationMinutes: "" });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -122,6 +122,7 @@ export default function ProviderHubScreen() {
     if (!oForm.title.trim()) { showToast("Service title is required", "error"); return; }
     setBusy(true);
     const payload = {
+      ...(oForm.id ? { id: oForm.id } : {}),
       title: oForm.title,
       description: oForm.description,
       basePrice: oForm.basePrice ? Number(oForm.basePrice) : 0,
@@ -131,9 +132,9 @@ export default function ProviderHubScreen() {
     const res = await serviceBazaarService.saveMyOffering(payload);
     setBusy(false);
     if (res.success) {
-      showToast("Service submitted for approval", "success");
+      showToast(oForm.id ? "Service updated and resubmitted for approval" : "Service submitted for approval", "success");
       setOfferingModal(false);
-      setOForm({ title: "", description: "", basePrice: "", durationMinutes: "" });
+      setOForm({ id: null, title: "", description: "", basePrice: "", durationMinutes: "" });
       const offRes = await serviceBazaarService.getMyOfferings();
       if (offRes.success) setOfferings(Array.isArray(offRes.data) ? offRes.data : []);
     } else showToast(res.message || "Could not save service", "error");
@@ -237,7 +238,7 @@ export default function ProviderHubScreen() {
         <div className="sb-section">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <h3 style={{ margin: 0 }}>My Services</h3>
-            <button className="sb-btn sm" onClick={() => setOfferingModal(true)}><FaPlus style={{ marginRight: 4 }} /> Add</button>
+            <button className="sb-btn sm" onClick={() => { setOForm({ id: null, title: "", description: "", basePrice: "", durationMinutes: "" }); setOfferingModal(true); }}><FaPlus style={{ marginRight: 4 }} /> Add</button>
           </div>
           {offerings.length === 0 ? <p className="sb-card-meta">No services yet. Add your first one.</p> : offerings.map((o) => (
             <div className="sb-offering" key={o.id}>
@@ -245,6 +246,16 @@ export default function ProviderHubScreen() {
                 <p className="sb-offering-title">{o.title}</p>
                 <p className="sb-offering-desc">₹{Number(o.basePrice || 0).toFixed(0)} • <span className={`sb-status ${o.status}`} style={{ fontSize: 10 }}>{o.status}</span></p>
               </div>
+              <button className="sb-btn sm ghost" onClick={() => {
+                setOForm({
+                  id: o.id,
+                  title: o.title || "",
+                  description: o.description || "",
+                  basePrice: o.basePrice != null ? String(o.basePrice) : "",
+                  durationMinutes: o.durationMinutes != null ? String(o.durationMinutes) : "",
+                });
+                setOfferingModal(true);
+              }}>Edit</button>
             </div>
           ))}
         </div>
@@ -315,12 +326,13 @@ export default function ProviderHubScreen() {
       {offeringModal && (
         <div className="sb-modal-backdrop" onClick={() => setOfferingModal(false)}>
           <div className="sb-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ marginTop: 0 }}>Add a Service</h3>
+            <h3 style={{ marginTop: 0 }}>{oForm.id ? "Edit Service" : "Add a Service"}</h3>
+            {oForm.id && <p className="sb-card-meta" style={{ marginTop: -6, marginBottom: 12 }}>Editing resubmits this service for approval.</p>}
             <div className="sb-field"><label>Title *</label><input value={oForm.title} onChange={(e) => setOForm({ ...oForm, title: e.target.value })} placeholder="e.g. Bridal makeup at home" /></div>
             <div className="sb-field"><label>Description</label><textarea rows={2} value={oForm.description} onChange={(e) => setOForm({ ...oForm, description: e.target.value })} /></div>
             <div className="sb-field"><label>Price (₹)</label><input type="number" value={oForm.basePrice} onChange={(e) => setOForm({ ...oForm, basePrice: e.target.value })} /></div>
             <div className="sb-field"><label>Duration (min)</label><input type="number" value={oForm.durationMinutes} onChange={(e) => setOForm({ ...oForm, durationMinutes: e.target.value })} /></div>
-            <button className="sb-btn block" disabled={busy} onClick={saveOffering}>{busy ? "Saving…" : "Submit for Approval"}</button>
+            <button className="sb-btn block" disabled={busy} onClick={saveOffering}>{busy ? "Saving…" : oForm.id ? "Update Service" : "Submit for Approval"}</button>
             <button className="sb-btn ghost block" style={{ marginTop: 8 }} onClick={() => setOfferingModal(false)}>Cancel</button>
           </div>
         </div>

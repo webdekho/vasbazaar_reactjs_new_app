@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaPlus, FaMinus, FaTrash, FaStore, FaMapMarkerAlt, FaClock } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
 import { userService } from "../../services/userService";
-import { FaWallet } from "react-icons/fa";
+import { FaWallet, FaArrowRight, FaMoneyBillWave, FaLock } from "react-icons/fa";
 import { useMarketplaceCart } from "../../context/MarketplaceCartContext";
 import { useCustomerModern } from "../../context/CustomerModernContext";
 import { savePaymentContext, extractPaymentUrl } from "../../services/juspayService";
@@ -70,8 +70,8 @@ const CartScreen = () => {
   // Subscription config.
   const [subFrequency, setSubFrequency] = useState("DAILY"); // DAILY | WEEKLY | MONTHLY | INTERVAL
   const [subDays, setSubDays] = useState([]); // ["MON", ...] for WEEKLY
-  const [subInterval] = useState(15); // gap in days for INTERVAL
-  const [subAnchor] = useState("TODAY"); // TODAY | START — anchor for INTERVAL
+  const [subInterval, setSubInterval] = useState(15); // gap in days for INTERVAL
+  const [subAnchor, setSubAnchor] = useState("TODAY"); // TODAY | START — anchor for INTERVAL
   const [subTime, setSubTime] = useState("09:00");
   const [subStartDate, setSubStartDate] = useState("");
   const [subEndDate, setSubEndDate] = useState("");
@@ -736,13 +736,18 @@ const CartScreen = () => {
                   We'll auto-place this order on your chosen schedule and charge the selected method each time.
                 </div>
                 {/* Frequency */}
-                <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                  {[{ key: "DAILY", label: "Daily" }, { key: "WEEKLY", label: "Weekly" }].map((f) => {
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginBottom: 10 }}>
+                  {[
+                    { key: "DAILY", label: "Daily" },
+                    { key: "WEEKLY", label: "Weekly" },
+                    { key: "MONTHLY", label: "Monthly" },
+                    { key: "INTERVAL", label: "Custom" },
+                  ].map((f) => {
                     const on = subFrequency === f.key;
                     return (
                       <button key={f.key} type="button" onClick={() => setSubFrequency(f.key)}
                         style={{
-                          flex: 1, padding: "8px 6px", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                          padding: "8px 4px", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer",
                           border: on ? "1px solid #007BFF" : "1px solid var(--cm-line)",
                           background: on ? "rgba(0,123,255,0.1)" : "transparent",
                           color: on ? "#007BFF" : "var(--cm-ink)",
@@ -752,6 +757,49 @@ const CartScreen = () => {
                     );
                   })}
                 </div>
+                {/* Custom gap (INTERVAL) */}
+                {subFrequency === "INTERVAL" && (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--cm-ink)" }}>Repeat every</span>
+                      <input
+                        type="number" min={1} max={365} inputMode="numeric"
+                        className="mkt-input"
+                        style={{ width: 72, textAlign: "center", height: 40, padding: "0 8px" }}
+                        value={subInterval}
+                        onChange={(e) => setSubInterval(e.target.value.replace(/[^0-9]/g, ""))}
+                      />
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--cm-ink)" }}>days</span>
+                    </div>
+                    {/* Anchor: from today vs from a chosen start date */}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {[{ key: "TODAY", label: "From today" }, { key: "START", label: "From start date" }].map((a) => {
+                        const on = subAnchor === a.key;
+                        return (
+                          <button key={a.key} type="button" onClick={() => setSubAnchor(a.key)}
+                            style={{
+                              flex: 1, padding: "7px 6px", borderRadius: 9, fontSize: 11.5, fontWeight: 700, cursor: "pointer",
+                              border: on ? "1px solid #007BFF" : "1px solid var(--cm-line)",
+                              background: on ? "rgba(0,123,255,0.1)" : "transparent",
+                              color: on ? "#007BFF" : "var(--cm-muted)",
+                            }}>
+                            {a.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: 6 }}>
+                      e.g. every {Number(subInterval) || 0} days — next on day {Number(subInterval) || 0} from {subAnchor === "START" ? "your start date" : "today"}, then repeating.
+                    </div>
+                  </div>
+                )}
+                {/* Monthly note */}
+                {subFrequency === "MONTHLY" && (
+                  <div style={{ fontSize: 11.5, color: "var(--cm-muted)", marginBottom: 10 }}>
+                    Repeats monthly on day {Number((subStartDate || new Date().toISOString().slice(0, 10)).slice(8, 10))} of every month
+                    {" "}(adjusts to the last day for shorter months). Set a Start date below to change the day.
+                  </div>
+                )}
                 {/* Weekdays (weekly only) */}
                 {subFrequency === "WEEKLY" && (
                   <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
@@ -935,7 +983,12 @@ const CartScreen = () => {
                   onClick={createSubscription}
                   disabled={creatingSub}
                 >
-                  {creatingSub ? "Creating subscription…" : `Subscribe — ${subFrequency === "DAILY" ? "every day" : "selected days"} · ${hasSlots ? (selectedSlot()?.label || "pick a slot") : (subTime || "--:--")}`}
+                  {creatingSub ? "Creating subscription…" : `Subscribe — ${
+                    subFrequency === "DAILY" ? "every day"
+                    : subFrequency === "WEEKLY" ? "selected days"
+                    : subFrequency === "MONTHLY" ? "monthly"
+                    : `every ${Number(subInterval) || 0} days`
+                  } · ${hasSlots ? (selectedSlot()?.label || "pick a slot") : (subTime || "--:--")}`}
                 </button>
                 <div style={{ fontSize: 11, color: "var(--cm-muted)", textAlign: "center", marginTop: 6 }}>
                   Auto-charged via {subPayMethod === "WALLET" ? "Wallet" : subPayMethod === "COD" ? "Cash on Delivery" : "Autopay (HDFC)"} each time. Manage anytime under My Subscriptions.
@@ -946,33 +999,6 @@ const CartScreen = () => {
             <div className="mkt-pay-actions">
               <button
                 type="button"
-                className="mkt-btn mkt-btn--secondary mkt-pay-cod"
-                onClick={() => placeOrder("COD")}
-                disabled={placing}
-              >
-                {placing && placingMethod === "COD" ? "Placing…" : "Cash on Delivery"}
-              </button>
-              <button
-                type="button"
-                className="mkt-btn mkt-btn--secondary mkt-pay-wallet"
-                onClick={() => placeOrder("WALLET")}
-                disabled={placing || (walletBalance !== null && walletBalance < payTotal)}
-                title={walletBalance !== null && walletBalance < payTotal ? "Insufficient wallet balance" : undefined}
-              >
-                {placing && placingMethod === "WALLET" ? (
-                  "Paying…"
-                ) : (
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
-                    <FaWallet size={13} />
-                    Pay from Wallet
-                    {walletBalance !== null && (
-                      <span style={{ fontSize: 11, opacity: 0.8 }}>(₹{walletBalance.toFixed(0)})</span>
-                    )}
-                  </span>
-                )}
-              </button>
-              <button
-                type="button"
                 className="mkt-btn mkt-btn--primary mkt-pay-online"
                 onClick={() => placeOrder("ONLINE")}
                 disabled={placing}
@@ -981,17 +1007,57 @@ const CartScreen = () => {
                   "Placing order…"
                 ) : (
                   <>
-                    <span>Pay ₹{payTotal.toFixed(0)} via</span>
+                    <span className="mkt-pay-online-label">Pay ₹{payTotal.toFixed(0)} via</span>
                     <img
                       src="https://webdekho.in/images/vasbazaar.png"
                       alt="vasbazaar"
                       className="mkt-pay-logo"
                     />
+                    <FaArrowRight className="mkt-pay-online-arrow" size={13} />
                   </>
                 )}
               </button>
+
+              <div className="mkt-pay-alt-row">
+                <button
+                  type="button"
+                  className="mkt-btn mkt-pay-wallet"
+                  onClick={() => placeOrder("WALLET")}
+                  disabled={placing || (walletBalance !== null && walletBalance < payTotal)}
+                  title={walletBalance !== null && walletBalance < payTotal ? "Insufficient wallet balance" : undefined}
+                >
+                  {placing && placingMethod === "WALLET" ? (
+                    "Paying…"
+                  ) : (
+                    <>
+                      <FaWallet className="mkt-pay-alt-icon" size={16} />
+                      <span className="mkt-pay-alt-title">Wallet</span>
+                      {walletBalance !== null && (
+                        <span className="mkt-pay-alt-sub">₹{walletBalance.toFixed(0)}</span>
+                      )}
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className="mkt-btn mkt-pay-cod"
+                  onClick={() => placeOrder("COD")}
+                  disabled={placing}
+                >
+                  {placing && placingMethod === "COD" ? (
+                    "Placing…"
+                  ) : (
+                    <>
+                      <FaMoneyBillWave className="mkt-pay-alt-icon" size={16} />
+                      <span className="mkt-pay-alt-title">Cash</span>
+                      <span className="mkt-pay-alt-sub">on Delivery</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
-            <div style={{ fontSize: 11, color: "var(--cm-muted)", textAlign: "center", marginTop: 6 }}>
+            <div className="mkt-pay-secure">
+              <FaLock size={9} />
               Secured by HDFC Juspay payment gateway
             </div>
             </>

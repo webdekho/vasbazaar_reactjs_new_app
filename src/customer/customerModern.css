@@ -26325,3 +26325,6 @@
 .loc-sheet-result svg { margin-top: 3px; flex-shrink: 0; color: #2563EB; }
 .loc-sheet-result-label { font-size: 14px; font-weight: 600; }
 .loc-sheet-result-full { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+
+/* Raise toasts above the marketplace floating cart bar when it is visible. */
+body.mkt-cartbar-visible .cm-toast { bottom: 164px; }

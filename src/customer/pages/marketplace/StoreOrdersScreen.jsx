@@ -175,6 +175,15 @@ const StoreOrdersScreen = () => {
     }
   };
 
+  // Close a delivery order that carries no OTP (store turned the OTP off).
+  const markDelivered = async (order) => {
+    setVerifying((v) => ({ ...v, [order.id]: true }));
+    const res = await marketplaceService.updateOrderStatus(order.id, "DELIVERED");
+    setVerifying((v) => ({ ...v, [order.id]: false }));
+    if (res.success) load();
+    else setError(res.message);
+  };
+
   const cancel = async (order) => {
     if (!window.confirm("Cancel this order?")) return;
     const res = await marketplaceService.updateOrderStatus(order.id, "CANCELLED");
@@ -388,7 +397,7 @@ const StoreOrdersScreen = () => {
                   </div>
                 )}
 
-                {!pickup && o.orderStatus === "OUT_FOR_DELIVERY" && (
+                {!pickup && o.orderStatus === "OUT_FOR_DELIVERY" && o.deliveryOtp && (
                   <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--cm-line)" }}>
                     <div style={{ fontSize: 11, color: "var(--cm-muted)", marginBottom: 6 }}>
                       Ask the customer for their 6-digit delivery OTP to complete this order.
@@ -422,6 +431,23 @@ const StoreOrdersScreen = () => {
                         {vMsg.text}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* OTP not required for this delivery — close it directly. */}
+                {!pickup && o.orderStatus === "OUT_FOR_DELIVERY" && !o.deliveryOtp && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--cm-line)" }}>
+                    <div style={{ fontSize: 11, color: "var(--cm-muted)", marginBottom: 6 }}>
+                      No delivery OTP is required for this order. Mark it delivered once handed over.
+                    </div>
+                    <button
+                      onClick={() => markDelivered(o)}
+                      disabled={verifying[o.id]}
+                      className="mkt-btn mkt-btn--primary"
+                      style={{ width: "auto", padding: "8px 14px", fontSize: 12, opacity: verifying[o.id] ? 0.7 : 1 }}
+                    >
+                      {verifying[o.id] ? "Marking…" : "Mark delivered"}
+                    </button>
                   </div>
                 )}
               </div>

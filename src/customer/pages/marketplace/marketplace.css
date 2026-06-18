@@ -733,37 +733,80 @@
 
 .mkt-pay-actions {
   display: flex;
+  flex-direction: column;
   gap: 10px;
-  align-items: stretch;
 }
-.mkt-pay-actions .mkt-btn {
-  width: auto;
-  padding: 12px 10px;
-  font-size: 13px;
-}
-.mkt-pay-cod {
-  flex: 0 0 42%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  line-height: 1.2;
-}
+
+/* Primary online-pay CTA — full width, prominent */
 .mkt-pay-online {
-  flex: 1 1 auto;
+  position: relative;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: nowrap;
   white-space: nowrap;
+  padding: 15px 16px;
+  font-size: 15px;
+  letter-spacing: 0.2px;
+}
+.mkt-pay-online-label { font-weight: 700; }
+.mkt-pay-online-arrow {
+  position: absolute;
+  right: 16px;
+  opacity: 0.9;
 }
 .mkt-pay-logo {
-  height: 16px;
+  height: 17px;
   width: auto;
   display: inline-block;
   filter: brightness(0) invert(1);
   vertical-align: middle;
+}
+
+/* Secondary row: Wallet + Cash on Delivery, equal halves */
+.mkt-pay-alt-row {
+  display: flex;
+  gap: 10px;
+}
+.mkt-pay-alt-row .mkt-btn {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 12px 8px;
+  font-size: 14px;
+  background: var(--cm-card);
+  color: var(--cm-ink);
+  border: 1px solid var(--cm-line);
+  border-radius: 14px;
+}
+.mkt-pay-alt-icon { flex-shrink: 0; color: #007BFF; }
+.theme-dark .mkt-pay-alt-icon { color: #40E0D0; }
+.mkt-pay-alt-title { font-weight: 700; }
+.mkt-pay-alt-sub {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cm-muted);
+  white-space: nowrap;
+}
+@media (hover: hover) and (pointer: fine) {
+  .mkt-pay-alt-row .mkt-btn:hover { border-color: #007BFF; }
+}
+.mkt-pay-wallet:disabled { opacity: 0.5; }
+
+.mkt-pay-secure {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--cm-muted);
+  margin-top: 8px;
 }
 
 .mkt-image-upload {
@@ -1668,6 +1711,13 @@
     margin: 10px 14px 0;
     padding: 14px 20px 16px;
   }
+  .mkt-cart-bar {
+    left: 16px;
+    right: auto;
+    transform: none;
+    width: auto;
+    min-width: 320px;
+  }
 }
 .mkt-v2 .mkt-hero-topline {
   gap: 12px;
@@ -2516,6 +2566,27 @@
   100% { left: 130%; }
 }
 
+/* Icon-only header action (My Orders) — glassy circle, secondary to the Sell CTA */
+.mkt-v2 .mkt-hero-action--icon {
+  padding: 0;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.82);
+  color: #2f8bff;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+.mkt-v2 .mkt-hero-action--icon::after { display: none; }
+.theme-dark .mkt-v2 .mkt-hero-action--icon {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
 /* Search — floating elevated glass with gradient focus ring */
 .mkt-v2 .mkt-hero-search {
   margin-top: 14px;
@@ -2862,4 +2933,226 @@
 .mkt-v2 .mkt-cat-chip.is-active svg { color: #fff; }
 .mkt-v2 .mkt-cat-chip-img {
   width: 16px; height: 16px; border-radius: 4px; object-fit: cover; flex-shrink: 0;
+}
+
+/* ===== Subscription action modals (reschedule / modify) ===== */
+.mkt-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.mkt-modal-sheet {
+  width: 100%;
+  max-width: 480px;
+  background: var(--cm-card);
+  border: 1px solid var(--cm-line);
+  border-radius: 22px 22px 0 0;
+  padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+  box-shadow: 0 -10px 40px -12px rgba(15, 23, 42, 0.5);
+  animation: mkt-sheet-up 0.2s ease;
+}
+@keyframes mkt-sheet-up {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.mkt-modal-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--cm-ink);
+  margin-bottom: 4px;
+}
+@media (min-width: 520px) {
+  .mkt-modal-backdrop { align-items: center; }
+  .mkt-modal-sheet { border-radius: 22px; }
+}
+
+/* ============================================================
+   Stores ↔ Products view toggle + unified product feed
+   ============================================================ */
+.mkt-view-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--cm-bg-secondary, rgba(120,120,140,0.1));
+  border: 1px solid var(--cm-line);
+}
+.mkt-view-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: transparent;
+  color: var(--cm-muted);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.mkt-view-toggle-btn.is-active {
+  background: linear-gradient(135deg, #40E0D0 0%, #007BFF 100%);
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(0,123,255,0.28);
+}
+
+.mkt-product-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px 0 6px;
+}
+.mkt-product-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 16px;
+  background: var(--cm-card);
+  border: 1px solid var(--cm-line);
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .mkt-product-row:hover { border-color: #40E0D0; box-shadow: 0 6px 18px rgba(0,123,255,0.10); }
+}
+.mkt-product-row:active { transform: scale(0.99); }
+.mkt-product-row.is-closed { opacity: 0.62; }
+.mkt-product-row--skel {
+  height: 86px;
+  border-style: dashed;
+  background: linear-gradient(100deg, var(--cm-card) 30%, var(--cm-bg-secondary, rgba(120,120,140,0.08)) 50%, var(--cm-card) 70%);
+  background-size: 200% 100%;
+  animation: mkt-skel 1.3s ease-in-out infinite;
+}
+@keyframes mkt-skel { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+.mkt-product-thumb {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--cm-bg-secondary, rgba(120,120,140,0.1));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cm-muted);
+}
+.mkt-product-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+.mkt-product-info { flex: 1; min-width: 0; }
+.mkt-product-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cm-ink);
+  margin: 0 0 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mkt-product-store {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--cm-muted);
+  margin-bottom: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mkt-product-store svg { color: #007BFF; flex-shrink: 0; }
+.mkt-product-closed { color: #ef4444; font-weight: 700; }
+.mkt-product-price { display: flex; align-items: baseline; gap: 6px; }
+.mkt-product-price-now {
+  display: inline-flex;
+  align-items: center;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--cm-ink);
+}
+.mkt-product-price-mrp {
+  font-size: 12px;
+  color: var(--cm-muted);
+  text-decoration: line-through;
+}
+.mkt-product-unit { font-size: 11px; color: var(--cm-muted); }
+
+.mkt-product-add {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  border-radius: 12px;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  color: #fff;
+  background: linear-gradient(135deg, #40E0D0 0%, #007BFF 100%);
+  box-shadow: 0 4px 12px rgba(0,123,255,0.25);
+  transition: transform 0.12s ease, box-shadow 0.15s ease;
+}
+.mkt-product-add:active { transform: scale(0.95); }
+
+.mkt-product-more {
+  margin: 6px auto 2px;
+  display: block;
+  border: 1.5px solid #007BFF;
+  background: rgba(0,123,255,0.06);
+  color: #007BFF;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 11px 28px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+.theme-dark .mkt-product-more { color: #40E0D0; border-color: #40E0D0; background: rgba(64,224,208,0.08); }
+.mkt-product-more:active { transform: scale(0.97); }
+.mkt-product-more:disabled { opacity: 0.6; cursor: default; }
+
+/* Quantity stepper shown on a product once it's in the cart */
+.mkt-product-stepper {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #40E0D0 0%, #007BFF 100%);
+  box-shadow: 0 4px 12px rgba(0,123,255,0.25);
+}
+.mkt-product-step {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 9px;
+  background: rgba(255,255,255,0.18);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.mkt-product-step:active { transform: scale(0.9); }
+@media (hover: hover) and (pointer: fine) {
+  .mkt-product-step:hover { background: rgba(255,255,255,0.3); }
+}
+.mkt-product-step-qty {
+  min-width: 22px;
+  text-align: center;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
 }

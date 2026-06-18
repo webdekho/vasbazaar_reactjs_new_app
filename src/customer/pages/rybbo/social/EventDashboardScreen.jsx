@@ -440,11 +440,17 @@ const EventDashboardScreen = () => {
     load();
   };
 
-  const removeCoHost = async (userId, name) => {
-    if (!window.confirm(`Remove ${name || "this co-host"}? They will lose access to this event.`)) return;
-    const r = await rybboSocialService.removeCoHost(id, userId);
+  const removeCoHost = async (coHost) => {
+    const label = coHost.name || coHost.mobile || "this co-host";
+    const pending = coHost.status === "PENDING" || !coHost.userId;
+    if (!window.confirm(pending
+      ? `Cancel the co-host invite for ${label}?`
+      : `Remove ${label}? They will lose access to this event.`)) return;
+    const r = pending
+      ? await rybboSocialService.removePendingCoHost(id, coHost.mobile)
+      : await rybboSocialService.removeCoHost(id, coHost.userId);
     if (!r.success) { showToast(r.message || "Could not remove co-host", "error"); return; }
-    showToast("Co-host removed", "success");
+    showToast(pending ? "Invite cancelled" : "Co-host removed", "success");
     load();
   };
 
@@ -499,20 +505,27 @@ const EventDashboardScreen = () => {
                 </div>
                 <div style={{ fontSize: 11, color: "var(--cm-muted, #6B7280)", marginBottom: 10 }}>
                   {e.isOwner
-                    ? "Add up to 2 VasBazaar users who can co-manage this event — edit details, invite guests and scan entries. Only you can cancel or delete it."
+                    ? "Add up to 2 people who can co-manage this event — edit details, invite guests and scan entries. If they're not on VasBazaar yet, they'll become a co-host automatically once they sign up. Only you can cancel or delete it."
                     : "You're a co-host for this event and can help manage it."}
                 </div>
 
                 {(e.coHosts || []).length > 0 && (
                   <div style={{ display: "grid", gap: 8, marginBottom: e.isOwner ? 12 : 0 }}>
                     {e.coHosts.map((c) => (
-                      <div key={c.userId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: "1px solid var(--cm-line, #E5E7EB)", borderRadius: 10 }}>
+                      <div key={c.userId || `pending-${c.mobile}`} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: "1px solid var(--cm-line, #E5E7EB)", borderRadius: 10 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 700, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name || c.mobile}</div>
-                          {c.name && <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>{c.mobile}</div>}
+                          <div style={{ fontWeight: 700, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 6 }}>
+                            {c.name || c.mobile}
+                            {c.status === "PENDING" && (
+                              <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999, background: "#fef3c7", color: "#92400e" }}>Invited</span>
+                            )}
+                          </div>
+                          {c.name
+                            ? <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>{c.mobile}</div>
+                            : c.status === "PENDING" && <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>Will join as co-host after sign-up</div>}
                         </div>
                         {e.isOwner && (
-                          <button type="button" onClick={() => removeCoHost(c.userId, c.name)} aria-label="Remove co-host"
+                          <button type="button" onClick={() => removeCoHost(c)} aria-label="Remove co-host"
                             style={{ border: "1px solid #fecaca", background: "transparent", color: "#b91c1c", borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
                             <FaTimes size={11} /> Remove
                           </button>
@@ -634,9 +647,9 @@ const EventDashboardScreen = () => {
                 </button>
               </div>
               {/* Invite by mobile — type a number or pick from the device contact list */}
-              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
                 <input value={inviteMobile} onChange={(ev) => setInviteMobile(ev.target.value)} type="tel" placeholder="Invite by mobile (track invitees)"
-                  style={{ flex: 1, minWidth: 0, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--cm-line, #E5E7EB)", background: "var(--cm-card, #fff)", color: "var(--cm-ink, inherit)", fontSize: 13, outline: "none" }} />
+                  style={{ flex: 1, minWidth: 160, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--cm-line, #E5E7EB)", background: "var(--cm-card, #fff)", color: "var(--cm-ink, inherit)", fontSize: 13, outline: "none" }} />
                 <button type="button" onClick={sendInvite} disabled={inviting}
                   style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 14px", borderRadius: 10, border: "none", background: ACCENT, color: "#fff", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
                   <FaUserPlus /> {inviting ? "…" : "Invite"}
@@ -649,7 +662,7 @@ const EventDashboardScreen = () => {
               </div>
               {/* Invite by email — type an email + comma/Enter to add it as a chip; sends the
                   banner + details + RSVP link from connect@vasbazaar.com to everyone added */}
-              <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "flex-start" }}>
+              <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
                 <div style={{ flex: 1, minWidth: 0, display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", padding: "6px 8px", borderRadius: 10, border: "1px solid var(--cm-line, #E5E7EB)", background: "var(--cm-card, #fff)" }}>
                   {emailChips.map((em) => (
                     <span key={em} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 6px 3px 9px", borderRadius: 999, background: "#ede9fe", color: ACCENT, fontSize: 12, fontWeight: 600 }}>

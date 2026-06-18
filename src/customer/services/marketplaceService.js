@@ -15,6 +15,18 @@ export const marketplaceService = {
       ...(categoryId ? { categoryId } : {}),
     }),
 
+  // Unified product feed — items across all stores servicing a location, with
+  // typo-tolerant item search.
+  getNearbyProducts: ({ lat, lng, search, categoryId, pageNumber = 0, pageSize = 30 } = {}) =>
+    authGet("/api/customer/marketplace/products", {
+      ...(lat != null ? { lat } : {}),
+      ...(lng != null ? { lng } : {}),
+      ...(search ? { search } : {}),
+      ...(categoryId ? { categoryId } : {}),
+      pageNumber,
+      pageSize,
+    }),
+
   getStore: (storeId) => authGet(`/api/customer/marketplace/stores/${storeId}`),
 
   getStoreItems: (storeId, search) =>
@@ -137,6 +149,11 @@ export const marketplaceService = {
     authGet("/api/customer/marketplace/orders/my", { pageNumber, pageSize }),
 
   getMyOrder: (orderId) => authGet(`/api/customer/marketplace/orders/${orderId}`),
+
+  // ===== Wishlist (manual want-list) =====
+  createWishlist: (payload) => authPost("/api/customer/marketplace/wishlist", payload),
+  getMyWishlist: () => authGet("/api/customer/marketplace/wishlist/my"),
+  deleteWishlist: (id) => authDelete(`/api/customer/marketplace/wishlist/${id}`),
 
   checkOrderPayment: (orderId) =>
     authGet(`/api/customer/marketplace/orders/${orderId}/check-payment`),

@@ -9,61 +9,96 @@ const MarketplaceCartContext = createContext(null);
 const lineKey = (itemId, variantLabel) =>
   variantLabel ? `${itemId}::${variantLabel}` : `${itemId}`;
 
+// ----- persistence -----------------------------------------------------------
+// New schema: { stores: { [storeId]: bucket } }. We still read the legacy
+// single-store shape ({ storeId, items }) and migrate it into a bucket so old
+// carts survive an app update.
 const readCart = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed) return {};
+    if (parsed.stores) return parsed.stores;
+    // Legacy single-store cart → migrate.
+    if (parsed.storeId && parsed.items) {
+      return { [parsed.storeId]: parsed };
+    }
+    return {};
   } catch {
-    return null;
+    return {};
   }
 };
 
-const persistCart = (cart) => {
+const persistStores = (stores) => {
   try {
-    if (!cart) localStorage.removeItem(STORAGE_KEY);
-    else localStorage.setItem(STORAGE_KEY, JSON.stringify(cart));
-  } catch { /* ignore */ }
+    if (!stores || Object.keys(stores).length === 0) localStorage.removeItem(STORAGE_KEY);
+    else localStorage.setItem(STORAGE_KEY, JSON.stringify({ stores }));
+  } catch { /* ignore quota */ }
 };
 
+const bucketMeta = (store) => ({
+  storeId: store.id,
+  storeName: store.businessName,
+  deliveryCharges: Number(store.deliveryCharges || 0),
+  minOrderValue: Number(store.minOrderValue || 0),
+  deliveryTimeMinutes: store.deliveryTimeMinutes || null,
+  storeLatitude: store.latitude ?? null,
+  storeLongitude: store.longitude ?? null,
+});
+
+const bucketCount = (b) => Object.values(b.items || {}).reduce((s, i) => s + (i.qty || 0), 0);
+
 /**
- * Single-store cart. Adding an item from a different store prompts the caller
- * to either replace the existing cart or cancel — see addItem's `confirmReplace`.
- *
- * Cart shape:
- *   { storeId, storeName, deliveryCharges, minOrderValue, items: { [itemId]: { id, name, price, image, qty } } }
+ * Multi-store cart. Items from several stores coexist, each in its own bucket.
+ * For backward compatibility the exposed `cart` is:
+ *   - null                          when empty
+ *   - the legacy single-store shape when exactly one store has items
+ *       { storeId, storeName, deliveryCharges, minOrderValue, …, items: { [key]: line } }
+ *   - { multi: true, stores, storeList } when more than one store has items
+ * This lets the rich single-store CartScreen keep working untouched while a
+ * dedicated multi-store checkout handles the combined case.
  */
 export const MarketplaceCartProvider = ({ children }) => {
-  const [cart, setCart] = useState(() => readCart());
+  const [stores, setStores] = useState(() => readCart());
 
-  useEffect(() => { persistCart(cart); }, [cart]);
+  useEffect(() => { persistStores(stores); }, [stores]);
 
-  const totals = useMemo(() => {
-    if (!cart || !cart.items) return { count: 0, subtotal: 0, total: 0, deliveryCharges: 0 };
-    const items = Object.values(cart.items);
-    const count = items.reduce((s, i) => s + (i.qty || 0), 0);
-    const subtotal = items.reduce((s, i) => s + (Number(i.price) * Number(i.qty || 0)), 0);
-    const deliveryCharges = Number(cart.deliveryCharges || 0);
-    const total = subtotal + (subtotal > 0 ? deliveryCharges : 0);
-    return { count, subtotal, total, deliveryCharges };
-  }, [cart]);
-
-  const startCart = useCallback((store) => {
-    setCart({
-      storeId: store.id,
-      storeName: store.businessName,
-      deliveryCharges: Number(store.deliveryCharges || 0),
-      minOrderValue: Number(store.minOrderValue || 0),
-      deliveryTimeMinutes: store.deliveryTimeMinutes || null,
-      storeLatitude: store.latitude ?? null,
-      storeLongitude: store.longitude ?? null,
-      items: {},
+  // Drop empty buckets so counts/derivations stay clean.
+  const pruned = useMemo(() => {
+    const out = {};
+    Object.entries(stores || {}).forEach(([id, b]) => {
+      if (b && b.items && Object.keys(b.items).length > 0) out[id] = b;
     });
-  }, []);
+    return out;
+  }, [stores]);
 
-  // `variant` (optional): { label, price } — when present the line is priced at
-  // the variant price and tracked separately from the plain item.
-  const addItem = useCallback((store, item, { confirmReplace, variant } = {}) => {
+  const storeList = useMemo(() => Object.values(pruned), [pruned]);
+
+  // Backward-compatible `cart` view.
+  const cart = useMemo(() => {
+    if (storeList.length === 0) return null;
+    if (storeList.length === 1) return storeList[0];
+    return { multi: true, stores: pruned, storeList };
+  }, [pruned, storeList]);
+
+  // Combined totals across every store bucket.
+  const totals = useMemo(() => {
+    if (storeList.length === 0) return { count: 0, subtotal: 0, total: 0, deliveryCharges: 0 };
+    let count = 0, subtotal = 0, deliveryCharges = 0;
+    storeList.forEach((b) => {
+      const lines = Object.values(b.items || {});
+      const sub = lines.reduce((s, i) => s + Number(i.price) * Number(i.qty || 0), 0);
+      count += lines.reduce((s, i) => s + (i.qty || 0), 0);
+      subtotal += sub;
+      if (sub > 0) deliveryCharges += Number(b.deliveryCharges || 0);
+    });
+    return { count, subtotal, total: subtotal + deliveryCharges, deliveryCharges };
+  }, [storeList]);
+
+  // Add one unit. `variant` (optional): { label, price }. No store-replace
+  // prompt anymore — different stores simply coexist in their own buckets.
+  const addItem = useCallback((store, item, { variant } = {}) => {
     const vLabel = variant?.label || null;
     const unitPrice = vLabel
       ? Number(variant.price)
@@ -77,100 +112,112 @@ export const MarketplaceCartProvider = ({ children }) => {
       variantLabel: vLabel,
       qty,
     });
-    if (cart && cart.storeId !== store.id) {
-      const ok = typeof confirmReplace === "function" ? confirmReplace() : window.confirm(
-        "Your cart already has items from a different store. Replace cart with items from this store?"
-      );
-      if (!ok) return false;
-      // Replace cart
-      const next = {
-        storeId: store.id,
-        storeName: store.businessName,
-        deliveryCharges: Number(store.deliveryCharges || 0),
-        minOrderValue: Number(store.minOrderValue || 0),
-        deliveryTimeMinutes: store.deliveryTimeMinutes || null,
-      storeLatitude: store.latitude ?? null,
-      storeLongitude: store.longitude ?? null,
-        items: { [key]: makeLine(1) },
-      };
-      setCart(next);
-      return true;
-    }
-    setCart((prev) => {
-      const base = prev && prev.storeId === store.id ? prev : {
-        storeId: store.id,
-        storeName: store.businessName,
-        deliveryCharges: Number(store.deliveryCharges || 0),
-        minOrderValue: Number(store.minOrderValue || 0),
-        deliveryTimeMinutes: store.deliveryTimeMinutes || null,
-      storeLatitude: store.latitude ?? null,
-      storeLongitude: store.longitude ?? null,
-        items: {},
-      };
+    setStores((prev) => {
+      const base = prev[store.id] || { ...bucketMeta(store), items: {} };
       const existing = base.items[key];
       const nextQty = existing ? existing.qty + 1 : 1;
       return {
-        ...base,
-        items: { ...base.items, [key]: makeLine(nextQty) },
+        ...prev,
+        [store.id]: { ...base, ...bucketMeta(store), items: { ...base.items, [key]: makeLine(nextQty) } },
       };
     });
     return true;
-  }, [cart]);
+  }, []);
 
-  const decrementItem = useCallback((itemId) => {
-    setCart((prev) => {
-      if (!prev || !prev.items[itemId]) return prev;
-      const existing = prev.items[itemId];
-      const nextQty = existing.qty - 1;
-      const nextItems = { ...prev.items };
-      if (nextQty <= 0) {
-        delete nextItems[itemId];
-      } else {
-        nextItems[itemId] = { ...existing, qty: nextQty };
-      }
-      // If the cart is empty, clear it entirely
-      if (Object.keys(nextItems).length === 0) return null;
-      return { ...prev, items: nextItems };
+  // Decrement a specific store+line; removes the line at 0 and the bucket when
+  // it empties.
+  const decrementLine = useCallback((storeId, key) => {
+    setStores((prev) => {
+      const b = prev[storeId];
+      if (!b || !b.items[key]) return prev;
+      const nextQty = b.items[key].qty - 1;
+      const items = { ...b.items };
+      if (nextQty <= 0) delete items[key];
+      else items[key] = { ...items[key], qty: nextQty };
+      const next = { ...prev };
+      if (Object.keys(items).length === 0) delete next[storeId];
+      else next[storeId] = { ...b, items };
+      return next;
     });
   }, []);
 
-  const removeItem = useCallback((itemId) => {
-    setCart((prev) => {
-      if (!prev || !prev.items[itemId]) return prev;
-      const nextItems = { ...prev.items };
-      delete nextItems[itemId];
-      if (Object.keys(nextItems).length === 0) return null;
-      return { ...prev, items: nextItems };
+  const removeLine = useCallback((storeId, key) => {
+    setStores((prev) => {
+      const b = prev[storeId];
+      if (!b || !b.items[key]) return prev;
+      const items = { ...b.items };
+      delete items[key];
+      const next = { ...prev };
+      if (Object.keys(items).length === 0) delete next[storeId];
+      else next[storeId] = { ...b, items };
+      return next;
     });
   }, []);
 
-  const clearCart = useCallback(() => setCart(null), []);
+  const clearStore = useCallback((storeId) => {
+    setStores((prev) => {
+      if (!prev[storeId]) return prev;
+      const next = { ...prev };
+      delete next[storeId];
+      return next;
+    });
+  }, []);
 
-  // Qty for a specific item+variant; pass no variantLabel for the plain line.
+  const clearCart = useCallback(() => setStores({}), []);
+
+  // --- Legacy single-store helpers (used by the existing CartScreen) ----------
+  // These operate on whichever bucket holds the key; in single-store mode that
+  // is unambiguous.
+  const findStoreForKey = useCallback((key) => {
+    const hit = Object.values(pruned).find((b) => b.items[key]);
+    return hit ? hit.storeId : null;
+  }, [pruned]);
+
+  const decrementItem = useCallback((key) => {
+    const sid = findStoreForKey(key);
+    if (sid != null) decrementLine(sid, key);
+  }, [findStoreForKey, decrementLine]);
+
+  const removeItem = useCallback((key) => {
+    const sid = findStoreForKey(key);
+    if (sid != null) removeLine(sid, key);
+  }, [findStoreForKey, removeLine]);
+
+  // Qty for an item+variant within a specific store bucket.
+  const getStoreItemQty = useCallback((storeId, itemId, variantLabel) => {
+    const b = pruned[storeId];
+    if (!b) return 0;
+    return b.items[lineKey(itemId, variantLabel)]?.qty || 0;
+  }, [pruned]);
+
+  // Legacy: qty across all buckets for an item+variant (single-store callers).
   const getItemQty = useCallback((itemId, variantLabel) => {
-    if (!cart || !cart.items) return 0;
-    return cart.items[lineKey(itemId, variantLabel)]?.qty || 0;
-  }, [cart]);
+    const k = lineKey(itemId, variantLabel);
+    return Object.values(pruned).reduce((s, b) => s + (b.items[k]?.qty || 0), 0);
+  }, [pruned]);
 
-  // Total qty across all variants of an item — used to show a combined badge.
   const getItemTotalQty = useCallback((itemId) => {
-    if (!cart || !cart.items) return 0;
-    return Object.values(cart.items)
-      .filter((l) => l.id === itemId)
-      .reduce((s, l) => s + (l.qty || 0), 0);
-  }, [cart]);
+    return Object.values(pruned).reduce(
+      (s, b) => s + Object.values(b.items).filter((l) => l.id === itemId).reduce((a, l) => a + (l.qty || 0), 0),
+      0
+    );
+  }, [pruned]);
 
   return (
     <MarketplaceCartContext.Provider
       value={{
         cart,
         totals,
+        storeList,
         addItem,
         decrementItem,
         removeItem,
+        decrementLine,
+        removeLine,
+        clearStore,
         clearCart,
-        startCart,
         getItemQty,
+        getStoreItemQty,
         getItemTotalQty,
         lineKeyOf: (line) => lineKey(line.id, line.variantLabel),
       }}

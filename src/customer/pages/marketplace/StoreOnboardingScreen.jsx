@@ -31,6 +31,9 @@ const initialForm = {
   deliveryTimeMinutes: 30,
   deliveryCharges: 0,
   minOrderValue: 0,
+  deliveryMode: "SELF", // SELF | VASBAZAAR | HYBRID
+  selfDeliveryMaxKm: 3,
+  deliveryOtpRequired: true, // require a doorstep OTP on self-delivered orders
   autoSchedule: false,
   openTime: "",
   closeTime: "",
@@ -141,6 +144,9 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
       deliveryTimeMinutes: Number(s.deliveryTimeMinutes || 30),
       deliveryCharges: Number(s.deliveryCharges || 0),
       minOrderValue: Number(s.minOrderValue || 0),
+      deliveryMode: s.deliveryMode || "SELF",
+      selfDeliveryMaxKm: Number(s.selfDeliveryMaxKm || 3),
+      deliveryOtpRequired: s.deliveryOtpRequired !== false,
       autoSchedule: s.autoSchedule === true,
       openTime: s.openTime ? String(s.openTime).slice(0, 5) : "",
       closeTime: s.closeTime ? String(s.closeTime).slice(0, 5) : "",
@@ -228,6 +234,14 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
       if (!form.deliveryTimeMinutes || form.deliveryTimeMinutes <= 0) return "Delivery time required";
       if (form.deliveryCharges < 0) return "Delivery charges cannot be negative";
       if (form.minOrderValue < 0) return "Min order value cannot be negative";
+      if (form.deliveryMode === "HYBRID") {
+        if (!form.selfDeliveryMaxKm || Number(form.selfDeliveryMaxKm) <= 0) {
+          return "Set the distance up to which you deliver yourself";
+        }
+        if (Number(form.selfDeliveryMaxKm) > Number(form.servingRadiusKm)) {
+          return "Self-delivery distance cannot exceed your serving radius";
+        }
+      }
       if (form.autoSchedule) {
         if (!form.openTime || !form.closeTime) {
           return "Set both open and close time, or turn off auto schedule";
@@ -478,6 +492,80 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
             </div>
 
             <div className="mkt-field">
+              <label className="mkt-field-label" style={{ marginBottom: 6 }}>Who delivers your orders?</label>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {DELIVERY_MODE_OPTIONS.map((opt) => {
+                  const active = form.deliveryMode === opt.key;
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => setField("deliveryMode", opt.key)}
+                      aria-pressed={active}
+                      style={{
+                        textAlign: "left",
+                        padding: "12px 14px",
+                        borderRadius: 12,
+                        border: `1.5px solid ${active ? "#007BFF" : "var(--cm-line)"}`,
+                        background: active ? "rgba(0,123,255,0.06)" : "var(--cm-card)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "var(--cm-text)" }}>{opt.title}</div>
+                      <div style={{ fontSize: 12, color: "var(--cm-muted)", marginTop: 2 }}>{opt.subtitle}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {form.deliveryMode === "HYBRID" && (
+              <div className="mkt-field">
+                <label className="mkt-field-label">Deliver yourself up to (km)</label>
+                <input
+                  className="mkt-input"
+                  type="number"
+                  inputMode="decimal"
+                  min="0.5"
+                  step="0.5"
+                  value={form.selfDeliveryMaxKm}
+                  onChange={(e) => setField("selfDeliveryMaxKm", e.target.value === "" ? "" : Number(e.target.value))}
+                  onBlur={(e) => {
+                    let v = Number(e.target.value);
+                    if (!Number.isFinite(v) || v < 0.5) v = 0.5;
+                    if (v > Number(form.servingRadiusKm)) v = Number(form.servingRadiusKm);
+                    setField("selfDeliveryMaxKm", v);
+                  }}
+                />
+                <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: 4 }}>
+                  Orders within this distance you deliver yourself. Farther orders (up to your {Number(form.servingRadiusKm)} km serving radius) are delivered by VasBazaar.
+                </div>
+              </div>
+            )}
+
+            {form.deliveryMode !== "VASBAZAAR" && (
+              <div className="mkt-field">
+                <label className="mkt-field-label" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span>Require delivery OTP</span>
+                  <label className="mkt-switch">
+                    <input
+                      type="checkbox"
+                      checked={form.deliveryOtpRequired}
+                      onChange={(e) => setField("deliveryOtpRequired", e.target.checked)}
+                    />
+                    <span className="mkt-switch-slider" />
+                  </label>
+                </label>
+                <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: 4 }}>
+                  {form.deliveryOtpRequired
+                    ? "On your own (self) deliveries, the customer reads out a 6-digit OTP that you verify before the order is marked delivered."
+                    : "No OTP on your self deliveries — you can mark orders delivered directly."}
+                  {form.deliveryMode === "HYBRID" && " VasBazaar-delivered orders follow the logistics partner's own process."}
+                </div>
+              </div>
+            )}
+
+            <div className="mkt-field">
               <label className="mkt-field-label" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span>Auto open/close by timing</span>
                 <label className="mkt-switch">
@@ -648,6 +736,10 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
             <ReviewRow label="Serving radius" value={`${form.servingRadiusKm} km`} />
             <ReviewRow label="Delivery time" value={`${form.deliveryTimeMinutes} min`} />
             <ReviewRow label="Delivery charges" value={`₹${Number(form.deliveryCharges).toFixed(0)}`} />
+            <ReviewRow label="Delivery by" value={deliveryModeLabel(form.deliveryMode, form.selfDeliveryMaxKm)} />
+            {form.deliveryMode !== "VASBAZAAR" && (
+              <ReviewRow label="Delivery OTP" value={form.deliveryOtpRequired ? "Required (self delivery)" : "Not required"} />
+            )}
             <ReviewRow label="Min order" value={`₹${Number(form.minOrderValue).toFixed(0)}`} />
             {form.gstCertificateUrl && <ReviewRow label="GST certificate" value="Uploaded" />}
             {form.udyamCertificateUrl && <ReviewRow label="Udyam / Shop Act" value="Uploaded" />}
@@ -741,6 +833,18 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
       </div>
     </div>
   );
+};
+
+const DELIVERY_MODE_OPTIONS = [
+  { key: "SELF", title: "I deliver myself", subtitle: "Your own staff delivers every order." },
+  { key: "VASBAZAAR", title: "VasBazaar Logistic Partner", subtitle: "VasBazaar's logistics partner handles every order." },
+  { key: "HYBRID", title: "Split by distance", subtitle: "You deliver nearby orders; VasBazaar covers the farther ones." },
+];
+
+const deliveryModeLabel = (mode, selfKm) => {
+  if (mode === "VASBAZAAR") return "VasBazaar Logistic Partner";
+  if (mode === "HYBRID") return `Self up to ${selfKm} km, then VasBazaar`;
+  return "Self delivery";
 };
 
 const DAY_OPTIONS = [

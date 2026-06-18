@@ -34,6 +34,9 @@ export const rybboSocialService = {
 
   removeCoHost: (id, userId) => authDelete(`${BASE}/events/${id}/cohosts/${userId}`),
 
+  // Cancel a pending co-host invite (someone who hasn't signed up yet) by mobile.
+  removePendingCoHost: (id, mobile) => authDelete(`${BASE}/events/${id}/cohosts/pending/${mobile}`),
+
   // Email an invite (banner + details + RSVP link) to a guest. payload: { email, inviteUrl, message, banner }
   inviteByEmail: (id, payload) => authPost(`${BASE}/events/${id}/invite-email`, payload),
 

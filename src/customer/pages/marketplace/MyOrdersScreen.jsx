@@ -25,15 +25,26 @@ const MyOrdersScreen = () => {
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
+  const loadOrders = () => {
+    setLoading(true);
+    setError(null);
     marketplaceService.getMyOrders({ pageSize: 50 }).then((res) => {
       setLoading(false);
       if (res.success) {
         const data = res.data || {};
         setOrders(Array.isArray(data.records) ? data.records : []);
+      } else {
+        // Don't mask a failed fetch as "No orders yet" — surface the real cause
+        // (auth expired, server/proxy error) so the user can retry or re-login.
+        setError(res.message || "Couldn't load your orders. Please try again.");
       }
     });
+  };
+
+  useEffect(() => {
+    loadOrders();
   }, []);
 
   return (
@@ -57,6 +68,17 @@ const MyOrdersScreen = () => {
 
       {loading ? (
         <div className="mkt-empty">Loading…</div>
+      ) : error ? (
+        <div className="mkt-empty">
+          <div className="mkt-empty-icon"><FaStore /></div>
+          <div>{error}</div>
+          <button
+            onClick={loadOrders}
+            style={{ marginTop: 14, background: "var(--cm-primary, #14b8a6)", color: "#fff", border: "none", borderRadius: 10, padding: "10px 22px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+          >
+            Retry
+          </button>
+        </div>
       ) : orders.length === 0 ? (
         <div className="mkt-empty">
           <div className="mkt-empty-icon"><FaStore /></div>
