@@ -651,6 +651,12 @@ const SuccessScreen = () => {
     });
   };
 
+  // Replay the success sonic. Triggered by a direct user tap, so it always
+  // plays — even after a page refresh where browser autoplay is blocked.
+  const handleReplaySound = () => {
+    playSuccessSound().catch(() => {});
+  };
+
   const handleShare = async () => {
     const shareText = `Payment of ₹${amount.toFixed(2)} completed successfully!\nTransaction ID: ${txnId}\nB-Connect TXN ID: ${bConnectTxnId}\nDate: ${dateTime}\n\nPowered by VasBazaar - Bharat Connect`;
     const shareUrl = "https://web.vasbazaar.com";
@@ -932,6 +938,11 @@ const SuccessScreen = () => {
           View / Print Receipt
         </button>
       )}
+
+      <button type="button" className="sx2-receipt-btn" onClick={handleReplaySound}>
+        <FaSyncAlt />
+        Refresh
+      </button>
 
       <div className="sx2-actionbar">
         <button type="button" className="sx2-act sx2-act--ghost" onClick={handleShare}>

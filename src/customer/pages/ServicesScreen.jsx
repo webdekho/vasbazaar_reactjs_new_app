@@ -262,8 +262,11 @@ const UpcomingDuesSection = ({ dues }) => {
   );
 };
 
+// Categories hidden from the Bill Pay grid (matched on lowercase service name).
+const HIDDEN_CATEGORIES = new Set(["donation", "recurring deposit"]);
+
 const quickAccessItems = [
-  { label: "Services", icon: HiMiniSquares2X2, to: "#services", color: "#40E0D0", isScroll: true, iconUrl: "/images/b.png" },
+  { label: "Bill Pay", icon: HiMiniSquares2X2, to: "#services", color: "#40E0D0", isScroll: true, iconUrl: "/images/b.png" },
   { label: "Resibot 360", icon: FaHeartbeat, to: "/customer/app/resibot", color: "#E11D48" },
   { label: "Retail Bazaar", icon: FaStore, to: "/customer/app/marketplace", color: "#10B981" },
   { label: "Service Bazaar", icon: FaTools, to: "/customer/app/service-bazaar", color: "#0EA5E9" },
@@ -482,7 +485,12 @@ const ServicesScreen = () => {
    * services or query changes, not on every render (e.g., search focus/blur).
    */
   const filtered = useMemo(
-    () => services.filter((s) => s.name.toLowerCase().includes(query.toLowerCase())),
+    () =>
+      services.filter((s) => {
+        const name = s.name.toLowerCase();
+        if (HIDDEN_CATEGORIES.has(name)) return false;
+        return name.includes(query.toLowerCase());
+      }),
     [services, query]
   );
 

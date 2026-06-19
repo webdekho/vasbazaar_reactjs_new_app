@@ -47,8 +47,6 @@ const bucketMeta = (store) => ({
   storeLongitude: store.longitude ?? null,
 });
 
-const bucketCount = (b) => Object.values(b.items || {}).reduce((s, i) => s + (i.qty || 0), 0);
-
 /**
  * Multi-store cart. Items from several stores coexist, each in its own bucket.
  * For backward compatibility the exposed `cart` is:

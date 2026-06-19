@@ -65,10 +65,30 @@ export const playSuccessSound = async () => {
     const audio = new Audio(WEB_PATH);
     audio.volume = 1.0;
     audio.preload = "auto";
-    audio.play().catch(() => { /* autoplay blocked — ignore */ });
+
+    // The success screen is usually reached via a payment-gateway redirect,
+    // i.e. a fresh page load with NO user-activation. Browsers then block
+    // audio.play() with NotAllowedError. When that happens, retry on the
+    // user's first interaction with the page (they tap to scratch the reward
+    // card moments later), then detach the listeners.
+    const events = ["pointerdown", "touchstart", "click", "keydown"];
+    const opts = { once: true, passive: true, capture: true };
+    let detach = () => {};
+    const onGesture = () => {
+      detach();
+      try { audio.currentTime = 0; } catch (_) { /* noop */ }
+      audio.play().catch(() => {});
+    };
+    const armGestureRetry = () => {
+      detach = () => events.forEach((e) => document.removeEventListener(e, onGesture, opts));
+      events.forEach((e) => document.addEventListener(e, onGesture, opts));
+    };
+
+    audio.play().catch(() => { armGestureRetry(); });
+
     return {
       stop: () => {
-        try { audio.pause(); audio.src = ""; } catch (_) { /* noop */ }
+        try { detach(); audio.pause(); audio.src = ""; } catch (_) { /* noop */ }
       },
     };
   } catch (_) {
