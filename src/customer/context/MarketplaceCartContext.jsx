@@ -102,21 +102,34 @@ export const MarketplaceCartProvider = ({ children }) => {
       ? Number(variant.price)
       : Number(item.offerPrice && Number(item.offerPrice) > 0 ? item.offerPrice : (item.sellingPrice || item.price || 0));
     const key = lineKey(item.id, vLabel);
-    const makeLine = (qty) => ({
-      id: item.id,
-      name: item.name,
-      price: unitPrice,
-      image: item.imageUrl || null,
-      variantLabel: vLabel,
-      qty,
-    });
+    // Per-item order-quantity limits (configured by the merchant). min defaults
+    // to 1; max null = unlimited. Stored on the line so decrement can respect min
+    // and so cart-screen re-adds (which rebuild a bare item) keep the limits.
+    const itemHasLimits = item.minOrderQty != null || item.maxOrderQty != null;
+    const itemMinQty = Math.max(1, Number(item.minOrderQty) || 1);
+    const itemMaxQty = Number(item.maxOrderQty) > 0 ? Number(item.maxOrderQty) : null;
     setStores((prev) => {
       const base = prev[store.id] || { ...bucketMeta(store), items: {} };
       const existing = base.items[key];
-      const nextQty = existing ? existing.qty + 1 : 1;
+      // Prefer limits from the item; fall back to the existing line's stored
+      // limits when the caller rebuilt a bare item (e.g. the cart stepper).
+      const minQty = itemHasLimits ? itemMinQty : Math.max(1, Number(existing?.minQty) || 1);
+      const maxQty = itemHasLimits ? itemMaxQty : (Number(existing?.maxQty) > 0 ? Number(existing.maxQty) : null);
+      let nextQty = existing ? existing.qty + 1 : minQty;
+      if (maxQty != null && nextQty > maxQty) nextQty = maxQty; // never exceed the cap
+      const line = {
+        id: item.id,
+        name: item.name,
+        price: unitPrice,
+        image: item.imageUrl || null,
+        variantLabel: vLabel,
+        minQty,
+        maxQty,
+        qty: nextQty,
+      };
       return {
         ...prev,
-        [store.id]: { ...base, ...bucketMeta(store), items: { ...base.items, [key]: makeLine(nextQty) } },
+        [store.id]: { ...base, ...bucketMeta(store), items: { ...base.items, [key]: line } },
       };
     });
     return true;
@@ -128,9 +141,13 @@ export const MarketplaceCartProvider = ({ children }) => {
     setStores((prev) => {
       const b = prev[storeId];
       if (!b || !b.items[key]) return prev;
-      const nextQty = b.items[key].qty - 1;
+      const line = b.items[key];
+      const lineMin = Math.max(1, Number(line.minQty) || 1);
+      const nextQty = line.qty - 1;
       const items = { ...b.items };
-      if (nextQty <= 0) delete items[key];
+      // Going below the minimum removes the line entirely — a partial order
+      // under the merchant's minimum isn't allowed.
+      if (nextQty < lineMin) delete items[key];
       else items[key] = { ...items[key], qty: nextQty };
       const next = { ...prev };
       if (Object.keys(items).length === 0) delete next[storeId];

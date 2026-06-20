@@ -138,6 +138,7 @@ const ServiceBazaarProviderHubScreen = lazy(() => import("./pages/service-bazaar
 const MarketplaceHomeScreen = lazy(() => import("./pages/marketplace/MarketplaceHomeScreen"));
 const StoreDetailScreen = lazy(() => import("./pages/marketplace/StoreDetailScreen"));
 const MarketplaceCartScreen = lazy(() => import("./pages/marketplace/CartScreen"));
+const MultiStoreCheckoutScreen = lazy(() => import("./pages/marketplace/MultiStoreCheckoutScreen"));
 const StoreOnboardingScreen = lazy(() => import("./pages/marketplace/StoreOnboardingScreen"));
 const MyStoreManageScreen = lazy(() => import("./pages/marketplace/MyStoreManageScreen"));
 const StoreTimingsScreen = lazy(() => import("./pages/marketplace/StoreTimingsScreen"));
@@ -323,6 +324,7 @@ const CustomerModernRoutes = () => {
             <Route path="marketplace" element={<Suspense fallback={<RouteFallback />}><MarketplaceHomeScreen /></Suspense>} />
             <Route path="marketplace/store/:storeId" element={<Suspense fallback={<RouteFallback />}><StoreDetailScreen /></Suspense>} />
             <Route path="marketplace/cart" element={<Suspense fallback={<RouteFallback />}><MarketplaceCartScreen /></Suspense>} />
+            <Route path="marketplace/checkout-all" element={<Suspense fallback={<RouteFallback />}><MultiStoreCheckoutScreen /></Suspense>} />
             <Route path="marketplace/onboard" element={<Suspense fallback={<RouteFallback />}><StoreOnboardingScreen /></Suspense>} />
             <Route path="marketplace/my-store" element={<Suspense fallback={<RouteFallback />}><MyStoreManageScreen /></Suspense>} />
             <Route path="marketplace/my-store/timings" element={<Suspense fallback={<RouteFallback />}><StoreTimingsScreen /></Suspense>} />

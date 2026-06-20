@@ -212,9 +212,9 @@ const MarketplaceHomeScreen = () => {
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  // Browse mode: "products" (unified Marketplace feed — the default landing) or
-  // "stores" (store cards). A non-empty search always shows item results.
-  const [viewMode, setViewMode] = useState("products");
+  // Browse mode: "stores" (store cards — the default landing) or "products"
+  // (unified Marketplace feed). A non-empty search always shows item results.
+  const [viewMode, setViewMode] = useState("stores");
   const [products, setProducts] = useState([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsError, setProductsError] = useState(null);

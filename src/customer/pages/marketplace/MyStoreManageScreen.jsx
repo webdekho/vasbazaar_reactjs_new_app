@@ -98,13 +98,13 @@ const MyStoreManageScreen = () => {
     // imageUrls/variants/services/offers are JSON arrays; category/subcategory match by name.
     const headers = [
       "name", "sellingPrice", "mrp", "offerPrice", "sku", "barcode", "hsn", "taxRate",
-      "unit", "stockQty", "lowStockThreshold", "description", "imageUrl",
+      "unit", "stockQty", "lowStockThreshold", "minOrderQty", "maxOrderQty", "description", "imageUrl",
       "imageUrls", "category", "subcategory", "variants", "services", "offers",
     ];
     const sample = [
       [
         "Aashirvaad Atta 5kg", "245", "260", "239", "ATTA-5KG", "8901234567890", "1101", "5",
-        "kg", "50", "10", "Whole wheat atta 5 kg pack", "https://cdn.example.com/atta.jpg",
+        "kg", "50", "10", "1", "5", "Whole wheat atta 5 kg pack", "https://cdn.example.com/atta.jpg",
         '["https://cdn.example.com/atta-1.jpg","https://cdn.example.com/atta-2.jpg"]',
         "Grocery", "Atta & Flour",
         '[{"label":"5 kg","price":245,"mrp":260,"stock":50,"options":{"Weight":"5 kg"}},{"label":"10 kg","price":480,"mrp":510,"stock":20,"options":{"Weight":"10 kg"}}]',
@@ -113,7 +113,7 @@ const MyStoreManageScreen = () => {
       ],
       [
         "Tata Salt 1kg", "28", "30", "", "SALT-1KG", "", "2501", "0",
-        "kg", "120", "", "Iodised salt 1 kg", "",
+        "kg", "120", "", "", "", "Iodised salt 1 kg", "",
         "", "Grocery", "",
         "", "", "",
       ],
@@ -541,7 +541,7 @@ const MyStoreManageScreen = () => {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 700 }}>{bulkImporting ? "Importing…" : "Bulk import items (CSV)"}</div>
                 <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>
-                  name &amp; sellingPrice required. Also supports mrp, offerPrice, sku, barcode, hsn, taxRate, unit, stockQty, lowStockThreshold, description, imageUrl, imageUrls, category, subcategory, variants, services, offers. Download the sample for the exact format.
+                  name &amp; sellingPrice required. Also supports mrp, offerPrice, sku, barcode, hsn, taxRate, unit, stockQty, lowStockThreshold, minOrderQty, maxOrderQty, description, imageUrl, imageUrls, category, subcategory, variants, services, offers. Download the sample for the exact format.
                 </div>
               </div>
               <FaChevronRight size={12} color="var(--cm-muted)" />
@@ -1271,6 +1271,8 @@ const ItemFormModal = ({ initial, allItems = [], onClose, onSaved }) => {
     unitMeasure: initial?.unitMeasure || "",
     stockQty: initial?.stockQty ?? 0,
     lowStockThreshold: initial?.lowStockThreshold ?? "",
+    minOrderQty: initial?.minOrderQty ?? "",
+    maxOrderQty: initial?.maxOrderQty ?? "",
     imageUrl: initial?.imageUrl || "",
     storeItemCategoryId: initial?.storeItemCategoryId?.id || "",
     storeItemSubcategoryId: initial?.storeItemSubcategoryId?.id || "",
@@ -1460,6 +1462,11 @@ const ItemFormModal = ({ initial, allItems = [], onClose, onSaved }) => {
     if (new Set(labels).size !== labels.length) {
       setError("Two variants have the same options/label. Make each variant unique."); setSaving(false); return;
     }
+    const minQ = form.minOrderQty !== "" ? Number(form.minOrderQty) : null;
+    const maxQ = form.maxOrderQty !== "" ? Number(form.maxOrderQty) : null;
+    if (minQ != null && maxQ != null && maxQ < minQ) {
+      setError("Max order quantity cannot be less than min order quantity."); setSaving(false); return;
+    }
     const payload = {
       ...(initial ? { id: initial.id } : {}),
       name: form.name.trim(),
@@ -1475,6 +1482,8 @@ const ItemFormModal = ({ initial, allItems = [], onClose, onSaved }) => {
       unitMeasure: form.unitMeasure.trim() || null,
       stockQty: form.stockQty ? Number(form.stockQty) : 0,
       lowStockThreshold: form.lowStockThreshold !== "" ? Number(form.lowStockThreshold) : null,
+      minOrderQty: form.minOrderQty !== "" ? Number(form.minOrderQty) : null,
+      maxOrderQty: form.maxOrderQty !== "" ? Number(form.maxOrderQty) : null,
       variants: cleanVariants.length ? JSON.stringify(cleanVariants) : null,
       services: (() => {
         const clean = services
@@ -1634,6 +1643,19 @@ const ItemFormModal = ({ initial, allItems = [], onClose, onSaved }) => {
               <label className="mkt-field-label">Low-stock alert at</label>
               <input className="mkt-input" inputMode="numeric" placeholder="e.g. 5" value={form.lowStockThreshold} onChange={(e) => setField("lowStockThreshold", e.target.value.replace(/\D/g, ""))} />
             </div>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <div className="mkt-field" style={{ flex: 1 }}>
+              <label className="mkt-field-label">Min order quantity</label>
+              <input className="mkt-input" inputMode="numeric" placeholder="e.g. 1" value={form.minOrderQty} onChange={(e) => setField("minOrderQty", e.target.value.replace(/\D/g, ""))} />
+            </div>
+            <div className="mkt-field" style={{ flex: 1 }}>
+              <label className="mkt-field-label">Max order quantity</label>
+              <input className="mkt-input" inputMode="numeric" placeholder="No limit" value={form.maxOrderQty} onChange={(e) => setField("maxOrderQty", e.target.value.replace(/\D/g, ""))} />
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: -4 }}>
+            Limits how many units a customer can buy per order. Leave blank for no limit.
           </div>
 
           {/* Grouped variants (Amazon-style). Optional option dimensions (Size,

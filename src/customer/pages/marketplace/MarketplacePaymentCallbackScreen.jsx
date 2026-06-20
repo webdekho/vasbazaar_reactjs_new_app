@@ -24,8 +24,10 @@ const MarketplacePaymentCallbackScreen = () => {
       const ctx = await getPaymentContext();
       // Saved context wins because it carries our internal numeric orderId.
       const localOrderId = ctx?.orderId;
+      // Combined multi-store checkout pays once for a whole group of orders.
+      const groupId = ctx?.paymentGroupId || null;
 
-      if (!localOrderId && !urlOrderId) {
+      if (!localOrderId && !urlOrderId && !groupId) {
         setState(STATE.FAILED);
         setMessage("Could not identify your order. Please check My Orders.");
         return;
@@ -36,13 +38,18 @@ const MarketplacePaymentCallbackScreen = () => {
       const maxAttempts = 10;
       for (let i = 0; i < maxAttempts; i++) {
         try {
-          const res = await marketplaceService.checkOrderPayment(localOrderId);
+          const res = groupId
+            ? await marketplaceService.checkGroupPayment(groupId)
+            : await marketplaceService.checkOrderPayment(localOrderId);
           const status = String(res?.data?.paymentStatus || "").toUpperCase();
           if (status === "PAID") {
             setState(STATE.SUCCESS);
             setMessage("Payment successful");
-            // Sound plays on the order-detail screen (celebrate) we redirect to.
-            setTimeout(() => navigate(`/customer/app/marketplace/orders/${localOrderId}`, { replace: true, state: { celebrate: true } }), 1200);
+            // Group payments cover several orders → send to the orders list.
+            const dest = groupId
+              ? "/customer/app/marketplace/my-orders"
+              : `/customer/app/marketplace/orders/${localOrderId}`;
+            setTimeout(() => navigate(dest, { replace: true, state: { celebrate: true } }), 1200);
             return;
           }
           if (status === "FAILED") {

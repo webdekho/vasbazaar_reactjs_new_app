@@ -374,8 +374,12 @@ const StoreDetailScreen = () => {
         </div>
       )}
 
-      {/* When there are no category chips, still show the toggle on its own row. */}
-      {itemCategories.length === 0 && viewToggle}
+      {/* When there are no category chips, still show the toggle on its own row (right-aligned). */}
+      {itemCategories.length === 0 && viewToggle && (
+        <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 14px 0" }}>
+          {viewToggle}
+        </div>
+      )}
 
       {filteredItems.length === 0 ? (
         <div className="mkt-empty">No items available</div>
@@ -400,13 +404,31 @@ const StoreDetailScreen = () => {
               ((() => { try { return JSON.parse(item.offers || "[]").length; } catch { return 0; } })()) +
               ((() => { try { return JSON.parse(item.services || "[]").length; } catch { return 0; } })());
             const groupCount = (() => { try { return JSON.parse(item.groupedItemIds || "[]").length; } catch { return 0; } })();
+            // Per-item order-quantity limits (merchant-configured).
+            const minQty = Math.max(1, Number(item.minOrderQty) || 1);
+            const maxQty = Number(item.maxOrderQty) > 0 ? Number(item.maxOrderQty) : null;
+            const atMax = !hasVariants && maxQty != null && qty >= maxQty;
             return (
               <div key={item.id} className={`mkt-item-card${viewMode === "list" ? " mkt-item-card--list" : ""}`}>
-                <div className="mkt-item-image">
+                <div
+                  className="mkt-item-image"
+                  role="button"
+                  tabIndex={0}
+                  style={{ cursor: "pointer" }}
+                  onClick={() => setVariantItem(item)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setVariantItem(item); } }}
+                  aria-label={`View ${item.name} details`}
+                >
                   {item.imageUrl ? <img src={item.imageUrl} alt="" /> : <FaStore size={32} />}
                 </div>
                 <div className="mkt-item-body">
-                  <p className="mkt-item-name">{item.name}</p>
+                  <p
+                    className="mkt-item-name"
+                    style={{ cursor: "pointer" }}
+                    onClick={() => setVariantItem(item)}
+                  >
+                    {item.name}
+                  </p>
                   <div className="mkt-item-row">
                     <div>
                       <div className="mkt-item-price">{hasVariants ? "From " : ""}₹{Number(effPrice || 0).toFixed(0)}</div>
@@ -426,10 +448,24 @@ const StoreDetailScreen = () => {
                       <div className="mkt-stepper">
                         <button className="mkt-stepper-btn" onClick={() => decrementItem(item.id)} aria-label="Decrease"><FaMinus size={10} /></button>
                         <span className="mkt-stepper-qty">{qty}</span>
-                        <button className="mkt-stepper-btn" onClick={() => handleAdd(item)} aria-label="Increase"><FaPlus size={10} /></button>
+                        <button
+                          className="mkt-stepper-btn"
+                          onClick={() => handleAdd(item)}
+                          disabled={atMax}
+                          style={atMax ? { opacity: 0.4, cursor: "default" } : undefined}
+                          aria-label="Increase"
+                        ><FaPlus size={10} /></button>
                       </div>
                     )}
                   </div>
+                  {!hasVariants && (minQty > 1 || maxQty != null) && (
+                    <div style={{ fontSize: 11, color: "var(--cm-muted)" }}>
+                      {minQty > 1 ? `Min ${minQty}` : ""}
+                      {minQty > 1 && maxQty != null ? " · " : ""}
+                      {maxQty != null ? `Max ${maxQty}` : ""}
+                      {atMax ? " (max reached)" : ""}
+                    </div>
+                  )}
                   {hasVariants && (
                     <div style={{ fontSize: 11, color: "var(--cm-muted)" }}>
                       {variants.length} option{variants.length > 1 ? "s" : ""}
@@ -677,7 +713,11 @@ const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, on
   const qty = hasVar ? (selected ? getItemQty(item.id, selected.label) : 0) : getItemQty(item.id);
   const stock = hasVar && selected && selected.stock != null ? Number(selected.stock) : null;
   const soldOut = stock != null && stock <= 0;
-  const canAdd = (hasVar ? !!selected : true) && !closed && item.isAvailable !== false && !soldOut;
+  // Per-item order-quantity limits (merchant-configured).
+  const minQty = Math.max(1, Number(item.minOrderQty) || 1);
+  const maxQty = Number(item.maxOrderQty) > 0 ? Number(item.maxOrderQty) : null;
+  const atMax = maxQty != null && qty >= maxQty;
+  const canAdd = (hasVar ? !!selected : true) && !closed && item.isAvailable !== false && !soldOut && !atMax;
 
   const variant = hasVar && selected ? { label: selected.label, price: Number(selected.price), image: selected.image } : null;
   const lineKey = hasVar && selected ? `${item.id}::${selected.label}` : `${item.id}`;
@@ -701,6 +741,18 @@ const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, on
           </div>
           <button className="mkt-header-back" onClick={onClose} aria-label="Close">×</button>
         </div>
+
+        {item.description && (
+          <div className="mkt-vsheet-dim">
+            <div className="mkt-vsheet-dim-label">Product description</div>
+            <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: "var(--cm-text, #4b5563)", whiteSpace: "pre-line" }}>
+              {item.description}
+            </p>
+            {item.unit && (
+              <div style={{ marginTop: 4, fontSize: 11, color: "var(--cm-muted)" }}>Unit: {item.unit}</div>
+            )}
+          </div>
+        )}
 
         {hasVar && (dims.length > 0 ? (
           dims.map((dim) => (
@@ -782,6 +834,14 @@ const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, on
           <div className="mkt-vsheet-stock">Only {stock} left</div>
         )}
         {soldOut && <div className="mkt-vsheet-stock" style={{ color: "#f87171" }}>Out of stock</div>}
+        {(minQty > 1 || maxQty != null) && (
+          <div className="mkt-vsheet-stock" style={{ color: atMax ? "#f87171" : "var(--cm-muted)" }}>
+            {minQty > 1 ? `Min order ${minQty}` : ""}
+            {minQty > 1 && maxQty != null ? " · " : ""}
+            {maxQty != null ? `Max order ${maxQty}` : ""}
+            {atMax ? " — limit reached" : ""}
+          </div>
+        )}
 
         {qty === 0 ? (
           <button
@@ -790,7 +850,7 @@ const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, on
             style={{ opacity: canAdd ? 1 : 0.5 }}
             onClick={() => { addItem(store, item, { variant }); }}
           >
-            {closed ? "Store closed" : "Add to cart"}
+            {closed ? "Store closed" : (minQty > 1 ? `Add ${minQty} to cart` : "Add to cart")}
           </button>
         ) : (
           <div className="mkt-stepper" style={{ alignSelf: "flex-start", width: "fit-content" }}>

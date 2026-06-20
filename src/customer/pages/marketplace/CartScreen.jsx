@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaArrowLeft, FaPlus, FaMinus, FaTrash, FaStore, FaMapMarkerAlt, FaClock } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
 import { userService } from "../../services/userService";
@@ -35,12 +35,41 @@ const haversineKm = (lat1, lng1, lat2, lng2) => {
 // Average delivery rider speed (km/h) used to convert distance into travel time.
 const AVG_DELIVERY_SPEED_KMH = 22;
 
+// Totals for a single store bucket — mirrors the per-store math the cart
+// context uses when aggregating, so a single-store checkout stays correct even
+// when other stores' items also sit in the cart.
+const bucketTotals = (b) => {
+  if (!b || !b.items) return { count: 0, subtotal: 0, total: 0, deliveryCharges: 0 };
+  const lines = Object.values(b.items);
+  const subtotal = lines.reduce((s, i) => s + Number(i.price) * Number(i.qty || 0), 0);
+  const count = lines.reduce((s, i) => s + (i.qty || 0), 0);
+  const deliveryCharges = subtotal > 0 ? Number(b.deliveryCharges || 0) : 0;
+  return { count, subtotal, total: subtotal + deliveryCharges, deliveryCharges };
+};
+
 const CartScreen = () => {
   const navigate = useNavigate();
-  const { cart, totals, addItem, decrementItem, removeItem, clearCart, lineKeyOf } = useMarketplaceCart();
+  const { cart: rawCart, totals: globalTotals, addItem, decrementItem, removeItem, clearCart, lineKeyOf } = useMarketplaceCart();
+  const [searchParams] = useSearchParams();
   const { userData } = useCustomerModern();
 
+  // The cart context exposes either a single-store bucket, or, when items from
+  // several stores coexist, { multi: true, storeList }. This screen checks out
+  // one store at a time, so resolve the active bucket from the ?store= param.
+  const activeStoreId = searchParams.get("store");
+  const activeBucket = rawCart && rawCart.multi
+    ? (rawCart.storeList || []).find((b) => String(b.storeId) === String(activeStoreId)) || null
+    : rawCart;
+  const needsStorePick = !!(rawCart && rawCart.multi && !activeBucket);
+  // Downstream code treats `cart`/`totals` as a single store; substitute the
+  // active bucket and its per-store totals so the rich single-store flow works.
+  const cart = activeBucket;
+  const totals = (rawCart && rawCart.multi) ? bucketTotals(activeBucket) : globalTotals;
+
   const [step, setStep] = useState("cart"); // cart | checkout
+  // Multi-store cart: which checkout style the shopper picked.
+  // null = not chosen yet, "separate" = pick one store at a time.
+  const [multiChoice, setMultiChoice] = useState(null);
   const [address, setAddress] = useState("");
   const [coords, setCoords] = useState(null);
   const [placing, setPlacing] = useState(false);
@@ -253,6 +282,102 @@ const CartScreen = () => {
     applyCoupon(offer.code);
   };
 
+  // Multiple stores in the cart and none selected yet → let the shopper choose
+  // how to check out: one combined payment (we split the money to each seller),
+  // or one store at a time as separate orders.
+  if (needsStorePick) {
+    const grand = globalTotals;
+    return (
+      <div className="mkt">
+        <div className="mkt-header">
+          <button className="mkt-header-back" onClick={() => (multiChoice ? setMultiChoice(null) : navigate(-1))}><FaArrowLeft /></button>
+          <h1 className="mkt-header-title">Your cart</h1>
+        </div>
+        <div style={{ padding: "12px 14px 4px", fontSize: 13, color: "var(--cm-muted)" }}>
+          You have items from {rawCart.storeList.length} stores.
+          {multiChoice === "separate" ? " Pick a store to check out — each is a separate order." : " How would you like to pay?"}
+        </div>
+
+        {multiChoice == null ? (
+          /* Step 1 — choose checkout style */
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "10px 14px 20px" }}>
+            <button
+              type="button"
+              onClick={() => navigate("/customer/app/marketplace/checkout-all")}
+              style={{
+                display: "flex", alignItems: "center", gap: 12, textAlign: "left",
+                padding: 16, borderRadius: 16, border: "1px solid var(--cm-accent, #007BFF)",
+                background: "var(--cm-card)", cursor: "pointer", width: "100%",
+              }}
+            >
+              <span style={{ width: 42, height: 42, borderRadius: 12, background: "rgba(0,123,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--cm-accent, #007BFF)" }}>
+                <FaWallet />
+              </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: 15, fontWeight: 700, color: "var(--cm-ink)" }}>Single order — pay once</span>
+                <span style={{ display: "block", fontSize: 12, color: "var(--cm-muted)" }}>
+                  Pay ₹{grand.subtotal.toFixed(0)}+ together; we split it to each seller.
+                </span>
+              </span>
+              <FaArrowRight color="var(--cm-accent, #007BFF)" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMultiChoice("separate")}
+              style={{
+                display: "flex", alignItems: "center", gap: 12, textAlign: "left",
+                padding: 16, borderRadius: 16, border: "1px solid var(--cm-line)",
+                background: "var(--cm-card)", cursor: "pointer", width: "100%",
+              }}
+            >
+              <span style={{ width: 42, height: 42, borderRadius: 12, background: "var(--cm-line)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--cm-muted)" }}>
+                <FaStore />
+              </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: 15, fontWeight: 700, color: "var(--cm-ink)" }}>Order each store separately</span>
+                <span style={{ display: "block", fontSize: 12, color: "var(--cm-muted)" }}>
+                  Check out one store at a time as separate orders.
+                </span>
+              </span>
+              <FaArrowRight color="var(--cm-muted)" />
+            </button>
+          </div>
+        ) : (
+          /* Step 2 (separate) — pick a store */
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "8px 14px 20px" }}>
+            {rawCart.storeList.map((b) => {
+              const t = bucketTotals(b);
+              return (
+                <button
+                  key={b.storeId}
+                  type="button"
+                  onClick={() => navigate(`/customer/app/marketplace/cart?store=${b.storeId}`)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 12, textAlign: "left",
+                    padding: 14, borderRadius: 14, border: "1px solid var(--cm-line)",
+                    background: "var(--cm-card)", cursor: "pointer", width: "100%",
+                  }}
+                >
+                  <span style={{ width: 40, height: 40, borderRadius: 10, background: "var(--cm-line)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--cm-muted)" }}>
+                    <FaStore />
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: "block", fontSize: 14, fontWeight: 700, color: "var(--cm-ink)" }}>{b.storeName}</span>
+                    <span style={{ display: "block", fontSize: 12, color: "var(--cm-muted)" }}>
+                      {t.count} item{t.count !== 1 ? "s" : ""} · ₹{t.subtotal.toFixed(0)}
+                    </span>
+                  </span>
+                  <FaArrowRight color="var(--cm-muted)" />
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (!cart || totals.count === 0) {
     return (
       <div className="mkt">
@@ -275,7 +400,7 @@ const CartScreen = () => {
     );
   }
 
-  const items = Object.values(cart.items);
+  const items = Object.values(cart.items || {});
   const minOrder = Number(cart.minOrderValue || 0);
   const belowMin = totals.subtotal < minOrder;
 
@@ -566,7 +691,12 @@ const CartScreen = () => {
                         key={opt.key}
                         type="button"
                         disabled={opt.disabled}
-                        onClick={() => !opt.disabled && setFulfillmentType(opt.key)}
+                        onClick={() => {
+                          if (opt.disabled) return;
+                          setFulfillmentType(opt.key);
+                          // Pickup has no delivery timing — collect whenever the store is open.
+                          if (opt.key === "PICKUP") { setDeliveryMode("NOW"); setError(null); }
+                        }}
                         style={{
                           flex: 1,
                           padding: "10px 8px",
@@ -663,7 +793,11 @@ const CartScreen = () => {
               </>
             )}
 
-            {/* Delivery timing: now / schedule / subscribe */}
+            {/* Delivery timing: now / schedule / subscribe. Not shown for store
+                pickup — there's no delivery to schedule, the customer collects
+                from the store directly. */}
+            {!isPickup && (
+            <>
             <div className="mkt-form-section-title">When to deliver</div>
             <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
               {[
@@ -878,6 +1012,8 @@ const CartScreen = () => {
                   })}
                 </div>
               </div>
+            )}
+            </>
             )}
 
             {/* Coupons / Offers */}

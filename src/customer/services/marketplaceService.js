@@ -145,6 +145,15 @@ export const marketplaceService = {
   // ===== Customer orders =====
   placeOrder: (payload) => authPost("/api/customer/marketplace/orders", payload),
 
+  // Combined multi-store checkout: one payment for items from several stores;
+  // backend creates one order per store (shared paymentGroupId) and settles each
+  // seller's wallet share on payment success.
+  placeMultiOrder: (payload) => authPost("/api/customer/marketplace/orders/multi", payload),
+
+  // Poll the combined payment's status by its group id.
+  checkGroupPayment: (groupId) =>
+    authGet(`/api/customer/marketplace/orders/group/${groupId}/check-payment`),
+
   getMyOrders: ({ pageNumber = 0, pageSize = 10 } = {}) =>
     authGet("/api/customer/marketplace/orders/my", { pageNumber, pageSize }),
 
