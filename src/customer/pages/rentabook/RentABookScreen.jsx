@@ -216,6 +216,7 @@ const hasSelfPickup = (book) => {
 const EMPTY_FORM = {
   id: null, photo: null, title: "", author: "", publisher: "", edition: "", isbn: "",
   language: "English", category: "Fiction", condition: "Good", city: "", address: "",
+  pickupPincode: "", pickupState: "",
   lat: null, lng: null,
   listingType: "rent",
   deliveryOption: "both", // pickup | delivery | both — how the owner hands over
@@ -312,6 +313,8 @@ const csvRowToForm = (rec) => ({
   deliveryCharge: rec.deliveryCharge || "",
   city: (rec.city || "").trim(),
   address: (rec.address || "").trim(),
+  pickupPincode: (rec.pickupPincode || "").trim(),
+  pickupState: (rec.pickupState || "").trim(),
   availableFrom: (rec.availableFrom || "").trim(),
   photo: null,
 });
@@ -584,6 +587,11 @@ const RentABookScreen = () => {
 
   // Rent/sell checkout state.
   const [deliveryMode, setDeliveryMode] = useState("SELF_PICKUP");
+  // Borrower delivery address — required for HOME_DELIVERY so Shiprocket can ship.
+  const [delivAddress, setDelivAddress] = useState("");
+  const [delivPincode, setDelivPincode] = useState("");
+  const [delivCity, setDelivCity] = useState("");
+  const [delivState, setDelivState] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("WALLET");
   const [ordering, setOrdering] = useState(false);
   const [orderError, setOrderError] = useState("");
@@ -870,6 +878,11 @@ const RentABookScreen = () => {
       setOrderError("This is a sample book. Live listings can be rented once owners publish them.");
       return;
     }
+    // Home delivery needs a real address + pincode for the Shiprocket courier.
+    if (deliveryMode === "HOME_DELIVERY" && (!delivAddress.trim() || delivPincode.length !== 6)) {
+      setOrderError("Please enter your delivery address and a valid 6-digit pincode.");
+      return;
+    }
     setOrdering(true); setOrderError("");
     let contactMobile = "";
     try { contactMobile = JSON.parse(localStorage.getItem("customerUserData") || "{}").mobile || ""; } catch { /* ignore */ }
@@ -881,6 +894,12 @@ const RentABookScreen = () => {
       paymentMethod,
       reminderDays,
       ...(contactMobile ? { contactMobile } : {}),
+      ...(deliveryMode === "HOME_DELIVERY" ? {
+        deliveryAddress: delivAddress.trim(),
+        deliveryPincode: delivPincode,
+        deliveryCity: delivCity.trim(),
+        deliveryState: delivState.trim(),
+      } : {}),
       returnUrl: `${window.location.origin}/customer/app/rentabook`,
     });
     setOrdering(false);
@@ -1571,6 +1590,24 @@ const RentABookScreen = () => {
                     placeholder="Full address / area / landmark (optional)"
                   />
                   <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                    <input
+                      style={{ ...inputStyle, flex: "0 0 40%" }}
+                      value={form.pickupPincode}
+                      inputMode="numeric"
+                      onChange={(e) => setField("pickupPincode", e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      placeholder="Pickup pincode"
+                    />
+                    <input
+                      style={{ ...inputStyle, flex: 1 }}
+                      value={form.pickupState}
+                      onChange={(e) => setField("pickupState", e.target.value)}
+                      placeholder="State"
+                    />
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--rb-muted)", marginTop: 4 }}>
+                    Pincode is used to ship the book to renters who pick home delivery.
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                     <button type="button" onClick={handleUseCurrentLocation} disabled={locating}
                       style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 12px", borderRadius: 10, border: "1px solid var(--rb-accent)", background: "var(--rb-accent-bg)", color: "var(--rb-accent)", fontWeight: 600, fontSize: 13, cursor: locating ? "default" : "pointer" }}>
                       {locating ? <span style={spinStyle} /> : <FaLocationArrow />}
@@ -1994,6 +2031,28 @@ const RentABookScreen = () => {
               ))}
             </div>
           </div>
+
+          {/* Delivery address — only for home delivery (needed for Shiprocket courier) */}
+          {deliveryMode === "HOME_DELIVERY" && (
+            <div style={{ marginTop: 12, background: "var(--rb-surface)", border: "1px solid var(--rb-surface-2)", borderRadius: 14, padding: 16 }}>
+              <div style={{ fontWeight: 700, color: "var(--rb-text)", marginBottom: 10 }}>Delivery address</div>
+              <textarea value={delivAddress} onChange={(e) => setDelivAddress(e.target.value)}
+                placeholder="Flat / House no, Street, Area, Landmark"
+                rows={2}
+                style={{ width: "100%", boxSizing: "border-box", padding: "9px 10px", borderRadius: 10, border: "1px solid var(--rb-border)", background: "var(--rb-surface)", color: "var(--rb-text)", fontSize: 13, resize: "vertical", marginBottom: 8 }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <input value={delivPincode} onChange={(e) => setDelivPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  inputMode="numeric" placeholder="Pincode"
+                  style={{ flex: "0 0 38%", boxSizing: "border-box", padding: "9px 10px", borderRadius: 10, border: "1px solid var(--rb-border)", background: "var(--rb-surface)", color: "var(--rb-text)", fontSize: 13 }} />
+                <input value={delivCity} onChange={(e) => setDelivCity(e.target.value)}
+                  placeholder="City"
+                  style={{ flex: 1, boxSizing: "border-box", padding: "9px 10px", borderRadius: 10, border: "1px solid var(--rb-border)", background: "var(--rb-surface)", color: "var(--rb-text)", fontSize: 13 }} />
+              </div>
+              <input value={delivState} onChange={(e) => setDelivState(e.target.value)}
+                placeholder="State"
+                style={{ width: "100%", boxSizing: "border-box", padding: "9px 10px", borderRadius: 10, border: "1px solid var(--rb-border)", background: "var(--rb-surface)", color: "var(--rb-text)", fontSize: 13, marginTop: 8 }} />
+            </div>
+          )}
 
           {/* Payment method */}
           <div style={{ marginTop: 12, background: "var(--rb-surface)", border: "1px solid var(--rb-surface-2)", borderRadius: 14, padding: 16 }}>

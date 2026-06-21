@@ -71,6 +71,10 @@ const CartScreen = () => {
   // null = not chosen yet, "separate" = pick one store at a time.
   const [multiChoice, setMultiChoice] = useState(null);
   const [address, setAddress] = useState("");
+  // Structured delivery address for Shiprocket courier shipments.
+  const [pincode, setPincode] = useState("");
+  const [city, setCity] = useState("");
+  const [stateName, setStateName] = useState("");
   const [coords, setCoords] = useState(null);
   const [placing, setPlacing] = useState(false);
   const [placingMethod, setPlacingMethod] = useState(null); // "ONLINE" | "COD" | "WALLET"
@@ -429,6 +433,9 @@ const CartScreen = () => {
       if (!address && saved.address) setAddress(saved.address);
       if (!coords && saved.coords) setCoords(saved.coords);
       if (!resolvedAddress && saved.resolvedAddress) setResolvedAddress(saved.resolvedAddress);
+      if (!pincode && saved.pincode) setPincode(saved.pincode);
+      if (!city && saved.city) setCity(saved.city);
+      if (!stateName && saved.state) setStateName(saved.state);
     }
     if (!coords && !(saved && saved.coords)) captureLocation();
     setStep("checkout");
@@ -460,6 +467,7 @@ const CartScreen = () => {
     if (placing) return;
     // Delivery requires an address; pickup does not (collect from store).
     if (!isPickup && !address.trim()) { setError("Please enter delivery address"); return; }
+    if (!isPickup && pincode.length !== 6) { setError("Please enter a valid 6-digit delivery pincode"); return; }
     if (deliveryMode === "SCHEDULE") {
       if (!scheduleDate) { setError("Pick a delivery date"); return; }
       if (hasSlots && !selectedSlotId) { setError("Pick a delivery slot"); return; }
@@ -480,6 +488,7 @@ const CartScreen = () => {
       storeId: cart.storeId,
       items: itemsPayload(),
       deliveryAddress: isPickup ? "" : address.trim(),
+      ...(isPickup ? {} : { deliveryPincode: pincode, deliveryCity: city.trim(), deliveryState: stateName.trim() }),
       contactMobile: orderMobile,
       paymentMethod: method,
       fulfillmentType,
@@ -510,6 +519,9 @@ const CartScreen = () => {
       address: address.trim(),
       coords,
       resolvedAddress,
+      pincode,
+      city: city.trim(),
+      state: stateName.trim(),
     });
 
     // Persist context so the marketplace callback screen can pick up the
@@ -556,6 +568,7 @@ const CartScreen = () => {
   const createSubscription = async () => {
     if (creatingSub) return;
     if (!isPickup && !address.trim()) { setError("Please enter delivery address"); return; }
+    if (!isPickup && pincode.length !== 6) { setError("Please enter a valid 6-digit delivery pincode"); return; }
     if (hasSlots && !selectedSlotId) { setError("Pick a delivery slot"); return; }
     if (!hasSlots && !subTime) { setError("Pick a delivery time for the subscription"); return; }
     if (subFrequency === "WEEKLY" && subDays.length === 0) { setError("Pick at least one weekday"); return; }
@@ -577,6 +590,7 @@ const CartScreen = () => {
       items: itemsPayload(),
       fulfillmentType,
       deliveryAddress: isPickup ? "" : address.trim(),
+      ...(isPickup ? {} : { deliveryPincode: pincode, deliveryCity: city.trim(), deliveryState: stateName.trim() }),
       contactMobile: orderMobile,
       paymentMethod: subPayMethod,
       frequency: subFrequency,
@@ -743,6 +757,26 @@ const CartScreen = () => {
                 onChange={(e) => setAddress(e.target.value)}
                 placeholder="House / Flat no., Street, Landmark, Area"
               />
+            </div>
+            <div className="mkt-field" style={{ display: "flex", gap: 8 }}>
+              <div style={{ flex: "0 0 38%" }}>
+                <label className="mkt-field-label">Pincode</label>
+                <input
+                  className="mkt-input"
+                  value={pincode}
+                  inputMode="numeric"
+                  onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="6-digit"
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label className="mkt-field-label">City</label>
+                <input className="mkt-input" value={city} onChange={(e) => setCity(e.target.value)} placeholder="City" />
+              </div>
+            </div>
+            <div className="mkt-field">
+              <label className="mkt-field-label">State</label>
+              <input className="mkt-input" value={stateName} onChange={(e) => setStateName(e.target.value)} placeholder="State" />
             </div>
             <button
               className="mkt-btn mkt-btn--secondary"

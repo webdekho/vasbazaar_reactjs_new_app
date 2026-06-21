@@ -31,6 +31,10 @@ const MultiStoreCheckoutScreen = () => {
 
   const [fulfillmentType, setFulfillmentType] = useState("DELIVERY");
   const [address, setAddress] = useState("");
+  // Structured delivery address for Shiprocket courier shipments.
+  const [pincode, setPincode] = useState("");
+  const [city, setCity] = useState("");
+  const [stateName, setStateName] = useState("");
   const [coords, setCoords] = useState(null);
   const [resolvedAddress, setResolvedAddress] = useState(null);
   const [walletBalance, setWalletBalance] = useState(null);
@@ -47,6 +51,9 @@ const MultiStoreCheckoutScreen = () => {
     const saved = customerStorage.getMarketplaceAddress();
     if (saved) {
       if (saved.address) setAddress(saved.address);
+      if (saved.pincode) setPincode(saved.pincode);
+      if (saved.city) setCity(saved.city);
+      if (saved.state) setStateName(saved.state);
       if (saved.coords) setCoords(saved.coords);
       if (saved.resolvedAddress) setResolvedAddress(saved.resolvedAddress);
     }
@@ -108,6 +115,7 @@ const MultiStoreCheckoutScreen = () => {
       return;
     }
     if (!isPickup && !address.trim()) { setError("Please enter delivery address"); return; }
+    if (!isPickup && pincode.length !== 6) { setError("Please enter a valid 6-digit delivery pincode"); return; }
     const orderMobile = String(userData?.mobile || userData?.mobileNumber || "").trim();
     if (!orderMobile || !/^\d{10}$/.test(orderMobile)) {
       setError("Your account mobile is missing. Please re-login and try again.");
@@ -120,6 +128,7 @@ const MultiStoreCheckoutScreen = () => {
     const payload = {
       stores: storesPayload,
       deliveryAddress: isPickup ? "" : address.trim(),
+      ...(isPickup ? {} : { deliveryPincode: pincode, deliveryCity: city.trim(), deliveryState: stateName.trim() }),
       contactMobile: orderMobile,
       paymentMethod: method,
       fulfillmentType,
@@ -138,7 +147,7 @@ const MultiStoreCheckoutScreen = () => {
 
     const data = res.data || {};
     if (!isPickup) {
-      customerStorage.setMarketplaceAddress({ address: address.trim(), coords, resolvedAddress });
+      customerStorage.setMarketplaceAddress({ address: address.trim(), coords, resolvedAddress, pincode, city: city.trim(), state: stateName.trim() });
     }
 
     if (method === "COD" || method === "WALLET") {
@@ -220,6 +229,13 @@ const MultiStoreCheckoutScreen = () => {
           {resolvedAddress && (
             <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: 4 }}>📍 {resolvedAddress}</div>
           )}
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <input className="mkt-input" inputMode="numeric" placeholder="Pincode"
+              value={pincode} onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              style={{ flex: "0 0 38%" }} />
+            <input className="mkt-input" placeholder="City" value={city} onChange={(e) => setCity(e.target.value)} style={{ flex: 1 }} />
+          </div>
+          <input className="mkt-input" placeholder="State" value={stateName} onChange={(e) => setStateName(e.target.value)} style={{ marginTop: 8 }} />
         </div>
       )}
 

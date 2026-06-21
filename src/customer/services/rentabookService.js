@@ -116,6 +116,9 @@ export const mapFormToPayload = (form = {}) => {
     photoUrl: form.photoUrl || (typeof form.photo === "string" && form.photo.startsWith("http") ? form.photo : ""),
     city: (form.city || "").trim(),
     address: (form.address || "").trim(),
+    // Lender pickup details — needed so Shiprocket can ship the book to the borrower.
+    pickupPincode: (form.pickupPincode || "").trim(),
+    pickupState: (form.pickupState || "").trim(),
     lat: form.lat ?? null,
     lng: form.lng ?? null,
     availableFrom: form.availableFrom || null,

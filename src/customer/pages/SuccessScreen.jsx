@@ -613,7 +613,7 @@ const SuccessScreen = () => {
     // this routes through NativeAudio + AVAudioSession.playback so it plays
     // even when the silent switch is on.
     let handle;
-    playSuccessSound().then((h) => { handle = h; }).catch(() => {});
+    playSuccessSound("bharatconnect").then((h) => { handle = h; }).catch(() => {});
 
     return () => {
       if (handle?.stop) handle.stop();
@@ -654,7 +654,7 @@ const SuccessScreen = () => {
   // Replay the success sonic. Triggered by a direct user tap, so it always
   // plays — even after a page refresh where browser autoplay is blocked.
   const handleReplaySound = () => {
-    playSuccessSound().catch(() => {});
+    playSuccessSound("bharatconnect").catch(() => {});
   };
 
   const handleShare = async () => {

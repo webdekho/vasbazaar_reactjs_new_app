@@ -1855,7 +1855,8 @@
 
 .cm-search-field-input::placeholder { color: #6B6B6B; }
 
-.cm-bc-logo { height: 40px; width: auto; flex-shrink: 0; object-fit: contain; }
+/* Bharat Connect (B-Connect) logo — fixed brand size 83 × 30 px */
+.cm-bc-logo { width: 83px; height: 30px; flex-shrink: 0; object-fit: contain; }
 
 /* Clickable Bharat Connect entry sitting inline beside the search bar */
 .cm-bc-entry--btn {
@@ -1877,7 +1878,7 @@
 
 .cm-services-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .cm-bc-entry--inline { margin-left: auto; }
-.cm-bc-entry .cm-bc-logo { height: 34px; }
+.cm-bc-entry .cm-bc-logo { width: 83px; height: 30px; }
 .cm-bc-entry-caption { font-size: 0.6rem; font-weight: 700; color: var(--cm-accent, #0B5FBA); letter-spacing: 0.3px; line-height: 1; }
 
 .cm-services-grid-4 {
@@ -5201,7 +5202,7 @@
 }
 
 /* ─── Bharat Connect logo (top-right) ─── */
-.fc-bbps-logo { height: 30px; width: auto; margin-left: auto; }
+.fc-bbps-logo { width: 83px; height: 30px; object-fit: contain; margin-left: auto; }
 
 /* ─── Complaint type radio (Transaction, pre-selected) ─── */
 .fc-radio {
@@ -7064,8 +7065,8 @@
 }
 
 .tc-bbps-logo {
-  height: 40px;
-  width: auto;
+  width: 83px;
+  height: 30px;
   flex-shrink: 0;
   object-fit: contain;
 }
@@ -10137,8 +10138,8 @@
 }
 
 .cm-bc-title-logo {
-  height: 40px;
-  width: auto;
+  width: 83px;
+  height: 30px;
   flex-shrink: 0;
   object-fit: contain;
   opacity: 0.7;
@@ -12803,8 +12804,8 @@
 
 /* Bharat Connect logo — 50% bigger */
 .cm-bc-title-logo--lg {
-  height: 40px !important;
-  width: auto;
+  width: 83px !important;
+  height: 30px !important;
 }
 
 /* Amount in words */
@@ -13013,8 +13014,8 @@
 }
 
 .xpay-bc-logo {
-  height: 40px;
-  width: auto;
+  width: 83px;
+  height: 30px;
   flex-shrink: 0;
   object-fit: contain;
   opacity: 0.7;
@@ -20932,8 +20933,8 @@
   padding: 10px 4px 2px;
   z-index: 20;
 }
-.sx2-bc-strip .sx2-bc-logo { height: 30px; width: auto; }
-.sx2-bc-strip .sx2-ba-logo { height: 68px; width: auto; margin-left: auto; }
+.sx2-bc-strip .sx2-bc-logo { width: 83px; height: 30px; object-fit: contain; }
+.sx2-bc-strip .sx2-ba-logo { width: 130px; height: 120px; object-fit: contain; margin-left: auto; }
 
 /* ═══════════════════════════════════════════════════════════════
    BILL PAY RECEIPT (dedicated, printable)
@@ -20975,7 +20976,7 @@
   font-size: 0.9rem; font-weight: 700; color: #16A34A;
 }
 .rcpt-success svg { font-size: 0.95rem; }
-.rcpt-ba-logo { height: 128px; width: auto; flex-shrink: 0; }
+.rcpt-ba-logo { width: 130px; height: 120px; object-fit: contain; flex-shrink: 0; }
 
 .rcpt-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 0 36px;
@@ -21014,7 +21015,7 @@
 @media (max-width: 620px) {
   .rcpt-grid { grid-template-columns: 1fr; gap: 0; }
   .rcpt-title { font-size: 1.25rem; }
-  .rcpt-ba-logo { height: 104px; }
+  .rcpt-ba-logo { width: 130px; height: 120px; }
   .rcpt-actions { flex-direction: column; }
   .rcpt-btn { width: 100%; }
 }
@@ -21160,7 +21161,7 @@
 .sx2-eyebrow-row .sx2-eyebrow { margin: 0; }
 .sx2-eyebrow-row .sx2-ba-logo {
   position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
-  height: 56px; width: auto;
+  width: 130px; height: 120px; object-fit: contain;
 }
 
 /* Bold gradient success check badge (solid disc + white tick) */

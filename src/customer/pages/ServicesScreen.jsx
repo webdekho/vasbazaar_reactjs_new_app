@@ -263,7 +263,8 @@ const UpcomingDuesSection = ({ dues }) => {
 };
 
 // Categories hidden from the Bill Pay grid (matched on lowercase service name).
-const HIDDEN_CATEGORIES = new Set(["donation", "recurring deposit"]);
+// Forex is excluded as it is not part of the Bharat Connect (BBPS) ecosystem.
+const HIDDEN_CATEGORIES = new Set(["donation", "recurring deposit", "forex"]);
 
 const quickAccessItems = [
   { label: "Bill Pay", icon: HiMiniSquares2X2, to: "#services", color: "#40E0D0", isScroll: true, iconUrl: "/images/b.png" },
