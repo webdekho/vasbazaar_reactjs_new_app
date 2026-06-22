@@ -24,7 +24,11 @@ const ReceiptScreen = () => {
   const amount = Number(data.amount || 0);
   const ccf = normalizeCcf(data.ccf ?? data.statusPayload?.ccf ?? 0);
   const total = amount + ccf;
-  const bConnectTxnId = data.statusPayload?.refId || data.statusPayload?.ref_id || data.statusPayload?.referenceId || data.bConnectTxnId || "";
+  // B-Connect Txn ID = NPCI Bharat Connect txnReferenceId, persisted by the
+  // backend in vendorRefId (apirefid). refId/referenceId holds the biller's
+  // approvalRefNumber (shown separately as "Approved Number"), so prefer
+  // vendorRefId here — otherwise the field renders blank for most billers.
+  const bConnectTxnId = data.statusPayload?.vendorRefId || data.statusPayload?.apirefid || data.bConnectTxnId || data.statusPayload?.referenceId || data.statusPayload?.refId || data.statusPayload?.ref_id || "";
   const txnId = data.txnId || data.statusPayload?.txnId || "";
   const billerName = data.operatorName || data.label || "";
   const billerId = data.operatorId || pick("billerId", "biller_id") || "";

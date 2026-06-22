@@ -43,7 +43,8 @@ const toBharatConnectFields = (t) => {
     amount: formatCurrency(txn.amount ?? t.txnAmt ?? t.amount ?? 0),
     billerName: txn.operator,
     txnDate: `${t.date || ""} ${t.time || ""}`.trim() || "—",
-    txnReferenceId: t.refId || t.txnReferenceId || t.txnId || "—",
+    // B-Connect TXN ID = NPCI txnReferenceId, stored in vendorRefId (apirefid).
+    txnReferenceId: t.vendorRefId || t.apirefid || t.txnReferenceId || t.refId || t.txnId || "—",
     txnStatus: t.status || "—",
   };
 };

@@ -567,8 +567,19 @@ const SuccessScreen = () => {
   const userMobile = userData?.mobile || userData?.mobileNumber || "";
 
   const txnId = data.txnId || data.statusPayload?.txnId || "--";
-  // B-Connect TXN ID (a.k.a. the 12-digit BBPS reference returned in the pay response).
-  const bConnectTxnId = data.statusPayload?.refId || data.statusPayload?.ref_id || data.statusPayload?.referenceId || data.bConnectTxnId || "--";
+  // B-Connect TXN ID = the NPCI Bharat Connect "txnReferenceId" returned in the
+  // BBPS pay response. The backend persists that value in vendorRefId (apirefid),
+  // while refId/referenceId holds the biller's approvalRefNumber — which is often
+  // blank and is NOT the B-Connect reference. So for bill payments prefer
+  // vendorRefId before falling back, otherwise the field renders blank.
+  const isBillPayment = data.type === "bill";
+  const bConnectTxnId =
+    (isBillPayment ? (data.statusPayload?.vendorRefId || data.statusPayload?.apirefid) : "") ||
+    data.bConnectTxnId ||
+    data.statusPayload?.referenceId ||
+    data.statusPayload?.refId ||
+    data.statusPayload?.ref_id ||
+    "--";
   const amount = Number(data.amount || 0);
   // CCF (Customer Convenience Fee) — VasBazaar does not levy a convenience fee on
   // bill payments, so this is 0; NPCI requires it be shown within the 0-25 range.

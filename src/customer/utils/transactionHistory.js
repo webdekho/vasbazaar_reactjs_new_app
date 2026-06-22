@@ -224,6 +224,12 @@ export const matchesTransactionSearch = (item, rawQuery) => {
   const txn = normalizeTransaction(item);
   const fields = [
     item.txnId,
+    // Bharat Connect references: vendorRefId/apirefid carry the NPCI
+    // txnReferenceId (the B-Connect TXN ID), refId the approvalRefNumber.
+    item.vendorRefId,
+    item.apirefid,
+    item.refId,
+    item.txnReferenceId,
     item.operatorNo,
     item.mobile,
     item.customerName,
