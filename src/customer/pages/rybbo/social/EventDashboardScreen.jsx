@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { FaArrowLeft, FaWhatsapp, FaCopy, FaEdit, FaBan, FaDownload, FaBell, FaUserPlus, FaQrcode, FaAddressBook, FaSearch, FaTimes, FaCheck, FaMagic, FaImage, FaEye, FaEnvelope, FaUsers } from "react-icons/fa";
+import { FaArrowLeft, FaWhatsapp, FaCopy, FaEdit, FaBan, FaDownload, FaBell, FaUserPlus, FaQrcode, FaAddressBook, FaSearch, FaTimes, FaCheck, FaMagic, FaImage, FaEye, FaUsers } from "react-icons/fa";
 import { rybboSocialService, buildInviteUrl, buildInviteMessage, buildBannerAiUrl, buildCanvaPrompt, CANVA_BANNER_URL } from "../../../services/rybboSocialService";
 import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
@@ -40,10 +40,21 @@ const CelebrationBg = () => (
 );
 
 const RESPONSE_META = {
-  ACCEPT: { label: "Going", color: "#16a34a" },
+  INVITED: { label: "Invited", color: "#7C3AED" },
+  ACCEPT: { label: "Accepted", color: "#16a34a" },
   MAYBE: { label: "Maybe", color: "#f59e0b" },
   DECLINE: { label: "Declined", color: "#ef4444" },
 };
+
+const isValidEmail = (s) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(s || "").trim());
+const inviteKey = (value) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "";
+  if (raw.includes("@")) return isValidEmail(raw) ? `email:${raw}` : "";
+  const mobile = raw.replace(/\D/g, "");
+  return mobile.length >= 10 ? `mobile:${mobile}` : "";
+};
+const guestContact = (guest) => guest?.guestMobile || guest?.guestEmail || "";
 
 const StatCard = ({ value, label, color, onClick }) => (
   <div onClick={onClick} role={onClick ? "button" : undefined}
@@ -58,13 +69,10 @@ const EventDashboardScreen = () => {
   const { id } = useParams();
   const { showToast } = useToast();
   const [state, setState] = useState({ loading: true, error: "", event: null });
-  const [inviteMobile, setInviteMobile] = useState("");
+  const [inviteTarget, setInviteTarget] = useState("");
   const [inviting, setInviting] = useState(false);
   const [coHostMobile, setCoHostMobile] = useState("");
   const [addingCoHost, setAddingCoHost] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [emailChips, setEmailChips] = useState([]);
-  const [emailing, setEmailing] = useState(false);
   // Multi-select contact invite sheet
   const [contactsOpen, setContactsOpen] = useState(false);
   const [contactsLoading, setContactsLoading] = useState(false);
@@ -105,9 +113,11 @@ const EventDashboardScreen = () => {
   const e = state.event;
   const summary = e?.summary || {};
   const guests = e?.guests || [];
+  const invitedGuests = guests.filter((g) => g.guestMobile || g.guestEmail);
+  const invitedKeys = new Set(invitedGuests.flatMap((g) => [inviteKey(g.guestMobile), inviteKey(g.guestEmail)]).filter(Boolean));
   const inviteUrl = e ? buildInviteUrl(e.token) : "";
 
-  // Consolidated "Going" report — head count, food split, kids, drinkers.
+  // Consolidated accepted report — head count, food split, kids, drinkers.
   const goingReport = () => {
     const going = guests.filter((g) => g.response === "ACCEPT");
     const heads = going.reduce((s, g) => s + (Number(g.partySize) || 1), 0);
@@ -137,10 +147,93 @@ const EventDashboardScreen = () => {
     catch { showToast(inviteUrl, "info"); }
   };
 
-  // Shared WhatsApp share. On the native app we attach the banner image via the OS
-  // share sheet (WhatsApp lands the image). On web, WhatsApp cannot accept a local
-  // file through a link, so we open WhatsApp directly with the text and also copy it
-  // to the clipboard as a safety net (desktop "Open app" can drop the long message).
+  const loadImage = (src) => new Promise((resolve, reject) => {
+    const img = new Image();
+    if (!src.startsWith("data:")) img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+
+  const wrapCanvasText = (ctx, text, maxWidth) => {
+    const lines = [];
+    String(text || "").split("\n").forEach((raw) => {
+      if (!raw.trim()) {
+        lines.push("");
+        return;
+      }
+      const words = raw.split(/\s+/);
+      let line = "";
+      words.forEach((word) => {
+        const next = line ? `${line} ${word}` : word;
+        if (ctx.measureText(next).width <= maxWidth) {
+          line = next;
+        } else {
+          if (line) lines.push(line);
+          line = word;
+        }
+      });
+      if (line) lines.push(line);
+    });
+    return lines;
+  };
+
+  const makeCaptionedInviteImage = async (banner, text) => {
+    const img = await loadImage(banner);
+    const width = Math.max(720, img.naturalWidth || img.width || 1080);
+    const scale = width / (img.naturalWidth || img.width || width);
+    const imageHeight = Math.round((img.naturalHeight || img.height || 1350) * scale);
+    const pad = Math.round(width * 0.045);
+    const fontSize = Math.max(26, Math.round(width * 0.032));
+    const lineHeight = Math.round(fontSize * 1.38);
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    const lines = wrapCanvasText(ctx, text, width - pad * 2);
+    const captionHeight = pad * 2 + Math.max(lineHeight, lines.length * lineHeight);
+    canvas.width = width;
+    canvas.height = imageHeight + captionHeight;
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, width, imageHeight);
+
+    ctx.fillStyle = "#111827";
+    ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    ctx.textBaseline = "top";
+    let y = imageHeight + pad;
+    lines.forEach((line) => {
+      if (line) ctx.fillText(line, pad, y);
+      y += lineHeight;
+    });
+
+    return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+  };
+
+  const shareCaptionedImageFallback = async (banner, text, dialogTitle) => {
+    const blob = await makeCaptionedInviteImage(banner, text);
+    if (!blob) throw new Error("Could not prepare invite image");
+    const file = new File([blob], "invite-with-message.jpg", { type: "image/jpeg" });
+    const data = { title: dialogTitle, files: [file] };
+    if (typeof navigator !== "undefined" && navigator.canShare?.(data)) {
+      await navigator.share(data);
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "invite-with-message.jpg";
+    a.click();
+    URL.revokeObjectURL(url);
+    try { await navigator.clipboard.writeText(text); } catch { /* clipboard may be blocked */ }
+    showToast("Invite image downloaded with message below it. Attach this image in WhatsApp.", "info");
+  };
+
+  // Shared WhatsApp share. On native, use `files` rather than `url` so WhatsApp
+  // receives the banner as media and the text as the media caption. On web, use
+  // Web Share when available; otherwise create one image with the message below
+  // the banner so it is not sent as a separate WhatsApp text bubble.
   const shareToWhatsApp = async (text, { attachBanner = false, dialogTitle = "Share", copiedToast } = {}) => {
     const banner = attachBanner ? coverImages[0] : null;
 
@@ -151,7 +244,7 @@ const EventDashboardScreen = () => {
           const mime = (banner.slice(0, banner.indexOf(",")).match(/data:(.*?);/) || [])[1] || "image/jpeg";
           const ext = (mime.split("/")[1] || "jpg").replace("jpeg", "jpg");
           const res = await Filesystem.writeFile({ path: `invite-${e.token}.${ext}`, data: base64, directory: Directory.Cache });
-          await Share.share({ text, url: res.uri, dialogTitle });
+          await Share.share({ text, files: [res.uri], dialogTitle });
         } else {
           await Share.share({ text, dialogTitle });
         }
@@ -162,18 +255,27 @@ const EventDashboardScreen = () => {
       }
     }
 
-    // Web with a banner: the Web Share API is the ONLY way to send the image + message
-    // together to WhatsApp. It opens the OS share sheet (WhatsApp is one tap away).
+    // Web with a banner: Web Share can send the image + message together. It opens
+    // the OS share sheet (WhatsApp is one tap away).
     if (banner && typeof navigator !== "undefined" && typeof navigator.canShare === "function") {
       try {
         const blob = await (await fetch(banner)).blob();
         const ext = ((blob.type || "image/jpeg").split("/")[1] || "jpg").replace("jpeg", "jpg");
         const file = new File([blob], `invite.${ext}`, { type: blob.type || "image/jpeg" });
-        const data = { text, files: [file] };
+        const data = { title: dialogTitle, text, files: [file] };
         if (navigator.canShare(data)) { await navigator.share(data); return; }
       } catch (err) {
         if (err?.name === "AbortError") return;
         // fall through to the link
+      }
+    }
+
+    if (banner) {
+      try {
+        await shareCaptionedImageFallback(banner, text, dialogTitle);
+        return;
+      } catch {
+        // fall through to text-only as the last resort
       }
     }
 
@@ -202,6 +304,28 @@ const EventDashboardScreen = () => {
       dialogTitle: "Send reminder",
       copiedToast: "Reminder copied — if WhatsApp shows only the link, just paste it",
     });
+  };
+
+  const sendGuestReminder = async (guest) => {
+    const mobile = String(guest?.guestMobile || "").replace(/\D/g, "");
+    const name = guest?.guestName && !/^Guest \d{4}$/.test(guest.guestName) ? `${guest.guestName}, ` : "";
+    const text = `${name}gentle reminder to RSVP for "${e.title}"${e.date ? ` on ${e.date}` : ""}.\n\nPlease confirm here: ${inviteUrl}`;
+    if (mobile.length >= 10) {
+      window.open(`https://api.whatsapp.com/send?phone=91${mobile.slice(-10)}&text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (guest?.guestEmail) {
+      const r = await rybboSocialService.inviteByEmail(id, {
+        email: guest.guestEmail,
+        inviteUrl,
+        message: text,
+        banner: coverImages[0] || null,
+        reminder: true,
+      });
+      showToast(r.success ? (r.data?.message || "Reminder emailed") : (r.message || "Could not send reminder"), r.success ? "success" : "error");
+      return;
+    }
+    showToast("Guest contact is missing", "error");
   };
 
   // Keep the local cover-image list + sample message in sync with the loaded event.
@@ -348,8 +472,9 @@ const EventDashboardScreen = () => {
     const mobiles = Array.from(selectedMobiles);
     if (!mobiles.length) { showToast("Select at least one contact", "info"); return; }
     setBulkInviting(true);
-    let ok = 0, fail = 0;
+    let ok = 0, fail = 0, duplicate = 0;
     for (const m of mobiles) {
+      if (invitedKeys.has(inviteKey(m))) { duplicate++; continue; }
       try {
         const r = await rybboSocialService.inviteByMobile(id, m);
         if (r.success) ok++; else fail++;
@@ -358,73 +483,29 @@ const EventDashboardScreen = () => {
     setBulkInviting(false);
     setContactsOpen(false);
     setSelectedMobiles(new Set());
-    showToast(`${ok} invite${ok === 1 ? "" : "s"} sent${fail ? `, ${fail} failed` : ""}`, ok ? "success" : "error");
+    showToast(`${ok} invite${ok === 1 ? "" : "s"} sent${duplicate ? `, ${duplicate} already invited` : ""}${fail ? `, ${fail} failed` : ""}`, ok ? "success" : duplicate ? "info" : "error");
     load();
   };
 
-  const isValidEmail = (s) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s);
-
-  // Add one/more typed emails as chips (split on comma/space). Returns true if any added.
-  const addEmailChips = (raw) => {
-    const parts = String(raw).split(/[,\s]+/).map((p) => p.trim()).filter(Boolean);
-    let added = false;
-    setEmailChips((prev) => {
-      const next = [...prev];
-      for (const p of parts) {
-        if (isValidEmail(p) && !next.includes(p)) { next.push(p); added = true; }
-        else if (!isValidEmail(p)) showToast(`"${p}" is not a valid email`, "error");
-      }
-      return next;
-    });
-    return added;
-  };
-
-  const onEmailKeyDown = (ev) => {
-    if (ev.key === "Enter" || ev.key === ",") {
-      ev.preventDefault();
-      if (addEmailChips(inviteEmail)) setInviteEmail("");
-    } else if (ev.key === "Backspace" && !inviteEmail && emailChips.length) {
-      setEmailChips((prev) => prev.slice(0, -1));
-    }
-  };
-
-  const onEmailChange = (ev) => {
-    const v = ev.target.value;
-    // Typing a comma commits the email as a chip.
-    if (v.includes(",")) { if (addEmailChips(v)) setInviteEmail(""); return; }
-    setInviteEmail(v);
-  };
-
-  const sendEmailInvite = async () => {
-    // Commit anything still typed, then collect the full recipient list.
-    const typed = inviteEmail.trim();
-    const recipients = [...emailChips];
-    if (typed && isValidEmail(typed) && !recipients.includes(typed)) recipients.push(typed);
-    if (!recipients.length) { showToast("Add at least one valid email", "error"); return; }
-
-    setEmailing(true);
-    const body = (shareMessage || buildInviteMessage(e)).trim();
-    const banner = coverImages[0] || null;
-    let ok = 0, fail = 0;
-    for (const email of recipients) {
-      const r = await rybboSocialService.inviteByEmail(id, { email, inviteUrl, message: body, banner });
-      if (r.success) ok++; else fail++;
-    }
-    setEmailing(false);
-    setEmailChips([]);
-    setInviteEmail("");
-    showToast(`${ok} invitation${ok === 1 ? "" : "s"} emailed${fail ? `, ${fail} failed` : ""}`, ok ? "success" : "error");
-  };
-
   const sendInvite = async () => {
-    const m = inviteMobile.replace(/\D/g, "");
-    if (m.length < 10) { showToast("Enter a valid 10-digit mobile", "error"); return; }
+    const target = inviteTarget.trim();
+    const key = inviteKey(target);
+    if (!key) { showToast("Enter a valid mobile number or email", "error"); return; }
+    if (invitedKeys.has(key)) { showToast("This guest is already invited", "info"); return; }
     setInviting(true);
-    const r = await rybboSocialService.inviteByMobile(id, m);
+    const r = key.startsWith("email:")
+      ? await rybboSocialService.inviteByEmail(id, {
+          email: target,
+          inviteUrl,
+          message: (shareMessage || buildInviteMessage(e)).trim(),
+          banner: coverImages[0] || null,
+        })
+      : await rybboSocialService.inviteByMobile(id, target);
     setInviting(false);
     if (!r.success) { showToast(r.message || "Could not send invite", "error"); return; }
-    showToast(r.data?.message || "Invite processed", r.data?.isAppUser ? "success" : "info");
-    setInviteMobile("");
+    showToast(r.data?.message || "Invite processed", "success");
+    setInviteTarget("");
+    load();
   };
 
   // Co-hosts — owner grants up to 2 extra people full management of this event.
@@ -646,9 +727,9 @@ const EventDashboardScreen = () => {
                   <FaCopy /> Copy link
                 </button>
               </div>
-              {/* Invite by mobile — type a number or pick from the device contact list */}
+              {/* Invite by mobile or email — type one contact, or pick mobiles from device contacts. */}
               <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-                <input value={inviteMobile} onChange={(ev) => setInviteMobile(ev.target.value)} type="tel" placeholder="Invite by mobile (track invitees)"
+                <input value={inviteTarget} onChange={(ev) => setInviteTarget(ev.target.value)} type="text" placeholder="Invite by mobile or email"
                   style={{ flex: 1, minWidth: 160, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--cm-line, #E5E7EB)", background: "var(--cm-card, #fff)", color: "var(--cm-ink, inherit)", fontSize: 13, outline: "none" }} />
                 <button type="button" onClick={sendInvite} disabled={inviting}
                   style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 14px", borderRadius: 10, border: "none", background: ACCENT, color: "#fff", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
@@ -660,27 +741,48 @@ const EventDashboardScreen = () => {
                   <FaAddressBook /> {contactsLoading ? "…" : "Contacts"}
                 </button>
               </div>
-              {/* Invite by email — type an email + comma/Enter to add it as a chip; sends the
-                  banner + details + RSVP link from connect@vasbazaar.com to everyone added */}
-              <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
-                <div style={{ flex: 1, minWidth: 0, display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", padding: "6px 8px", borderRadius: 10, border: "1px solid var(--cm-line, #E5E7EB)", background: "var(--cm-card, #fff)" }}>
-                  {emailChips.map((em) => (
-                    <span key={em} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 6px 3px 9px", borderRadius: 999, background: "#ede9fe", color: ACCENT, fontSize: 12, fontWeight: 600 }}>
-                      {em}
-                      <button type="button" onClick={() => setEmailChips((prev) => prev.filter((x) => x !== em))} aria-label={`Remove ${em}`}
-                        style={{ border: "none", background: "transparent", color: ACCENT, cursor: "pointer", display: "inline-flex", padding: 0 }}>
-                        <FaTimes size={10} />
-                      </button>
-                    </span>
-                  ))}
-                  <input value={inviteEmail} onChange={onEmailChange} onKeyDown={onEmailKeyDown} onBlur={() => { if (addEmailChips(inviteEmail)) setInviteEmail(""); }}
-                    type="email" placeholder={emailChips.length ? "Add another email" : "Invite by email (comma to add)"}
-                    style={{ flex: 1, minWidth: 120, padding: "4px 2px", border: "none", outline: "none", background: "transparent", color: "var(--cm-ink, inherit)", fontSize: 13 }} />
+
+              <div style={{ marginTop: 14, border: "1px solid var(--cm-line, #E5E7EB)", borderRadius: 12, overflow: "hidden" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", padding: "10px 12px", borderBottom: "1px solid var(--cm-line, #E5E7EB)" }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 800 }}>Invited guests</div>
+                    <div style={{ fontSize: 11, color: "var(--cm-muted, #6B7280)" }}>
+                      {summary.totalInvited ?? invitedGuests.length} invited • {summary.invited ?? 0} awaiting RSVP
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => setStep(3)}
+                    style={{ border: `1px solid ${ACCENT}`, background: "transparent", color: ACCENT, borderRadius: 999, padding: "7px 10px", fontSize: 12, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>
+                    View all
+                  </button>
                 </div>
-                <button type="button" onClick={sendEmailInvite} disabled={emailing}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 14px", borderRadius: 10, border: "none", background: ACCENT, color: "#fff", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
-                  <FaEnvelope /> {emailing ? "…" : "Email"}
-                </button>
+                {invitedGuests.length === 0 ? (
+                  <div style={{ padding: 14, color: "var(--cm-muted, #6B7280)", fontSize: 13 }}>
+                    No invited guests yet. Add a mobile number/email or pick contacts.
+                  </div>
+                ) : (
+                  <div>
+                    {invitedGuests.slice(0, 6).map((g) => {
+                      const meta = RESPONSE_META[g.response] || { label: g.response || "Invited", color: "#6B7280" };
+                      return (
+                        <div key={g.id || guestContact(g)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderTop: "1px solid rgba(127,127,127,0.14)" }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{g.guestName || "Guest"}</div>
+                            <div style={{ fontSize: 11, color: "var(--cm-muted, #6B7280)" }}>{guestContact(g)}</div>
+                          </div>
+                          <span style={{ fontSize: 11, fontWeight: 800, color: meta.color, background: `${meta.color}18`, borderRadius: 999, padding: "4px 8px", whiteSpace: "nowrap" }}>
+                            {meta.label}
+                          </span>
+                          {g.response !== "ACCEPT" && (
+                            <button type="button" onClick={() => sendGuestReminder(g)}
+                              style={{ border: "none", background: "#25D366", color: "#fff", borderRadius: 999, padding: "7px 10px", fontSize: 11, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>
+                              Reminder
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -704,7 +806,9 @@ const EventDashboardScreen = () => {
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, margin: "0 2px 8px" }}>Responses</div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <StatCard value={summary.accepted ?? 0} label="Going" color="#16a34a" onClick={() => setReportOpen(true)} />
+                <StatCard value={summary.totalInvited ?? invitedGuests.length} label="Invited" color={ACCENT} />
+                <StatCard value={summary.invited ?? 0} label="Awaiting" color="#7C3AED" />
+                <StatCard value={summary.accepted ?? 0} label="Accepted" color="#16a34a" onClick={() => setReportOpen(true)} />
                 <StatCard value={summary.maybe ?? 0} label="Maybe" color="#f59e0b" />
                 <StatCard value={summary.declined ?? 0} label="Declined" color="#ef4444" />
                 <StatCard value={summary.guestCount ?? 0} label="Head count" color={ACCENT} />
@@ -759,7 +863,7 @@ const EventDashboardScreen = () => {
               </div>
               {guests.length === 0 ? (
                 <div className="cm-empty" style={{ padding: 24, textAlign: "center", fontSize: 13, color: "var(--cm-muted, #6B7280)" }}>
-                  No responses yet. Share the invite to get started.
+                  No invited guests yet. Share the invite to get started.
                 </div>
               ) : (
                 <div style={{ display: "grid", gap: 8 }}>
@@ -769,14 +873,22 @@ const EventDashboardScreen = () => {
                       <div key={g.id} style={{ display: "flex", gap: 10, padding: 12, border: "1px solid var(--cm-line, #E5E7EB)", borderRadius: 10 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontWeight: 700, fontSize: 14 }}>{g.guestName} {g.response === "ACCEPT" && g.partySize > 1 ? <span style={{ color: "var(--cm-muted, #6B7280)", fontWeight: 500 }}>+{g.partySize - 1}</span> : null}</div>
-                          <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>{g.guestMobile}{g.foodPref ? ` · ${g.foodPref}` : ""}</div>
+                          <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>{guestContact(g)}{g.foodPref ? ` · ${g.foodPref}` : ""}</div>
                           {g.note && <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)", marginTop: 2, fontStyle: "italic" }}>"{g.note}"</div>}
                           <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
                             {g.contributionStatus === "PAID" && <span style={{ fontSize: 10, fontWeight: 700, color: "#166534", background: "#dcfce7", padding: "2px 7px", borderRadius: 999 }}>Paid ₹{g.contributionAmount}</span>}
                             {g.checkedIn && <span style={{ fontSize: 10, fontWeight: 700, color: ACCENT, background: "#ede9fe", padding: "2px 7px", borderRadius: 999 }}>Checked in</span>}
                           </div>
                         </div>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: meta.color, whiteSpace: "nowrap" }}>{meta.label}</span>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: meta.color, whiteSpace: "nowrap" }}>{meta.label}</span>
+                          {g.response !== "ACCEPT" && (
+                            <button type="button" onClick={() => sendGuestReminder(g)}
+                              style={{ border: "none", background: "#25D366", color: "#fff", borderRadius: 999, padding: "6px 9px", fontSize: 11, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>
+                              Reminder
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -941,7 +1053,7 @@ const EventDashboardScreen = () => {
             </div>
           )}
 
-          {/* Going — consolidated report */}
+          {/* Accepted — consolidated report */}
           {reportOpen && (() => {
             const rep = goingReport();
             const Stat = ({ label, value, color }) => (
@@ -956,7 +1068,7 @@ const EventDashboardScreen = () => {
                 <div onClick={(ev) => ev.stopPropagation()}
                   style={{ width: "100%", maxWidth: 460, maxHeight: "85vh", overflowY: "auto", background: "var(--cm-card, #fff)", color: "var(--cm-ink, inherit)", borderRadius: 16, padding: 16 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                    <div style={{ fontSize: 16, fontWeight: 800 }}>Going — consolidated report</div>
+                    <div style={{ fontSize: 16, fontWeight: 800 }}>Accepted — consolidated report</div>
                     <button type="button" onClick={() => setReportOpen(false)} aria-label="Close"
                       style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>
                       <FaTimes />
@@ -964,7 +1076,7 @@ const EventDashboardScreen = () => {
                   </div>
 
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-                    <Stat label="Going" value={rep.going.length} color="#16a34a" />
+                    <Stat label="Accepted" value={rep.going.length} color="#16a34a" />
                     <Stat label="Head count" value={rep.heads} />
                     <Stat label="Kids" value={rep.kids} />
                     <Stat label="Drinkers" value={rep.drinkers} color="#b45309" />

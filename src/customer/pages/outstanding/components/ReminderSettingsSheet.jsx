@@ -116,7 +116,7 @@ const ReminderSettingsSheet = ({ customer, onClose, onSaved }) => {
       <div className="cm-sheet-overlay is-open" onClick={onClose} />
       <div className="cm-sheet is-open ol-sheet">
         <div className="ol-sheet-head">
-          <h3>SMS reminder for {customer.customerName}</h3>
+          <h3>Payment reminders for {customer.customerName}</h3>
           <button type="button" className="ol-sheet-close" onClick={onClose} aria-label="Close">
             <FaTimes />
           </button>
@@ -132,7 +132,7 @@ const ReminderSettingsSheet = ({ customer, onClose, onSaved }) => {
                 checked={enabled}
                 onChange={(e) => setEnabled(e.target.checked)}
               />
-              <span>Send daily SMS reminder from my phone</span>
+              <span>Send payment reminders (auto in-app + SMS from my phone)</span>
             </label>
 
             <label className="ol-field">
@@ -180,9 +180,10 @@ const ReminderSettingsSheet = ({ customer, onClose, onSaved }) => {
             </label>
 
             <div style={{ background: "#e3f2fd", padding: 12, borderRadius: 8, fontSize: 13, color: "#1565c0" }}>
-              <strong>How it works:</strong> At the chosen time, you'll get a notification.
-              Tap it to open the SMS app with pre-filled message. Just tap Send!
-              SMS charges apply as per your operator.
+              <strong>How it works:</strong> If your customer uses the VasBazaar app, they
+              automatically get an in-app reminder every day at 12 PM (weekly customers once a week).
+              For SMS: at the chosen time you'll get a notification — tap it to open the SMS app with a
+              pre-filled message, then tap Send. SMS charges apply as per your operator.
             </div>
 
             {error && <div className="ol-error">{error}</div>}

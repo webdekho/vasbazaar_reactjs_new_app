@@ -32,13 +32,14 @@ export default function ProviderHubScreen() {
   const [pForm, setPForm] = useState({
     providerName: "", businessName: "", headline: "", about: "",
     categoryId: "", city: "", pincode: "", serviceAreas: "", mobile: "",
-    travelCharge: "", latitude: "", longitude: "", profilePhotoUrl: "",
+    travelCharge: "", locationName: "", latitude: "", longitude: "", profilePhotoUrl: "",
   });
   const [locating, setLocating] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef(null);
   const [offeringModal, setOfferingModal] = useState(false);
-  const [oForm, setOForm] = useState({ id: null, title: "", description: "", basePrice: "", durationMinutes: "" });
+  const emptyOfferingForm = { id: null, title: "", description: "", basePrice: "", durationMinutes: "", serviceableArea: "", serviceRadiusKm: "" };
+  const [oForm, setOForm] = useState(emptyOfferingForm);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,6 +57,7 @@ export default function ProviderHubScreen() {
         categoryId: p.categoryId?.id || "", city: p.city || "",
         pincode: p.pincode || "", serviceAreas: p.serviceAreas || "", mobile: p.mobile || "",
         travelCharge: p.travelCharge != null ? String(p.travelCharge) : "",
+        locationName: p.locationName || "",
         latitude: p.latitude != null ? String(p.latitude) : "",
         longitude: p.longitude != null ? String(p.longitude) : "",
         profilePhotoUrl: p.profilePhotoUrl || "",
@@ -127,6 +129,8 @@ export default function ProviderHubScreen() {
       description: oForm.description,
       basePrice: oForm.basePrice ? Number(oForm.basePrice) : 0,
       durationMinutes: oForm.durationMinutes ? Number(oForm.durationMinutes) : null,
+      serviceableArea: oForm.serviceableArea,
+      serviceRadiusKm: oForm.serviceRadiusKm ? Number(oForm.serviceRadiusKm) : null,
       pricingType: "FIXED",
     };
     const res = await serviceBazaarService.saveMyOffering(payload);
@@ -134,7 +138,7 @@ export default function ProviderHubScreen() {
     if (res.success) {
       showToast(oForm.id ? "Service updated and resubmitted for approval" : "Service submitted for approval", "success");
       setOfferingModal(false);
-      setOForm({ id: null, title: "", description: "", basePrice: "", durationMinutes: "" });
+      setOForm(emptyOfferingForm);
       const offRes = await serviceBazaarService.getMyOfferings();
       if (offRes.success) setOfferings(Array.isArray(offRes.data) ? offRes.data : []);
     } else showToast(res.message || "Could not save service", "error");
@@ -224,10 +228,20 @@ export default function ProviderHubScreen() {
           <div className="sb-field"><label>Travel / visit charge (₹)</label><input type="number" value={pForm.travelCharge} onChange={(e) => setPForm({ ...pForm, travelCharge: e.target.value })} placeholder="0 — added to each doorstep booking" /></div>
           <div className="sb-field sb-col-full">
             <label>Map location (for "near me" search)</label>
+            <input
+              value={pForm.locationName}
+              onChange={(e) => setPForm({ ...pForm, locationName: e.target.value })}
+              placeholder="e.g. Newa BKC"
+              style={{ marginBottom: 8 }}
+            />
             <button type="button" className="sb-btn ghost sm" onClick={pinLocation} disabled={locating}>
               {locating ? "Locating…" : pForm.latitude ? "Update GPS pin" : "Pin my location (GPS)"}
             </button>
-            {pForm.latitude && <p className="sb-photo-hint">Pinned: {Number(pForm.latitude).toFixed(4)}, {Number(pForm.longitude).toFixed(4)}</p>}
+            {pForm.latitude && (
+              <p className="sb-photo-hint">
+                Pinned{pForm.locationName ? ` at ${pForm.locationName}` : ""}: {Number(pForm.latitude).toFixed(4)}, {Number(pForm.longitude).toFixed(4)}
+              </p>
+            )}
           </div>
           <div className="sb-field"><label>Contact mobile</label><input value={pForm.mobile} onChange={(e) => setPForm({ ...pForm, mobile: e.target.value })} /></div>
           <button className="sb-btn block" disabled={busy} onClick={saveProfile}>{busy ? "Saving…" : profile ? "Update & Resubmit" : "Submit for Approval"}</button>
@@ -238,13 +252,19 @@ export default function ProviderHubScreen() {
         <div className="sb-section">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <h3 style={{ margin: 0 }}>My Services</h3>
-            <button className="sb-btn sm" onClick={() => { setOForm({ id: null, title: "", description: "", basePrice: "", durationMinutes: "" }); setOfferingModal(true); }}><FaPlus style={{ marginRight: 4 }} /> Add</button>
+            <button className="sb-btn sm" onClick={() => { setOForm(emptyOfferingForm); setOfferingModal(true); }}><FaPlus style={{ marginRight: 4 }} /> Add</button>
           </div>
           {offerings.length === 0 ? <p className="sb-card-meta">No services yet. Add your first one.</p> : offerings.map((o) => (
             <div className="sb-offering" key={o.id}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p className="sb-offering-title">{o.title}</p>
                 <p className="sb-offering-desc">₹{Number(o.basePrice || 0).toFixed(0)} • <span className={`sb-status ${o.status}`} style={{ fontSize: 10 }}>{o.status}</span></p>
+                {(o.serviceableArea || o.serviceRadiusKm) && (
+                  <p className="sb-offering-desc">
+                    {o.serviceableArea || "Serviceable area"}
+                    {o.serviceRadiusKm ? ` • ${Number(o.serviceRadiusKm).toFixed(0)} km` : ""}
+                  </p>
+                )}
               </div>
               <button className="sb-btn sm ghost" onClick={() => {
                 setOForm({
@@ -253,6 +273,8 @@ export default function ProviderHubScreen() {
                   description: o.description || "",
                   basePrice: o.basePrice != null ? String(o.basePrice) : "",
                   durationMinutes: o.durationMinutes != null ? String(o.durationMinutes) : "",
+                  serviceableArea: o.serviceableArea || "",
+                  serviceRadiusKm: o.serviceRadiusKm != null ? String(o.serviceRadiusKm) : "",
                 });
                 setOfferingModal(true);
               }}>Edit</button>
@@ -332,6 +354,8 @@ export default function ProviderHubScreen() {
             <div className="sb-field"><label>Description</label><textarea rows={2} value={oForm.description} onChange={(e) => setOForm({ ...oForm, description: e.target.value })} /></div>
             <div className="sb-field"><label>Price (₹)</label><input type="number" value={oForm.basePrice} onChange={(e) => setOForm({ ...oForm, basePrice: e.target.value })} /></div>
             <div className="sb-field"><label>Duration (min)</label><input type="number" value={oForm.durationMinutes} onChange={(e) => setOForm({ ...oForm, durationMinutes: e.target.value })} /></div>
+            <div className="sb-field"><label>Serviceable area</label><textarea rows={2} value={oForm.serviceableArea} onChange={(e) => setOForm({ ...oForm, serviceableArea: e.target.value })} placeholder="e.g. BKC, Bandra, Kurla" /></div>
+            <div className="sb-field"><label>Service radius (km)</label><input type="number" min="0" step="0.5" value={oForm.serviceRadiusKm} onChange={(e) => setOForm({ ...oForm, serviceRadiusKm: e.target.value })} placeholder="e.g. 5" /></div>
             <button className="sb-btn block" disabled={busy} onClick={saveOffering}>{busy ? "Saving…" : oForm.id ? "Update Service" : "Submit for Approval"}</button>
             <button className="sb-btn ghost block" style={{ marginTop: 8 }} onClick={() => setOfferingModal(false)}>Cancel</button>
           </div>

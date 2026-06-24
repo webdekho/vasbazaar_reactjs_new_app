@@ -25,7 +25,7 @@ const SocialHomeScreen = () => {
     return () => { cancelled = true; };
   }, []);
 
-  const RESPONSE_LABEL = { ACCEPT: { t: "Going", c: "#16a34a" }, MAYBE: { t: "Maybe", c: "#f59e0b" }, DECLINE: { t: "Declined", c: "#ef4444" } };
+  const RESPONSE_LABEL = { ACCEPT: { t: "Accepted", c: "#16a34a" }, MAYBE: { t: "Maybe", c: "#f59e0b" }, DECLINE: { t: "Declined", c: "#ef4444" } };
 
   return (
     <DataState loading={state.loading} error={state.error}>
@@ -84,7 +84,7 @@ const SocialHomeScreen = () => {
                       {e.date}{e.time ? ` · ${e.time}` : ""}{e.venue ? ` · ${e.venue}` : ""}
                     </div>
                     <div style={{ display: "flex", gap: 14, marginTop: 10, fontSize: 12 }}>
-                      <span style={{ color: "#16a34a", fontWeight: 700 }}>{s.accepted ?? 0} going</span>
+                      <span style={{ color: "#16a34a", fontWeight: 700 }}>{s.accepted ?? 0} accepted</span>
                       <span style={{ color: "#f59e0b", fontWeight: 700 }}>{s.maybe ?? 0} maybe</span>
                       <span style={{ color: "var(--cm-muted, #6B7280)" }}><FaUsers size={11} style={{ marginRight: 4 }} />{s.guestCount ?? 0} guests</span>
                     </div>

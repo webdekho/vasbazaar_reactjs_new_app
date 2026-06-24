@@ -114,6 +114,16 @@ const AddTxnSheet = ({ type, customer, transaction, onClose, onAdded }) => {
       setError(res.message || "Failed to record transaction");
       return;
     }
+    // When the seller chose to notify, offer to forward a WhatsApp reminder right
+    // away. The in-app push only reaches the customer if they're a VasBazaar app
+    // user, so WhatsApp is the reliable nudge for everyone else.
+    if (notify && !isEdit && res.data?.whatsappLink) {
+      const note = res.data?.notificationSent
+        ? "Entry saved and in-app notification sent."
+        : "Entry saved.";
+      const send = window.confirm(`${note}\n\nSend a WhatsApp reminder to ${customer.customerName} now?`);
+      if (send) window.open(res.data.whatsappLink, "_blank");
+    }
     onAdded?.(res.data);
   };
 
@@ -201,8 +211,8 @@ const AddTxnSheet = ({ type, customer, transaction, onClose, onAdded }) => {
           </label>
 
           <div className="ol-field">
-            <span>Collection mode</span>
-            <div className="ol-payment-mode-grid" role="radiogroup" aria-label="Collection mode">
+            <span>Payment mode</span>
+            <div className="ol-payment-mode-grid" role="radiogroup" aria-label="Payment mode">
               {[
                 ["CASH", "Cash"],
                 ["UPI", "UPI"],

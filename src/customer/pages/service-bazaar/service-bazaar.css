@@ -7,6 +7,8 @@
   padding: 12px 10px 90px;
   width: 100%;
   box-sizing: border-box;
+  min-width: 0;
+  overflow-x: hidden;
 }
 .sb-topbar {
   display: flex;
@@ -36,9 +38,11 @@
   display: flex;
   gap: 8px;
   margin-bottom: 12px;
+  min-width: 0;
 }
 .sb-search {
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -51,6 +55,7 @@
   background: transparent;
   outline: none;
   flex: 1;
+  min-width: 0;
   font-size: 14px;
   color: inherit;
 }
@@ -58,10 +63,13 @@
   display: flex;
   gap: 8px;
   overflow-x: auto;
+  max-width: 100%;
   padding-bottom: 6px;
   margin-bottom: 12px;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+.sb-chips::-webkit-scrollbar { display: none; }
 .sb-chip {
   white-space: nowrap;
   border: 1px solid rgba(127, 127, 127, 0.3);
@@ -88,6 +96,8 @@
   margin-bottom: 10px;
   cursor: pointer;
   background: var(--cm-card-bg, transparent);
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .sb-avatar {
   width: 56px;
@@ -109,11 +119,13 @@
   font-weight: 700;
   font-size: 15px;
   margin: 0;
+  overflow-wrap: anywhere;
 }
 .sb-card-meta {
   font-size: 12px;
   opacity: 0.7;
   margin: 3px 0 0;
+  overflow-wrap: anywhere;
 }
 .sb-badges {
   display: flex;
@@ -178,6 +190,7 @@
   cursor: pointer;
   background: #0ea5e9;
   color: #fff;
+  min-width: 0;
 }
 .sb-btn:disabled {
   opacity: 0.5;
@@ -280,9 +293,17 @@
 .sb-cta-row {
   display: flex;
   gap: 8px;
+  margin-top: 20px;
   margin-bottom: 14px;
+  min-width: 0;
 }
-.sb-cta-row .sb-btn { flex: 1; }
+.sb-cta-row .sb-btn {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
 .sb-stars {
   display: flex;
   gap: 4px;
@@ -322,6 +343,7 @@
   margin: -12px -10px 12px;
   padding-left: 10px;
   padding-right: 10px;
+  box-sizing: border-box;
 }
 .theme-light .sb-sticky { background: #fff; }
 .sb-hero {
@@ -330,6 +352,8 @@
   padding: 16px;
   color: #fff;
   margin-bottom: 12px;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .sb-hero h1 { margin: 0; font-size: 20px; font-weight: 800; color: #fff; }
 .sb-hero p { margin: 4px 0 0; font-size: 12px; opacity: 0.95; }
@@ -345,6 +369,7 @@
   padding: 6px 12px;
   font-size: 12px;
   cursor: pointer;
+  max-width: 100%;
 }
 
 /* ---- Skeleton shimmer ---- */
@@ -563,7 +588,7 @@
   .sb-page { max-width: none; margin: 0; padding: 8px 0 96px; }
 
   /* No horizontal break-out on desktop (the column has no side padding) */
-  .sb-sticky { margin: -8px 0 16px; padding-left: 0; padding-right: 0; padding-top: 8px; }
+  .sb-sticky { margin: -8px 0 20px; padding-left: 0; padding-right: 0; padding-top: 8px; }
 
   .sb-hero { padding: 26px 28px; border-radius: 18px; }
   .sb-hero h1 { font-size: 28px; }
