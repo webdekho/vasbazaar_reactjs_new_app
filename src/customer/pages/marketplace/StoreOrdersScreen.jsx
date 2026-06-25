@@ -9,7 +9,7 @@ const STATUS_FILTER = ["All", "PLACED", "ACCEPTED", "PREPARING", "OUT_FOR_DELIVE
 const NEXT_STATUS = {
   ACCEPTED: "PREPARING",
   PREPARING: "OUT_FOR_DELIVERY",
-  OUT_FOR_DELIVERY: "DELIVERED",
+  // DELIVERED is reached via the delivery-OTP verification, not a plain button.
 };
 // Pickup orders follow a different progression: no out-for-delivery/delivered.
 // PICKED_UP is reached via the verify-pickup code, not a plain status button.
@@ -155,6 +155,33 @@ const StoreOrdersScreen = () => {
     } else {
       setVerifyMsg((m) => ({ ...m, [order.id]: { type: "error", text: res.message || "Incorrect pickup code" } }));
     }
+  };
+
+  const verifyDelivery = async (order) => {
+    const code = (pickupCodes[order.id] || "").trim();
+    if (code.length < 4) {
+      setVerifyMsg((m) => ({ ...m, [order.id]: { type: "error", text: "Enter the customer's delivery OTP" } }));
+      return;
+    }
+    setVerifying((v) => ({ ...v, [order.id]: true }));
+    const res = await marketplaceService.verifyDelivery(order.id, code);
+    setVerifying((v) => ({ ...v, [order.id]: false }));
+    if (res.success) {
+      setVerifyMsg((m) => ({ ...m, [order.id]: { type: "success", text: res.message || "Delivery verified" } }));
+      setPickupCodes((c) => ({ ...c, [order.id]: "" }));
+      load();
+    } else {
+      setVerifyMsg((m) => ({ ...m, [order.id]: { type: "error", text: res.message || "Incorrect delivery OTP" } }));
+    }
+  };
+
+  // Close a delivery order that carries no OTP (store turned the OTP off).
+  const markDelivered = async (order) => {
+    setVerifying((v) => ({ ...v, [order.id]: true }));
+    const res = await marketplaceService.updateOrderStatus(order.id, "DELIVERED");
+    setVerifying((v) => ({ ...v, [order.id]: false }));
+    if (res.success) load();
+    else setError(res.message);
   };
 
   const cancel = async (order) => {
@@ -367,6 +394,60 @@ const StoreOrdersScreen = () => {
                         {vMsg.text}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {!pickup && o.orderStatus === "OUT_FOR_DELIVERY" && o.deliveryOtp && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--cm-line)" }}>
+                    <div style={{ fontSize: 11, color: "var(--cm-muted)", marginBottom: 6 }}>
+                      Ask the customer for their 6-digit delivery OTP to complete this order.
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={6}
+                        placeholder="Delivery OTP"
+                        className="mkt-input"
+                        value={pickupCodes[o.id] || ""}
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/\D/g, "").slice(0, 6);
+                          setPickupCodes((c) => ({ ...c, [o.id]: v }));
+                          setVerifyMsg((m) => ({ ...m, [o.id]: undefined }));
+                        }}
+                        style={{ width: 120, letterSpacing: 2, fontWeight: 700, textAlign: "center" }}
+                      />
+                      <button
+                        onClick={() => verifyDelivery(o)}
+                        disabled={verifying[o.id]}
+                        className="mkt-btn mkt-btn--primary"
+                        style={{ width: "auto", padding: "8px 14px", fontSize: 12, opacity: verifying[o.id] ? 0.7 : 1 }}
+                      >
+                        {verifying[o.id] ? "Verifying…" : "Verify & mark delivered"}
+                      </button>
+                    </div>
+                    {vMsg && (
+                      <div style={{ marginTop: 6, fontSize: 12, color: vMsg.type === "success" ? "#10b981" : "#ef4444" }}>
+                        {vMsg.text}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* OTP not required for this delivery — close it directly. */}
+                {!pickup && o.orderStatus === "OUT_FOR_DELIVERY" && !o.deliveryOtp && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--cm-line)" }}>
+                    <div style={{ fontSize: 11, color: "var(--cm-muted)", marginBottom: 6 }}>
+                      No delivery OTP is required for this order. Mark it delivered once handed over.
+                    </div>
+                    <button
+                      onClick={() => markDelivered(o)}
+                      disabled={verifying[o.id]}
+                      className="mkt-btn mkt-btn--primary"
+                      style={{ width: "auto", padding: "8px 14px", fontSize: 12, opacity: verifying[o.id] ? 0.7 : 1 }}
+                    >
+                      {verifying[o.id] ? "Marking…" : "Mark delivered"}
+                    </button>
                   </div>
                 )}
               </div>

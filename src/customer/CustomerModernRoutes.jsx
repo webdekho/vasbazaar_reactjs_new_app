@@ -56,6 +56,7 @@ const ServiceFlowScreen = lazy(() => import("./pages/ServiceFlowScreen"));
 const OfferScreen = lazy(() => import("./pages/OfferScreen"));
 const PaymentScreen = lazy(() => import("./pages/PaymentScreen"));
 const SuccessScreen = lazy(() => import("./pages/SuccessScreen"));
+const ReceiptScreen = lazy(() => import("./pages/ReceiptScreen"));
 const PaymentResultPreview = lazy(() => import("./pages/PaymentResultPreview"));
 const WalletScreen = lazy(() => import("./pages/WalletScreen"));
 const NotificationsScreen = lazy(() => import("./pages/NotificationsScreen"));
@@ -137,15 +138,21 @@ const ServiceBazaarProviderHubScreen = lazy(() => import("./pages/service-bazaar
 const MarketplaceHomeScreen = lazy(() => import("./pages/marketplace/MarketplaceHomeScreen"));
 const StoreDetailScreen = lazy(() => import("./pages/marketplace/StoreDetailScreen"));
 const MarketplaceCartScreen = lazy(() => import("./pages/marketplace/CartScreen"));
+const MultiStoreCheckoutScreen = lazy(() => import("./pages/marketplace/MultiStoreCheckoutScreen"));
 const StoreOnboardingScreen = lazy(() => import("./pages/marketplace/StoreOnboardingScreen"));
 const MyStoreManageScreen = lazy(() => import("./pages/marketplace/MyStoreManageScreen"));
 const StoreTimingsScreen = lazy(() => import("./pages/marketplace/StoreTimingsScreen"));
 const MyMarketplaceOrdersScreen = lazy(() => import("./pages/marketplace/MyOrdersScreen"));
+const MyMarketplaceWishlistScreen = lazy(() => import("./pages/marketplace/MyWishlistScreen"));
 const MarketplaceOrderDetailScreen = lazy(() => import("./pages/marketplace/OrderDetailScreen"));
 const StoreOrdersScreen = lazy(() => import("./pages/marketplace/StoreOrdersScreen"));
 const StoreOffersScreen = lazy(() => import("./pages/marketplace/StoreOffersScreen"));
 const StoreAnalyticsScreen = lazy(() => import("./pages/marketplace/StoreAnalyticsScreen"));
 const StoreReviewsScreen = lazy(() => import("./pages/marketplace/StoreReviewsScreen"));
+const StoreKhataScreen = lazy(() => import("./pages/marketplace/StoreKhataScreen"));
+const MyKhataScreen = lazy(() => import("./pages/marketplace/MyKhataScreen"));
+const MySubscriptionsScreen = lazy(() => import("./pages/marketplace/MySubscriptionsScreen"));
+const StoreDeliverySlotsScreen = lazy(() => import("./pages/marketplace/StoreDeliverySlotsScreen"));
 const MarketplacePaymentCallbackScreen = lazy(() => import("./pages/marketplace/MarketplacePaymentCallbackScreen"));
 
 /** Lightweight loading fallback for lazy-loaded routes */
@@ -234,6 +241,7 @@ const CustomerModernRoutes = () => {
             <Route path="qr" element={<Suspense fallback={<RouteFallback />}><QrStickerScreen /></Suspense>} />
             <Route path="payment-callback" element={<Suspense fallback={<RouteFallback />}><JuspayCallbackScreen /></Suspense>} />
             <Route path="success" element={<Suspense fallback={<RouteFallback />}><SuccessScreen /></Suspense>} />
+            <Route path="receipt" element={<Suspense fallback={<RouteFallback />}><ReceiptScreen /></Suspense>} />
             <Route path="failure" element={<Suspense fallback={<RouteFallback />}><FailureScreen /></Suspense>} />
             <Route path="preview/:kind" element={<Suspense fallback={<RouteFallback />}><PaymentResultPreview /></Suspense>} />
             <Route path="wallet" element={<Suspense fallback={<RouteFallback />}><WalletScreen /></Suspense>} />
@@ -316,15 +324,21 @@ const CustomerModernRoutes = () => {
             <Route path="marketplace" element={<Suspense fallback={<RouteFallback />}><MarketplaceHomeScreen /></Suspense>} />
             <Route path="marketplace/store/:storeId" element={<Suspense fallback={<RouteFallback />}><StoreDetailScreen /></Suspense>} />
             <Route path="marketplace/cart" element={<Suspense fallback={<RouteFallback />}><MarketplaceCartScreen /></Suspense>} />
+            <Route path="marketplace/checkout-all" element={<Suspense fallback={<RouteFallback />}><MultiStoreCheckoutScreen /></Suspense>} />
             <Route path="marketplace/onboard" element={<Suspense fallback={<RouteFallback />}><StoreOnboardingScreen /></Suspense>} />
             <Route path="marketplace/my-store" element={<Suspense fallback={<RouteFallback />}><MyStoreManageScreen /></Suspense>} />
             <Route path="marketplace/my-store/timings" element={<Suspense fallback={<RouteFallback />}><StoreTimingsScreen /></Suspense>} />
+            <Route path="marketplace/my-store/delivery-slots" element={<Suspense fallback={<RouteFallback />}><StoreDeliverySlotsScreen /></Suspense>} />
             <Route path="marketplace/my-orders" element={<Suspense fallback={<RouteFallback />}><MyMarketplaceOrdersScreen /></Suspense>} />
+            <Route path="marketplace/my-wishlist" element={<Suspense fallback={<RouteFallback />}><MyMarketplaceWishlistScreen /></Suspense>} />
             <Route path="marketplace/orders/:orderId" element={<Suspense fallback={<RouteFallback />}><MarketplaceOrderDetailScreen /></Suspense>} />
             <Route path="marketplace/store-orders" element={<Suspense fallback={<RouteFallback />}><StoreOrdersScreen /></Suspense>} />
             <Route path="marketplace/my-store/offers" element={<Suspense fallback={<RouteFallback />}><StoreOffersScreen /></Suspense>} />
             <Route path="marketplace/my-store/analytics" element={<Suspense fallback={<RouteFallback />}><StoreAnalyticsScreen /></Suspense>} />
             <Route path="marketplace/my-store/reviews" element={<Suspense fallback={<RouteFallback />}><StoreReviewsScreen /></Suspense>} />
+            <Route path="marketplace/my-store/khata" element={<Suspense fallback={<RouteFallback />}><StoreKhataScreen /></Suspense>} />
+            <Route path="marketplace/my-khata" element={<Suspense fallback={<RouteFallback />}><MyKhataScreen /></Suspense>} />
+            <Route path="marketplace/subscriptions" element={<Suspense fallback={<RouteFallback />}><MySubscriptionsScreen /></Suspense>} />
             <Route path="marketplace/payment-callback" element={<Suspense fallback={<RouteFallback />}><MarketplacePaymentCallbackScreen /></Suspense>} />
             <Route path="*" element={<Navigate to="/customer/app/services" replace />} />
           </Route>

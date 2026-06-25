@@ -161,7 +161,7 @@ const CreateEventScreen = () => {
   const [locating, setLocating] = useState(false);
   const { requestLocation } = useGeolocation({ autoRequest: false });
   const [form, setForm] = useState({
-    title: "", hostName: "", eventCategory: "celebration", eventType: "birthday-party",
+    title: "", hostName: "", eventCategory: "celebration", eventType: "birthday-party", customEventType: "",
     eventDates: [""], endAt: "", venue: "", venueLat: null, venueLng: null,
     description: "", dressCode: "", dressCodePreset: "", foodPref: "",
     guestLimit: "", maxPerInvitee: "", rsvpDeadline: "",
@@ -184,13 +184,16 @@ const CreateEventScreen = () => {
       const resolvedType = ALL_TYPES.some((t) => t.key === rawType)
         ? rawType
         : (LEGACY_TYPE_MAP[rawType] || rawType);
+      // A type that still isn't a known sub-type is a host-typed custom value.
+      const isCustomType = !!resolvedType && !ALL_TYPES.some((t) => t.key === resolvedType);
       const resolvedCategory = e.eventCategory || categoryOfType(resolvedType) || "celebration";
       const dressCode = e.dressCode || "";
       setForm({
         title: e.title || "",
         hostName: e.hostName || "",
         eventCategory: resolvedCategory,
-        eventType: resolvedType,
+        eventType: isCustomType ? "__custom__" : resolvedType,
+        customEventType: isCustomType ? resolvedType : "",
         // Prefer multi-date array; fall back to legacy single eventAt. ISO → "YYYY-MM-DDTHH:mm"
         eventDates: (Array.isArray(e.eventDates) && e.eventDates.length
           ? e.eventDates
@@ -284,6 +287,11 @@ const CreateEventScreen = () => {
     const dates = form.eventDates.map((d) => (d || "").trim()).filter(Boolean);
     if (!dates.length) { showToast("Please pick at least one date & time", "error"); return; }
     const uniqueDates = [...new Set(dates)].sort();
+    // Resolve the event type: "Custom…" uses the host-typed value.
+    const eventType = form.eventType === "__custom__" ? form.customEventType.trim() : form.eventType;
+    if (form.eventType === "__custom__" && !eventType) {
+      showToast("Please type your custom event type", "error"); return;
+    }
     // Resolve the dress code: a named preset wins; "custom" uses the typed value.
     const dressCode = form.dressCodePreset === "custom"
       ? (form.dressCode.trim() || null)
@@ -293,7 +301,7 @@ const CreateEventScreen = () => {
       title: form.title.trim(),
       hostName: form.hostName.trim() || null,
       eventCategory: form.eventCategory,
-      eventType: form.eventType,
+      eventType,
       eventAt: uniqueDates[0],        // earliest date — legacy single-date field
       eventDates: uniqueDates,        // full recurring set
       endAt: form.endAt || null,
@@ -366,12 +374,18 @@ const CreateEventScreen = () => {
               {(() => {
                 const cat = EVENT_CATEGORIES.find((c) => c.key === form.eventCategory) || EVENT_CATEGORIES[0];
                 let opts = cat.types;
-                if (form.eventType && !opts.some((t) => t.key === form.eventType)) {
+                if (form.eventType && form.eventType !== "__custom__" && !opts.some((t) => t.key === form.eventType)) {
                   opts = [{ key: form.eventType, label: prettifyType(form.eventType) }, ...opts];
                 }
                 return opts.map((t) => <option key={t.key} value={t.key}>{t.label}</option>);
               })()}
+              {/* Let the host name an event type that isn't in the list. */}
+              <option value="__custom__">Custom…</option>
             </select>
+            {form.eventType === "__custom__" && (
+              <input style={{ ...inputStyle, marginTop: 8 }} value={form.customEventType} maxLength={60}
+                onChange={(e) => set("customEventType", e.target.value)} placeholder="Type your event type (e.g. Vastu Pooja)" />
+            )}
           </div>
 
           <div>

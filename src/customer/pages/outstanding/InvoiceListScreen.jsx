@@ -107,6 +107,11 @@ const InvoiceListScreen = () => {
     else showToast(res.message || "Delete failed", "error");
   };
 
+  const editInvoice = (inv, invCustomerId) => {
+    if (inv.linked && !window.confirm("ही invoice आधीच customer च्या ledger ला जोडलेली आहे. Edit केल्यावर outstanding balance नवीन रकमेनुसार पुन्हा मोजली जाईल. पुढे जायचं?")) return;
+    navigate(`/customer/app/outstanding/${invCustomerId}/invoice/${inv.id}/edit`);
+  };
+
   const linkOutstanding = async (id) => {
     if (!window.confirm("ही invoice customer च्या outstanding balance मध्ये जोडायची?")) return;
     setBusyId(id);
@@ -189,7 +194,7 @@ const InvoiceListScreen = () => {
                     <FaEye /> View
                   </button>
                   {inv.editable && (
-                    <button type="button" onClick={() => navigate(`/customer/app/outstanding/${invCustomerId}/invoice/${inv.id}/edit`)} disabled={busyId === inv.id}>
+                    <button type="button" onClick={() => editInvoice(inv, invCustomerId)} disabled={busyId === inv.id}>
                       <FaPen /> Edit
                     </button>
                   )}

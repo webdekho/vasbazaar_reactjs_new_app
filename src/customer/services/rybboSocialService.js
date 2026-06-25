@@ -1,5 +1,5 @@
 import { authGet, authPost, authPut, authDelete, guestGet, guestPost } from "./apiClient";
-import { server_api } from "../../utils/constants";
+import { server_api, web_app_url } from "../../utils/constants";
 
 const BASE = "/api/customer/rybbo/social";
 
@@ -26,6 +26,16 @@ export const rybboSocialService = {
   deleteEvent: (id) => authDelete(`${BASE}/events/${id}`),
 
   inviteByMobile: (id, mobile) => authPost(`${BASE}/events/${id}/invite`, { mobile }),
+
+  // ── Co-hosts (owner only) ── up to 2 extra hosts who can co-manage the event.
+  getCoHosts: (id) => authGet(`${BASE}/events/${id}/cohosts`),
+
+  addCoHost: (id, mobile) => authPost(`${BASE}/events/${id}/cohosts`, { mobile }),
+
+  removeCoHost: (id, userId) => authDelete(`${BASE}/events/${id}/cohosts/${userId}`),
+
+  // Cancel a pending co-host invite (someone who hasn't signed up yet) by mobile.
+  removePendingCoHost: (id, mobile) => authDelete(`${BASE}/events/${id}/cohosts/pending/${mobile}`),
 
   // Email an invite (banner + details + RSVP link) to a guest. payload: { email, inviteUrl, message, banner }
   inviteByEmail: (id, payload) => authPost(`${BASE}/events/${id}/invite-email`, payload),
@@ -59,7 +69,7 @@ export const buildContributionReturnUrl = () => {
 
 /** Build the shareable invite URL for a given public token. */
 export const buildInviteUrl = (token) =>
-  `${window.location.origin}/customer/rybbo/i/${token}`;
+  `${web_app_url()}/customer/rybbo/i/${token}`;
 
 /**
  * Build a ready-made prompt + claude.ai link that opens a new Claude chat with

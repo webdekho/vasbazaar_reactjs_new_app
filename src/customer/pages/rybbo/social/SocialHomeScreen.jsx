@@ -25,7 +25,7 @@ const SocialHomeScreen = () => {
     return () => { cancelled = true; };
   }, []);
 
-  const RESPONSE_LABEL = { ACCEPT: { t: "Going", c: "#16a34a" }, MAYBE: { t: "Maybe", c: "#f59e0b" }, DECLINE: { t: "Declined", c: "#ef4444" } };
+  const RESPONSE_LABEL = { ACCEPT: { t: "Accepted", c: "#16a34a" }, MAYBE: { t: "Maybe", c: "#f59e0b" }, DECLINE: { t: "Declined", c: "#ef4444" } };
 
   return (
     <DataState loading={state.loading} error={state.error}>
@@ -70,7 +70,12 @@ const SocialHomeScreen = () => {
                   <button key={e.id} type="button" onClick={() => navigate(`/customer/app/rybbo/social/event/${e.id}`)}
                     style={{ display: "block", textAlign: "left", width: "100%", padding: 14, border: "1px solid var(--cm-line, #E5E7EB)", borderRadius: 12, background: "transparent", color: "inherit", cursor: "pointer", opacity: cancelled ? 0.65 : 1 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                      <div style={{ fontWeight: 700, fontSize: 15 }}>{e.title}</div>
+                      <div style={{ fontWeight: 700, fontSize: 15 }}>
+                        {e.title}
+                        {e.isOwner === false && (
+                          <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999, background: "#ede9fe", color: ACCENT, verticalAlign: "middle" }}>Co-host</span>
+                        )}
+                      </div>
                       <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 999, background: cancelled ? "#fee2e2" : "#ede9fe", color: cancelled ? "#b91c1c" : ACCENT, whiteSpace: "nowrap", textTransform: "capitalize" }}>
                         {cancelled ? "Cancelled" : e.eventType}
                       </span>
@@ -79,7 +84,7 @@ const SocialHomeScreen = () => {
                       {e.date}{e.time ? ` · ${e.time}` : ""}{e.venue ? ` · ${e.venue}` : ""}
                     </div>
                     <div style={{ display: "flex", gap: 14, marginTop: 10, fontSize: 12 }}>
-                      <span style={{ color: "#16a34a", fontWeight: 700 }}>{s.accepted ?? 0} going</span>
+                      <span style={{ color: "#16a34a", fontWeight: 700 }}>{s.accepted ?? 0} accepted</span>
                       <span style={{ color: "#f59e0b", fontWeight: 700 }}>{s.maybe ?? 0} maybe</span>
                       <span style={{ color: "var(--cm-muted, #6B7280)" }}><FaUsers size={11} style={{ marginRight: 4 }} />{s.guestCount ?? 0} guests</span>
                     </div>

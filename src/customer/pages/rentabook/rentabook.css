@@ -22,7 +22,8 @@
   --rb-text-2: #475569;      /* secondary text */
   --rb-text-3: #64748B;      /* tertiary text */
   --rb-muted: #94A3B8;       /* placeholder / disabled icons */
-  --rb-accent-bg: #EFF6FF;   /* light-blue accent fills */
+  --rb-accent: #007BFF;      /* brand accent (matches app theme) */
+  --rb-accent-bg: #EAF4FF;   /* accent tint fills */
 
   /* Info callout banners (bg / border / heading text) */
   --rb-info-blue-bg: #F0F9FF;  --rb-info-blue-bd: #BAE6FD;  --rb-info-blue-tx: #0369A1;
@@ -41,7 +42,8 @@
   --rb-text-2: #C5CBD4;
   --rb-text-3: #9AA3AF;
   --rb-muted: #6E767F;
-  --rb-accent-bg: rgba(37, 99, 235, 0.18);
+  --rb-accent: #40E0D0;      /* brand accent reads brighter on dark */
+  --rb-accent-bg: rgba(0, 123, 255, 0.20);
 
   --rb-info-blue-bg: #14242E;  --rb-info-blue-bd: #234A63;  --rb-info-blue-tx: #7CC4F2;
   --rb-info-green-bg: #122A20; --rb-info-green-bd: #235C40; --rb-info-green-tx: #56D08A;

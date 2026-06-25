@@ -7,6 +7,8 @@ import {
 import { complaintService } from "../services/complaintService";
 import { useCustomerModern } from "../context/CustomerModernContext";
 
+// NPCI predefined dispositions for a Transaction-type Bharat Connect complaint.
+// Order and wording follow the NPCI guideline exactly.
 const dispositionOptions = [
   "Transaction Successful, Amount Debited but services not received",
   "Transaction Successful, Amount Debited but Service Disconnected or Service Stopped",
@@ -14,13 +16,15 @@ const dispositionOptions = [
   "Erroneously paid in wrong account",
   "Duplicate Payment",
   "Erroneously paid the wrong amount",
+  "Payment information not received from Biller or Delay in receiving payment information from the Biller",
   "Bill Paid but Amount not adjusted or still showing due amount",
-  "Payment information not received from Biller or Delay in receiving payment information",
 ];
 
 const ComplaintScreen = () => {
   const navigate = useNavigate();
   const { userData } = useCustomerModern();
+  // Search basis: "txn" = B-Connect TXN ID, "mobile" = Mobile Number + Date Range.
+  const [basis, setBasis] = useState("txn");
   const [form, setForm] = useState({
     transactionId: "",
     mobile: userData?.mobile || userData?.mobileNumber || "",
@@ -41,34 +45,45 @@ const ComplaintScreen = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.transactionId.trim()) { setError("Transaction ID is required."); return; }
-    if (!form.mobile || form.mobile.length < 10) { setError("Valid 10-digit mobile number is required."); return; }
+    if (basis === "txn") {
+      if (!form.transactionId.trim()) { setError("B-Connect TXN ID is required."); return; }
+    } else {
+      if (!form.mobile || form.mobile.length < 10) { setError("Valid 10-digit mobile number is required."); return; }
+      if (!form.fromDate || !form.toDate) { setError("Please select a From and To date."); return; }
+    }
     if (!form.disposition) { setError("Please select a complaint disposition."); return; }
     setError("");
     setLoading(true);
     const ticket = `CMP${Date.now().toString().slice(-8)}`;
     const res = await complaintService.create({
-      transactionReferenceId: form.transactionId,
-      transactionId: form.transactionId,
-      mobileNumber: form.mobile,
-      fromDate: form.fromDate,
-      toDate: form.toDate,
+      complaintType: "Transaction",
+      complaintBasis: basis === "txn" ? "TXN_ID" : "MOBILE_DATE",
+      transactionReferenceId: basis === "txn" ? form.transactionId : "",
+      transactionId: basis === "txn" ? form.transactionId : "",
+      bConnectTxnId: basis === "txn" ? form.transactionId : "",
+      mobileNumber: basis === "mobile" ? form.mobile : "",
+      fromDate: basis === "mobile" ? form.fromDate : "",
+      toDate: basis === "mobile" ? form.toDate : "",
       complaintDisposition: form.disposition,
       disposition: form.disposition,
       complaintDescription: form.description,
       description: form.description,
-      complaintType: "Transaction",
       ticketNumber: ticket,
     });
     setLoading(false);
     if (res.success) {
-      setSuccess(ticket);
+      // Prefer the gateway-issued complaint identifiers; fall back to the local ticket.
+      const d = res.data || {};
+      setSuccess({
+        complaintId: d.complaintId || d.trackingId || d.ticketNumber || ticket,
+        complaintAssigned: d.complaintAssigned || d.assignedTo || "Bharat Connect (BBPS)",
+      });
     } else {
       setError(res.message || "Failed to submit complaint.");
     }
   };
 
-  /* ─── Success Screen ─── */
+  /* ─── Success / Response Screen ─── */
   if (success) {
     return (
       <div className="fc-page">
@@ -79,14 +94,20 @@ const ComplaintScreen = () => {
             <div className="fc-success-ring fc-success-ring--2" />
           </div>
           <h2 className="fc-success-title">Complaint Registered</h2>
-          <div className="fc-success-ticket">
-            <span className="fc-success-ticket-label">Ticket Number</span>
-            <span className="fc-success-ticket-id">{success}</span>
+          {/* NPCI-mandated response fields: complaintAssigned and complaintId */}
+          <div className="fc-success-fields">
+            <div className="fc-success-field-row">
+              <span className="fc-success-field-label">Complaint ID</span>
+              <span className="fc-success-field-value">{success.complaintId}</span>
+            </div>
+            <div className="fc-success-field-row">
+              <span className="fc-success-field-label">Complaint Assigned</span>
+              <span className="fc-success-field-value">{success.complaintAssigned}</span>
+            </div>
           </div>
           <div className="fc-success-info">
-            <p>Your complaint has been registered with <strong>Bharat Bill Payment System (BBPS)</strong>.</p>
-            <p>Updates will be sent to your registered mobile number.</p>
-            <p>Expected resolution: <strong>5-7 working days</strong>.</p>
+            <p>Your complaint has been registered with <strong>Bharat Connect (BBPS)</strong>.</p>
+            <p>You can track the status of your complaint using your Complaint ID.</p>
           </div>
           <div className="fc-success-actions">
             <button className="fc-btn-primary" type="button" onClick={() => navigate("/customer/app/track-complaint")}>
@@ -104,95 +125,109 @@ const ComplaintScreen = () => {
   /* ─── Form ─── */
   return (
     <div className="fc-page">
-      {/* Header */}
+      {/* Header with Bharat Connect logo top-right */}
       <div className="fc-header">
         <button className="fc-back" type="button" onClick={() => navigate(-1)}>
           <FaArrowLeft />
         </button>
         <div className="fc-header-text">
-          <h1 className="fc-title">File Complaint</h1>
+          <h1 className="fc-title">Complaint Registration</h1>
           <p className="fc-subtitle">Bharat Connect Grievance</p>
         </div>
-        <button className="fc-track-btn" type="button" onClick={() => navigate("/customer/app/track-complaint")}>
-          Track <FaChevronRight />
-        </button>
-      </div>
-
-      {/* Complaint type indicator */}
-      <div className="fc-type-bar">
-        <div className="fc-type-dot" />
-        <span className="fc-type-label">Type of Complaint</span>
-        <span className="fc-type-value">Transaction</span>
+        <img src="/images/bbps.svg" alt="Bharat Connect" className="fc-bbps-logo" />
       </div>
 
       <form className="fc-form" onSubmit={handleSubmit}>
-        {/* Transaction ID */}
-        <div className={`fc-field${focusedField === "txn" ? " is-focused" : ""}`}>
+        {/* a. Type of Complaint — Transaction (radio, pre-selected) */}
+        <div className="fc-field">
           <label className="fc-label">
-            <FaIdCard className="fc-label-icon" />
-            B-Connect Transaction ID
+            <FaListAlt className="fc-label-icon" />
+            Type of Complaint
           </label>
-          <input
-            className="fc-input"
-            placeholder="Enter B-Connect Transaction ID"
-            value={form.transactionId}
-            onChange={(e) => update("transactionId", e.target.value)}
-            onFocus={() => setFocusedField("txn")}
-            onBlur={() => setFocusedField("")}
-          />
+          <label className="fc-radio">
+            <input type="radio" name="complaintType" checked readOnly />
+            <span className="fc-radio-mark" />
+            <span className="fc-radio-text">Transaction</span>
+          </label>
         </div>
 
-        {/* Mobile Number */}
-        <div className={`fc-field${focusedField === "mobile" ? " is-focused" : ""}`}>
-          <label className="fc-label">
-            <FaPhoneAlt className="fc-label-icon" />
-            Mobile Number
-          </label>
-          <input
-            className="fc-input"
-            inputMode="numeric"
-            maxLength={10}
-            placeholder="Enter 10-digit mobile number"
-            value={form.mobile}
-            onChange={(e) => update("mobile", e.target.value.replace(/\D/g, ""))}
-            onFocus={() => setFocusedField("mobile")}
-            onBlur={() => setFocusedField("")}
-          />
+        {/* b. B-Connect TXN ID OR Mobile + Date Range */}
+        <div className="fc-basis-tabs">
+          <button type="button" className={`fc-basis-tab${basis === "txn" ? " is-active" : ""}`} onClick={() => { setBasis("txn"); setError(""); }}>
+            B-Connect TXN ID
+          </button>
+          <button type="button" className={`fc-basis-tab${basis === "mobile" ? " is-active" : ""}`} onClick={() => { setBasis("mobile"); setError(""); }}>
+            Mobile No. & Date
+          </button>
         </div>
 
-        {/* Date range */}
-        <div className="fc-date-row">
-          <div className={`fc-field${focusedField === "from" ? " is-focused" : ""}`}>
+        {basis === "txn" ? (
+          <div className={`fc-field${focusedField === "txn" ? " is-focused" : ""}`}>
             <label className="fc-label">
-              <FaCalendarAlt className="fc-label-icon" />
-              From Date
+              <FaIdCard className="fc-label-icon" />
+              B-Connect TXN ID
             </label>
             <input
               className="fc-input"
-              type="date"
-              value={form.fromDate}
-              onChange={(e) => update("fromDate", e.target.value)}
-              onFocus={() => setFocusedField("from")}
+              placeholder="Enter B-Connect TXN ID (received in Pay Response)"
+              value={form.transactionId}
+              onChange={(e) => update("transactionId", e.target.value)}
+              onFocus={() => setFocusedField("txn")}
               onBlur={() => setFocusedField("")}
             />
           </div>
-          <div className={`fc-field${focusedField === "to" ? " is-focused" : ""}`}>
-            <label className="fc-label">
-              <FaCalendarAlt className="fc-label-icon" />
-              To Date
-            </label>
-            <input
-              className="fc-input"
-              type="date"
-              value={form.toDate}
-              onChange={(e) => update("toDate", e.target.value)}
-              onFocus={() => setFocusedField("to")}
-              onBlur={() => setFocusedField("")}
-            />
-          </div>
-        </div>
+        ) : (
+          <>
+            <div className={`fc-field${focusedField === "mobile" ? " is-focused" : ""}`}>
+              <label className="fc-label">
+                <FaPhoneAlt className="fc-label-icon" />
+                Mobile Number
+              </label>
+              <input
+                className="fc-input"
+                inputMode="numeric"
+                maxLength={10}
+                placeholder="Enter 10-digit mobile number"
+                value={form.mobile}
+                onChange={(e) => update("mobile", e.target.value.replace(/\D/g, ""))}
+                onFocus={() => setFocusedField("mobile")}
+                onBlur={() => setFocusedField("")}
+              />
+            </div>
+            <div className="fc-date-row">
+              <div className={`fc-field${focusedField === "from" ? " is-focused" : ""}`}>
+                <label className="fc-label">
+                  <FaCalendarAlt className="fc-label-icon" />
+                  From Date
+                </label>
+                <input
+                  className="fc-input"
+                  type="date"
+                  value={form.fromDate}
+                  onChange={(e) => update("fromDate", e.target.value)}
+                  onFocus={() => setFocusedField("from")}
+                  onBlur={() => setFocusedField("")}
+                />
+              </div>
+              <div className={`fc-field${focusedField === "to" ? " is-focused" : ""}`}>
+                <label className="fc-label">
+                  <FaCalendarAlt className="fc-label-icon" />
+                  To Date
+                </label>
+                <input
+                  className="fc-input"
+                  type="date"
+                  value={form.toDate}
+                  onChange={(e) => update("toDate", e.target.value)}
+                  onFocus={() => setFocusedField("to")}
+                  onBlur={() => setFocusedField("")}
+                />
+              </div>
+            </div>
+          </>
+        )}
 
-        {/* Disposition */}
+        {/* c. Complaint Disposition */}
         <div className={`fc-field${focusedField === "disp" ? " is-focused" : ""}`}>
           <label className="fc-label">
             <FaListAlt className="fc-label-icon" />
@@ -212,7 +247,7 @@ const ComplaintScreen = () => {
           </select>
         </div>
 
-        {/* Description */}
+        {/* d. Complaint Description */}
         <div className={`fc-field${focusedField === "desc" ? " is-focused" : ""}`}>
           <label className="fc-label">
             <FaFileAlt className="fc-label-icon" />
@@ -229,24 +264,26 @@ const ComplaintScreen = () => {
           />
         </div>
 
-        {/* Error */}
         {error && (
           <div className="fc-error">
             <FaExclamationTriangle /> {error}
           </div>
         )}
 
-        {/* Submit */}
         <button className="fc-submit" type="submit" disabled={loading}>
           {loading ? (
             <span className="fc-submit-loading"><span className="md-spinner" /> Submitting...</span>
           ) : (
-            "File Complaint"
+            "Register Complaint"
           )}
         </button>
 
+        <button className="fc-track-link" type="button" onClick={() => navigate("/customer/app/track-complaint")}>
+          Track an existing complaint <FaChevronRight />
+        </button>
+
         <p className="fc-disclaimer">
-          Complaints are processed through the Bharat Bill Payment System (BBPS) grievance mechanism. Resolution typically takes 5-7 working days.
+          Complaints are processed through the Bharat Connect (BBPS) grievance mechanism.
         </p>
       </form>
     </div>

@@ -1,21 +1,28 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FaArrowLeft, FaStore, FaClock, FaRupeeSign, FaPlus, FaMinus, FaShareAlt, FaStar } from "react-icons/fa";
-import { FiSearch } from "react-icons/fi";
+import { FiSearch, FiGrid, FiList } from "react-icons/fi";
 import { marketplaceService } from "../../services/marketplaceService";
 import { useMarketplaceCart } from "../../context/MarketplaceCartContext";
 import { shareStore } from "./shareStore";
+import { parseVariants, variantDimensions, dimensionValues, findVariantByOptions, minVariantPrice } from "./variantUtils";
 import "./marketplace.css";
 
 const StoreDetailScreen = () => {
   const { storeId } = useParams();
   const navigate = useNavigate();
-  const { addItem, decrementItem, getItemQty, totals, cart } = useMarketplaceCart();
+  const { addItem, decrementItem, getItemQty, getItemTotalQty, totals, cart } = useMarketplaceCart();
+
+  // Item whose variant picker sheet is open (null = closed).
+  const [variantItem, setVariantItem] = useState(null);
+
+  // Per-item chosen variant label (for items that define variants).
 
   const [store, setStore] = useState(null);
   const [items, setItems] = useState([]);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [viewMode, setViewMode] = useState("grid"); // "grid" | "list"
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -24,10 +31,6 @@ const StoreDetailScreen = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [subcategories, setSubcategories] = useState([]);
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState(null);
-
-  // Offers strip
-  const [offers, setOffers] = useState([]);
-  const [copiedCode, setCopiedCode] = useState(null);
 
   // Ratings & reviews
   const [reviewSummary, setReviewSummary] = useState(null);
@@ -69,16 +72,6 @@ const StoreDetailScreen = () => {
     return () => clearTimeout(t);
   }, [search]);
 
-  // Fetch offers on mount
-  useEffect(() => {
-    marketplaceService.getStoreOffers(storeId)
-      .then((res) => {
-        if (res.success && Array.isArray(res.data)) setOffers(res.data);
-        else setOffers([]);
-      })
-      .catch(() => setOffers([]));
-  }, [storeId]);
-
   // Fetch first page of reviews on mount
   useEffect(() => {
     setReviewsLoading(true);
@@ -97,17 +90,6 @@ const StoreDetailScreen = () => {
       .finally(() => setReviewsLoading(false));
   }, [storeId]);
 
-  const handleCopyCode = useCallback((code) => {
-    if (!code) return;
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(code);
-      }
-    } catch (_e) { /* ignore */ }
-    setCopiedCode(code);
-    setTimeout(() => setCopiedCode((c) => (c === code ? null : c)), 1500);
-  }, []);
-
   const loadMoreReviews = useCallback(() => {
     const next = reviewPage + 1;
     setReviewsLoading(true);
@@ -123,14 +105,6 @@ const StoreDetailScreen = () => {
       .catch(() => {})
       .finally(() => setReviewsLoading(false));
   }, [storeId, reviewPage]);
-
-  const offerTitle = useCallback((o) => {
-    if (o.title) return o.title;
-    if (o.type === "PERCENT") return `${Number(o.value)}% OFF`;
-    if (o.type === "FLAT") return `₹${Number(o.value)} OFF`;
-    if (o.type === "BOGO") return "Buy 1 Get 1";
-    return "Offer";
-  }, []);
 
   const renderStars = useCallback((rating, size = 12) => {
     const r = Math.round(Number(rating) || 0);
@@ -161,9 +135,9 @@ const StoreDetailScreen = () => {
     return result;
   }, [items, debouncedSearch, selectedCategoryId, selectedSubcategoryId]);
 
-  const handleAdd = useCallback((item) => {
+  const handleAdd = useCallback((item, variant) => {
     if (!store) return;
-    addItem(store, item);
+    addItem(store, item, variant ? { variant } : undefined);
   }, [addItem, store]);
 
   if (loading) {
@@ -191,6 +165,30 @@ const StoreDetailScreen = () => {
 
   const closed = store.isOpen === false;
 
+  // View toggle (grid / list) — rendered inline with the category chips.
+  const viewToggle = filteredItems.length > 0 ? (
+    <div className="mkt-view-toggle">
+      <button
+        type="button"
+        className={`mkt-view-btn${viewMode === "grid" ? " active" : ""}`}
+        onClick={() => setViewMode("grid")}
+        aria-label="Grid view"
+        aria-pressed={viewMode === "grid"}
+      >
+        <FiGrid size={16} />
+      </button>
+      <button
+        type="button"
+        className={`mkt-view-btn${viewMode === "list" ? " active" : ""}`}
+        onClick={() => setViewMode("list")}
+        aria-label="List view"
+        aria-pressed={viewMode === "list"}
+      >
+        <FiList size={16} />
+      </button>
+    </div>
+  ) : null;
+
   return (
     <div className="mkt">
       <div className="mkt-header">
@@ -207,122 +205,58 @@ const StoreDetailScreen = () => {
         </button>
       </div>
 
-      <div className="mkt-detail-banner">
-        {store.bannerUrl ? <img src={store.bannerUrl} alt="" /> : null}
-      </div>
+      {/* ===== Hero: banner with overlapping store-identity card ===== */}
+      <div className="mkt-hero">
+        <div className="mkt-detail-banner">
+          {store.bannerUrl ? <img src={store.bannerUrl} alt="" /> : null}
+          <div className="mkt-hero-scrim" />
+        </div>
 
-      <div className="mkt-detail-info">
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <h2 className="mkt-detail-title" style={{ margin: 0 }}>{store.businessName}</h2>
-          {Number(store.reviewCount) > 0 ? (
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 5,
-                padding: "3px 9px",
-                borderRadius: 999,
-                background: "rgba(251,191,36,0.15)",
-                color: "#fbbf24",
-                fontSize: 12,
-                fontWeight: 700,
-              }}
-            >
-              <FaStar size={11} />
-              {Number(store.avgRating || 0).toFixed(1)}
-              <span style={{ color: "var(--cm-muted)", fontWeight: 500 }}>
-                ({Number(store.reviewCount)} review{Number(store.reviewCount) > 1 ? "s" : ""})
-              </span>
-            </span>
-          ) : (
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                padding: "3px 9px",
-                borderRadius: 999,
-                background: "rgba(20,184,166,0.15)",
-                color: "#14b8a6",
-                fontSize: 12,
-                fontWeight: 700,
-              }}
-            >
-              New
-            </span>
-          )}
-        </div>
-        <div className="mkt-detail-meta">
-          {store.deliveryTimeMinutes && <span><FaClock />{store.deliveryTimeMinutes} min delivery</span>}
-          {Number(store.deliveryCharges) > 0
-            ? <span><FaRupeeSign />{Number(store.deliveryCharges).toFixed(0)} delivery</span>
-            : <span style={{ color: "#34d399" }}>Free delivery</span>}
-          {Number(store.minOrderValue) > 0 && <span>Min order ₹{Number(store.minOrderValue).toFixed(0)}</span>}
-          {closed && <span className="mkt-store-badge--closed">Closed</span>}
-        </div>
-        {store.addressLine1 && (
-          <div style={{ marginTop: 8, fontSize: 12, color: "var(--cm-muted)" }}>
-            {store.addressLine1}{store.city ? `, ${store.city}` : ""}
+        <div className="mkt-hero-card">
+          <div className="mkt-hero-avatar">
+            {store.logoUrl ? <img src={store.logoUrl} alt="" /> : <FaStore size={26} />}
+            <span className={`mkt-hero-dot ${closed ? "is-closed" : "is-open"}`} />
           </div>
-        )}
-      </div>
 
-      {/* Offers strip */}
-      {offers.length > 0 && (
-        <div style={{ padding: "12px 14px 0" }}>
-          <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
-            {offers.map((o) => {
-              const flash = !!o.isFlash;
-              return (
-                <div
-                  key={o.id}
-                  style={{
-                    flexShrink: 0,
-                    width: 180,
-                    padding: "12px 12px 10px",
-                    borderRadius: 14,
-                    border: `1px solid ${flash ? "rgba(245,158,11,0.6)" : "var(--cm-line)"}`,
-                    background: flash ? "rgba(245,158,11,0.12)" : "var(--cm-card)",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 8,
-                  }}
-                >
-                  <div style={{ fontSize: 14, fontWeight: 700, color: flash ? "#f59e0b" : "var(--cm-text, #fff)", display: "flex", alignItems: "center", gap: 4 }}>
-                    {flash && <span aria-hidden>⚡</span>}
-                    {offerTitle(o)}
-                  </div>
-                  {o.description && (
-                    <div style={{ fontSize: 11, color: "var(--cm-muted)", lineHeight: 1.3 }}>{o.description}</div>
-                  )}
-                  {o.code && (
-                    <button
-                      type="button"
-                      onClick={() => handleCopyCode(o.code)}
-                      style={{
-                        alignSelf: "flex-start",
-                        padding: "4px 10px",
-                        borderRadius: 8,
-                        border: `1px dashed ${flash ? "#f59e0b" : "var(--cm-line)"}`,
-                        background: "transparent",
-                        color: flash ? "#f59e0b" : "var(--cm-text, #fff)",
-                        fontSize: 11,
-                        fontWeight: 700,
-                        letterSpacing: 0.5,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {copiedCode === o.code ? "Copied!" : `${o.code} · Tap to copy`}
-                    </button>
-                  )}
-                  {Number(o.minOrderValue) > 0 && (
-                    <div style={{ fontSize: 10, color: "var(--cm-muted)" }}>Min ₹{Number(o.minOrderValue).toFixed(0)}</div>
-                  )}
-                </div>
-              );
-            })}
+          <div className="mkt-hero-body">
+            <div className="mkt-hero-title-row">
+              <h2 className="mkt-detail-title" style={{ margin: 0 }}>{store.businessName}</h2>
+              {Number(store.reviewCount) > 0 ? (
+                <span className="mkt-hero-rating">
+                  <FaStar size={11} />
+                  {Number(store.avgRating || 0).toFixed(1)}
+                  <span className="mkt-hero-rating-count">
+                    ({Number(store.reviewCount)})
+                  </span>
+                </span>
+              ) : (
+                <span className="mkt-hero-newbadge">New</span>
+              )}
+            </div>
+
+            <div className="mkt-detail-meta">
+              {store.deliveryTimeMinutes && (
+                <span className="mkt-meta-pill"><FaClock />{store.deliveryTimeMinutes} min</span>
+              )}
+              {Number(store.deliveryCharges) > 0
+                ? <span className="mkt-meta-pill"><FaRupeeSign />{Number(store.deliveryCharges).toFixed(0)} delivery</span>
+                : <span className="mkt-meta-pill mkt-meta-pill--free">Free delivery</span>}
+              {Number(store.minOrderValue) > 0 && (
+                <span className="mkt-meta-pill">Min ₹{Number(store.minOrderValue).toFixed(0)}</span>
+              )}
+              {closed && <span className="mkt-store-badge--closed">Closed</span>}
+            </div>
+
+            {store.addressLine1 && (
+              <div className="mkt-hero-address">
+                {store.addressLine1}{store.city ? `, ${store.city}` : ""}
+              </div>
+            )}
           </div>
         </div>
-      )}
+      </div>
+
+      {/* Coupons moved to the cart/payment page (Apply coupon section). */}
 
       <div className="mkt-search-bar" style={{ position: "static", paddingTop: 12 }}>
         <div className="mkt-search-input-wrap">
@@ -336,10 +270,11 @@ const StoreDetailScreen = () => {
         </div>
       </div>
 
-      {/* Category filter chips */}
+      {/* Category filter chips (with inline grid/list toggle on the right) */}
       {itemCategories.length > 0 && (
         <div style={{ padding: "8px 14px 0", display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none", flex: 1, minWidth: 0 }}>
             <button
               type="button"
               onClick={() => { setSelectedCategoryId(null); setSelectedSubcategoryId(null); }}
@@ -386,6 +321,8 @@ const StoreDetailScreen = () => {
                 </button>
               );
             })}
+          </div>
+          {viewToggle}
           </div>
           {/* Subcategory chips */}
           {selectedCategoryId && subcategories.length > 0 && (
@@ -437,39 +374,112 @@ const StoreDetailScreen = () => {
         </div>
       )}
 
+      {/* When there are no category chips, still show the toggle on its own row (right-aligned). */}
+      {itemCategories.length === 0 && viewToggle && (
+        <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 14px 0" }}>
+          {viewToggle}
+        </div>
+      )}
+
       {filteredItems.length === 0 ? (
         <div className="mkt-empty">No items available</div>
       ) : (
-        <div className="mkt-item-grid">
+        <div className={`mkt-item-grid${viewMode === "list" ? " mkt-item-grid--list" : ""}`}>
           {filteredItems.map((item) => {
-            const qty = getItemQty(item.id);
+            const variants = parseVariants(item);
+            const hasVariants = variants.length > 0;
             const unavailable = item.isAvailable === false || closed;
+            // Variant items show a "From ₹X" price and open a grouped picker sheet;
+            // plain items keep the inline ADD / stepper.
+            const effPrice = hasVariants
+              ? minVariantPrice(variants)
+              : Number(item.offerPrice && Number(item.offerPrice) > 0 ? item.offerPrice : item.sellingPrice);
+            const strikePrice = hasVariants
+              ? null
+              : (item.offerPrice && Number(item.offerPrice) > 0 && Number(item.sellingPrice) > Number(item.offerPrice)
+                  ? Number(item.sellingPrice)
+                  : (item.mrp && Number(item.mrp) > Number(item.sellingPrice) ? Number(item.mrp) : null));
+            const qty = hasVariants ? getItemTotalQty(item.id) : getItemQty(item.id);
+            const extraCount =
+              ((() => { try { return JSON.parse(item.offers || "[]").length; } catch { return 0; } })()) +
+              ((() => { try { return JSON.parse(item.services || "[]").length; } catch { return 0; } })());
+            const groupCount = (() => { try { return JSON.parse(item.groupedItemIds || "[]").length; } catch { return 0; } })();
+            // Per-item order-quantity limits (merchant-configured).
+            const minQty = Math.max(1, Number(item.minOrderQty) || 1);
+            const maxQty = Number(item.maxOrderQty) > 0 ? Number(item.maxOrderQty) : null;
+            const atMax = !hasVariants && maxQty != null && qty >= maxQty;
             return (
-              <div key={item.id} className="mkt-item-card">
-                <div className="mkt-item-image">
+              <div key={item.id} className={`mkt-item-card${viewMode === "list" ? " mkt-item-card--list" : ""}`}>
+                <div
+                  className="mkt-item-image"
+                  role="button"
+                  tabIndex={0}
+                  style={{ cursor: "pointer" }}
+                  onClick={() => setVariantItem(item)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setVariantItem(item); } }}
+                  aria-label={`View ${item.name} details`}
+                >
                   {item.imageUrl ? <img src={item.imageUrl} alt="" /> : <FaStore size={32} />}
                 </div>
                 <div className="mkt-item-body">
-                  <p className="mkt-item-name">{item.name}</p>
+                  <p
+                    className="mkt-item-name"
+                    style={{ cursor: "pointer" }}
+                    onClick={() => setVariantItem(item)}
+                  >
+                    {item.name}
+                  </p>
                   <div className="mkt-item-row">
                     <div>
-                      <div className="mkt-item-price">₹{Number(item.sellingPrice).toFixed(0)}</div>
-                      {item.mrp && Number(item.mrp) > Number(item.sellingPrice) && (
-                        <div className="mkt-item-mrp">₹{Number(item.mrp).toFixed(0)}</div>
+                      <div className="mkt-item-price">{hasVariants ? "From " : ""}₹{Number(effPrice || 0).toFixed(0)}</div>
+                      {strikePrice && (
+                        <div className="mkt-item-mrp">₹{strikePrice.toFixed(0)}</div>
                       )}
                     </div>
                     {unavailable ? (
                       <span style={{ fontSize: 11, color: "#f87171" }}>N/A</span>
+                    ) : hasVariants ? (
+                      <button className="mkt-add-btn" onClick={() => setVariantItem(item)}>
+                        {qty > 0 ? `${qty} · OPTIONS` : "OPTIONS"}
+                      </button>
                     ) : qty === 0 ? (
                       <button className="mkt-add-btn" onClick={() => handleAdd(item)}>ADD</button>
                     ) : (
                       <div className="mkt-stepper">
                         <button className="mkt-stepper-btn" onClick={() => decrementItem(item.id)} aria-label="Decrease"><FaMinus size={10} /></button>
                         <span className="mkt-stepper-qty">{qty}</span>
-                        <button className="mkt-stepper-btn" onClick={() => handleAdd(item)} aria-label="Increase"><FaPlus size={10} /></button>
+                        <button
+                          className="mkt-stepper-btn"
+                          onClick={() => handleAdd(item)}
+                          disabled={atMax}
+                          style={atMax ? { opacity: 0.4, cursor: "default" } : undefined}
+                          aria-label="Increase"
+                        ><FaPlus size={10} /></button>
                       </div>
                     )}
                   </div>
+                  {!hasVariants && (minQty > 1 || maxQty != null) && (
+                    <div style={{ fontSize: 11, color: "var(--cm-muted)" }}>
+                      {minQty > 1 ? `Min ${minQty}` : ""}
+                      {minQty > 1 && maxQty != null ? " · " : ""}
+                      {maxQty != null ? `Max ${maxQty}` : ""}
+                      {atMax ? " (max reached)" : ""}
+                    </div>
+                  )}
+                  {hasVariants && (
+                    <div style={{ fontSize: 11, color: "var(--cm-muted)" }}>
+                      {variants.length} option{variants.length > 1 ? "s" : ""}
+                    </div>
+                  )}
+                  {!hasVariants && (extraCount > 0 || groupCount > 0) && (
+                    <button
+                      type="button"
+                      onClick={() => setVariantItem(item)}
+                      style={{ background: "none", border: "none", padding: 0, marginTop: 2, fontSize: 11, color: "var(--cm-accent, #007BFF)", fontWeight: 600, cursor: "pointer" }}
+                    >
+                      {groupCount > 0 ? `View options (${groupCount + 1}) ›` : "Offers & services ›"}
+                    </button>
+                  )}
                   {item.unit && (
                     <div style={{ fontSize: 11, color: "var(--cm-muted)" }}>{item.unit}</div>
                   )}
@@ -482,7 +492,7 @@ const StoreDetailScreen = () => {
 
       {/* Ratings & Reviews */}
       <div style={{ padding: "20px 14px 8px" }}>
-        <h3 style={{ margin: "0 0 14px", fontSize: 16, fontWeight: 700, color: "var(--cm-text, #fff)" }}>
+        <h3 style={{ margin: "0 0 14px", fontSize: 16, fontWeight: 700, color: "var(--cm-ink)" }}>
           Ratings &amp; Reviews
         </h3>
 
@@ -516,7 +526,7 @@ const StoreDetailScreen = () => {
                 }}
               >
                 <div style={{ textAlign: "center", flexShrink: 0 }}>
-                  <div style={{ fontSize: 34, fontWeight: 800, lineHeight: 1, color: "var(--cm-text, #fff)" }}>
+                  <div style={{ fontSize: 34, fontWeight: 800, lineHeight: 1, color: "var(--cm-ink)" }}>
                     {Number(reviewSummary.average || 0).toFixed(1)}
                   </div>
                   <div style={{ marginTop: 6 }}>{renderStars(reviewSummary.average, 13)}</div>
@@ -559,7 +569,7 @@ const StoreDetailScreen = () => {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       {renderStars(rv.rating, 11)}
-                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--cm-text, #fff)" }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--cm-ink)" }}>
                         {rv.userId?.name || "Customer"}
                       </span>
                     </div>
@@ -614,7 +624,7 @@ const StoreDetailScreen = () => {
                   borderRadius: 10,
                   border: "1px solid var(--cm-line)",
                   background: "var(--cm-card)",
-                  color: "var(--cm-text, #fff)",
+                  color: "var(--cm-ink)",
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: reviewsLoading ? "default" : "pointer",
@@ -636,6 +646,254 @@ const StoreDetailScreen = () => {
           <div className="mkt-cart-bar-cta">View cart →</div>
         </div>
       )}
+
+      {variantItem && (
+        <VariantPickerSheet
+          store={store}
+          item={variantItem}
+          allItems={items}
+          onOpenItem={setVariantItem}
+          closed={closed}
+          onClose={() => setVariantItem(null)}
+          getItemQty={getItemQty}
+          addItem={addItem}
+          decrementItem={decrementItem}
+        />
+      )}
+    </div>
+  );
+};
+
+/**
+ * Amazon-style grouped variant picker. Renders one chip group per option
+ * dimension (Size / Colour …); legacy flat variants fall back to a single
+ * group of labels. The resolved variant drives price, MRP, stock and add/qty.
+ */
+const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, onClose, getItemQty, addItem, decrementItem }) => {
+  const variants = useMemo(() => parseVariants(item), [item]);
+  const dims = useMemo(() => variantDimensions(variants), [variants]);
+
+  // Products grouped with this one (Amazon-style "other options"). Tapping a
+  // grouped product swaps the sheet to show that product instead.
+  const groupedProducts = useMemo(() => {
+    let ids = [];
+    try { const a = JSON.parse(item.groupedItemIds || "[]"); if (Array.isArray(a)) ids = a.map(Number); } catch { /* ignore */ }
+    if (!ids.length) return [];
+    const byId = new Map((allItems || []).map((it) => [it.id, it]));
+    return ids.map((id) => byId.get(id)).filter(Boolean);
+  }, [item, allItems]);
+
+  const [selection, setSelection] = useState(() =>
+    dims.length ? { ...(variants[0]?.options || {}) } : {}
+  );
+  const [flatLabel, setFlatLabel] = useState(() => (dims.length ? null : variants[0]?.label || null));
+
+  const hasVar = variants.length > 0;
+  const selected = !hasVar
+    ? null
+    : dims.length
+      ? findVariantByOptions(variants, dims, selection)
+      : variants.find((v) => v.label === flatLabel) || null;
+
+  // A value is selectable if a variant exists for it given the other chosen dims.
+  const valueEnabled = (dim, val) =>
+    variants.some((v) =>
+      String(v.options?.[dim] ?? "") === String(val) &&
+      dims.filter((d) => d !== dim).every((d) => !selection[d] || String(v.options?.[d] ?? "") === String(selection[d]))
+    );
+
+  // Effective price/MRP: variant when present, else the item's own price.
+  const basePrice = Number(item.offerPrice && Number(item.offerPrice) > 0 ? item.offerPrice : item.sellingPrice);
+  const baseMrp = item.mrp && Number(item.mrp) > basePrice ? Number(item.mrp) : null;
+  const dispPrice = hasVar ? (selected ? Number(selected.price) : null) : basePrice;
+  const dispMrp = hasVar
+    ? (selected?.mrp && Number(selected.mrp) > Number(selected.price) ? Number(selected.mrp) : null)
+    : baseMrp;
+
+  const qty = hasVar ? (selected ? getItemQty(item.id, selected.label) : 0) : getItemQty(item.id);
+  const stock = hasVar && selected && selected.stock != null ? Number(selected.stock) : null;
+  const soldOut = stock != null && stock <= 0;
+  // Per-item order-quantity limits (merchant-configured).
+  const minQty = Math.max(1, Number(item.minOrderQty) || 1);
+  const maxQty = Number(item.maxOrderQty) > 0 ? Number(item.maxOrderQty) : null;
+  const atMax = maxQty != null && qty >= maxQty;
+  const canAdd = (hasVar ? !!selected : true) && !closed && item.isAvailable !== false && !soldOut && !atMax;
+
+  const variant = hasVar && selected ? { label: selected.label, price: Number(selected.price), image: selected.image } : null;
+  const lineKey = hasVar && selected ? `${item.id}::${selected.label}` : `${item.id}`;
+
+  const parseArr = (raw) => { try { const a = raw ? JSON.parse(raw) : []; return Array.isArray(a) ? a : []; } catch { return []; } };
+  const offers = parseArr(item.offers);
+  const services = parseArr(item.services);
+
+  return (
+    <div className="mkt-vsheet-overlay" onClick={onClose}>
+      <div className="mkt-vsheet" onClick={(e) => e.stopPropagation()}>
+        <div className="mkt-vsheet-head">
+          <div className="mkt-vsheet-img">
+            {(selected?.image || item.imageUrl)
+              ? <img src={selected?.image || item.imageUrl} alt="" />
+              : <FaStore size={20} />}
+          </div>
+          <div style={{ flex: 1 }}>
+            <div className="mkt-vsheet-title">{item.name}</div>
+            {selected && <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>{selected.label}</div>}
+          </div>
+          <button className="mkt-header-back" onClick={onClose} aria-label="Close">×</button>
+        </div>
+
+        {item.description && (
+          <div className="mkt-vsheet-dim">
+            <div className="mkt-vsheet-dim-label">Product description</div>
+            <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: "var(--cm-text, #4b5563)", whiteSpace: "pre-line" }}>
+              {item.description}
+            </p>
+            {item.unit && (
+              <div style={{ marginTop: 4, fontSize: 11, color: "var(--cm-muted)" }}>Unit: {item.unit}</div>
+            )}
+          </div>
+        )}
+
+        {hasVar && (dims.length > 0 ? (
+          dims.map((dim) => (
+            <div key={dim} className="mkt-vsheet-dim">
+              <div className="mkt-vsheet-dim-label">{dim}</div>
+              <div className="mkt-vopt-row">
+                {dimensionValues(variants, dim).map((val) => {
+                  const enabled = valueEnabled(dim, val);
+                  const active = String(selection[dim] ?? "") === String(val);
+                  return (
+                    <button
+                      key={val}
+                      className={`mkt-vopt${active ? " mkt-vopt--active" : ""}${enabled ? "" : " mkt-vopt--disabled"}`}
+                      disabled={!enabled}
+                      onClick={() => setSelection((p) => ({ ...p, [dim]: val }))}
+                    >
+                      {val}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="mkt-vsheet-dim">
+            <div className="mkt-vsheet-dim-label">Options</div>
+            <div className="mkt-vopt-row">
+              {variants.map((v) => (
+                <button
+                  key={v.label}
+                  className={`mkt-vopt${flatLabel === v.label ? " mkt-vopt--active" : ""}`}
+                  onClick={() => setFlatLabel(v.label)}
+                >
+                  {v.label} · ₹{Number(v.price).toFixed(0)}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {groupedProducts.length > 0 && (
+          <div className="mkt-vsheet-dim">
+            <div className="mkt-vsheet-dim-label">Other options</div>
+            <div className="mkt-group-row">
+              {groupedProducts.map((g) => {
+                const gPrice = Number(g.offerPrice && Number(g.offerPrice) > 0 ? g.offerPrice : g.sellingPrice) || 0;
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    className="mkt-group-chip"
+                    onClick={() => onOpenItem && onOpenItem(g)}
+                  >
+                    <span className="mkt-group-chip-img">
+                      {g.imageUrl ? <img src={g.imageUrl} alt="" /> : <FaStore size={16} />}
+                    </span>
+                    <span className="mkt-group-chip-name">{g.name}</span>
+                    <span className="mkt-group-chip-price">₹{gPrice.toFixed(0)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="mkt-vsheet-pricerow">
+          {dispPrice != null ? (
+            <>
+              <span className="mkt-vsheet-price">₹{Number(dispPrice).toFixed(0)}</span>
+              {dispMrp && (
+                <span className="mkt-vsheet-mrp">₹{Number(dispMrp).toFixed(0)}</span>
+              )}
+            </>
+          ) : (
+            <span style={{ fontSize: 13, color: "var(--cm-muted)" }}>This combination isn't available</span>
+          )}
+        </div>
+        {stock != null && stock > 0 && stock <= 5 && (
+          <div className="mkt-vsheet-stock">Only {stock} left</div>
+        )}
+        {soldOut && <div className="mkt-vsheet-stock" style={{ color: "#f87171" }}>Out of stock</div>}
+        {(minQty > 1 || maxQty != null) && (
+          <div className="mkt-vsheet-stock" style={{ color: atMax ? "#f87171" : "var(--cm-muted)" }}>
+            {minQty > 1 ? `Min order ${minQty}` : ""}
+            {minQty > 1 && maxQty != null ? " · " : ""}
+            {maxQty != null ? `Max order ${maxQty}` : ""}
+            {atMax ? " — limit reached" : ""}
+          </div>
+        )}
+
+        {qty === 0 ? (
+          <button
+            className="mkt-btn mkt-btn--primary"
+            disabled={!canAdd}
+            style={{ opacity: canAdd ? 1 : 0.5 }}
+            onClick={() => { addItem(store, item, { variant }); }}
+          >
+            {closed ? "Store closed" : (minQty > 1 ? `Add ${minQty} to cart` : "Add to cart")}
+          </button>
+        ) : (
+          <div className="mkt-stepper" style={{ alignSelf: "flex-start", width: "fit-content" }}>
+            <button className="mkt-stepper-btn" onClick={() => decrementItem(lineKey)} aria-label="Decrease"><FaMinus size={10} /></button>
+            <span className="mkt-stepper-qty">{qty}</span>
+            <button className="mkt-stepper-btn" disabled={!canAdd} onClick={() => addItem(store, item, { variant })} aria-label="Increase"><FaPlus size={10} /></button>
+          </div>
+        )}
+
+        {offers.length > 0 && (
+          <div className="mkt-isheet-sec">
+            <div className="mkt-isheet-sec-title">Offers</div>
+            <div className="mkt-offer-row">
+              {offers.map((o, i) => (
+                <div key={i} className="mkt-offer-card">
+                  <div className="mkt-offer-title">{o.title}</div>
+                  {Number(o.discountValue) > 0 && (
+                    <div className="mkt-offer-rule">
+                      {o.discountType === "percent" ? `${Number(o.discountValue)}% off` : `₹${Number(o.discountValue)} off`}
+                      {Number(o.minPurchase) > 0 ? ` on orders above ₹${Number(o.minPurchase)}` : ""}
+                    </div>
+                  )}
+                  {o.description && <div className="mkt-offer-desc">{o.description}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {services.length > 0 && (
+          <div className="mkt-isheet-sec">
+            <div className="mkt-isheet-sec-title">Services</div>
+            <div className="mkt-service-row">
+              {services.map((s, i) => (
+                <div key={i} className="mkt-service-item">
+                  <div className="mkt-service-label">{s.label}</div>
+                  {s.detail && <div className="mkt-service-detail">{s.detail}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

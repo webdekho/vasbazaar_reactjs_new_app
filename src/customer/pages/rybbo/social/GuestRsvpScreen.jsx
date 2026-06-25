@@ -19,7 +19,7 @@ const inputStyle = {
 const labelStyle = { fontSize: 12, fontWeight: 700, color: "#6B7280", display: "block", marginBottom: 6 };
 
 const RESPONSES = [
-  { key: "ACCEPT", label: "Going", icon: FaCheckCircle, color: "#16a34a" },
+  { key: "ACCEPT", label: "Accepted", icon: FaCheckCircle, color: "#16a34a" },
   { key: "MAYBE", label: "Maybe", icon: FaQuestionCircle, color: "#f59e0b" },
   { key: "DECLINE", label: "Can't make it", icon: FaTimesCircle, color: "#ef4444" },
 ];
@@ -38,7 +38,7 @@ const GuestRsvpScreen = () => {
   const [state, setState] = useState({ loading: true, error: "", event: null });
   const [verifiedHint, setVerifiedHint] = useState(false);
   const [form, setForm] = useState({
-    guestName: "", guestMobile: "", response: "ACCEPT", partySize: 1, foodPref: "", note: "",
+    guestName: "", guestMobile: "", guestEmail: "", response: "ACCEPT", partySize: 1, foodPref: "", note: "",
     allergies: "", dressConfirm: false, arrivalTime: "", parkingNeeded: false,
     kidsCount: 0, accommodationNeeded: false, songRequest: "", drinks: false,
   });
@@ -55,12 +55,18 @@ const GuestRsvpScreen = () => {
       setState({ loading: false, error: r.success ? "" : (r.message || "Invite not found"), event: r.success ? r.data : null });
 
       // Logged-in user who already RSVP'd: prefill the form so they can edit it.
+      const params = new URLSearchParams(window.location.search);
+      const emailFromLink = (params.get("email") || "").trim().toLowerCase();
+      if (emailFromLink) {
+        setForm((p) => ({ ...p, guestEmail: emailFromLink }));
+      }
       const mine = r.success ? r.data?.myRsvp : null;
       if (mine) {
         setForm((p) => ({
           ...p,
           guestName: mine.guestName ?? p.guestName,
           guestMobile: mine.guestMobile ?? p.guestMobile,
+          guestEmail: mine.guestEmail ?? p.guestEmail,
           response: mine.response ?? p.response,
           partySize: mine.partySize ?? p.partySize,
           foodPref: mine.foodPref ?? p.foodPref,
@@ -130,13 +136,16 @@ const GuestRsvpScreen = () => {
   const submit = async () => {
     if (!form.guestName.trim()) { alert("Please enter your name"); return; }
     const mobile = form.guestMobile.replace(/\D/g, "");
-    if (!/^\d{10,}$/.test(mobile)) { alert("Please enter a valid mobile number"); return; }
+    const email = String(form.guestEmail || "").trim().toLowerCase();
+    const hasMobile = /^\d{10,}$/.test(mobile);
+    const hasEmail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
+    if (!hasMobile && !hasEmail) { alert("Please enter a valid mobile number or email address"); return; }
 
     const accessToken = localStorage.getItem(SESSION_KEY) || "";
     // Every RSVP must come from a verified VasBazaar account. If not logged in,
     // stash the filled form, route through the standard OTP login, and come back
     // here verified — the restore in the load effect brings the form back.
-    if (!accessToken) {
+    if (!accessToken && !hasEmail) {
       try {
         sessionStorage.setItem(draftKey(token), JSON.stringify(form));
         sessionStorage.setItem("vb_post_login_redirect", `/customer/rybbo/i/${token}`);
@@ -146,7 +155,7 @@ const GuestRsvpScreen = () => {
     }
 
     setSubmitting(true);
-    const r = await rybboSocialService.submitRsvp(token, { ...form, accessToken });
+    const r = await rybboSocialService.submitRsvp(token, { ...form, guestMobile: hasMobile ? mobile : "", guestEmail: hasEmail ? email : "", accessToken });
     setSubmitting(false);
     if (!r.success) { alert(r.message || "Could not submit your RSVP"); return; }
     setVerifiedHint(false);
@@ -252,8 +261,12 @@ const GuestRsvpScreen = () => {
                         <input style={inputStyle} value={form.guestName} onChange={(e2) => set("guestName", e2.target.value)} placeholder="Full name" />
                       </div>
                       <div>
-                        <label style={labelStyle}>Mobile number *</label>
+                        <label style={labelStyle}>Mobile number</label>
                         <input style={inputStyle} type="tel" value={form.guestMobile} onChange={(e2) => set("guestMobile", e2.target.value)} placeholder="10-digit mobile" />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Email address</label>
+                        <input style={inputStyle} type="email" value={form.guestEmail} onChange={(e2) => set("guestEmail", e2.target.value)} placeholder="name@example.com" />
                       </div>
 
                       {form.response !== "DECLINE" && (
@@ -433,7 +446,8 @@ const AudioInvite = ({ src }) => {
  * Handles the optional contribution payment, then the QR entry pass.
  */
 const PostRsvp = ({ event, token, guest, done, onChange }) => {
-  const needsContribution = done.response === "ACCEPT" && Number(event.contributionAmount) > 0;
+  const hasMobileIdentity = String(guest.guestMobile || "").replace(/\D/g, "").length >= 10;
+  const needsContribution = hasMobileIdentity && done.response === "ACCEPT" && Number(event.contributionAmount) > 0;
   const [paid, setPaid] = useState(done.resumePay === "success");
   const [busy, setBusy] = useState(false);
   const [payMsg, setPayMsg] = useState(
@@ -523,7 +537,7 @@ const PostRsvp = ({ event, token, guest, done, onChange }) => {
       )}
 
       {/* Entry pass */}
-      {done.response === "ACCEPT" && (!needsContribution || paid) && (
+      {done.response === "ACCEPT" && hasMobileIdentity && (!needsContribution || paid) && (
         <div style={{ marginTop: 16, padding: 16, border: "1px solid #E5E7EB", borderRadius: 14, textAlign: "center" }}>
           <div style={{ fontSize: 14, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
             <FaQrcode color={ACCENT} /> Your entry pass

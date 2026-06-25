@@ -11,6 +11,7 @@ import DataState from "../components/DataState";
 import { normalizeService } from "../components/serviceUtils";
 import BillerFlowScreen from "./BillerFlowScreen";
 import { useToast } from "../context/ToastContext";
+import { isBlockedAmount } from "../utils/blockedAmount";
 
 const FALLBACK_LOGO = "/assets/images/Brand_favicon.png";
 const handleLogoError = (e) => { e.target.onerror = null; e.target.src = FALLBACK_LOGO; };
@@ -192,6 +193,13 @@ const RechargePlansView = ({ contactName, mobile, operatorData: initialOperatorD
       showToast(`Enter an amount between ₹${min} and ₹${max} for ${opName}.`, "error");
       return;
     }
+    // Block-list guard: admin can configure specific amounts (operator.rejectAmount,
+    // stored as a JSON array like "[10,20]") that are not allowed for this operator.
+    // Reject them here on the first screen before advancing to payment.
+    if (Number.isFinite(amount) && isBlockedAmount(matchedOperator?.rejectAmount, amount)) {
+      showToast(`₹${amount} is not available for ${opName}. Please choose a different amount.`, "error");
+      return;
+    }
     navigate("/customer/app/offers", {
       state: { type: "recharge", operatorId: matchedOperator?.id || "", amount: plan.rs, label: serviceData.name, validity: plan.validity, planDescription: plan.desc, mobile, contactName, opCode, circleCode, serviceId: serviceData.id, operatorName: opName, logo: opLogo },
     });
@@ -359,6 +367,10 @@ const MobileNumberSheet = ({ open, operator, isPostpaid, navigate, serviceData, 
     const num = normalizeMobile(mobile);
     const payAmount = Number(amount);
     if (!payAmount || payAmount <= 0) { setError("Enter a valid amount."); return; }
+    if (isBlockedAmount(operator?.rejectAmount, payAmount)) {
+      setError(`₹${payAmount} is not available for ${opName}. Please choose a different amount.`);
+      return;
+    }
     navigate("/customer/app/offers", {
       state: {
         type: "bill",
@@ -891,6 +903,10 @@ const PostpaidFlow = ({ serviceData, operators, navigate }) => {
     const payAmount = Number(amount);
     if (!payAmount || payAmount <= 0) { setError("Enter a valid amount."); return; }
     const opName = selectedOp?.operatorName || selectedOp?.name || "Operator";
+    if (isBlockedAmount(selectedOp?.rejectAmount, payAmount)) {
+      setError(`₹${payAmount} is not available for ${opName}. Please choose a different amount.`);
+      return;
+    }
     navigate("/customer/app/offers", {
       state: {
         type: "bill", operatorId: selectedOp?.id, amount: payAmount,
@@ -1002,7 +1018,7 @@ const PostpaidFlow = ({ serviceData, operators, navigate }) => {
                   )}
                   <div className="cm-contact-info">
                     <div className="cm-contact-name">{name}</div>
-                    <div className="cm-contact-number">Bharat BillPay</div>
+                    <div className="cm-contact-number">Bharat Connect</div>
                   </div>
                   {loading && selectedOp?.id === op.id ? <span className="cm-contact-loading" /> : <FaChevronRight style={{ color: "var(--cm-disabled, #6B6B6B)", fontSize: 12 }} />}
                 </button>

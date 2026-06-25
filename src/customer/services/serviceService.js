@@ -8,7 +8,10 @@ export const serviceService = {
    */
   getHomeServices: () => cachedFetch("getHomeServices", () => authGet("/api/customer/service/allService", { displayOnScreen: 1 }), 86400000),
 
-  getAllServices: () => cachedFetch("getAllServices", () => authGet("/api/customer/service/allService"), 86400000),
+  // Pass displayOnScreen so the backend also filters out services whose
+  // ON/OFF-SCREEN toggle is Off (not just INACTIVE status). Without this the
+  // all-services screen kept showing services admins had switched off-screen.
+  getAllServices: () => cachedFetch("getAllServices", () => authGet("/api/customer/service/allService", { displayOnScreen: 1 }), 86400000),
 
   // Operators list cached for 1 hour per service
   getOperatorsByService: (serviceId) =>

@@ -32,12 +32,14 @@ export default function ProviderHubScreen() {
   const [pForm, setPForm] = useState({
     providerName: "", businessName: "", headline: "", about: "",
     categoryId: "", city: "", pincode: "", serviceAreas: "", mobile: "",
-    profilePhotoUrl: "",
+    travelCharge: "", locationName: "", latitude: "", longitude: "", profilePhotoUrl: "",
   });
+  const [locating, setLocating] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef(null);
   const [offeringModal, setOfferingModal] = useState(false);
-  const [oForm, setOForm] = useState({ title: "", description: "", basePrice: "", durationMinutes: "" });
+  const emptyOfferingForm = { id: null, title: "", description: "", basePrice: "", durationMinutes: "", serviceableArea: "", serviceRadiusKm: "" };
+  const [oForm, setOForm] = useState(emptyOfferingForm);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -54,6 +56,10 @@ export default function ProviderHubScreen() {
         headline: p.headline || "", about: p.about || "",
         categoryId: p.categoryId?.id || "", city: p.city || "",
         pincode: p.pincode || "", serviceAreas: p.serviceAreas || "", mobile: p.mobile || "",
+        travelCharge: p.travelCharge != null ? String(p.travelCharge) : "",
+        locationName: p.locationName || "",
+        latitude: p.latitude != null ? String(p.latitude) : "",
+        longitude: p.longitude != null ? String(p.longitude) : "",
         profilePhotoUrl: p.profilePhotoUrl || "",
       });
       const offRes = await serviceBazaarService.getMyOfferings();
@@ -71,6 +77,20 @@ export default function ProviderHubScreen() {
 
   useEffect(() => { if (tab === "jobs" && profile) loadJobs(); }, [tab, profile, loadJobs]);
 
+  const pinLocation = () => {
+    if (!navigator.geolocation) { showToast("Location not supported on this device", "error"); return; }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setPForm((f) => ({ ...f, latitude: String(pos.coords.latitude), longitude: String(pos.coords.longitude) }));
+        setLocating(false);
+        showToast("Location pinned — remember to save", "success");
+      },
+      () => { setLocating(false); showToast("Could not get your location", "error"); },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
   const onPickPhoto = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -87,7 +107,13 @@ export default function ProviderHubScreen() {
   const saveProfile = async () => {
     if (!pForm.providerName.trim()) { showToast("Name is required", "error"); return; }
     setBusy(true);
-    const payload = { ...pForm, categoryId: pForm.categoryId ? { id: Number(pForm.categoryId) } : null };
+    const payload = {
+      ...pForm,
+      categoryId: pForm.categoryId ? { id: Number(pForm.categoryId) } : null,
+      travelCharge: pForm.travelCharge ? Number(pForm.travelCharge) : 0,
+      latitude: pForm.latitude ? Number(pForm.latitude) : null,
+      longitude: pForm.longitude ? Number(pForm.longitude) : null,
+    };
     const res = await serviceBazaarService.saveMyProviderProfile(payload);
     setBusy(false);
     if (res.success) { showToast(res.message || "Profile saved", "success"); load(); }
@@ -98,22 +124,28 @@ export default function ProviderHubScreen() {
     if (!oForm.title.trim()) { showToast("Service title is required", "error"); return; }
     setBusy(true);
     const payload = {
+      ...(oForm.id ? { id: oForm.id } : {}),
       title: oForm.title,
       description: oForm.description,
       basePrice: oForm.basePrice ? Number(oForm.basePrice) : 0,
       durationMinutes: oForm.durationMinutes ? Number(oForm.durationMinutes) : null,
+      serviceableArea: oForm.serviceableArea,
+      serviceRadiusKm: oForm.serviceRadiusKm ? Number(oForm.serviceRadiusKm) : null,
       pricingType: "FIXED",
     };
     const res = await serviceBazaarService.saveMyOffering(payload);
     setBusy(false);
     if (res.success) {
-      showToast("Service submitted for approval", "success");
+      showToast(oForm.id ? "Service updated and resubmitted for approval" : "Service submitted for approval", "success");
       setOfferingModal(false);
-      setOForm({ title: "", description: "", basePrice: "", durationMinutes: "" });
+      setOForm(emptyOfferingForm);
       const offRes = await serviceBazaarService.getMyOfferings();
       if (offRes.success) setOfferings(Array.isArray(offRes.data) ? offRes.data : []);
     } else showToast(res.message || "Could not save service", "error");
   };
+
+  const [otpModal, setOtpModal] = useState(null); // { job, mode: "start" | "complete" }
+  const [otpInput, setOtpInput] = useState("");
 
   const setJobStatus = async (job, status) => {
     setBusy(true);
@@ -121,6 +153,30 @@ export default function ProviderHubScreen() {
     setBusy(false);
     if (res.success) { showToast(res.message || "Updated", "success"); loadJobs(); }
     else showToast(res.message || "Could not update", "error");
+  };
+
+  const setFulfillment = async (job, stage) => {
+    setBusy(true);
+    const res = await serviceBazaarService.updateProviderFulfillment(job.id, stage);
+    setBusy(false);
+    if (res.success) { showToast(res.message || "Updated", "success"); loadJobs(); }
+    else showToast(res.message || "Could not update", "error");
+  };
+
+  const submitOtp = async () => {
+    const otp = otpInput.trim();
+    if (!/^\d{4}$/.test(otp)) { showToast("Enter the 4-digit OTP from the customer", "error"); return; }
+    setBusy(true);
+    const { job, mode } = otpModal;
+    const res = mode === "start"
+      ? await serviceBazaarService.providerStartService(job.id, otp)
+      : await serviceBazaarService.providerCompleteService(job.id, otp);
+    setBusy(false);
+    if (res.success) {
+      showToast(res.message || "Done", "success");
+      setOtpModal(null); setOtpInput("");
+      loadJobs();
+    } else showToast(res.message || "Incorrect OTP", "error");
   };
 
   if (loading) return <div className="sb-page"><div className="sb-empty">Loading…</div></div>;
@@ -142,7 +198,7 @@ export default function ProviderHubScreen() {
       </div>
 
       {tab === "profile" && (
-        <div className="sb-section">
+        <div className="sb-section sb-profile-form">
           {!profile && <p className="sb-card-meta" style={{ marginBottom: 12 }}>Create your provider profile to start earning. It goes live after VasBazaar approval.</p>}
           <div className="sb-photo-upload">
             <div className="sb-photo-preview" onClick={() => photoInputRef.current?.click()}>
@@ -165,10 +221,28 @@ export default function ProviderHubScreen() {
             </select>
           </div>
           <div className="sb-field"><label>Headline</label><input value={pForm.headline} onChange={(e) => setPForm({ ...pForm, headline: e.target.value })} placeholder="e.g. Bridal makeup specialist, 8 yrs" /></div>
-          <div className="sb-field"><label>About</label><textarea rows={3} value={pForm.about} onChange={(e) => setPForm({ ...pForm, about: e.target.value })} /></div>
+          <div className="sb-field sb-col-full"><label>About</label><textarea rows={3} value={pForm.about} onChange={(e) => setPForm({ ...pForm, about: e.target.value })} /></div>
           <div className="sb-field"><label>City</label><input value={pForm.city} onChange={(e) => setPForm({ ...pForm, city: e.target.value })} /></div>
           <div className="sb-field"><label>Pincode</label><input value={pForm.pincode} onChange={(e) => setPForm({ ...pForm, pincode: e.target.value })} /></div>
           <div className="sb-field"><label>Service areas</label><input value={pForm.serviceAreas} onChange={(e) => setPForm({ ...pForm, serviceAreas: e.target.value })} placeholder="Areas / pincodes you serve" /></div>
+          <div className="sb-field"><label>Travel / visit charge (₹)</label><input type="number" value={pForm.travelCharge} onChange={(e) => setPForm({ ...pForm, travelCharge: e.target.value })} placeholder="0 — added to each doorstep booking" /></div>
+          <div className="sb-field sb-col-full">
+            <label>Map location (for "near me" search)</label>
+            <input
+              value={pForm.locationName}
+              onChange={(e) => setPForm({ ...pForm, locationName: e.target.value })}
+              placeholder="e.g. Newa BKC"
+              style={{ marginBottom: 8 }}
+            />
+            <button type="button" className="sb-btn ghost sm" onClick={pinLocation} disabled={locating}>
+              {locating ? "Locating…" : pForm.latitude ? "Update GPS pin" : "Pin my location (GPS)"}
+            </button>
+            {pForm.latitude && (
+              <p className="sb-photo-hint">
+                Pinned{pForm.locationName ? ` at ${pForm.locationName}` : ""}: {Number(pForm.latitude).toFixed(4)}, {Number(pForm.longitude).toFixed(4)}
+              </p>
+            )}
+          </div>
           <div className="sb-field"><label>Contact mobile</label><input value={pForm.mobile} onChange={(e) => setPForm({ ...pForm, mobile: e.target.value })} /></div>
           <button className="sb-btn block" disabled={busy} onClick={saveProfile}>{busy ? "Saving…" : profile ? "Update & Resubmit" : "Submit for Approval"}</button>
         </div>
@@ -178,37 +252,72 @@ export default function ProviderHubScreen() {
         <div className="sb-section">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <h3 style={{ margin: 0 }}>My Services</h3>
-            <button className="sb-btn sm" onClick={() => setOfferingModal(true)}><FaPlus style={{ marginRight: 4 }} /> Add</button>
+            <button className="sb-btn sm" onClick={() => { setOForm(emptyOfferingForm); setOfferingModal(true); }}><FaPlus style={{ marginRight: 4 }} /> Add</button>
           </div>
           {offerings.length === 0 ? <p className="sb-card-meta">No services yet. Add your first one.</p> : offerings.map((o) => (
             <div className="sb-offering" key={o.id}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p className="sb-offering-title">{o.title}</p>
                 <p className="sb-offering-desc">₹{Number(o.basePrice || 0).toFixed(0)} • <span className={`sb-status ${o.status}`} style={{ fontSize: 10 }}>{o.status}</span></p>
+                {(o.serviceableArea || o.serviceRadiusKm) && (
+                  <p className="sb-offering-desc">
+                    {o.serviceableArea || "Serviceable area"}
+                    {o.serviceRadiusKm ? ` • ${Number(o.serviceRadiusKm).toFixed(0)} km` : ""}
+                  </p>
+                )}
               </div>
+              <button className="sb-btn sm ghost" onClick={() => {
+                setOForm({
+                  id: o.id,
+                  title: o.title || "",
+                  description: o.description || "",
+                  basePrice: o.basePrice != null ? String(o.basePrice) : "",
+                  durationMinutes: o.durationMinutes != null ? String(o.durationMinutes) : "",
+                  serviceableArea: o.serviceableArea || "",
+                  serviceRadiusKm: o.serviceRadiusKm != null ? String(o.serviceRadiusKm) : "",
+                });
+                setOfferingModal(true);
+              }}>Edit</button>
             </div>
           ))}
         </div>
       )}
 
       {tab === "jobs" && (
-        <div>
+        <div className="sb-results">
           {jobs.length === 0 ? <div className="sb-empty">No job requests yet.</div> : jobs.map((j) => {
             const status = j.bookingStatus || "PENDING";
+            const paid = String(j.paymentStatus || "").toUpperCase() === "PAID";
+            const fl = j.fulfillmentStatus;
             return (
               <div className="sb-booking" key={j.id}>
                 <div className="sb-booking-head">
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p className="sb-offering-title">{j.serviceOfferingId?.title || "Service"}</p>
-                    <p className="sb-offering-desc">#{j.bookingNo} • ₹{Number(j.totalAmount || 0).toFixed(0)}</p>
+                    <p className="sb-offering-desc">#{j.bookingNo} • ₹{Number(j.totalAmount || 0).toFixed(0)} • {paid ? "Paid" : "Payment pending"}</p>
                     {j.serviceAddress && <p className="sb-offering-desc">{j.serviceAddress}</p>}
+                    {j.scheduledAt && <p className="sb-offering-desc">{new Date(j.scheduledAt).toLocaleString()}</p>}
                   </div>
                   <span className={`sb-status ${status}`}>{status.replace("_", " ")}</span>
                 </div>
                 <div className="sb-row-actions">
-                  {status === "PENDING" && <button className="sb-btn sm" disabled={busy} onClick={() => setJobStatus(j, "CONFIRMED")}>Confirm</button>}
-                  {status === "CONFIRMED" && <button className="sb-btn sm" disabled={busy} onClick={() => setJobStatus(j, "IN_PROGRESS")}>Start</button>}
-                  {status === "IN_PROGRESS" && <button className="sb-btn sm" disabled={busy} onClick={() => setJobStatus(j, "COMPLETED")}>Mark Complete</button>}
+                  {status === "PENDING" && (
+                    <button className="sb-btn sm" disabled={busy || !paid} onClick={() => setJobStatus(j, "CONFIRMED")}>
+                      {paid ? "Accept" : "Awaiting payment"}
+                    </button>
+                  )}
+                  {status === "CONFIRMED" && fl !== "ON_THE_WAY" && fl !== "REACHED" && (
+                    <button className="sb-btn sm ghost" disabled={busy} onClick={() => setFulfillment(j, "ON_THE_WAY")}>On the way</button>
+                  )}
+                  {status === "CONFIRMED" && fl === "ON_THE_WAY" && (
+                    <button className="sb-btn sm ghost" disabled={busy} onClick={() => setFulfillment(j, "REACHED")}>Reached</button>
+                  )}
+                  {status === "CONFIRMED" && (
+                    <button className="sb-btn sm" disabled={busy} onClick={() => { setOtpModal({ job: j, mode: "start" }); setOtpInput(""); }}>Start (OTP)</button>
+                  )}
+                  {status === "IN_PROGRESS" && (
+                    <button className="sb-btn sm" disabled={busy} onClick={() => { setOtpModal({ job: j, mode: "complete" }); setOtpInput(""); }}>Complete (OTP)</button>
+                  )}
                   {(status === "PENDING" || status === "CONFIRMED") && <button className="sb-btn sm danger" disabled={busy} onClick={() => setJobStatus(j, "CANCELLED")}>Decline</button>}
                 </div>
               </div>
@@ -217,15 +326,37 @@ export default function ProviderHubScreen() {
         </div>
       )}
 
+      {otpModal && (
+        <div className="sb-modal-backdrop" onClick={() => setOtpModal(null)}>
+          <div className="sb-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>{otpModal.mode === "start" ? "Start service" : "Complete service"}</h3>
+            <p className="sb-card-meta" style={{ marginBottom: 12 }}>
+              Ask the customer to read the {otpModal.mode === "start" ? "Start" : "End"} OTP shown in their app, then enter it below.
+            </p>
+            <div className="sb-field">
+              <label>4-digit OTP</label>
+              <input inputMode="numeric" maxLength={4} value={otpInput}
+                onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                placeholder="••••" style={{ letterSpacing: 6, fontSize: 18, textAlign: "center" }} />
+            </div>
+            <button className="sb-btn block" disabled={busy} onClick={submitOtp}>{busy ? "Verifying…" : "Verify & continue"}</button>
+            <button className="sb-btn ghost block" style={{ marginTop: 8 }} onClick={() => setOtpModal(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
       {offeringModal && (
         <div className="sb-modal-backdrop" onClick={() => setOfferingModal(false)}>
           <div className="sb-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ marginTop: 0 }}>Add a Service</h3>
+            <h3 style={{ marginTop: 0 }}>{oForm.id ? "Edit Service" : "Add a Service"}</h3>
+            {oForm.id && <p className="sb-card-meta" style={{ marginTop: -6, marginBottom: 12 }}>Editing resubmits this service for approval.</p>}
             <div className="sb-field"><label>Title *</label><input value={oForm.title} onChange={(e) => setOForm({ ...oForm, title: e.target.value })} placeholder="e.g. Bridal makeup at home" /></div>
             <div className="sb-field"><label>Description</label><textarea rows={2} value={oForm.description} onChange={(e) => setOForm({ ...oForm, description: e.target.value })} /></div>
             <div className="sb-field"><label>Price (₹)</label><input type="number" value={oForm.basePrice} onChange={(e) => setOForm({ ...oForm, basePrice: e.target.value })} /></div>
             <div className="sb-field"><label>Duration (min)</label><input type="number" value={oForm.durationMinutes} onChange={(e) => setOForm({ ...oForm, durationMinutes: e.target.value })} /></div>
-            <button className="sb-btn block" disabled={busy} onClick={saveOffering}>{busy ? "Saving…" : "Submit for Approval"}</button>
+            <div className="sb-field"><label>Serviceable area</label><textarea rows={2} value={oForm.serviceableArea} onChange={(e) => setOForm({ ...oForm, serviceableArea: e.target.value })} placeholder="e.g. BKC, Bandra, Kurla" /></div>
+            <div className="sb-field"><label>Service radius (km)</label><input type="number" min="0" step="0.5" value={oForm.serviceRadiusKm} onChange={(e) => setOForm({ ...oForm, serviceRadiusKm: e.target.value })} placeholder="e.g. 5" /></div>
+            <button className="sb-btn block" disabled={busy} onClick={saveOffering}>{busy ? "Saving…" : oForm.id ? "Update Service" : "Submit for Approval"}</button>
             <button className="sb-btn ghost block" style={{ marginTop: 8 }} onClick={() => setOfferingModal(false)}>Cancel</button>
           </div>
         </div>

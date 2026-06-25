@@ -33,8 +33,27 @@ export default function ServiceBazaarHomeScreen() {
   const [search, setSearch] = useState("");
   const [pincode, setPincode] = useState(localStorage.getItem("sbPincode") || "");
   const [editingLoc, setEditingLoc] = useState(false);
+  const [coords, setCoords] = useState(null); // { lat, lng } when "near me" is active
+  const [radiusKm, setRadiusKm] = useState(10);
+  const [locating, setLocating] = useState(false);
   const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  const RADII = [3, 5, 10, 20, 0]; // 0 = any distance (within each provider's own reach)
+
+  const useMyLocation = () => {
+    if (!navigator.geolocation) { showToast("Location not supported on this device", "error"); return; }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocating(false);
+        showToast("Showing providers near you", "success");
+      },
+      () => { setLocating(false); showToast("Could not get your location", "error"); },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -46,10 +65,13 @@ export default function ServiceBazaarHomeScreen() {
 
   const loadProviders = useCallback(async () => {
     setLoading(true);
+    const geo = coords ? { lat: coords.lat, lng: coords.lng, radiusKm: radiusKm || undefined } : {};
     const res = await serviceBazaarService.searchProviders({
       categoryId: activeCategory || undefined,
       search: search.trim() || undefined,
-      pincode: pincode.trim() || undefined,
+      // Pincode is ignored once a precise "near me" location is active.
+      pincode: coords ? undefined : pincode.trim() || undefined,
+      ...geo,
       pageSize: 20,
     });
     if (res.success) {
@@ -58,7 +80,7 @@ export default function ServiceBazaarHomeScreen() {
       showToast(res.message || "Could not load services", "error");
     }
     setLoading(false);
-  }, [activeCategory, search, pincode, showToast]);
+  }, [activeCategory, search, pincode, coords, radiusKm, showToast]);
 
   const saveLocation = () => {
     localStorage.setItem("sbPincode", pincode.trim());
@@ -95,9 +117,30 @@ export default function ServiceBazaarHomeScreen() {
               <button className="sb-loc" onClick={saveLocation}>Done</button>
             </div>
           ) : (
-            <button className="sb-loc" onClick={() => setEditingLoc(true)}>
-              <FaMapMarkerAlt /> {pincode ? `Near ${pincode}` : "Set your location"}
-            </button>
+            <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+              <button className="sb-loc" onClick={() => setEditingLoc(true)}>
+                <FaMapMarkerAlt /> {coords ? "Near me" : pincode ? `Near ${pincode}` : "Set your location"}
+              </button>
+              <button className="sb-loc" onClick={useMyLocation} disabled={locating}>
+                {locating ? "Locating…" : coords ? "Update GPS" : "Use my location"}
+              </button>
+              {coords && (
+                <button className="sb-loc" onClick={() => setCoords(null)}>Clear</button>
+              )}
+            </div>
+          )}
+          {coords && (
+            <div className="sb-chips" style={{ marginTop: 8 }}>
+              {RADII.map((r) => (
+                <button
+                  key={r}
+                  className={`sb-chip ${radiusKm === r ? "active" : ""}`}
+                  onClick={() => setRadiusKm(r)}
+                >
+                  {r === 0 ? "Any" : `${r} km`}
+                </button>
+              ))}
+            </div>
           )}
         </div>
       </div>
@@ -140,6 +183,7 @@ export default function ServiceBazaarHomeScreen() {
         ))}
       </div>
 
+      <div className="sb-results">
       {loading ? (
         <SkeletonCards />
       ) : providers.length === 0 ? (
@@ -165,6 +209,11 @@ export default function ServiceBazaarHomeScreen() {
                 {p.city ? ` • ${p.city}` : ""}
               </p>
               <div className="sb-badges">
+                {p.distanceKm != null && (
+                  <span className="sb-badge">
+                    <FaMapMarkerAlt style={{ marginRight: 3, fontSize: 10 }} /> {p.distanceKm} km
+                  </span>
+                )}
                 {Number(p.ratingAvg) > 0 && (
                   <span className="sb-badge rating">
                     <FaStar style={{ marginRight: 3, fontSize: 10 }} />
@@ -179,6 +228,7 @@ export default function ServiceBazaarHomeScreen() {
           </div>
         ))
       )}
+      </div>
     </div>
   );
 }

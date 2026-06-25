@@ -20,14 +20,24 @@ export default function ServiceBookingDetailScreen() {
   const { showToast } = useToast();
 
   const [b, setB] = useState(null);
+  const [otp, setOtp] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     const res = await serviceBazaarService.getBooking(bookingId);
-    if (res.success) setB(res.data);
-    else showToast(res.message || "Booking not found", "error");
+    if (res.success) {
+      setB(res.data);
+      const st = res.data?.bookingStatus;
+      // The live Start/End service OTP the customer reads out to the provider.
+      if (st === "CONFIRMED" || st === "IN_PROGRESS") {
+        const otpRes = await serviceBazaarService.getBookingOtp(bookingId);
+        setOtp(otpRes.success ? otpRes.data : null);
+      } else {
+        setOtp(null);
+      }
+    } else showToast(res.message || "Booking not found", "error");
     setLoading(false);
   }, [bookingId, showToast]);
 
@@ -61,8 +71,12 @@ export default function ServiceBookingDetailScreen() {
   const provider = b.providerProfileId || {};
   const subtotal = Number(b.subtotal || 0);
   const platform = Number(b.platformCharge || 0);
+  const travel = Number(b.travelCharge || 0);
   const discount = Number(b.discountAmount || 0);
   const total = Number(b.totalAmount || 0);
+  const fulfillment = b.fulfillmentStatus;
+  const otpValue = otp?.otp;
+  const otpStage = otp?.stage; // START | END
 
   return (
     <div className="sb-page">
@@ -75,10 +89,28 @@ export default function ServiceBookingDetailScreen() {
         <span className={`sb-status ${status}`} style={{ marginLeft: "auto" }}>{status.replace("_", " ")}</span>
       </div>
 
+      {/* Live service OTP — customer reads it out to the provider */}
+      {otpValue && (
+        <div className="sb-otp-banner">
+          <p className="sb-otp-label">
+            {otpStage === "START"
+              ? "Share this OTP to START the service"
+              : "Share this OTP to CLOSE the service"}
+          </p>
+          <p className="sb-otp-code">{otpValue}</p>
+          <p className="sb-otp-hint">Read it out only when the professional is with you.</p>
+        </div>
+      )}
+
       {/* Tracking timeline */}
       {!cancelled ? (
         <div className="sb-section">
           <h3>Track your booking</h3>
+          {fulfillment && status === "CONFIRMED" && (
+            <p className="sb-card-meta" style={{ marginTop: -4, marginBottom: 8 }}>
+              {fulfillment === "ON_THE_WAY" ? "Your professional is on the way" : "Professional has reached your location"}
+            </p>
+          )}
           <div className="sb-timeline">
             {FLOW.map((s, i) => {
               const done = i < currentIdx || status === "COMPLETED";
@@ -116,20 +148,21 @@ export default function ServiceBookingDetailScreen() {
       {/* Bill / receipt */}
       <div className="sb-receipt">
         <div className="sb-receipt-row"><span>Subtotal</span><span>₹{subtotal.toFixed(0)}</span></div>
+        {travel > 0 && <div className="sb-receipt-row"><span>Travel / visit charge</span><span>₹{travel.toFixed(0)}</span></div>}
         {discount > 0 && <div className="sb-receipt-row"><span>Discount</span><span>-₹{discount.toFixed(0)}</span></div>}
         {platform > 0 && <div className="sb-receipt-row"><span style={{ opacity: 0.7 }}>Platform commission</span><span style={{ opacity: 0.7 }}>₹{platform.toFixed(0)}</span></div>}
         <div className="sb-receipt-row total"><span>Total payable</span><span>₹{total.toFixed(0)}</span></div>
         <div className="sb-receipt-row" style={{ marginTop: 6 }}>
           <span style={{ opacity: 0.7 }}>Payment</span>
           <span className={`sb-status ${b.paymentStatus === "PAID" ? "COMPLETED" : "PENDING"}`} style={{ fontSize: 10 }}>
-            {b.paymentStatus === "PAID" ? "PAID" : "Pay after service"}
+            {b.paymentStatus === "PAID" ? "PAID" : "Online payment pending"}
           </span>
         </div>
       </div>
 
       {b.paymentStatus === "PENDING" && status !== "CANCELLED" && (
         <button className="sb-btn ghost block" style={{ marginBottom: 8 }} disabled={busy} onClick={checkPayment}>
-          {busy ? "Checking…" : "I've paid — check status"}
+          {busy ? "Checking…" : "Check online payment status"}
         </button>
       )}
       {status !== "COMPLETED" && status !== "CANCELLED" && (

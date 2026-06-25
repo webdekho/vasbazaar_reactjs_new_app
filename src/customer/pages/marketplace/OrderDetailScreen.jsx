@@ -122,6 +122,28 @@ const OrderDetailScreen = () => {
   const [reviewError, setReviewError] = useState("");
   const [reviewThanks, setReviewThanks] = useState(false);
 
+  // Dispute / report-an-issue
+  const [showDispute, setShowDispute] = useState(false);
+  const [disputeType, setDisputeType] = useState("COMPLAINT");
+  const [disputeReason, setDisputeReason] = useState("");
+  const [disputeSubmitting, setDisputeSubmitting] = useState(false);
+  const [disputeError, setDisputeError] = useState("");
+  const [disputeDone, setDisputeDone] = useState(false);
+
+  const submitDispute = useCallback(async () => {
+    if (!disputeReason.trim()) { setDisputeError("Please describe the issue"); return; }
+    setDisputeError("");
+    setDisputeSubmitting(true);
+    const res = await marketplaceService.raiseDispute({
+      orderId: Number(orderId),
+      type: disputeType,
+      reason: disputeReason.trim(),
+    });
+    setDisputeSubmitting(false);
+    if (res.success) { setDisputeDone(true); setShowDispute(false); }
+    else setDisputeError(res.message || "Could not submit. Please try again.");
+  }, [disputeReason, disputeType, orderId]);
+
   const load = useCallback(async () => {
     const res = await marketplaceService.getMyOrder(orderId);
     setLoading(false);
@@ -427,6 +449,48 @@ const OrderDetailScreen = () => {
           </div>
         )}
 
+        {/* Home delivery OTP — read out to the delivery agent at the door */}
+        {!isPickup && order.deliveryOtp &&
+          ["ACCEPTED", "PREPARING", "OUT_FOR_DELIVERY"].includes(order.orderStatus) && (
+          <div
+            className="mkt-receipt-card no-print"
+            style={{
+              marginTop: 12,
+              textAlign: "center",
+              background: "linear-gradient(135deg, rgba(59,130,246,0.16), rgba(99,102,241,0.10))",
+              border: "1px solid rgba(59,130,246,0.4)",
+            }}
+          >
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                fontWeight: 800,
+                fontSize: 14,
+                color: "#3b82f6",
+              }}
+            >
+              <FaTruck size={14} /> Delivery OTP
+            </div>
+            <div
+              style={{
+                fontFamily: "'Courier New', monospace",
+                fontSize: 40,
+                fontWeight: 800,
+                letterSpacing: 6,
+                color: "var(--cm-ink)",
+                margin: "10px 0 4px",
+              }}
+            >
+              {order.deliveryOtp}
+            </div>
+            <div style={{ fontSize: 12, color: "#3b82f6", fontWeight: 700 }}>
+              Share this OTP with the delivery agent only on receiving your order.
+            </div>
+          </div>
+        )}
+
         {/* Customer & delivery */}
         <div className="mkt-receipt-card" style={{ marginTop: 12 }}>
           <div className="mkt-receipt-section-title">Bill To</div>
@@ -712,6 +776,55 @@ const OrderDetailScreen = () => {
                 >
                   {submitting ? "Submitting…" : "Submit review"}
                 </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Report an issue (returns / refunds / complaints) on completed orders */}
+        {(order.orderStatus === "DELIVERED" || order.orderStatus === "PICKED_UP") && (
+          <div className="mkt-receipt-card no-print" style={{ marginTop: 12 }}>
+            {disputeDone ? (
+              <div style={{ textAlign: "center", padding: "8px 0" }}>
+                <FaCheckCircle size={24} style={{ color: "#34d399" }} />
+                <div style={{ fontWeight: 800, fontSize: 14, marginTop: 6 }}>Issue reported</div>
+                <div style={{ fontSize: 12, color: "var(--cm-muted)", marginTop: 4 }}>
+                  Our team will review and get back to you.
+                </div>
+              </div>
+            ) : !showDispute ? (
+              <button
+                onClick={() => setShowDispute(true)}
+                style={{ width: "100%", padding: "11px 14px", borderRadius: 10, border: "1px solid var(--cm-line)", background: "transparent", color: "var(--cm-ink)", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+              >
+                Report an issue with this order
+              </button>
+            ) : (
+              <>
+                <div className="mkt-receipt-section-title">Report an issue</div>
+                <select
+                  value={disputeType}
+                  onChange={(e) => setDisputeType(e.target.value)}
+                  style={{ marginTop: 10, width: "100%", padding: 10, borderRadius: 10, border: "1px solid var(--cm-line)", background: "var(--cm-card, rgba(255,255,255,0.04))", color: "var(--cm-ink)", fontSize: 13 }}
+                >
+                  <option value="COMPLAINT">Complaint</option>
+                  <option value="RETURN">Return request</option>
+                  <option value="REFUND">Refund request</option>
+                </select>
+                <textarea
+                  value={disputeReason}
+                  onChange={(e) => setDisputeReason(e.target.value)}
+                  placeholder="Describe what went wrong…"
+                  rows={3}
+                  style={{ marginTop: 10, width: "100%", resize: "vertical", padding: 10, borderRadius: 10, border: "1px solid var(--cm-line)", background: "var(--cm-card, rgba(255,255,255,0.04))", color: "var(--cm-ink)", fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }}
+                />
+                {disputeError && <div style={{ color: "#f87171", fontSize: 12, marginTop: 8 }}>{disputeError}</div>}
+                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                  <button onClick={() => setShowDispute(false)} style={{ flex: 1, padding: "10px", borderRadius: 10, border: "1px solid var(--cm-line)", background: "transparent", color: "var(--cm-ink)", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                  <button onClick={submitDispute} disabled={disputeSubmitting} style={{ flex: 2, padding: "10px", borderRadius: 10, border: "none", background: disputeSubmitting ? "var(--cm-line)" : "linear-gradient(135deg, #f59e0b, #ef4444)", color: "#fff", fontWeight: 800, fontSize: 13, cursor: disputeSubmitting ? "default" : "pointer" }}>
+                    {disputeSubmitting ? "Submitting…" : "Submit"}
+                  </button>
+                </div>
               </>
             )}
           </div>

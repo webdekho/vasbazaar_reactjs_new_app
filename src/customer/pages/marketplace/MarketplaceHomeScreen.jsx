@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   FaArrowLeft,
   FaPlus,
+  FaMinus,
   FaStore,
   FaClock,
   FaRupeeSign,
@@ -32,6 +33,7 @@ import {
   FaBookReader,
   FaSpa,
   FaHeart,
+  FaReceipt,
 } from "react-icons/fa";
 import { FiSearch, FiMapPin, FiZap, FiTag, FiTrendingUp } from "react-icons/fi";
 import { marketplaceService } from "../../services/marketplaceService";
@@ -95,6 +97,9 @@ const formatDistance = (km) => {
 
 const SEARCH_HINTS = ["milk", "paracetamol", "biryani", "notebooks", "fruits"];
 
+// Marketplace feed loads 10 products at a time ("View more" fetches the next 10).
+const PRODUCT_PAGE_SIZE = 10;
+
 const QUICK_FILTERS = [
   { id: "free_delivery", label: "Free delivery", icon: FiTag },
   { id: "fast", label: "Under 30 min", icon: FiZap },
@@ -121,7 +126,7 @@ const matchesQuickFilter = (store, filter) => {
 
 const MarketplaceHomeScreen = () => {
   const navigate = useNavigate();
-  const { totals, cart } = useMarketplaceCart();
+  const { totals, cart, addItem, decrementLine, getStoreItemQty } = useMarketplaceCart();
   const { showToast } = useToast();
 
   // Use Capacitor geolocation hook for proper Android/iOS permission handling
@@ -136,6 +141,34 @@ const MarketplaceHomeScreen = () => {
   // denied/inaccurate location can still browse stores in any area.
   const [selectedLoc, setSelectedLoc] = useState(readSelectedLocation);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Human-readable name for the device GPS position (reverse-geocoded).
+  const [gpsLabel, setGpsLabel] = useState("");
+
+  // Reverse-geocode the device GPS coords into a place name so the chip shows
+  // e.g. "Kothrud, Pune" instead of a static "Current location".
+  useEffect(() => {
+    if (!geoCoords) { setGpsLabel(""); return; }
+    const ctrl = new AbortController();
+    const params = new URLSearchParams({
+      lat: String(geoCoords.lat),
+      lon: String(geoCoords.lng),
+      format: "jsonv2",
+      addressdetails: "1",
+      zoom: "16",
+    });
+    fetch(`https://nominatim.openstreetmap.org/reverse?${params.toString()}`, { signal: ctrl.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        const a = j?.address || {};
+        const primary = a.neighbourhood || a.suburb || a.village || a.town || a.city_district || a.road || a.amenity;
+        const city = a.city || a.town || a.village || a.county;
+        const label = [primary, city].filter(Boolean).filter((v, i, arr) => arr.indexOf(v) === i).join(", ")
+          || j?.display_name?.split(",").slice(0, 2).join(", ");
+        if (label) setGpsLabel(label);
+      })
+      .catch(() => { /* keep fallback label */ });
+    return () => ctrl.abort();
+  }, [geoCoords]);
 
   const coords = useMemo(() => {
     if (selectedLoc) return { lat: selectedLoc.lat, lng: selectedLoc.lng };
@@ -146,10 +179,10 @@ const MarketplaceHomeScreen = () => {
 
   const locationLabel = useMemo(() => {
     if (selectedLoc?.label) return selectedLoc.label;
-    if (geoCoords) return "Current location";
+    if (geoCoords) return gpsLabel || "Current location";
     if (geoError) return "Set location";
     return "Detecting…";
-  }, [selectedLoc, geoCoords, geoError]);
+  }, [selectedLoc, geoCoords, geoError, gpsLabel]);
 
   const handleSelectLocation = (place) => {
     const next = { lat: place.lat, lng: place.lng, label: place.label };
@@ -179,6 +212,17 @@ const MarketplaceHomeScreen = () => {
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Browse mode: "stores" (store cards — the default landing) or "products"
+  // (unified Marketplace feed). A non-empty search always shows item results.
+  const [viewMode, setViewMode] = useState("stores");
+  const [products, setProducts] = useState([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [productsError, setProductsError] = useState(null);
+  const [productsRefresh, setProductsRefresh] = useState(0);
+  const [productPage, setProductPage] = useState(0);
+  const [productsHasMore, setProductsHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const lastProductKey = useRef("");
   const [hasMyStore, setHasMyStore] = useState(false);
   const checkedMyStore = useRef(false);
   const lastFetchKey = useRef(""); // Track last fetch params to prevent duplicate calls
@@ -260,6 +304,85 @@ const MarketplaceHomeScreen = () => {
     }
   }, [coords, debouncedSearch, activeCategoryId]);
 
+  // A search query always surfaces item-level results (typo-tolerant), even when
+  // the toggle is on "stores" — you search for things, not shop names.
+  const showProducts = viewMode === "products" || !!debouncedSearch;
+
+  // Fetch one page of products. append=false replaces (fresh load), true grows
+  // the list for "View more". Pages are 10 items each.
+  const loadProducts = useCallback(async (page, append) => {
+    if (!coords) return;
+    if (append) setLoadingMore(true);
+    else { setProductsLoading(true); setProductsError(null); }
+    const res = await marketplaceService.getNearbyProducts({
+      lat: coords.lat,
+      lng: coords.lng,
+      search: debouncedSearch || undefined,
+      categoryId: activeCategoryId || undefined,
+      pageNumber: page,
+      pageSize: PRODUCT_PAGE_SIZE,
+    });
+    if (append) setLoadingMore(false);
+    else setProductsLoading(false);
+    if (res.success) {
+      const data = res.data || {};
+      const recs = Array.isArray(data.records) ? data.records : [];
+      setProducts((prev) => (append ? [...prev, ...recs] : recs));
+      setProductPage(page);
+      const totalPages = Number(data.totalPages || 0);
+      const current = Number(data.currentPage || page + 1);
+      setProductsHasMore(current < totalPages);
+    } else if (!append) {
+      setProductsError(res.message || "Could not load products");
+    }
+  }, [coords, debouncedSearch, activeCategoryId]);
+
+  // Reset and load the first page whenever the feed shows or its filters change.
+  useEffect(() => {
+    if (!showProducts || !coords) return;
+    const fetchKey = `${coords.lat}-${coords.lng}-${debouncedSearch}-${activeCategoryId}-${productsRefresh}`;
+    if (lastProductKey.current === fetchKey) return;
+    lastProductKey.current = fetchKey;
+    loadProducts(0, false);
+  }, [showProducts, coords, debouncedSearch, activeCategoryId, productsRefresh, loadProducts]);
+
+  // Qty of this product currently in the cart (items from many stores coexist).
+  const productQty = (p) => getStoreItemQty(p.storeId, p.id);
+
+  const addProductToCart = (p, silent = false) => {
+    // Quick-add the product at its displayed price. Shoppers who want a specific
+    // variant can open the store (tap the card) and pick there.
+    if (p.storeOpen === false) {
+      showToast("This store is currently closed", "error");
+      return;
+    }
+    const store = {
+      id: p.storeId,
+      businessName: p.storeName,
+      deliveryCharges: p.deliveryCharges,
+      minOrderValue: p.minOrderValue,
+      deliveryTimeMinutes: p.deliveryTimeMinutes,
+      latitude: p.storeLatitude,
+      longitude: p.storeLongitude,
+    };
+    const item = {
+      id: p.id,
+      name: p.name,
+      sellingPrice: p.offerPrice != null ? p.offerPrice : p.sellingPrice,
+      imageUrl: p.imageUrl,
+    };
+    const ok = addItem(store, item);
+    if (ok && !silent) showToast(`${p.name} added to cart`, "success");
+  };
+
+  // Lift toasts above the floating cart bar while it's on screen so the
+  // "added to cart" toast doesn't sit on top of it.
+  useEffect(() => {
+    const show = totals.count > 0 && !!cart;
+    document.body.classList.toggle("mkt-cartbar-visible", show);
+    return () => document.body.classList.remove("mkt-cartbar-visible");
+  }, [totals.count, cart]);
+
   const onPlusClick = () => {
     navigate(hasMyStore ? "/customer/app/marketplace/my-store" : "/customer/app/marketplace/onboard");
   };
@@ -298,6 +421,24 @@ const MarketplaceHomeScreen = () => {
             <FiMapPin size={12} />
             <span className="mkt-loc-chip-label">{locationLabel}</span>
             <span aria-hidden="true">▾</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/customer/app/marketplace/my-wishlist")}
+            className="mkt-hero-action mkt-hero-action--icon"
+            aria-label="My Wishlist"
+            title="My Wishlist"
+          >
+            <FaHeart size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/customer/app/marketplace/my-orders")}
+            className="mkt-hero-action mkt-hero-action--icon"
+            aria-label="My Orders"
+            title="My Orders"
+          >
+            <FaReceipt size={14} />
           </button>
           <button
             type="button"
@@ -350,23 +491,14 @@ const MarketplaceHomeScreen = () => {
       {/* Categories — modern morphic rail */}
       {categories.length > 0 && (
         <div className="mkt-section mkt-cat-section">
-          <div className="mkt-section-head">
-            <h2 className="mkt-section-title">
-              Browse categories
-              <span className="mkt-cat-section-count">{categories.length + 1}</span>
-            </h2>
-          </div>
-          <div className="mkt-cat-rail mkt-cat-rail--modern">
+          <div className="mkt-cat-chip-rail">
             <button
-              className={`mkt-cat-tile mkt-cat-tile--modern${activeCategoryId == null ? " is-active" : ""}`}
+              className={`mkt-cat-chip${activeCategoryId == null ? " is-active" : ""}`}
               onClick={() => setActiveCategoryId(null)}
               style={{ "--cat-accent": "#6366f1" }}
             >
-              <span className="mkt-cat-tile-avatar">
-                <span className="mkt-cat-tile-ring" aria-hidden="true" />
-                <FaShoppingBag size={20} />
-              </span>
-              <span className="mkt-cat-tile-label">All</span>
+              <FaShoppingBag size={13} />
+              <span>All</span>
             </button>
             {categories.map((cat) => {
               const isActive = activeCategoryId === cat.id;
@@ -375,15 +507,12 @@ const MarketplaceHomeScreen = () => {
               return (
                 <button
                   key={cat.id}
-                  className={`mkt-cat-tile mkt-cat-tile--modern${isActive ? " is-active" : ""}`}
+                  className={`mkt-cat-chip${isActive ? " is-active" : ""}`}
                   onClick={() => setActiveCategoryId(cat.id)}
                   style={{ "--cat-accent": accent }}
                 >
-                  <span className="mkt-cat-tile-avatar">
-                    <span className="mkt-cat-tile-ring" aria-hidden="true" />
-                    {cat.iconUrl ? <img src={cat.iconUrl} alt="" /> : <Icon size={20} />}
-                  </span>
-                  <span className="mkt-cat-tile-label">{cat.name}</span>
+                  {cat.iconUrl ? <img src={cat.iconUrl} alt="" className="mkt-cat-chip-img" /> : <Icon size={13} />}
+                  <span>{cat.name}</span>
                 </button>
               );
             })}
@@ -391,18 +520,147 @@ const MarketplaceHomeScreen = () => {
         </div>
       )}
 
-      {/* Stores */}
+      {/* Stores / Products */}
       <div className="mkt-section">
         <div className="mkt-section-head">
           <h2 className="mkt-section-title">
-            {activeQuick || debouncedSearch ? "Matching stores" : "Stores near you"}
+            {debouncedSearch
+              ? `Results for "${debouncedSearch}"`
+              : showProducts
+                ? "Marketplace"
+                : (activeQuick ? "Matching stores" : "Stores near you")}
           </h2>
-          {!loading && !error && (
-            <span className="mkt-section-count">{filteredStores.length}</span>
+          {!debouncedSearch && (
+            <div className="mkt-view-toggle" role="tablist" aria-label="Browse mode">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === "products"}
+                className={`mkt-view-toggle-btn${viewMode === "products" ? " is-active" : ""}`}
+                onClick={() => setViewMode("products")}
+              >
+                <FaShoppingBag size={11} /> Marketplace
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === "stores"}
+                className={`mkt-view-toggle-btn${viewMode === "stores" ? " is-active" : ""}`}
+                onClick={() => setViewMode("stores")}
+              >
+                <FaStore size={11} /> Stores
+              </button>
+            </div>
           )}
         </div>
 
-        {loading ? (
+        {showProducts ? (
+          productsLoading ? (
+            <div className="mkt-product-list">
+              {Array.from({ length: 6 }).map((_, i) => <div key={i} className="mkt-product-row mkt-product-row--skel" />)}
+            </div>
+          ) : productsError ? (
+            <div className="mkt-empty mkt-empty-v2">
+              <div className="mkt-empty-icon-v2">!</div>
+              <div className="mkt-empty-title">Couldn't load products</div>
+              <div className="mkt-empty-sub">{productsError}</div>
+              <button
+                className="mkt-btn mkt-btn--secondary"
+                onClick={() => setProductsRefresh((n) => n + 1)}
+                style={{ width: "auto", marginTop: 14, padding: "10px 22px" }}
+              >
+                Try again
+              </button>
+            </div>
+          ) : products.length === 0 ? (
+            <div className="mkt-empty mkt-empty-v2">
+              <div className="mkt-empty-icon-v2"><FaShoppingBag /></div>
+              <div className="mkt-empty-title">{debouncedSearch ? "No items found" : "No products yet"}</div>
+              <div className="mkt-empty-sub">
+                {debouncedSearch
+                  ? "Try a different spelling or keyword"
+                  : "Stores near you haven't listed items yet"}
+              </div>
+            </div>
+          ) : (
+            <div className="mkt-product-list">
+              {products.map((p) => {
+                const price = p.offerPrice != null ? Number(p.offerPrice) : Number(p.sellingPrice || 0);
+                const mrp = Number(p.mrp || 0);
+                const hasDiscount = mrp > price;
+                const dist = formatDistance(p.distanceKm);
+                const closed = p.storeOpen === false;
+                return (
+                  <article
+                    key={`${p.storeId}-${p.id}`}
+                    className={`mkt-product-row${closed ? " is-closed" : ""}`}
+                    onClick={() => navigate(`/customer/app/marketplace/store/${p.storeId}`)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === "Enter") navigate(`/customer/app/marketplace/store/${p.storeId}`); }}
+                  >
+                    <div className="mkt-product-thumb">
+                      {p.imageUrl ? <img src={p.imageUrl} alt="" /> : <FaShoppingBag size={20} />}
+                    </div>
+                    <div className="mkt-product-info">
+                      <h3 className="mkt-product-name">{p.name}</h3>
+                      <div className="mkt-product-store">
+                        <FaStore size={10} /> {p.storeName}
+                        {dist && <span className="mkt-product-dist"> · {dist}</span>}
+                        {closed && <span className="mkt-product-closed"> · Closed</span>}
+                      </div>
+                      <div className="mkt-product-price">
+                        <span className="mkt-product-price-now"><FaRupeeSign size={10} />{price.toFixed(0)}</span>
+                        {hasDiscount && <span className="mkt-product-price-mrp">₹{mrp.toFixed(0)}</span>}
+                        {p.unit && <span className="mkt-product-unit"> / {p.unit}</span>}
+                      </div>
+                    </div>
+                    {productQty(p) > 0 ? (
+                      <div className="mkt-product-stepper" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          className="mkt-product-step"
+                          aria-label={`Remove one ${p.name}`}
+                          onClick={() => decrementLine(p.storeId, String(p.id))}
+                        >
+                          <FaMinus size={11} />
+                        </button>
+                        <span className="mkt-product-step-qty">{productQty(p)}</span>
+                        <button
+                          type="button"
+                          className="mkt-product-step"
+                          aria-label={`Add one more ${p.name}`}
+                          onClick={() => addProductToCart(p, true)}
+                        >
+                          <FaPlus size={11} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="mkt-product-add"
+                        aria-label={`Add ${p.name} to cart`}
+                        onClick={(e) => { e.stopPropagation(); addProductToCart(p); }}
+                      >
+                        <FaPlus size={12} /> Add
+                      </button>
+                    )}
+                  </article>
+                );
+              })}
+              {productsHasMore && (
+                <button
+                  type="button"
+                  className="mkt-product-more"
+                  onClick={() => loadProducts(productPage + 1, true)}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? "Loading…" : "View more"}
+                </button>
+              )}
+            </div>
+          )
+        ) : loading ? (
           <div className="mkt-store-grid">
             {Array.from({ length: 4 }).map((_, i) => <StoreCardSkeleton key={i} />)}
           </div>

@@ -15,6 +15,18 @@ export const marketplaceService = {
       ...(categoryId ? { categoryId } : {}),
     }),
 
+  // Unified product feed — items across all stores servicing a location, with
+  // typo-tolerant item search.
+  getNearbyProducts: ({ lat, lng, search, categoryId, pageNumber = 0, pageSize = 30 } = {}) =>
+    authGet("/api/customer/marketplace/products", {
+      ...(lat != null ? { lat } : {}),
+      ...(lng != null ? { lng } : {}),
+      ...(search ? { search } : {}),
+      ...(categoryId ? { categoryId } : {}),
+      pageNumber,
+      pageSize,
+    }),
+
   getStore: (storeId) => authGet(`/api/customer/marketplace/stores/${storeId}`),
 
   getStoreItems: (storeId, search) =>
@@ -75,6 +87,9 @@ export const marketplaceService = {
 
   addMyItem: (payload) => authPost("/api/customer/marketplace/store/my/items", payload),
 
+  // Bulk import: rows is an array of plain objects parsed from a CSV/Excel.
+  bulkAddItems: (rows) => authPost("/api/customer/marketplace/store/my/items/bulk", { rows }),
+
   updateMyItem: (payload) => authPut("/api/customer/marketplace/store/my/items", payload),
 
   deleteMyItem: (id) => authDelete(`/api/customer/marketplace/store/my/items/${id}`),
@@ -86,6 +101,10 @@ export const marketplaceService = {
   getMyItemCategories: () => authGet("/api/customer/marketplace/store/my/item-categories"),
 
   createMyItemCategory: (payload) => authPost("/api/customer/marketplace/store/my/item-categories", payload),
+
+  // Propose a category plus one or more subcategories in a single call.
+  createMyItemCategoryWithSubs: (payload) =>
+    authPost("/api/customer/marketplace/store/my/item-categories/with-subs", payload),
 
   updateMyItemCategory: (payload) => authPut("/api/customer/marketplace/store/my/item-categories", payload),
 
@@ -126,13 +145,59 @@ export const marketplaceService = {
   // ===== Customer orders =====
   placeOrder: (payload) => authPost("/api/customer/marketplace/orders", payload),
 
+  // Combined multi-store checkout: one payment for items from several stores;
+  // backend creates one order per store (shared paymentGroupId) and settles each
+  // seller's wallet share on payment success.
+  placeMultiOrder: (payload) => authPost("/api/customer/marketplace/orders/multi", payload),
+
+  // Poll the combined payment's status by its group id.
+  checkGroupPayment: (groupId) =>
+    authGet(`/api/customer/marketplace/orders/group/${groupId}/check-payment`),
+
   getMyOrders: ({ pageNumber = 0, pageSize = 10 } = {}) =>
     authGet("/api/customer/marketplace/orders/my", { pageNumber, pageSize }),
 
   getMyOrder: (orderId) => authGet(`/api/customer/marketplace/orders/${orderId}`),
 
+  // ===== Wishlist (manual want-list) =====
+  createWishlist: (payload) => authPost("/api/customer/marketplace/wishlist", payload),
+  getMyWishlist: () => authGet("/api/customer/marketplace/wishlist/my"),
+  deleteWishlist: (id) => authDelete(`/api/customer/marketplace/wishlist/${id}`),
+
   checkOrderPayment: (orderId) =>
     authGet(`/api/customer/marketplace/orders/${orderId}/check-payment`),
+
+  // ===== Recurring subscriptions =====
+  createSubscription: (payload) => authPost("/api/customer/marketplace/subscriptions", payload),
+
+  getMySubscriptions: () => authGet("/api/customer/marketplace/subscriptions/my"),
+
+  toggleSubscription: (id, active) =>
+    authPut(`/api/customer/marketplace/subscriptions/${id}/active?active=${active}`, {}),
+
+  cancelSubscription: (id) => authDelete(`/api/customer/marketplace/subscriptions/${id}`),
+
+  // Modify an existing subscription's cadence/time/payment/dates.
+  updateSubscription: (id, payload) =>
+    authPut(`/api/customer/marketplace/subscriptions/${id}`, payload),
+
+  // One-time move of the next delivery to { date, time }.
+  rescheduleSubscription: (id, payload) =>
+    authPost(`/api/customer/marketplace/subscriptions/${id}/reschedule`, payload),
+
+  // ===== Delivery slots =====
+  getStoreDeliverySlots: (storeId) => authGet(`/api/customer/marketplace/stores/${storeId}/delivery-slots`),
+
+  getMyDeliverySlots: () => authGet("/api/customer/marketplace/store/my/delivery-slots"),
+
+  createMyDeliverySlot: (payload) => authPost("/api/customer/marketplace/store/my/delivery-slots", payload),
+
+  updateMyDeliverySlot: (payload) => authPut("/api/customer/marketplace/store/my/delivery-slots", payload),
+
+  deleteMyDeliverySlot: (id) => authDelete(`/api/customer/marketplace/store/my/delivery-slots/${id}`),
+
+  toggleMyDeliverySlot: (id, isActive) =>
+    authPut(`/api/customer/marketplace/store/my/delivery-slots/${id}/toggle-active?isActive=${isActive}`, {}),
 
   // ===== Ratings & Reviews =====
   getStoreReviews: (storeId, { pageNumber = 0, pageSize = 10 } = {}) =>
@@ -170,6 +235,26 @@ export const marketplaceService = {
   // ===== Click & Collect =====
   verifyPickup: (orderId, code) =>
     authPost(`/api/customer/marketplace/seller/orders/${orderId}/verify-pickup`, { code }),
+
+  // ===== Home delivery OTP =====
+  verifyDelivery: (orderId, code) =>
+    authPost(`/api/customer/marketplace/seller/orders/${orderId}/verify-delivery`, { code }),
+
+  // ===== Digital Khata (merchant side) =====
+  getMyStoreKhatas: () => authGet("/api/customer/marketplace/store/my/khata"),
+  createKhata: (payload) => authPost("/api/customer/marketplace/store/my/khata", payload),
+  getKhataStatement: (khataId) => authGet(`/api/customer/marketplace/store/my/khata/${khataId}`),
+  addKhataEntry: (khataId, payload) => authPost(`/api/customer/marketplace/store/my/khata/${khataId}/entry`, payload),
+  updateKhata: (khataId, payload) => authPut(`/api/customer/marketplace/store/my/khata/${khataId}`, payload),
+  remindKhata: (khataId) => authPost(`/api/customer/marketplace/store/my/khata/${khataId}/remind`, {}),
+
+  // ===== Digital Khata (customer side) =====
+  getMyKhatas: () => authGet("/api/customer/marketplace/khata/my"),
+  getMyKhataStatement: (khataId) => authGet(`/api/customer/marketplace/khata/my/${khataId}`),
+
+  // ===== Disputes / returns (customer side) =====
+  raiseDispute: (payload) => authPost("/api/customer/marketplace/disputes", payload),
+  getMyDisputes: () => authGet("/api/customer/marketplace/disputes/my"),
 
   // Merchant: enable/disable delivery & pickup without re-approval
   updateFulfillmentModes: ({ deliveryEnabled, pickupEnabled }) =>

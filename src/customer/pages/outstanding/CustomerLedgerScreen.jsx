@@ -639,8 +639,8 @@ const CustomerLedgerScreen = () => {
               >
                 <span className="ol-command-icon"><FaClock /></span>
                 <span>
-                  <b>Auto SMS reminder</b>
-                  <small>Schedule daily SMS from your phone</small>
+                  <b>Auto reminders</b>
+                  <small>Daily in-app + SMS from your phone</small>
                 </span>
               </button>
               <button

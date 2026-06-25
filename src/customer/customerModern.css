@@ -1669,7 +1669,7 @@
    3. SERVICES PAGE
    ═══════════════════════════════════════════════════════════════ */
 
-.cm-services-page { display: grid; gap: 8px; padding-bottom: 140px; }
+.cm-services-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding-bottom: 140px; overflow-x: hidden; }
 
 .cm-install-banner {
   display: flex;
@@ -1818,19 +1818,27 @@
 
 .cm-search-bar-row {
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: 12px;
+  gap: 14px;
+  padding: 15px 20px;
+  border-radius: 22px;
   border: 1px solid #2A2A2A;
   background: #1A1A1A;
-  transition: border-color 0.3s, box-shadow 0.3s;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.22), 0 3px 8px rgba(0, 0, 0, 0.12);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  will-change: transform;
+}
+
+.cm-search-bar-row:hover {
+  transform: translateY(-1px);
 }
 
 .cm-search-bar-row.is-focused {
+  transform: translateY(-2px);
   border-color: #007BFF;
-  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+  box-shadow: 0 0 0 4px rgba(0, 123, 255, 0.12), 0 14px 30px rgba(0, 0, 0, 0.26);
 }
 
 .cm-search-field-input {
@@ -1847,7 +1855,31 @@
 
 .cm-search-field-input::placeholder { color: #6B6B6B; }
 
-.cm-bc-logo { height: 40px; width: auto; flex-shrink: 0; object-fit: contain; }
+/* Bharat Connect (B-Connect) logo — fixed brand size 83 × 30 px */
+.cm-bc-logo { width: 83px; height: 30px; flex-shrink: 0; object-fit: contain; }
+
+/* Clickable Bharat Connect entry sitting inline beside the search bar */
+.cm-bc-entry--btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.cm-bc-entry--btn:hover { transform: translateY(-1px); }
+.cm-bc-entry--btn:active { transform: scale(0.94); opacity: 0.85; }
+/* Bharat Connect "B" mnemonic at the entry of the Pay Bills section, with the
+   mandated "Bill Pay" caption below it (NPCI guideline). */
+.cm-bc-entry { display: flex; flex-direction: column; align-items: center; gap: 1px; flex-shrink: 0; }
+/* Services section title row with the Bharat Connect logo at the right corner */
+/* Offset scrollIntoView so the sticky topbar (incl. iOS safe-area notch) doesn't hide the first row */
+#services-grid-section { scroll-margin-top: calc(56px + env(safe-area-inset-top, 0px) + 12px); }
+
+.cm-services-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cm-bc-entry--inline { margin-left: auto; }
+.cm-bc-entry .cm-bc-logo { width: 83px; height: 30px; }
+.cm-bc-entry-caption { font-size: 0.6rem; font-weight: 700; color: var(--cm-accent, #0B5FBA); letter-spacing: 0.3px; line-height: 1; }
 
 .cm-services-grid-4 {
   display: grid;
@@ -5169,6 +5201,61 @@
   margin: 0;
 }
 
+/* ─── Bharat Connect logo (top-right) ─── */
+.fc-bbps-logo { width: 83px; height: 30px; object-fit: contain; margin-left: auto; }
+
+/* ─── Complaint type radio (Transaction, pre-selected) ─── */
+.fc-radio {
+  display: inline-flex; align-items: center; gap: 10px;
+  cursor: default;
+}
+.fc-radio input { display: none; }
+.fc-radio-mark {
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 2px solid var(--cm-accent);
+  position: relative; flex-shrink: 0;
+}
+.fc-radio input:checked + .fc-radio-mark::after {
+  content: ""; position: absolute; inset: 3px;
+  border-radius: 50%; background: var(--cm-accent);
+}
+.fc-radio-text { font-size: 0.95rem; font-weight: 600; color: var(--cm-text); }
+
+/* ─── Basis toggle: B-Connect TXN ID vs Mobile + Date ─── */
+.fc-basis-tabs {
+  display: flex; gap: 8px;
+  background: color-mix(in srgb, var(--cm-accent) 8%, transparent);
+  border-radius: 12px; padding: 4px;
+}
+.fc-basis-tab {
+  flex: 1; height: 38px; border: none; border-radius: 9px;
+  background: transparent; color: var(--cm-disabled);
+  font-size: 0.85rem; font-weight: 600; cursor: pointer;
+  transition: all 0.15s ease;
+}
+.fc-basis-tab.is-active {
+  background: var(--cm-accent); color: #062B23;
+}
+
+/* ─── Registration response fields (complaintId / complaintAssigned) ─── */
+.fc-success-fields {
+  width: 100%; display: flex; flex-direction: column; gap: 8px;
+  background: color-mix(in srgb, var(--cm-accent) 8%, transparent);
+  border-radius: 14px; padding: 14px 16px;
+}
+.fc-success-field-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.fc-success-field-label { font-size: 0.8rem; color: var(--cm-disabled); }
+.fc-success-field-value { font-size: 0.9rem; font-weight: 700; color: var(--cm-text); text-align: right; word-break: break-all; }
+
+/* ─── Track existing complaint link ─── */
+.fc-track-link {
+  background: none; border: none; cursor: pointer;
+  color: var(--cm-accent); font-size: 0.85rem; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 6px;
+  justify-content: center; padding: 6px;
+}
+.fc-track-link svg { font-size: 0.65rem; }
+
 /* ─── Success Screen ─── */
 .fc-success {
   display: flex;
@@ -6920,6 +7007,14 @@
    TRACK COMPLAINT
    ═══════════════════════════════════════════════════════════════ */
 
+.tc-type-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  background: color-mix(in srgb, var(--cm-accent) 8%, transparent);
+  border-radius: 12px; padding: 12px 16px;
+}
+.tc-type-bar .tc-type-label { font-size: 0.8rem; color: var(--cm-disabled); }
+.tc-type-bar .tc-type-value { font-size: 0.9rem; font-weight: 700; color: var(--cm-accent); }
+
 .tc-page {
   display: flex;
   flex-direction: column;
@@ -6970,8 +7065,8 @@
 }
 
 .tc-bbps-logo {
-  height: 40px;
-  width: auto;
+  width: 83px;
+  height: 30px;
   flex-shrink: 0;
   object-fit: contain;
 }
@@ -7705,6 +7800,7 @@
    ═══════════════════════════════════════════════════════════════ */
 
 .st-page, .ap-page, .rf-page { display: flex; flex-direction: column; gap: 12px; padding: 0 0 24px; animation: cm-page-fadeIn 0.4s ease both; }
+.st-otp-hint { font-size: 0.72rem; color: var(--cm-disabled); margin: 6px 2px 0; }
 
 /* AutoPay tabs */
 .ap-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0; -webkit-overflow-scrolling: touch; }
@@ -8080,6 +8176,7 @@
 /* ───────────── Services screen biller-search results ───────────── */
 .cm-biller-results {
   padding: 4px 4px 12px;
+  min-width: 0;
   animation: cm-svc-fade-in 0.25s ease;
 }
 .cm-biller-list {
@@ -8087,6 +8184,7 @@
   flex-direction: column;
   gap: 6px;
   margin-top: 8px;
+  min-width: 0;
 }
 .cm-biller-row {
   display: flex;
@@ -8100,6 +8198,9 @@
   transition: transform 0.15s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   text-align: left;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 .cm-biller-row:hover {
   border-color: rgba(64, 224, 208, 0.35);
@@ -8985,10 +9086,39 @@
 }
 
 /* Search bar */
+/* Premium elevated (soft 3D) search bar — light theme.
+   Directional drop shadow (below only) + bright top edge = clearly raised, not sunken. */
 .theme-light .cm-search-bar-row {
-  background: #FFFFFF;
-  border-color: #E5E7EB;
+  transform: translateY(-2px);
+  background: linear-gradient(180deg, #ffffff 0%, #f4f8ff 100%);
+  border-color: rgba(210, 216, 228, 0.7);
+  border-top-color: rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 16px 28px -8px rgba(31, 45, 75, 0.22),
+    0 6px 12px -4px rgba(31, 45, 75, 0.12),
+    inset 0 2px 0 rgba(255, 255, 255, 1);
 }
+
+.theme-light .cm-search-bar-row:hover {
+  transform: translateY(-4px);
+  box-shadow:
+    0 22px 36px -8px rgba(31, 45, 75, 0.26),
+    0 8px 16px -4px rgba(31, 45, 75, 0.14),
+    inset 0 2px 0 rgba(255, 255, 255, 1);
+}
+
+.theme-light .cm-search-bar-row.is-focused {
+  transform: translateY(-4px);
+  border-color: rgba(34, 193, 215, 0.55);
+  box-shadow:
+    0 22px 36px -8px rgba(31, 45, 75, 0.26),
+    0 8px 16px -4px rgba(31, 45, 75, 0.14),
+    0 0 0 4px rgba(34, 193, 215, 0.10),
+    inset 0 2px 0 rgba(255, 255, 255, 1);
+}
+
+.theme-light .cm-search-field-input { color: #252b3d; }
+.theme-light .cm-search-field-input::placeholder { color: #9ca3b2; opacity: 1; }
 
 .theme-light .cm-search-field-input {
   color: #1A1A2E;
@@ -9376,7 +9506,7 @@
   content: "";
   position: absolute;
   inset: -1px;
-  border-radius: 12px;
+  border-radius: 22px;
   background: linear-gradient(90deg, #40E0D0, #007BFF, #40E0D0);
   background-size: 200% auto;
   opacity: 0;
@@ -10008,8 +10138,8 @@
 }
 
 .cm-bc-title-logo {
-  height: 40px;
-  width: auto;
+  width: 83px;
+  height: 30px;
   flex-shrink: 0;
   object-fit: contain;
   opacity: 0.7;
@@ -11835,7 +11965,9 @@
    ═══════════════════════════════════════════════════════════════ */
 
 .cm-screen-page { min-height: 100vh; }
-.cm-search-between { padding: 8px 16px; }
+/* No horizontal padding so the search bar's left/right edges line up with the
+   slider and Quick Access box (both sit flush at the page edge). */
+.cm-search-between { padding: 8px 0; }
 
 /* When searching — pack content at top, no gap between search bar and results */
 .cm-services-page.is-searching {
@@ -12543,29 +12675,33 @@
    25. SLIDER — Professional Compact with Curved Edges
    ═══════════════════════════════════════════════════════════════ */
 
-/* Services page slider — compact with rounded corners */
+/* Services page slider — compact with rounded corners.
+   Width is capped on wide screens so a 16:9 box never becomes absurdly tall on
+   web/desktop; it stays a centered hero. On phones it spans the full content width. */
 .cm-services-page .cm-slider {
   border-radius: 18px !important;
   border: 1px solid #2A2A2A !important;
-  margin: 0 !important;
+  margin: 0 auto !important;
   width: 100% !important;
-  max-width: 100% !important;
+  max-width: 560px !important;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(64, 224, 208, 0.03) !important;
 }
 
-.cm-services-page .cm-slider-slide {
-  aspect-ratio: 16 / 7;
-  min-height: 160px;
-}
-
-.cm-services-page .cm-slider-slide--text {
-  aspect-ratio: auto;
-  min-height: 150px;
-}
-
+/* PERMANENT carousel sizing — ONE fixed 16:9 box for every slide on every platform
+   (web, mobile web, Android, iOS). Banner images uploaded at 16:9 fill it exactly via
+   object-fit:cover: no black gap, no top/bottom crop, no blurred bars. The customer
+   card adapts to the very same box, so all slides share identical dimensions and the
+   carousel never jumps height between slides. This is the single source of truth —
+   the per-breakpoint overrides below only tune the look, not the aspect ratio. */
+.cm-services-page .cm-slider-slide,
+.cm-services-page .cm-slider-slide--banner,
+.cm-services-page .cm-slider-slide--text,
 .cm-services-page .cm-slider-slide--customer {
-  aspect-ratio: unset !important;
-  min-height: 220px;
+  aspect-ratio: 16 / 9 !important;
+  min-height: 0 !important;
+  height: auto !important;
+  padding-top: 0 !important;
+  align-self: stretch;
 }
 
 /* Enhanced slide transition — smooth 3D feel */
@@ -12634,24 +12770,13 @@
   100% { left: 150%; }
 }
 
-/* Mobile adjustments — keep rounded */
+/* Mobile adjustments — keep rounded. The 16:9 aspect ratio is intentionally NOT
+   changed here so the box shape stays identical to web (full width on phones means
+   the slider is already full size). Only cosmetic radius/arrow tweaks below. */
 @media (max-width: 640px) {
   .cm-services-page .cm-slider {
     border-radius: 16px !important;
-  }
-
-  .cm-services-page .cm-slider-slide {
-    aspect-ratio: 16 / 8;
-    min-height: 145px;
-  }
-
-  .cm-services-page .cm-slider-slide--text {
-    min-height: 135px;
-  }
-
-  .cm-services-page .cm-slider-slide--customer {
-    min-height: 210px;
-    aspect-ratio: unset !important;
+    max-width: 100% !important;
   }
 
   .cm-slider-arrow--prev { left: 6px !important; }
@@ -12661,11 +12786,12 @@
 
 @media (max-width: 360px) {
   .cm-services-page .cm-slider { border-radius: 14px !important; }
-  .cm-services-page .cm-slider-slide { min-height: 125px; }
-  .cm-services-page .cm-slider-slide--customer { min-height: 200px; aspect-ratio: unset !important; }
 }
 
-/* Force images to fill — override everything */
+/* The carousel box is a fixed 16:9 on every platform, so a 16:9 banner fills it
+   exactly via cover — no gap, no crop, no bars. cover (not contain) guarantees a
+   clean full fill even if a re-uploaded image is a touch off 16:9; the blurred
+   cm-slider-img-bg layer sits behind only as a safety net. */
 .cm-slider-img {
   object-fit: cover !important;
   object-position: center !important;
@@ -12678,8 +12804,8 @@
 
 /* Bharat Connect logo — 50% bigger */
 .cm-bc-title-logo--lg {
-  height: 40px !important;
-  width: auto;
+  width: 83px !important;
+  height: 30px !important;
 }
 
 /* Amount in words */
@@ -12888,8 +13014,8 @@
 }
 
 .xpay-bc-logo {
-  height: 40px;
-  width: auto;
+  width: 83px;
+  height: 30px;
   flex-shrink: 0;
   object-fit: contain;
   opacity: 0.7;
@@ -18450,10 +18576,6 @@
     padding-right: 0;
   }
 
-  .cm-search-with-bc {
-    gap: 18px;
-  }
-
   .cm-search-bar-row,
   .cm-contact-search {
     min-height: 58px;
@@ -20803,6 +20925,129 @@
   box-shadow: 0 12px 30px rgba(0,229,160,0.35);
 }
 
+/* Bharat Connect / Be-Assured branding strip on the bill receipt
+   (Bharat Connect on the left, Be-Assured pinned to the right corner) */
+.sx2-bc-strip {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px;
+  padding: 10px 4px 2px;
+  z-index: 20;
+}
+.sx2-bc-strip .sx2-bc-logo { width: 83px; height: 30px; object-fit: contain; }
+.sx2-bc-strip .sx2-ba-logo { width: 130px; height: 120px; object-fit: contain; margin-left: auto; }
+
+/* ═══════════════════════════════════════════════════════════════
+   BILL PAY RECEIPT (dedicated, printable)
+   ═══════════════════════════════════════════════════════════════ */
+.rcpt-page {
+  display: flex; flex-direction: column; gap: 16px;
+  padding: 16px 12px 32px; max-width: 880px; margin: 0 auto;
+  animation: cm-page-fadeIn 0.4s ease both;
+}
+.rcpt-back {
+  align-self: flex-start;
+  background: none; border: none; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+  color: var(--cm-text, #0F172A); font-size: 0.9rem; font-weight: 600;
+  padding: 6px 4px;
+}
+.rcpt-card {
+  background: #FFFFFF;
+  border: 1px solid #E8EDF3;
+  border-radius: 20px;
+  padding: 28px 28px 22px;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+  position: relative; overflow: hidden;
+}
+.rcpt-card::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 5px;
+  background: linear-gradient(90deg, #0B5FBA 0%, #00B8D9 100%);
+}
+.rcpt-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; padding-bottom: 18px; border-bottom: 1px dashed #E2E8F0; margin-bottom: 20px;
+}
+.rcpt-title {
+  margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: 0.5px;
+  color: #1E293B;
+}
+.rcpt-success {
+  margin-top: 8px; display: inline-flex; align-items: center; gap: 7px;
+  font-size: 0.9rem; font-weight: 700; color: #16A34A;
+}
+.rcpt-success svg { font-size: 0.95rem; }
+.rcpt-ba-logo { width: 130px; height: 120px; object-fit: contain; flex-shrink: 0; }
+
+.rcpt-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0 36px;
+}
+.rcpt-col { display: flex; flex-direction: column; }
+.rcpt-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 13px 0; border-bottom: 1px solid #F1F5F9;
+}
+.rcpt-row-label { font-size: 0.85rem; color: #94A3B8; }
+.rcpt-row-value {
+  font-size: 0.92rem; font-weight: 700; color: #1E293B; text-align: right;
+  word-break: break-all; font-variant-numeric: tabular-nums;
+}
+.rcpt-row-value--ok { color: #16A34A; }
+.rcpt-foot {
+  margin-top: 20px; text-align: center; font-size: 0.72rem; color: #94A3B8;
+}
+
+.rcpt-actions { display: flex; gap: 12px; justify-content: center; }
+.rcpt-btn {
+  height: 46px; padding: 0 26px; border-radius: 12px; cursor: pointer;
+  font-size: 0.95rem; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  transition: transform 0.15s ease;
+}
+.rcpt-btn:active { transform: scale(0.97); }
+.rcpt-btn:disabled { opacity: 0.6; cursor: default; }
+.rcpt-btn--ghost { background: #EEF2F7; border: 1px solid #E2E8F0; color: #1E293B; }
+.rcpt-btn--primary {
+  background: linear-gradient(135deg, #0B5FBA 0%, #00B8D9 100%);
+  border: none; color: #FFFFFF;
+  box-shadow: 0 10px 24px rgba(11, 95, 186, 0.3);
+}
+
+@media (max-width: 620px) {
+  .rcpt-grid { grid-template-columns: 1fr; gap: 0; }
+  .rcpt-title { font-size: 1.25rem; }
+  .rcpt-ba-logo { width: 130px; height: 120px; }
+  .rcpt-actions { flex-direction: column; }
+  .rcpt-btn { width: 100%; }
+}
+
+/* Print: isolate the receipt card */
+@media print {
+  body * { visibility: hidden !important; }
+  .rcpt-print-area, .rcpt-print-area * { visibility: visible !important; }
+  .rcpt-print-area {
+    position: absolute; top: 0; left: 0; width: 100%;
+    box-shadow: none !important; border: none !important;
+  }
+  .rcpt-noprint { display: none !important; }
+}
+
+/* Download Receipt button */
+.sx2-receipt-btn {
+  margin-top: 10px;
+  width: 100%;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.06);
+  color: #F5F7FA;
+  font-size: 15px; font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  cursor: pointer; transition: transform 0.15s ease;
+  z-index: 20;
+}
+.sx2-receipt-btn:active { transform: scale(0.98); }
+.sx2-receipt-btn:disabled { opacity: 0.6; cursor: default; }
+
 /* Toast */
 .sx2-toast {
   position: fixed;
@@ -20835,8 +21080,7 @@
   color: #0F172A;
 }
 .theme-light .sx2-mesh,
-.theme-light .sx2-grain,
-.theme-light .sx2-confetti { display: none; }
+.theme-light .sx2-grain { display: none; }
 .theme-light .sx2-amount {
   background: linear-gradient(180deg, #0F172A 0%, #334155 100%);
   -webkit-background-clip: text; background-clip: text;
@@ -20897,6 +21141,94 @@
   border-color: rgba(15,23,42,0.2);
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   CUTTING-EDGE light success page
+   ═══════════════════════════════════════════════════════════════ */
+.theme-light .sx2-page {
+  background:
+    radial-gradient(1100px 480px at 50% -160px, rgba(0,184,217,0.12), transparent 70%),
+    radial-gradient(820px 420px at 115% 4%, rgba(0,229,160,0.12), transparent 70%),
+    radial-gradient(720px 420px at -10% 18%, rgba(99,102,241,0.08), transparent 70%),
+    linear-gradient(180deg, #F6FAFD 0%, #FFFFFF 46%);
+}
+
+/* Eyebrow + Be-Assured seal on one line: eyebrow centered, logo pinned right */
+.sx2-eyebrow-row {
+  position: relative; width: 100%;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 40px;
+}
+.sx2-eyebrow-row .sx2-eyebrow { margin: 0; }
+.sx2-eyebrow-row .sx2-ba-logo {
+  position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
+  width: 130px; height: 120px; object-fit: contain;
+}
+
+/* Bold gradient success check badge (solid disc + white tick) */
+.theme-light .sx2-badge { width: 104px; height: 104px; margin-bottom: 12px; }
+.theme-light .sx2-check { width: 104px; height: 104px; }
+.theme-light .sx2-badge-glow {
+  inset: -26px;
+  background: radial-gradient(circle, rgba(0,200,120,0.42) 0%, transparent 62%);
+}
+.theme-light .sx2-check-ring {
+  fill: url(#sx2-grad); stroke: none; opacity: 1;
+  transform-box: fill-box; transform-origin: center;
+  animation: sx2-pop 0.55s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+/* Resting state is fully drawn (visible even with reduced motion); the
+   keyframe animates the tick in from hidden → drawn. */
+.theme-light .sx2-check-path {
+  stroke: #FFFFFF; stroke-width: 6; opacity: 1;
+  stroke-dasharray: 50; stroke-dashoffset: 0;
+  filter: drop-shadow(0 2px 3px rgba(2,43,35,0.25));
+  animation: sx2-tick-in 0.45s 0.4s cubic-bezier(0.65,0,0.35,1) both;
+}
+@keyframes sx2-tick-in { from { stroke-dashoffset: 50; } to { stroke-dashoffset: 0; } }
+
+/* Group Share/Done right below the receipt button (no push-to-bottom) */
+.theme-light .sx2-actionbar { margin-top: 12px; }
+
+/* Bigger, crisper amount */
+.theme-light .sx2-amount {
+  font-size: clamp(40px, 11vw, 56px);
+  letter-spacing: -2px;
+  background: linear-gradient(180deg, #0B5FBA 0%, #00B8D9 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.theme-light .sx2-eyebrow { font-size: 12px; letter-spacing: 0.18em; }
+
+/* Elevated glass ticket */
+.theme-light .sx2-ticket {
+  border-radius: 22px;
+  border: 1px solid rgba(15,23,42,0.07);
+  box-shadow: 0 22px 60px rgba(15,23,42,0.10), 0 2px 0 rgba(255,255,255,0.6) inset;
+  position: relative; overflow: hidden;
+}
+.theme-light .sx2-ticket::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+  background: linear-gradient(90deg, #00E5A0 0%, #00B8D9 55%, #0B5FBA 100%);
+}
+.theme-light .sx2-row dd .sx2-mono { letter-spacing: 0.3px; }
+
+/* Prominent, premium "View / Print Receipt" CTA */
+.theme-light .sx2-receipt-btn {
+  background: linear-gradient(135deg, #0B5FBA 0%, #00B8D9 100%);
+  border: none;
+  color: #FFFFFF;
+  font-weight: 700;
+  box-shadow: 0 14px 30px rgba(11,95,186,0.28);
+  letter-spacing: 0.2px;
+}
+.theme-light .sx2-receipt-btn:hover { filter: brightness(1.04); }
+.theme-light .sx2-receipt-btn svg { font-size: 1rem; }
+
+/* Crisper primary "Done" action */
+.theme-light .sx2-act--primary {
+  box-shadow: 0 14px 30px rgba(0,184,140,0.28);
+}
+
 /* ── Status icon (failure/pending) ── */
 .sx2-status-icon {
   position: relative; z-index: 1;
@@ -20912,6 +21244,14 @@
 @keyframes sx2-pop {
   0% { transform: scale(0); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
+}
+
+/* FailureScreen shows the app bottom nav — reserve space so its content sits
+   above the fixed nav and the nav stays pinned to the screen bottom on every
+   device height (instead of overlapping the page content). */
+.sx2-page--failure,
+.sx2-page--pending {
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
 }
 
 /* Failure/Pending variant tokens */
@@ -21070,6 +21410,67 @@
 }
 .theme-light .sx2-refund-title { color: #0F172A; }
 .theme-light .sx2-refund-desc { color: #6B7280; }
+
+/* Refund accepted popup */
+.sx2-refund-popup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(4, 6, 12, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: sx2-popup-fade 0.2s ease;
+}
+.sx2-refund-popup {
+  width: 100%;
+  max-width: 340px;
+  background: #14161F;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 28px 22px 24px;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  animation: sx2-popup-pop 0.25s ease;
+}
+.sx2-refund-popup-icon {
+  font-size: 52px;
+  color: #00C853;
+  line-height: 1;
+  margin-bottom: 14px;
+}
+.sx2-refund-popup-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #F5F7FA;
+}
+.sx2-refund-popup-text {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: rgba(245, 247, 250, 0.75);
+}
+.sx2-refund-popup-hint {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(245, 247, 250, 0.45);
+}
+.theme-light .sx2-refund-popup {
+  background: #FFFFFF;
+  border-color: #E5E7EB;
+}
+.theme-light .sx2-refund-popup-title { color: #0F172A; }
+.theme-light .sx2-refund-popup-text { color: #475569; }
+.theme-light .sx2-refund-popup-hint { color: #94A3B8; }
+@keyframes sx2-popup-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sx2-popup-pop {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
 
 /* Spinner utility (used by poll/refresh icons) */
 .sx-spin { animation: sx2-spin 0.9s linear infinite; }
@@ -23492,8 +23893,9 @@
 
 .ol-list-page .ol-ledger-header {
   min-height: 64px;
-  padding: 8px 16px;
-  gap: 12px;
+  padding: 8px 12px;
+  gap: 8px;
+  flex-wrap: nowrap;
   background: rgba(255, 255, 255, 0.94);
   border-bottom: 1px solid rgba(15, 23, 42, 0.06);
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
@@ -23503,10 +23905,30 @@
 
 .ol-list-page .ol-back-btn,
 .ol-list-page .ol-add-btn-pill {
-  width: 40px;
-  height: 40px;
-  border-radius: 13px;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  flex-shrink: 0;
+}
+
+/* Keep all six action pills + back on one row without overflowing narrow phones. */
+.ol-list-page .ol-ledger-header .ol-export-btn-pill,
+.ol-list-page .ol-ledger-header .ol-hdr-pill,
+.ol-list-page .ol-ledger-header .ol-renew-btn-pill,
+.ol-list-page .ol-ledger-header .ol-add-btn-pill {
+  width: 32px;
+  height: 32px;
+  font-size: 12.5px;
+}
+
+@media (max-width: 380px) {
+  .ol-list-page .ol-ledger-header { gap: 5px; padding: 8px 10px; }
+  .ol-list-page .ol-back-btn { width: 34px; height: 34px; }
+  .ol-list-page .ol-ledger-header .ol-export-btn-pill,
+  .ol-list-page .ol-ledger-header .ol-hdr-pill,
+  .ol-list-page .ol-ledger-header .ol-renew-btn-pill,
+  .ol-list-page .ol-ledger-header .ol-add-btn-pill { width: 29px; height: 29px; font-size: 11.5px; }
 }
 
 .ol-list-page .ol-add-btn-pill {
@@ -23871,10 +24293,11 @@
 /* Outstanding list should use the full app width with only a slim phone gutter. */
 .ol-page.ol-list-page {
   width: 100%;
-  max-width: none;
+  max-width: 100%;
   box-sizing: border-box;
   padding-left: 8px;
   padding-right: 8px;
+  overflow-x: clip;
 }
 
 .ol-list-page > .ol-ledger-header,
@@ -25925,3 +26348,6 @@
 .loc-sheet-result svg { margin-top: 3px; flex-shrink: 0; color: #2563EB; }
 .loc-sheet-result-label { font-size: 14px; font-weight: 600; }
 .loc-sheet-result-full { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+
+/* Raise toasts above the marketplace floating cart bar when it is visible. */
+body.mkt-cartbar-visible .cm-toast { bottom: 164px; }

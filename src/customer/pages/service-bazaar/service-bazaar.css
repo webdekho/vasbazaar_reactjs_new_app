@@ -1,8 +1,14 @@
 /* Service Bazaar — self-contained styles (scoped under .sb- prefix) */
+/* No own max-width / auto-margins: the app's .cm-content parent already
+   controls the responsive column width + centring at every breakpoint.
+   Adding our own 720px cap here double-constrained the layout and left
+   big empty gaps on the sides. Just provide light padding. */
 .sb-page {
-  padding: 12px 14px 90px;
-  max-width: 720px;
-  margin: 0 auto;
+  padding: 12px 10px 90px;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  overflow-x: hidden;
 }
 .sb-topbar {
   display: flex;
@@ -32,9 +38,11 @@
   display: flex;
   gap: 8px;
   margin-bottom: 12px;
+  min-width: 0;
 }
 .sb-search {
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -47,6 +55,7 @@
   background: transparent;
   outline: none;
   flex: 1;
+  min-width: 0;
   font-size: 14px;
   color: inherit;
 }
@@ -54,10 +63,13 @@
   display: flex;
   gap: 8px;
   overflow-x: auto;
+  max-width: 100%;
   padding-bottom: 6px;
   margin-bottom: 12px;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+.sb-chips::-webkit-scrollbar { display: none; }
 .sb-chip {
   white-space: nowrap;
   border: 1px solid rgba(127, 127, 127, 0.3);
@@ -70,8 +82,8 @@
   flex-shrink: 0;
 }
 .sb-chip.active {
-  background: #0ea5e9;
-  border-color: #0ea5e9;
+  background: linear-gradient(135deg, var(--cm-accent, #40E0D0), var(--cm-accent-end, #007BFF));
+  border-color: transparent;
   color: #fff;
   font-weight: 600;
 }
@@ -84,6 +96,8 @@
   margin-bottom: 10px;
   cursor: pointer;
   background: var(--cm-card-bg, transparent);
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .sb-avatar {
   width: 56px;
@@ -105,11 +119,13 @@
   font-weight: 700;
   font-size: 15px;
   margin: 0;
+  overflow-wrap: anywhere;
 }
 .sb-card-meta {
   font-size: 12px;
   opacity: 0.7;
   margin: 3px 0 0;
+  overflow-wrap: anywhere;
 }
 .sb-badges {
   display: flex;
@@ -174,6 +190,7 @@
   cursor: pointer;
   background: #0ea5e9;
   color: #fff;
+  min-width: 0;
 }
 .sb-btn:disabled {
   opacity: 0.5;
@@ -276,9 +293,17 @@
 .sb-cta-row {
   display: flex;
   gap: 8px;
+  margin-top: 20px;
   margin-bottom: 14px;
+  min-width: 0;
 }
-.sb-cta-row .sb-btn { flex: 1; }
+.sb-cta-row .sb-btn {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
 .sb-stars {
   display: flex;
   gap: 4px;
@@ -315,9 +340,10 @@
   z-index: 40;
   background: var(--cm-bg, #0b1220);
   padding-top: 8px;
-  margin: -12px -14px 12px;
-  padding-left: 14px;
-  padding-right: 14px;
+  margin: -12px -10px 12px;
+  padding-left: 10px;
+  padding-right: 10px;
+  box-sizing: border-box;
 }
 .theme-light .sb-sticky { background: #fff; }
 .sb-hero {
@@ -326,6 +352,8 @@
   padding: 16px;
   color: #fff;
   margin-bottom: 12px;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .sb-hero h1 { margin: 0; font-size: 20px; font-weight: 800; color: #fff; }
 .sb-hero p { margin: 4px 0 0; font-size: 12px; opacity: 0.95; }
@@ -341,6 +369,7 @@
   padding: 6px 12px;
   font-size: 12px;
   cursor: pointer;
+  max-width: 100%;
 }
 
 /* ---- Skeleton shimmer ---- */
@@ -459,3 +488,134 @@
 .sb-step-title { font-size: 14px; font-weight: 600; margin: 0; }
 .sb-step-sub { font-size: 11px; opacity: 0.6; margin: 2px 0 0; }
 .sb-step.pendingstep .sb-step-title { opacity: 0.5; }
+
+/* Doorstep engine — live Start/End service OTP banner */
+.sb-otp-banner {
+  background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
+  color: #fff;
+  border-radius: 14px;
+  padding: 16px;
+  margin: 12px 0;
+  text-align: center;
+}
+.sb-otp-label { font-size: 13px; font-weight: 600; margin: 0; opacity: 0.95; }
+.sb-otp-code {
+  font-size: 38px;
+  font-weight: 800;
+  letter-spacing: 10px;
+  margin: 8px 0 4px;
+  padding-left: 10px; /* offset letter-spacing on last glyph */
+}
+.sb-otp-hint { font-size: 11px; margin: 0; opacity: 0.85; }
+
+/* ============================================================
+   v2 REDESIGN — solid card surfaces, segmented tabs, and a
+   responsive layout that reads well on both phone and desktop.
+   Defined last so it cascades over the base rules above.
+   ============================================================ */
+
+/* ---- Real card surfaces (so nothing looks "lost" on a light bg) ---- */
+.sb-card,
+.sb-section,
+.sb-booking,
+.sb-receipt,
+.sb-skel-card {
+  background: var(--cm-card-bg, #fff);
+  border: 1px solid rgba(127, 127, 127, 0.16);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+}
+.theme-light .sb-card,
+.theme-light .sb-section,
+.theme-light .sb-booking,
+.theme-light .sb-receipt,
+.theme-light .sb-skel-card {
+  background: #fff;
+  border-color: #e7eaee;
+}
+.sb-card { transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+.sb-card:hover { box-shadow: 0 6px 18px rgba(16, 24, 40, 0.10); border-color: rgba(14, 165, 233, 0.45); }
+
+/* ---- Inputs: visible field background ---- */
+.theme-light .sb-field input,
+.theme-light .sb-field textarea,
+.theme-light .sb-field select,
+.theme-light .sb-search { background: #f6f8fa; border-color: #e1e5ea; }
+.sb-field input:focus,
+.sb-field textarea:focus,
+.sb-field select:focus { border-color: #0ea5e9; box-shadow: 0 0 0 3px rgba(14,165,233,0.15); }
+
+/* ---- Tabs → full-width segmented control ---- */
+.sb-tabs {
+  gap: 4px;
+  border-bottom: none;
+  background: rgba(127, 127, 127, 0.10);
+  padding: 4px;
+  border-radius: 12px;
+}
+.theme-light .sb-tabs { background: #eef1f4; }
+.sb-tab {
+  flex: 1;
+  text-align: center;
+  border-radius: 9px;
+  padding: 9px 8px;
+  border-bottom: none;
+  opacity: 0.7;
+}
+.sb-tab.active,
+.theme-light .sb-tab.active {
+  background: linear-gradient(135deg, var(--cm-accent, #40E0D0), var(--cm-accent-end, #007BFF));
+  color: #fff;
+  border-bottom: none;
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.28);
+  opacity: 1;
+}
+.sb-tab:disabled { opacity: 0.35; }
+
+/* ---- Section heading rhythm ---- */
+.sb-section h3 { font-size: 16px; font-weight: 700; }
+
+/* ============================================================
+   Desktop / wide-screen
+   The customer app already provides a desktop shell on >=768px:
+   a left .cm-sidebar (~292px) + a centred .cm-content column
+   (~980px). So Service Bazaar must NOT impose its own max-width /
+   auto-margins / sticky break-out — that fought the shell and
+   pushed content off-centre. Here we simply fill the .cm-content
+   column so the page is centred and consistent with every other
+   app page.
+   ============================================================ */
+@media (min-width: 768px) {
+  .sb-page { max-width: none; margin: 0; padding: 8px 0 96px; }
+
+  /* No horizontal break-out on desktop (the column has no side padding) */
+  .sb-sticky { margin: -8px 0 20px; padding-left: 0; padding-right: 0; padding-top: 8px; }
+
+  .sb-hero { padding: 26px 28px; border-radius: 18px; }
+  .sb-hero h1 { font-size: 28px; }
+  .sb-hero p { font-size: 14px; }
+
+  /* Provider / booking lists → responsive card grid */
+  .sb-results {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    align-items: start;
+  }
+  .sb-results .sb-card,
+  .sb-results .sb-booking,
+  .sb-results .sb-skel-card { margin-bottom: 0; }
+  .sb-results > .sb-empty { grid-column: 1 / -1; }
+
+  /* Provider-hub profile form → two columns, with full-width spans */
+  .sb-profile-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; align-items: start; }
+  .sb-profile-form > .sb-photo-upload,
+  .sb-profile-form > .sb-card-meta,
+  .sb-profile-form > .sb-btn,
+  .sb-profile-form > .sb-col-full { grid-column: 1 / -1; }
+
+  .sb-cta-row { max-width: 560px; }
+}
+
+@media (min-width: 1180px) {
+  .sb-results { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}

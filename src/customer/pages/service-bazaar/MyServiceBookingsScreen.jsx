@@ -65,6 +65,7 @@ export default function MyServiceBookingsScreen() {
         <h1 className="sb-title">My Bookings</h1>
       </div>
 
+      <div className="sb-results">
       {loading ? (
         Array.from({ length: 4 }).map((_, i) => <div className="sb-skel" key={i} style={{ height: 92, marginBottom: 10 }} />)
       ) : bookings.length === 0 ? (
@@ -92,6 +93,7 @@ export default function MyServiceBookingsScreen() {
           </div>
         );
       })}
+      </div>
 
       {reviewFor && (
         <div className="sb-modal-backdrop" onClick={() => setReviewFor(null)}>

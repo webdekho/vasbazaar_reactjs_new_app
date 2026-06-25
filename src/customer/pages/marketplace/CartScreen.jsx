@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaArrowLeft, FaPlus, FaMinus, FaTrash, FaStore, FaMapMarkerAlt, FaClock } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
+import { userService } from "../../services/userService";
+import { FaWallet, FaArrowRight, FaMoneyBillWave, FaLock } from "react-icons/fa";
 import { useMarketplaceCart } from "../../context/MarketplaceCartContext";
 import { useCustomerModern } from "../../context/CustomerModernContext";
 import { savePaymentContext, extractPaymentUrl } from "../../services/juspayService";
@@ -33,16 +35,50 @@ const haversineKm = (lat1, lng1, lat2, lng2) => {
 // Average delivery rider speed (km/h) used to convert distance into travel time.
 const AVG_DELIVERY_SPEED_KMH = 22;
 
+// Totals for a single store bucket — mirrors the per-store math the cart
+// context uses when aggregating, so a single-store checkout stays correct even
+// when other stores' items also sit in the cart.
+const bucketTotals = (b) => {
+  if (!b || !b.items) return { count: 0, subtotal: 0, total: 0, deliveryCharges: 0 };
+  const lines = Object.values(b.items);
+  const subtotal = lines.reduce((s, i) => s + Number(i.price) * Number(i.qty || 0), 0);
+  const count = lines.reduce((s, i) => s + (i.qty || 0), 0);
+  const deliveryCharges = subtotal > 0 ? Number(b.deliveryCharges || 0) : 0;
+  return { count, subtotal, total: subtotal + deliveryCharges, deliveryCharges };
+};
+
 const CartScreen = () => {
   const navigate = useNavigate();
-  const { cart, totals, addItem, decrementItem, removeItem, clearCart } = useMarketplaceCart();
+  const { cart: rawCart, totals: globalTotals, addItem, decrementItem, removeItem, clearCart, lineKeyOf } = useMarketplaceCart();
+  const [searchParams] = useSearchParams();
   const { userData } = useCustomerModern();
 
+  // The cart context exposes either a single-store bucket, or, when items from
+  // several stores coexist, { multi: true, storeList }. This screen checks out
+  // one store at a time, so resolve the active bucket from the ?store= param.
+  const activeStoreId = searchParams.get("store");
+  const activeBucket = rawCart && rawCart.multi
+    ? (rawCart.storeList || []).find((b) => String(b.storeId) === String(activeStoreId)) || null
+    : rawCart;
+  const needsStorePick = !!(rawCart && rawCart.multi && !activeBucket);
+  // Downstream code treats `cart`/`totals` as a single store; substitute the
+  // active bucket and its per-store totals so the rich single-store flow works.
+  const cart = activeBucket;
+  const totals = (rawCart && rawCart.multi) ? bucketTotals(activeBucket) : globalTotals;
+
   const [step, setStep] = useState("cart"); // cart | checkout
+  // Multi-store cart: which checkout style the shopper picked.
+  // null = not chosen yet, "separate" = pick one store at a time.
+  const [multiChoice, setMultiChoice] = useState(null);
   const [address, setAddress] = useState("");
+  // Structured delivery address for Shiprocket courier shipments.
+  const [pincode, setPincode] = useState("");
+  const [city, setCity] = useState("");
+  const [stateName, setStateName] = useState("");
   const [coords, setCoords] = useState(null);
   const [placing, setPlacing] = useState(false);
-  const [placingMethod, setPlacingMethod] = useState(null); // "ONLINE" | "COD"
+  const [placingMethod, setPlacingMethod] = useState(null); // "ONLINE" | "COD" | "WALLET"
+  const [walletBalance, setWalletBalance] = useState(null); // null until loaded
   const [error, setError] = useState(null);
   const [resolvedAddress, setResolvedAddress] = useState(null);
   const [resolving, setResolving] = useState(false);
@@ -59,6 +95,25 @@ const CartScreen = () => {
   const [pickupEnabled, setPickupEnabled] = useState(false);
   const [deliveryEnabled, setDeliveryEnabled] = useState(true);
 
+  // Delivery timing: NOW (deliver immediately) | SCHEDULE (one-time future) |
+  // SUBSCRIBE (recurring auto-order).
+  const [deliveryMode, setDeliveryMode] = useState("NOW");
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("");
+  // Subscription config.
+  const [subFrequency, setSubFrequency] = useState("DAILY"); // DAILY | WEEKLY | MONTHLY | INTERVAL
+  const [subDays, setSubDays] = useState([]); // ["MON", ...] for WEEKLY
+  const [subInterval, setSubInterval] = useState(15); // gap in days for INTERVAL
+  const [subAnchor, setSubAnchor] = useState("TODAY"); // TODAY | START — anchor for INTERVAL
+  const [subTime, setSubTime] = useState("09:00");
+  const [subStartDate, setSubStartDate] = useState("");
+  const [subEndDate, setSubEndDate] = useState("");
+  const [subPayMethod, setSubPayMethod] = useState("WALLET"); // WALLET | COD | AUTOPAY
+  const [creatingSub, setCreatingSub] = useState(false);
+  // Store-defined delivery slots (shown in schedule + subscribe).
+  const [deliverySlots, setDeliverySlots] = useState([]);
+  const [selectedSlotId, setSelectedSlotId] = useState("");
+
   // Offers / coupons.
   const [offers, setOffers] = useState([]);
   const [couponCode, setCouponCode] = useState("");
@@ -73,6 +128,17 @@ const CartScreen = () => {
     marketplaceService.getStoreOffers(cart.storeId).then((res) => {
       if (cancelled || !res?.success || !Array.isArray(res.data)) return;
       setOffers(res.data);
+    });
+    return () => { cancelled = true; };
+  }, [cart]);
+
+  // Load store-defined delivery slots on mount.
+  useEffect(() => {
+    if (!cart) return;
+    let cancelled = false;
+    marketplaceService.getStoreDeliverySlots(cart.storeId).then((res) => {
+      if (cancelled || !res?.success || !Array.isArray(res.data)) return;
+      setDeliverySlots(res.data);
     });
     return () => { cancelled = true; };
   }, [cart]);
@@ -143,6 +209,23 @@ const CartScreen = () => {
     return () => { cancelled = true; };
   }, [coords]);
 
+  // Load wallet balance once the customer reaches checkout, so we can show the
+  // available balance and gate the Pay-from-wallet button.
+  useEffect(() => {
+    if (step !== "checkout" || walletBalance !== null) return;
+    let alive = true;
+    (async () => {
+      try {
+        const res = await userService.getUserProfile();
+        const bal = parseFloat(res?.data?.balance ?? res?.data?.walletBalance ?? 0);
+        if (alive) setWalletBalance(isNaN(bal) ? 0 : bal);
+      } catch {
+        if (alive) setWalletBalance(0);
+      }
+    })();
+    return () => { alive = false; };
+  }, [step, walletBalance]);
+
   // Compute estimated delivery: preparation time (from store profile) +
   // travel time derived from distance between customer and store.
   const eta = (() => {
@@ -203,6 +286,102 @@ const CartScreen = () => {
     applyCoupon(offer.code);
   };
 
+  // Multiple stores in the cart and none selected yet → let the shopper choose
+  // how to check out: one combined payment (we split the money to each seller),
+  // or one store at a time as separate orders.
+  if (needsStorePick) {
+    const grand = globalTotals;
+    return (
+      <div className="mkt">
+        <div className="mkt-header">
+          <button className="mkt-header-back" onClick={() => (multiChoice ? setMultiChoice(null) : navigate(-1))}><FaArrowLeft /></button>
+          <h1 className="mkt-header-title">Your cart</h1>
+        </div>
+        <div style={{ padding: "12px 14px 4px", fontSize: 13, color: "var(--cm-muted)" }}>
+          You have items from {rawCart.storeList.length} stores.
+          {multiChoice === "separate" ? " Pick a store to check out — each is a separate order." : " How would you like to pay?"}
+        </div>
+
+        {multiChoice == null ? (
+          /* Step 1 — choose checkout style */
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "10px 14px 20px" }}>
+            <button
+              type="button"
+              onClick={() => navigate("/customer/app/marketplace/checkout-all")}
+              style={{
+                display: "flex", alignItems: "center", gap: 12, textAlign: "left",
+                padding: 16, borderRadius: 16, border: "1px solid var(--cm-accent, #007BFF)",
+                background: "var(--cm-card)", cursor: "pointer", width: "100%",
+              }}
+            >
+              <span style={{ width: 42, height: 42, borderRadius: 12, background: "rgba(0,123,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--cm-accent, #007BFF)" }}>
+                <FaWallet />
+              </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: 15, fontWeight: 700, color: "var(--cm-ink)" }}>Single order — pay once</span>
+                <span style={{ display: "block", fontSize: 12, color: "var(--cm-muted)" }}>
+                  Pay ₹{grand.subtotal.toFixed(0)}+ together; we split it to each seller.
+                </span>
+              </span>
+              <FaArrowRight color="var(--cm-accent, #007BFF)" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMultiChoice("separate")}
+              style={{
+                display: "flex", alignItems: "center", gap: 12, textAlign: "left",
+                padding: 16, borderRadius: 16, border: "1px solid var(--cm-line)",
+                background: "var(--cm-card)", cursor: "pointer", width: "100%",
+              }}
+            >
+              <span style={{ width: 42, height: 42, borderRadius: 12, background: "var(--cm-line)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--cm-muted)" }}>
+                <FaStore />
+              </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: 15, fontWeight: 700, color: "var(--cm-ink)" }}>Order each store separately</span>
+                <span style={{ display: "block", fontSize: 12, color: "var(--cm-muted)" }}>
+                  Check out one store at a time as separate orders.
+                </span>
+              </span>
+              <FaArrowRight color="var(--cm-muted)" />
+            </button>
+          </div>
+        ) : (
+          /* Step 2 (separate) — pick a store */
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "8px 14px 20px" }}>
+            {rawCart.storeList.map((b) => {
+              const t = bucketTotals(b);
+              return (
+                <button
+                  key={b.storeId}
+                  type="button"
+                  onClick={() => navigate(`/customer/app/marketplace/cart?store=${b.storeId}`)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 12, textAlign: "left",
+                    padding: 14, borderRadius: 14, border: "1px solid var(--cm-line)",
+                    background: "var(--cm-card)", cursor: "pointer", width: "100%",
+                  }}
+                >
+                  <span style={{ width: 40, height: 40, borderRadius: 10, background: "var(--cm-line)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--cm-muted)" }}>
+                    <FaStore />
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: "block", fontSize: 14, fontWeight: 700, color: "var(--cm-ink)" }}>{b.storeName}</span>
+                    <span style={{ display: "block", fontSize: 12, color: "var(--cm-muted)" }}>
+                      {t.count} item{t.count !== 1 ? "s" : ""} · ₹{t.subtotal.toFixed(0)}
+                    </span>
+                  </span>
+                  <FaArrowRight color="var(--cm-muted)" />
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (!cart || totals.count === 0) {
     return (
       <div className="mkt">
@@ -225,7 +404,7 @@ const CartScreen = () => {
     );
   }
 
-  const items = Object.values(cart.items);
+  const items = Object.values(cart.items || {});
   const minOrder = Number(cart.minOrderValue || 0);
   const belowMin = totals.subtotal < minOrder;
 
@@ -254,15 +433,48 @@ const CartScreen = () => {
       if (!address && saved.address) setAddress(saved.address);
       if (!coords && saved.coords) setCoords(saved.coords);
       if (!resolvedAddress && saved.resolvedAddress) setResolvedAddress(saved.resolvedAddress);
+      if (!pincode && saved.pincode) setPincode(saved.pincode);
+      if (!city && saved.city) setCity(saved.city);
+      if (!stateName && saved.state) setStateName(saved.state);
     }
     if (!coords && !(saved && saved.coords)) captureLocation();
     setStep("checkout");
+  };
+
+  const itemsPayload = () =>
+    items.map((i) => ({ itemId: i.id, quantity: i.qty, ...(i.variantLabel ? { variantLabel: i.variantLabel } : {}) }));
+
+  const hasSlots = deliverySlots.length > 0;
+  const selectedSlot = () => deliverySlots.find((s) => String(s.id) === String(selectedSlotId)) || null;
+  const slotTime = (s) => (s?.startTime ? String(s.startTime).slice(0, 5) : "");
+
+  // Slots whose days include the chosen date's weekday (null days = every day).
+  const slotsForDate = (dateStr) => {
+    if (!dateStr) return deliverySlots;
+    const dow = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][new Date(`${dateStr}T00:00`).getDay()];
+    return deliverySlots.filter((s) => !s.daysOfWeek || s.daysOfWeek.split(",").includes(dow));
+  };
+
+  // For SCHEDULE mode: combined ISO local date-time (yyyy-MM-ddTHH:mm).
+  const scheduledForIso = () => {
+    if (deliveryMode !== "SCHEDULE" || !scheduleDate) return null;
+    const slot = selectedSlot();
+    const time = slot ? slotTime(slot) : scheduleTime;
+    return time ? `${scheduleDate}T${time}` : null;
   };
 
   const placeOrder = async (method = "ONLINE") => {
     if (placing) return;
     // Delivery requires an address; pickup does not (collect from store).
     if (!isPickup && !address.trim()) { setError("Please enter delivery address"); return; }
+    if (!isPickup && pincode.length !== 6) { setError("Please enter a valid 6-digit delivery pincode"); return; }
+    if (deliveryMode === "SCHEDULE") {
+      if (!scheduleDate) { setError("Pick a delivery date"); return; }
+      if (hasSlots && !selectedSlotId) { setError("Pick a delivery slot"); return; }
+      if (!hasSlots && !scheduleTime) { setError("Pick a delivery time"); return; }
+      const iso = scheduledForIso();
+      if (!iso || new Date(iso) <= new Date()) { setError("Scheduled time must be in the future"); return; }
+    }
     const orderMobile = String(userData?.mobile || userData?.mobileNumber || "").trim();
     if (!orderMobile || !/^\d{10}$/.test(orderMobile)) {
       setError("Your account mobile is missing. Please re-login and try again.");
@@ -274,14 +486,17 @@ const CartScreen = () => {
 
     const payload = {
       storeId: cart.storeId,
-      items: items.map((i) => ({ itemId: i.id, quantity: i.qty })),
+      items: itemsPayload(),
       deliveryAddress: isPickup ? "" : address.trim(),
+      ...(isPickup ? {} : { deliveryPincode: pincode, deliveryCity: city.trim(), deliveryState: stateName.trim() }),
       contactMobile: orderMobile,
       paymentMethod: method,
       fulfillmentType,
       ...(appliedOffer?.code ? { offerCode: appliedOffer.code } : {}),
       ...(method === "ONLINE" ? { returnUrl: buildMarketplaceReturnUrl() } : {}),
       ...(coords && !isPickup ? { deliveryLat: coords.lat, deliveryLng: coords.lng } : {}),
+      ...(scheduledForIso() ? { scheduledFor: scheduledForIso() } : {}),
+      ...(deliveryMode === "SCHEDULE" && selectedSlotId ? { deliverySlotId: Number(selectedSlotId) } : {}),
     };
 
     const res = await marketplaceService.placeOrder(payload);
@@ -304,6 +519,9 @@ const CartScreen = () => {
       address: address.trim(),
       coords,
       resolvedAddress,
+      pincode,
+      city: city.trim(),
+      state: stateName.trim(),
     });
 
     // Persist context so the marketplace callback screen can pick up the
@@ -317,7 +535,8 @@ const CartScreen = () => {
     });
     clearCart();
 
-    if (method === "COD") {
+    if (method === "COD" || method === "WALLET") {
+      // Both settle synchronously server-side (COD = pay later, WALLET = debited now).
       navigate(`/customer/app/marketplace/orders/${orderId}`, { replace: true, state: { celebrate: true } });
       return;
     }
@@ -343,6 +562,56 @@ const CartScreen = () => {
     navigate(`/customer/app/marketplace/orders/${orderId}`, { replace: true });
   };
 
+  const toggleSubDay = (d) =>
+    setSubDays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]));
+
+  const createSubscription = async () => {
+    if (creatingSub) return;
+    if (!isPickup && !address.trim()) { setError("Please enter delivery address"); return; }
+    if (!isPickup && pincode.length !== 6) { setError("Please enter a valid 6-digit delivery pincode"); return; }
+    if (hasSlots && !selectedSlotId) { setError("Pick a delivery slot"); return; }
+    if (!hasSlots && !subTime) { setError("Pick a delivery time for the subscription"); return; }
+    if (subFrequency === "WEEKLY" && subDays.length === 0) { setError("Pick at least one weekday"); return; }
+    if (subFrequency === "INTERVAL" && (!Number(subInterval) || Number(subInterval) < 1)) {
+      setError("Enter a valid gap (number of days) for the custom schedule"); return;
+    }
+    if (subFrequency === "INTERVAL" && subAnchor === "START" && !subStartDate) {
+      setError("Pick a start date to repeat from"); return;
+    }
+    const orderMobile = String(userData?.mobile || userData?.mobileNumber || "").trim();
+    if (!orderMobile || !/^\d{10}$/.test(orderMobile)) {
+      setError("Your account mobile is missing. Please re-login and try again.");
+      return;
+    }
+    setError(null);
+    setCreatingSub(true);
+    const payload = {
+      storeId: cart.storeId,
+      items: itemsPayload(),
+      fulfillmentType,
+      deliveryAddress: isPickup ? "" : address.trim(),
+      ...(isPickup ? {} : { deliveryPincode: pincode, deliveryCity: city.trim(), deliveryState: stateName.trim() }),
+      contactMobile: orderMobile,
+      paymentMethod: subPayMethod,
+      frequency: subFrequency,
+      ...(subFrequency === "WEEKLY" ? { daysOfWeek: subDays } : {}),
+      ...(subFrequency === "INTERVAL" ? { intervalDays: Number(subInterval) } : {}),
+      ...(selectedSlotId ? { deliverySlotId: Number(selectedSlotId) } : { deliveryTime: subTime }),
+      // INTERVAL anchors on startDate: "from today" forces today; "from start date" uses the picked date.
+      ...(subFrequency === "INTERVAL"
+        ? { startDate: subAnchor === "START" && subStartDate ? subStartDate : new Date().toISOString().slice(0, 10) }
+        : (subStartDate ? { startDate: subStartDate } : {})),
+      ...(subEndDate ? { endDate: subEndDate } : {}),
+      ...(appliedOffer?.code ? { offerCode: appliedOffer.code } : {}),
+      ...(coords && !isPickup ? { deliveryLat: coords.lat, deliveryLng: coords.lng } : {}),
+    };
+    const res = await marketplaceService.createSubscription(payload);
+    setCreatingSub(false);
+    if (!res.success) { setError(res.message || "Could not create subscription"); return; }
+    clearCart();
+    navigate("/customer/app/marketplace/subscriptions", { replace: true });
+  };
+
   return (
     <div className="mkt">
       <div className="mkt-header">
@@ -358,24 +627,26 @@ const CartScreen = () => {
             <FaStore size={12} style={{ marginRight: 6 }} />
             From <strong style={{ color: "var(--cm-ink)" }}>{cart.storeName}</strong>
           </div>
-          {items.map((it) => (
-            <div key={it.id} className="mkt-cart-line">
+          {items.map((it) => {
+            const key = lineKeyOf(it);
+            return (
+            <div key={key} className="mkt-cart-line">
               <div className="mkt-cart-line-img">
                 {it.image ? <img src={it.image} alt="" /> : <FaStore size={20} />}
               </div>
               <div className="mkt-cart-line-info">
-                <p className="mkt-cart-line-name">{it.name}</p>
+                <p className="mkt-cart-line-name">{it.name}{it.variantLabel ? <span style={{ color: "var(--cm-muted)", fontWeight: 500 }}> · {it.variantLabel}</span> : null}</p>
                 <div className="mkt-cart-line-price">₹{Number(it.price).toFixed(0)} each</div>
                 <div className="mkt-stepper" style={{ marginTop: 6 }}>
-                  <button className="mkt-stepper-btn" onClick={() => decrementItem(it.id)}><FaMinus size={10} /></button>
+                  <button className="mkt-stepper-btn" onClick={() => decrementItem(key)}><FaMinus size={10} /></button>
                   <span className="mkt-stepper-qty">{it.qty}</span>
-                  <button className="mkt-stepper-btn" onClick={() => addItem({ id: cart.storeId, businessName: cart.storeName, deliveryCharges: cart.deliveryCharges, minOrderValue: cart.minOrderValue, deliveryTimeMinutes: cart.deliveryTimeMinutes, latitude: cart.storeLatitude, longitude: cart.storeLongitude }, { id: it.id, name: it.name, sellingPrice: it.price, imageUrl: it.image })}><FaPlus size={10} /></button>
+                  <button className="mkt-stepper-btn" onClick={() => addItem({ id: cart.storeId, businessName: cart.storeName, deliveryCharges: cart.deliveryCharges, minOrderValue: cart.minOrderValue, deliveryTimeMinutes: cart.deliveryTimeMinutes, latitude: cart.storeLatitude, longitude: cart.storeLongitude }, { id: it.id, name: it.name, sellingPrice: it.price, imageUrl: it.image }, it.variantLabel ? { variant: { label: it.variantLabel, price: it.price } } : undefined)}><FaPlus size={10} /></button>
                 </div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>₹{(Number(it.price) * it.qty).toFixed(0)}</div>
                 <button
-                  onClick={() => removeItem(it.id)}
+                  onClick={() => removeItem(key)}
                   style={{ background: "none", border: "none", color: "#f87171", marginTop: 8, cursor: "pointer" }}
                   aria-label="Remove"
                 >
@@ -383,7 +654,8 @@ const CartScreen = () => {
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
 
           <div className="mkt-summary">
             <div className="mkt-summary-row"><span>Subtotal</span><span>₹{totals.subtotal.toFixed(0)}</span></div>
@@ -415,9 +687,9 @@ const CartScreen = () => {
                 <div
                   style={{
                     display: "flex",
-                    gap: 8,
-                    background: "var(--cm-surface, #1a1a1a)",
-                    border: "1px solid var(--cm-border, #2a2a2a)",
+                    gap: 6,
+                    background: "var(--cm-bg-secondary)",
+                    border: "1px solid var(--cm-line)",
                     borderRadius: 12,
                     padding: 4,
                     marginBottom: 14,
@@ -433,7 +705,12 @@ const CartScreen = () => {
                         key={opt.key}
                         type="button"
                         disabled={opt.disabled}
-                        onClick={() => !opt.disabled && setFulfillmentType(opt.key)}
+                        onClick={() => {
+                          if (opt.disabled) return;
+                          setFulfillmentType(opt.key);
+                          // Pickup has no delivery timing — collect whenever the store is open.
+                          if (opt.key === "PICKUP") { setDeliveryMode("NOW"); setError(null); }
+                        }}
                         style={{
                           flex: 1,
                           padding: "10px 8px",
@@ -441,11 +718,12 @@ const CartScreen = () => {
                           border: "none",
                           cursor: opt.disabled ? "not-allowed" : "pointer",
                           fontSize: 13,
-                          fontWeight: 600,
+                          fontWeight: 700,
                           opacity: opt.disabled ? 0.4 : 1,
-                          background: active ? "var(--cm-primary, #22c55e)" : "transparent",
+                          background: active ? "linear-gradient(135deg, #40E0D0 0%, #007BFF 100%)" : "transparent",
                           color: active ? "#fff" : "var(--cm-ink)",
-                          transition: "background 0.15s",
+                          boxShadow: active ? "0 4px 12px rgba(0,123,255,0.3)" : "none",
+                          transition: "background 0.15s, box-shadow 0.15s",
                         }}
                       >
                         {opt.label}
@@ -479,6 +757,26 @@ const CartScreen = () => {
                 onChange={(e) => setAddress(e.target.value)}
                 placeholder="House / Flat no., Street, Landmark, Area"
               />
+            </div>
+            <div className="mkt-field" style={{ display: "flex", gap: 8 }}>
+              <div style={{ flex: "0 0 38%" }}>
+                <label className="mkt-field-label">Pincode</label>
+                <input
+                  className="mkt-input"
+                  value={pincode}
+                  inputMode="numeric"
+                  onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="6-digit"
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label className="mkt-field-label">City</label>
+                <input className="mkt-input" value={city} onChange={(e) => setCity(e.target.value)} placeholder="City" />
+              </div>
+            </div>
+            <div className="mkt-field">
+              <label className="mkt-field-label">State</label>
+              <input className="mkt-input" value={stateName} onChange={(e) => setStateName(e.target.value)} placeholder="State" />
             </div>
             <button
               className="mkt-btn mkt-btn--secondary"
@@ -527,6 +825,229 @@ const CartScreen = () => {
               </div>
             )}
               </>
+            )}
+
+            {/* Delivery timing: now / schedule / subscribe. Not shown for store
+                pickup — there's no delivery to schedule, the customer collects
+                from the store directly. */}
+            {!isPickup && (
+            <>
+            <div className="mkt-form-section-title">When to deliver</div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              {[
+                { key: "NOW", label: "Deliver now" },
+                { key: "SCHEDULE", label: "Schedule" },
+                { key: "SUBSCRIBE", label: "Subscribe" },
+              ].map((m) => {
+                const on = deliveryMode === m.key;
+                return (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => { setDeliveryMode(m.key); setError(null); }}
+                    style={{
+                      flex: 1, padding: "9px 6px", borderRadius: 12, fontSize: 12.5, fontWeight: 700, cursor: "pointer",
+                      border: on ? "1px solid transparent" : "1px solid var(--cm-line)",
+                      background: on ? "linear-gradient(135deg, #40E0D0 0%, #007BFF 100%)" : "var(--cm-card)",
+                      color: on ? "#fff" : "var(--cm-ink)",
+                      boxShadow: on ? "0 6px 16px rgba(0,123,255,0.3)" : "none",
+                    }}
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {deliveryMode === "SCHEDULE" && (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <div className="mkt-field" style={{ flex: 1, margin: 0 }}>
+                    <label className="mkt-field-label">Date</label>
+                    <input type="date" className="mkt-input" value={scheduleDate}
+                      min={new Date().toISOString().slice(0, 10)}
+                      onChange={(e) => { setScheduleDate(e.target.value); setSelectedSlotId(""); }} />
+                  </div>
+                  {!hasSlots && (
+                    <div className="mkt-field" style={{ flex: 1, margin: 0 }}>
+                      <label className="mkt-field-label">Time</label>
+                      <input type="time" className="mkt-input" value={scheduleTime}
+                        onChange={(e) => setScheduleTime(e.target.value)} />
+                    </div>
+                  )}
+                </div>
+                {hasSlots && (
+                  <div className="mkt-field" style={{ margin: "10px 0 0" }}>
+                    <label className="mkt-field-label">Delivery slot</label>
+                    <select className="mkt-input" value={selectedSlotId}
+                      onChange={(e) => setSelectedSlotId(e.target.value)}>
+                      <option value="">-- Select a slot --</option>
+                      {slotsForDate(scheduleDate).map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.label} ({slotTime(s)}–{String(s.endTime).slice(0, 5)})
+                        </option>
+                      ))}
+                    </select>
+                    {scheduleDate && slotsForDate(scheduleDate).length === 0 && (
+                      <div style={{ fontSize: 11, color: "#f59e0b", marginTop: 4 }}>
+                        No slots on this day — pick another date.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {deliveryMode === "SUBSCRIBE" && (
+              <div style={{ marginBottom: 10, padding: 12, borderRadius: 14, border: "1px solid var(--cm-line)", background: "var(--cm-card)" }}>
+                <div style={{ fontSize: 11, color: "var(--cm-muted)", marginBottom: 10 }}>
+                  We'll auto-place this order on your chosen schedule and charge the selected method each time.
+                </div>
+                {/* Frequency */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginBottom: 10 }}>
+                  {[
+                    { key: "DAILY", label: "Daily" },
+                    { key: "WEEKLY", label: "Weekly" },
+                    { key: "MONTHLY", label: "Monthly" },
+                    { key: "INTERVAL", label: "Custom" },
+                  ].map((f) => {
+                    const on = subFrequency === f.key;
+                    return (
+                      <button key={f.key} type="button" onClick={() => setSubFrequency(f.key)}
+                        style={{
+                          padding: "8px 4px", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                          border: on ? "1px solid #007BFF" : "1px solid var(--cm-line)",
+                          background: on ? "rgba(0,123,255,0.1)" : "transparent",
+                          color: on ? "#007BFF" : "var(--cm-ink)",
+                        }}>
+                        {f.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* Custom gap (INTERVAL) */}
+                {subFrequency === "INTERVAL" && (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--cm-ink)" }}>Repeat every</span>
+                      <input
+                        type="number" min={1} max={365} inputMode="numeric"
+                        className="mkt-input"
+                        style={{ width: 72, textAlign: "center", height: 40, padding: "0 8px" }}
+                        value={subInterval}
+                        onChange={(e) => setSubInterval(e.target.value.replace(/[^0-9]/g, ""))}
+                      />
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--cm-ink)" }}>days</span>
+                    </div>
+                    {/* Anchor: from today vs from a chosen start date */}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {[{ key: "TODAY", label: "From today" }, { key: "START", label: "From start date" }].map((a) => {
+                        const on = subAnchor === a.key;
+                        return (
+                          <button key={a.key} type="button" onClick={() => setSubAnchor(a.key)}
+                            style={{
+                              flex: 1, padding: "7px 6px", borderRadius: 9, fontSize: 11.5, fontWeight: 700, cursor: "pointer",
+                              border: on ? "1px solid #007BFF" : "1px solid var(--cm-line)",
+                              background: on ? "rgba(0,123,255,0.1)" : "transparent",
+                              color: on ? "#007BFF" : "var(--cm-muted)",
+                            }}>
+                            {a.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: 6 }}>
+                      e.g. every {Number(subInterval) || 0} days — next on day {Number(subInterval) || 0} from {subAnchor === "START" ? "your start date" : "today"}, then repeating.
+                    </div>
+                  </div>
+                )}
+                {/* Monthly note */}
+                {subFrequency === "MONTHLY" && (
+                  <div style={{ fontSize: 11.5, color: "var(--cm-muted)", marginBottom: 10 }}>
+                    Repeats monthly on day {Number((subStartDate || new Date().toISOString().slice(0, 10)).slice(8, 10))} of every month
+                    {" "}(adjusts to the last day for shorter months). Set a Start date below to change the day.
+                  </div>
+                )}
+                {/* Weekdays (weekly only) */}
+                {subFrequency === "WEEKLY" && (
+                  <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
+                    {["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"].map((d) => {
+                      const on = subDays.includes(d);
+                      return (
+                        <button key={d} type="button" onClick={() => toggleSubDay(d)}
+                          style={{
+                            width: 38, height: 34, borderRadius: 9, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                            border: on ? "1px solid transparent" : "1px solid var(--cm-line)",
+                            background: on ? "linear-gradient(135deg, #40E0D0 0%, #007BFF 100%)" : "transparent",
+                            color: on ? "#fff" : "var(--cm-muted)",
+                          }}>
+                          {d[0] + d[1].toLowerCase()}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {/* Slot (store-defined) or free time */}
+                {hasSlots && (
+                  <div className="mkt-field" style={{ margin: "0 0 10px" }}>
+                    <label className="mkt-field-label">Delivery slot</label>
+                    <select className="mkt-input" value={selectedSlotId}
+                      onChange={(e) => setSelectedSlotId(e.target.value)}>
+                      <option value="">-- Select a slot --</option>
+                      {deliverySlots.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.label} ({slotTime(s)}–{String(s.endTime).slice(0, 5)})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {/* Time + dates */}
+                <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                  {!hasSlots && (
+                    <div className="mkt-field" style={{ flex: 1, margin: 0 }}>
+                      <label className="mkt-field-label">Time</label>
+                      <input type="time" className="mkt-input" value={subTime} onChange={(e) => setSubTime(e.target.value)} />
+                    </div>
+                  )}
+                  <div className="mkt-field" style={{ flex: 1, margin: 0 }}>
+                    <label className="mkt-field-label">Start (optional)</label>
+                    <input type="date" className="mkt-input" value={subStartDate}
+                      min={new Date().toISOString().slice(0, 10)}
+                      onChange={(e) => setSubStartDate(e.target.value)} />
+                  </div>
+                  <div className="mkt-field" style={{ flex: 1, margin: 0 }}>
+                    <label className="mkt-field-label">End (optional)</label>
+                    <input type="date" className="mkt-input" value={subEndDate}
+                      min={subStartDate || new Date().toISOString().slice(0, 10)}
+                      onChange={(e) => setSubEndDate(e.target.value)} />
+                  </div>
+                </div>
+                {/* Payment method for auto-orders */}
+                <label className="mkt-field-label" style={{ display: "block", marginBottom: 6 }}>Auto-pay using</label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {[
+                    { key: "WALLET", label: "Wallet" },
+                    { key: "COD", label: "Cash" },
+                    { key: "AUTOPAY", label: "Autopay" },
+                  ].map((p) => {
+                    const on = subPayMethod === p.key;
+                    return (
+                      <button key={p.key} type="button" onClick={() => setSubPayMethod(p.key)}
+                        style={{
+                          flex: 1, padding: "8px 6px", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                          border: on ? "1px solid #007BFF" : "1px solid var(--cm-line)",
+                          background: on ? "rgba(0,123,255,0.1)" : "transparent",
+                          color: on ? "#007BFF" : "var(--cm-ink)",
+                        }}>
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            </>
             )}
 
             {/* Coupons / Offers */}
@@ -624,15 +1145,28 @@ const CartScreen = () => {
 
             {error && <div className="mkt-error-text">{error}</div>}
 
+            {deliveryMode === "SUBSCRIBE" ? (
+              <div className="mkt-pay-actions">
+                <button
+                  type="button"
+                  className="mkt-btn mkt-btn--primary"
+                  onClick={createSubscription}
+                  disabled={creatingSub}
+                >
+                  {creatingSub ? "Creating subscription…" : `Subscribe — ${
+                    subFrequency === "DAILY" ? "every day"
+                    : subFrequency === "WEEKLY" ? "selected days"
+                    : subFrequency === "MONTHLY" ? "monthly"
+                    : `every ${Number(subInterval) || 0} days`
+                  } · ${hasSlots ? (selectedSlot()?.label || "pick a slot") : (subTime || "--:--")}`}
+                </button>
+                <div style={{ fontSize: 11, color: "var(--cm-muted)", textAlign: "center", marginTop: 6 }}>
+                  Auto-charged via {subPayMethod === "WALLET" ? "Wallet" : subPayMethod === "COD" ? "Cash on Delivery" : "Autopay (HDFC)"} each time. Manage anytime under My Subscriptions.
+                </div>
+              </div>
+            ) : (
+            <>
             <div className="mkt-pay-actions">
-              <button
-                type="button"
-                className="mkt-btn mkt-btn--secondary mkt-pay-cod"
-                onClick={() => placeOrder("COD")}
-                disabled={placing}
-              >
-                {placing && placingMethod === "COD" ? "Placing…" : "Cash on Delivery"}
-              </button>
               <button
                 type="button"
                 className="mkt-btn mkt-btn--primary mkt-pay-online"
@@ -643,19 +1177,61 @@ const CartScreen = () => {
                   "Placing order…"
                 ) : (
                   <>
-                    <span>Pay ₹{payTotal.toFixed(0)} via</span>
+                    <span className="mkt-pay-online-label">Pay ₹{payTotal.toFixed(0)} via</span>
                     <img
                       src="https://webdekho.in/images/vasbazaar.png"
                       alt="vasbazaar"
                       className="mkt-pay-logo"
                     />
+                    <FaArrowRight className="mkt-pay-online-arrow" size={13} />
                   </>
                 )}
               </button>
+
+              <div className="mkt-pay-alt-row">
+                <button
+                  type="button"
+                  className="mkt-btn mkt-pay-wallet"
+                  onClick={() => placeOrder("WALLET")}
+                  disabled={placing || (walletBalance !== null && walletBalance < payTotal)}
+                  title={walletBalance !== null && walletBalance < payTotal ? "Insufficient wallet balance" : undefined}
+                >
+                  {placing && placingMethod === "WALLET" ? (
+                    "Paying…"
+                  ) : (
+                    <>
+                      <FaWallet className="mkt-pay-alt-icon" size={16} />
+                      <span className="mkt-pay-alt-title">Wallet</span>
+                      {walletBalance !== null && (
+                        <span className="mkt-pay-alt-sub">₹{walletBalance.toFixed(0)}</span>
+                      )}
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className="mkt-btn mkt-pay-cod"
+                  onClick={() => placeOrder("COD")}
+                  disabled={placing}
+                >
+                  {placing && placingMethod === "COD" ? (
+                    "Placing…"
+                  ) : (
+                    <>
+                      <FaMoneyBillWave className="mkt-pay-alt-icon" size={16} />
+                      <span className="mkt-pay-alt-title">Cash</span>
+                      <span className="mkt-pay-alt-sub">on Delivery</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
-            <div style={{ fontSize: 11, color: "var(--cm-muted)", textAlign: "center", marginTop: 6 }}>
+            <div className="mkt-pay-secure">
+              <FaLock size={9} />
               Secured by HDFC Juspay payment gateway
             </div>
+            </>
+            )}
           </div>
         </>
       )}

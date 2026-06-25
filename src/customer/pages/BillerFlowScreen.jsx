@@ -24,6 +24,7 @@ import SaveVehiclePrompt from "../components/SaveVehiclePrompt";
 import VehicleHistorySheet from "../components/VehicleHistorySheet";
 import { useToast } from "../context/ToastContext";
 import { sanitizeBackendMessage } from "../utils/userMessages";
+import { isBlockedAmount } from "../utils/blockedAmount";
 
 /* ── Step Indicator ── */
 // eslint-disable-next-line no-unused-vars
@@ -267,7 +268,7 @@ const BillerList = ({ operators, myBillers = [], isLoading: listLoading, onSelec
                             </div>
                             <div className="bf-biller-info">
                               <span className="bf-biller-name">{name}</span>
-                              <span className="bf-biller-tag">Bharat BillPay</span>
+                              <span className="bf-biller-tag">Bharat Connect</span>
                             </div>
                             <span className="bf-mybiller-badge">★</span>
                             <span className="bf-biller-arrow">
@@ -309,7 +310,7 @@ const BillerList = ({ operators, myBillers = [], isLoading: listLoading, onSelec
                             </div>
                             <div className="bf-biller-info">
                               <span className="bf-biller-name">{name}</span>
-                              <span className="bf-biller-tag">Bharat BillPay</span>
+                              <span className="bf-biller-tag">Bharat Connect</span>
                             </div>
                             <span className="bf-biller-arrow">
                               <FaChevronRight />
@@ -677,7 +678,7 @@ const BillView = ({ biller, billData, amount, setAmount, onPay, onBack, isExact,
           />
           <div className="bf-hero-biller-meta">
             <div className="bf-hero-biller-name">{biller.operatorName || biller.name}</div>
-            <div className="bf-hero-biller-sub">Bharat Billpay</div>
+            <div className="bf-hero-biller-sub">Bharat Connect</div>
           </div>
         </div>
 
@@ -1732,6 +1733,10 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
   /* DTH: select a plan → go to offers page */
   const handleDTHPlanSelect = (plan) => {
     const opName = selectedBiller?.operatorName || selectedBiller?.name || serviceData.name;
+    if (isBlockedAmount(selectedBiller?.rejectAmount, plan.rs)) {
+      showToast(`₹${plan.rs} is not available for ${opName}. Please choose a different amount.`, "error");
+      return;
+    }
     navigate("/customer/app/offers", {
       state: {
         type: "bill", operatorId: selectedBiller?.id, amount: plan.rs,
@@ -1746,6 +1751,10 @@ const BillerFlowScreen = ({ serviceData, operators: passedOperators, navigate })
   const handlePayBill = () => {
     if (!amount || Number(amount) <= 0) return;
     const opName = selectedBiller?.operatorName || selectedBiller?.name || serviceData.name;
+    if (isBlockedAmount(selectedBiller?.rejectAmount, Number(amount))) {
+      showToast(`₹${Number(amount)} is not available for ${opName}. Please choose a different amount.`, "error");
+      return;
+    }
     navigate("/customer/app/offers", {
       state: {
         type: "bill", operatorId: selectedBiller?.id, amount: Number(amount),
