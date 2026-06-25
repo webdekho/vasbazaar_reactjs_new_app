@@ -82,6 +82,83 @@ const PaymentScreen = () => {
     serviceId: context.serviceId || null,
   }), [paymentState]);
 
+  // Shared resolver for a UPI check-status response.
+  // Returns true if it reached a terminal state and navigated; false if it left the
+  // payment as still-in-progress (used by the auto-poll to keep waiting).
+  // `auto` = true means this came from the background poll, so non-terminal statuses
+  // (PENDING / not-yet-paid / transient) must NOT navigate away.
+  const finalizePaymentStatus = useCallback((statusResponse, context, { auto = false } = {}) => {
+    if (_navigationDone) return true;
+
+    const payStatus = (statusResponse?.data?.status || "").toUpperCase();
+    const isPaidVal = statusResponse?.data?.is_paid ?? statusResponse?.data?.isPaid ?? false;
+    const failBase = {
+      orderId: context.orderId,
+      amount: context.amount,
+      type: context.type,
+      payType: "upi",
+      mobile: context.mobile || context.field1,
+      operatorName: context.operatorName,
+      isPaid: isPaidVal,
+    };
+
+    const go = (path, state) => {
+      _navigationDone = true;
+      setNativePaymentPending(false);
+      paymentContextRef.current = null;
+      navigate(path, { state });
+    };
+
+    // SUCCESS
+    if (statusResponse?.success && (payStatus === "CHARGED" || payStatus === "SUCCESS" || payStatus === "COMPLETED")) {
+      go("/customer/app/success", buildSuccessState(statusResponse.data, "upi", context.orderId, context));
+      return true;
+    }
+
+    // REFUNDED — payment was collected then returned (terminal). The backend tells us
+    // the actual destination (wallet vs original bank/UPI) in the message, so trust it
+    // rather than assuming wallet here.
+    if (payStatus === "REFUNDED" || payStatus === "REFUND" || payStatus === "REVERSAL" || payStatus === "CANCELLED") {
+      go("/customer/app/failure", {
+        ...failBase,
+        status: "failed",
+        isPaid: true,
+        message: statusResponse?.data?.message || "This payment did not go through and the amount has been refunded.",
+      });
+      return true;
+    }
+
+    // FAILED (terminal)
+    if (payStatus === "FAILED" || payStatus === "FAILURE") {
+      go("/customer/app/failure", {
+        ...failBase,
+        status: "failed",
+        message: "Payment could not be completed. If money was deducted, it will be refunded within 24-48 hours.",
+      });
+      return true;
+    }
+
+    // Non-terminal (PENDING / STARTED / not-yet-paid / transient): the background
+    // poll keeps waiting; only an explicit user verify resolves it below.
+    if (auto) return false;
+
+    if (payStatus === "PENDING" || payStatus === "PENDING_VBG" || payStatus === "STARTED" || payStatus === "AUTHORIZING") {
+      go("/customer/app/failure", {
+        ...failBase,
+        status: "pending",
+        message: "Your payment is being processed. Please check your transaction history for the latest status.",
+      });
+      return true;
+    }
+
+    go("/customer/app/failure", {
+      ...failBase,
+      status: "failed",
+      message: "Payment could not be completed. If money was deducted, it will be refunded within 24-48 hours.",
+    });
+    return true;
+  }, [buildSuccessState, navigate]);
+
   // Handle payment callback from deep link (native apps)
   const handlePaymentCallback = useCallback(async (url) => {
     console.log("Payment callback received:", url);
@@ -130,45 +207,8 @@ const PaymentScreen = () => {
         console.log("Navigation already done, skipping");
         return;
       }
-      _navigationDone = true;
 
-      const payStatus = (statusResponse.data?.status || "").toUpperCase();
-      if (statusResponse.success && (payStatus === "CHARGED" || payStatus === "SUCCESS" || payStatus === "COMPLETED")) {
-        // Payment successful
-        navigate("/customer/app/success", {
-          state: buildSuccessState(statusResponse.data, "upi", orderId, context),
-        });
-      } else if (payStatus === "PENDING" || payStatus === "PENDING_VBG" || payStatus === "STARTED" || payStatus === "AUTHORIZING") {
-        // Navigate to failure page with pending status
-        navigate("/customer/app/failure", {
-          state: {
-            status: "pending",
-            message: "Your payment is being processed. Please check your transaction history for the latest status.",
-            orderId,
-            amount: context.amount,
-            type: context.type,
-            payType: "upi",
-            mobile: context.mobile || context.field1,
-            operatorName: context.operatorName,
-            isPaid: statusResponse.data?.is_paid ?? statusResponse.data?.isPaid ?? false,
-          },
-        });
-      } else {
-        // Navigate to failure page
-        navigate("/customer/app/failure", {
-          state: {
-            status: "failed",
-            message: "Payment could not be completed. If money was deducted, it will be refunded within 24-48 hours.",
-            orderId,
-            amount: context.amount,
-            type: context.type,
-            payType: "upi",
-            mobile: context.mobile || context.field1,
-            operatorName: context.operatorName,
-            isPaid: statusResponse.data?.is_paid ?? statusResponse.data?.isPaid ?? false,
-          },
-        });
-      }
+      finalizePaymentStatus(statusResponse, { ...context, orderId }, { auto: false });
     } catch (e) {
       setLoading(false);
       // Prevent multiple navigations
@@ -189,7 +229,7 @@ const PaymentScreen = () => {
         },
       });
     }
-  }, [buildSuccessState, navigate]);
+  }, [finalizePaymentStatus, navigate]);
 
   useEffect(() => {
     const load = async () => {
@@ -220,6 +260,30 @@ const PaymentScreen = () => {
       }
     };
   }, [handlePaymentCallback]);
+
+  // While the "Payment In Progress" overlay is shown, poll the backend so the screen
+  // resolves itself (success / refunded / failed) even if the user never taps verify —
+  // e.g. when the payment was already settled or refunded to the wallet out-of-band.
+  useEffect(() => {
+    if (!nativePaymentPending) return undefined;
+    let cancelled = false;
+    const tick = async () => {
+      const context = paymentContextRef.current;
+      if (!context || _navigationDone) return;
+      try {
+        const statusResponse = await juspayService.checkOrderStatus(context.orderId);
+        if (cancelled || _navigationDone) return;
+        finalizePaymentStatus(statusResponse, context, { auto: true });
+      } catch (e) {
+        // Transient error — the next tick retries.
+      }
+    };
+    const intervalId = setInterval(tick, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
+  }, [nativePaymentPending, finalizePaymentStatus]);
 
   if (!paymentState.amount) return <Navigate to="/customer/app/services" replace />;
 
@@ -424,46 +488,8 @@ const PaymentScreen = () => {
         console.log("Navigation already done, skipping");
         return;
       }
-      _navigationDone = true;
 
-      const payStatus = (statusResponse.data?.status || "").toUpperCase();
-      if (statusResponse.success && (payStatus === "CHARGED" || payStatus === "SUCCESS" || payStatus === "COMPLETED")) {
-        setNativePaymentPending(false);
-        navigate("/customer/app/success", {
-          state: buildSuccessState(statusResponse.data, "upi", context.orderId, context),
-        });
-      } else if (payStatus === "PENDING" || payStatus === "PENDING_VBG" || payStatus === "STARTED" || payStatus === "AUTHORIZING") {
-        setNativePaymentPending(false);
-        navigate("/customer/app/failure", {
-          state: {
-            status: "pending",
-            message: "Your payment is being processed. Please check your transaction history for the latest status.",
-            orderId: context.orderId,
-            amount: context.amount,
-            type: context.type,
-            payType: "upi",
-            mobile: context.mobile || context.field1,
-            operatorName: context.operatorName,
-            isPaid: statusResponse.data?.is_paid ?? statusResponse.data?.isPaid ?? false,
-          },
-        });
-      } else {
-        setNativePaymentPending(false);
-        paymentContextRef.current = null;
-        navigate("/customer/app/failure", {
-          state: {
-            status: "failed",
-            message: "Payment could not be completed. If money was deducted, it will be refunded within 24-48 hours.",
-            orderId: context.orderId,
-            amount: context.amount,
-            type: context.type,
-            payType: "upi",
-            mobile: context.mobile || context.field1,
-            operatorName: context.operatorName,
-            isPaid: statusResponse.data?.is_paid ?? statusResponse.data?.isPaid ?? false,
-          },
-        });
-      }
+      finalizePaymentStatus(statusResponse, context, { auto: false });
     } catch (e) {
       setLoading(false);
       // Prevent multiple navigations

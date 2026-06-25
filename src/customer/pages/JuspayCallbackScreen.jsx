@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { FaCheckCircle, FaTimesCircle, FaClock, FaHome, FaHistory } from "react-icons/fa";
+import { FaCheckCircle, FaTimesCircle, FaClock, FaHome, FaHistory, FaUniversity } from "react-icons/fa";
 import { isSuccessStatus, isPendingStatus } from "../../shared/constants/juspay";
 import juspayService from "../services/juspayService";
-import { authPost } from "../services/apiClient";
 import { useTheme } from "../context/ThemeContext";
 
 // Helper to get/set verified order cache in sessionStorage
@@ -32,6 +31,8 @@ const setVerifiedOrder = (orderId, result) => {
   }
 };
 
+const HOME_ROUTE = "/customer/app/services";
+
 const JuspayCallbackScreen = () => {
   const navigate = useNavigate();
   const { theme } = useTheme();
@@ -40,10 +41,8 @@ const JuspayCallbackScreen = () => {
   const [message, setMessage] = useState("Verifying your payment...");
   const [txnId, setTxnId] = useState("");
   const [paymentCtx, setPaymentCtx] = useState(null);
-  const [refundLoadingType, setRefundLoadingType] = useState("");
-  const [refundMessage, setRefundMessage] = useState("");
-  const [refundMessageType, setRefundMessageType] = useState("");
   const [isPaid, setIsPaid] = useState(true); // Default to true for backward compatibility
+
   const isLight = theme === "light";
 
   useEffect(() => {
@@ -193,57 +192,29 @@ const JuspayCallbackScreen = () => {
     // Push a sentinel entry so the first Back press triggers popstate here.
     window.history.pushState(null, "", window.location.href);
     const handlePopState = () => {
-      navigate("/customer/app/services", { replace: true });
+      navigate(HOME_ROUTE, { replace: true });
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, [navigate]);
 
-  const handleRefundRequest = async (refundType) => {
-    if (!txnId) {
-      setRefundMessageType("error");
-      setRefundMessage("Order ID not found. Please try again from transaction history.");
-      return;
-    }
-
-    setRefundLoadingType(refundType);
-    setRefundMessage("");
-    setRefundMessageType("");
-
-    try {
-      const response = await authPost("/api/customer/plan_recharge/request-refund", {
-        txnId,
-        refundType,
-      });
-
-      if (response.success) {
-        setRefundMessageType("success");
-        setRefundMessage(
-          refundType === "wallet"
-            ? "Amount has been credited to your wallet."
-            : "Refund request submitted. Amount will be refunded to your original payment source within 3 working days."
-        );
-      } else {
-        // Show actual API error message
-        setRefundMessageType("error");
-        setRefundMessage(response.message || "Unable to submit refund request. Please try again.");
-      }
-    } catch {
-      setRefundMessageType("error");
-      setRefundMessage("Unable to submit refund request. Please try again.");
-    } finally {
-      setRefundLoadingType("");
-    }
-  };
+  const goHome = () => navigate(HOME_ROUTE, { replace: true });
 
   const statusConfig = {
-    verifying: { icon: null, color: "#00BBF9", bg: "rgba(0,187,249,0.1)" },
-    success: { icon: <FaCheckCircle />, color: "#00E676", bg: "rgba(0,230,118,0.1)" },
-    pending: { icon: <FaClock />, color: "#FFB300", bg: "rgba(255,179,0,0.1)" },
-    failed: { icon: <FaTimesCircle />, color: "#FF4757", bg: "rgba(255,71,87,0.1)" },
+    verifying: { color: "#00BBF9", glow: "0,187,249" },
+    success: { icon: <FaCheckCircle />, color: "#00E676", glow: "0,230,118" },
+    pending: { icon: <FaClock />, color: "#FFB300", glow: "255,179,0" },
+    failed: { icon: <FaTimesCircle />, color: "#FF4757", glow: "255,71,87" },
   };
 
   const cfg = statusConfig[state];
+
+  const detailRow = (label, value) => (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.06)"}` }}>
+      <span style={{ fontSize: "0.82rem", color: isLight ? "#8A90A2" : "#6B7394", fontWeight: 500 }}>{label}</span>
+      <span style={{ fontSize: "0.85rem", fontWeight: 700, color: isLight ? "#1A1A2E" : "#F0F0FF", letterSpacing: 0.2 }}>{value}</span>
+    </div>
+  );
 
   return (
     <div style={{
@@ -252,30 +223,50 @@ const JuspayCallbackScreen = () => {
       flexDirection: "column",
       alignItems: "center",
       justifyContent: "flex-start",
-      padding: "16px 24px 24px",
-      background: isLight ? "#F5F7FA" : "#0B0B10",
+      padding: "max(28px, env(safe-area-inset-top)) 20px 32px",
+      position: "relative",
+      overflow: "hidden",
+      background: isLight
+        ? "radial-gradient(1200px 600px at 50% -10%, #EAF4FF 0%, #F5F7FA 55%)"
+        : "radial-gradient(1200px 600px at 50% -10%, #14142B 0%, #0B0B10 55%)",
       color: isLight ? "#1A1A2E" : "#F0F0FF",
     }}>
-      {/* Status icon */}
+      {/* Ambient gradient blob */}
       <div style={{
-        width: 80, height: 80, borderRadius: "50%",
-        background: cfg.bg,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 36, color: cfg.color,
-        marginBottom: 24,
-      }}>
-        {state === "verifying" ? (
-          <div style={{
-            width: 32, height: 32, border: `3px solid ${cfg.color}`,
-            borderTopColor: "transparent", borderRadius: "50%",
-            animation: "jcb-spin 0.8s linear infinite",
-          }} />
-        ) : cfg.icon}
+        position: "absolute", top: -120, left: "50%", transform: "translateX(-50%)",
+        width: 360, height: 360, borderRadius: "50%",
+        background: `radial-gradient(circle, rgba(${cfg.glow},0.18) 0%, transparent 70%)`,
+        filter: "blur(20px)", pointerEvents: "none", transition: "background 0.5s ease",
+      }} />
+
+      {/* Status icon with pulse ring */}
+      <div style={{ position: "relative", marginTop: 8, marginBottom: 22 }}>
+        <div style={{
+          position: "absolute", inset: -10, borderRadius: "50%",
+          border: `2px solid rgba(${cfg.glow},0.35)`,
+          animation: state === "verifying" ? "none" : "jcb-pulse 2s ease-out infinite",
+        }} />
+        <div style={{
+          width: 92, height: 92, borderRadius: "50%",
+          background: isLight ? "#fff" : "rgba(255,255,255,0.04)",
+          boxShadow: `0 10px 40px rgba(${cfg.glow},0.35), inset 0 0 0 1px rgba(${cfg.glow},0.25)`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 40, color: cfg.color,
+          animation: "jcb-pop 0.5s cubic-bezier(0.34,1.56,0.64,1)",
+        }}>
+          {state === "verifying" ? (
+            <div style={{
+              width: 34, height: 34, border: `3px solid ${cfg.color}`,
+              borderTopColor: "transparent", borderRadius: "50%",
+              animation: "jcb-spin 0.8s linear infinite",
+            }} />
+          ) : cfg.icon}
+        </div>
       </div>
 
       {/* Title */}
       <h2 style={{
-        fontSize: "1.3rem", fontWeight: 700, marginBottom: 8,
+        fontSize: "1.5rem", fontWeight: 800, marginBottom: 8, letterSpacing: -0.4,
         color: cfg.color, textAlign: "center",
       }}>
         {state === "verifying" ? "Verifying Payment" :
@@ -283,141 +274,68 @@ const JuspayCallbackScreen = () => {
          state === "pending" ? "Payment Pending" : "Transaction Failed"}
       </h2>
 
-      {/* Failure reason message */}
+      {/* Message */}
       <p style={{
-        fontSize: "0.9rem", color: isLight ? "#6B7280" : "#9CA3C0", textAlign: "center",
-        maxWidth: 360, lineHeight: 1.6, marginBottom: 8,
+        fontSize: "0.92rem", color: isLight ? "#6B7280" : "#9CA3C0", textAlign: "center",
+        maxWidth: 340, lineHeight: 1.6, marginBottom: 22,
       }}>
         {message}
       </p>
 
-      {/* Transaction details */}
+      {/* Transaction details card */}
       {(txnId || paymentCtx) && (
         <div style={{
-          width: "100%",
-          maxWidth: 360,
-          background: isLight ? "#FFFFFF" : "rgba(255,255,255,0.04)",
-          border: isLight ? "1px solid #E5E7EB" : "1px solid rgba(255,255,255,0.08)",
-          borderRadius: 10,
-          padding: "12px 16px",
+          width: "100%", maxWidth: 380,
+          background: isLight ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.04)",
+          backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+          border: isLight ? "1px solid rgba(0,0,0,0.06)" : "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 18,
+          padding: "6px 18px 14px",
+          boxShadow: isLight ? "0 12px 40px rgba(20,40,80,0.08)" : "0 12px 40px rgba(0,0,0,0.4)",
           marginBottom: 24,
         }}>
-          {paymentCtx?.mobile && (
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <span style={{ fontSize: "0.82rem", color: isLight ? "#6B7280" : "#6B7394" }}>Mobile</span>
-              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: isLight ? "#1A1A2E" : "#F0F0FF" }}>{paymentCtx.mobile}</span>
-            </div>
-          )}
-          {paymentCtx?.operatorName && (
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <span style={{ fontSize: "0.82rem", color: isLight ? "#6B7280" : "#6B7394" }}>Operator</span>
-              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: isLight ? "#1A1A2E" : "#F0F0FF" }}>{paymentCtx.operatorName}</span>
-            </div>
-          )}
-          {paymentCtx?.amount && (
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <span style={{ fontSize: "0.82rem", color: isLight ? "#6B7280" : "#6B7394" }}>Amount</span>
-              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: isLight ? "#1A1A2E" : "#F0F0FF" }}>{"\u20B9"}{paymentCtx.amount}</span>
-            </div>
-          )}
-          {txnId && (
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontSize: "0.82rem", color: isLight ? "#6B7280" : "#6B7394" }}>Order ID</span>
-              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: isLight ? "#1A1A2E" : "#F0F0FF" }}>{txnId}</span>
-            </div>
-          )}
+          {paymentCtx?.mobile && detailRow("Mobile", paymentCtx.mobile)}
+          {paymentCtx?.operatorName && detailRow("Operator", paymentCtx.operatorName)}
+          {paymentCtx?.amount && detailRow("Amount", `₹${paymentCtx.amount}`)}
+          {txnId && detailRow("Order ID", txnId)}
         </div>
       )}
 
-      {/* Action buttons for failed transactions - only show refund options if payment was made */}
+      {/* Refund notice for failed + paid transactions.
+          UPI-funded recharge failures are auto-refunded to the original payment source
+          by the backend, so we no longer offer a wallet/source choice here (it would be
+          rejected as "already refunded"). Just inform the customer. */}
       {state === "failed" && isPaid && (
-        <div style={{ width: "100%", maxWidth: 460 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
-            <button
-              onClick={() => handleRefundRequest("wallet")}
-              disabled={Boolean(refundLoadingType)}
-              style={{
-                padding: "12px 18px", borderRadius: 10, width: "100%",
-                background: "linear-gradient(135deg, #00B894 0%, #00D2A0 100%)",
-                border: "none",
-                color: "#fff",
-                cursor: refundLoadingType ? "not-allowed" : "pointer",
-                opacity: refundLoadingType ? 0.7 : 1,
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                fontSize: "0.9rem", fontWeight: 700,
-              }}
-            >
-              {refundLoadingType === "wallet" ? "Processing..." : "Refund to Wallet (Immediate)"}
-            </button>
-
-            <button
-              onClick={() => handleRefundRequest("bank")}
-              disabled={Boolean(refundLoadingType)}
-              style={{
-                padding: "12px 18px", borderRadius: 10, width: "100%",
-                background: "linear-gradient(135deg, #4C6FFF 0%, #6C8BFF 100%)",
-                border: "none",
-                color: "#fff",
-                cursor: refundLoadingType ? "not-allowed" : "pointer",
-                opacity: refundLoadingType ? 0.7 : 1,
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                fontSize: "0.9rem", fontWeight: 700,
-              }}
-            >
-              {refundLoadingType === "bank" ? "Processing..." : "Refund to Original Source (Upto 3 Days)"}
-            </button>
+        <div style={{ width: "100%", maxWidth: 380 }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 12,
+            padding: "14px 16px", borderRadius: 14,
+            background: isLight ? "rgba(76,111,255,0.08)" : "rgba(76,111,255,0.12)",
+            border: isLight ? "1px solid rgba(76,111,255,0.18)" : "1px solid rgba(76,111,255,0.28)",
+          }}>
+            <FaUniversity style={{ fontSize: 20, color: "#4C6FFF", flexShrink: 0 }} />
+            <span style={{ fontSize: "0.85rem", lineHeight: 1.5, color: isLight ? "#3A4A7A" : "#AEB9E8" }}>
+              The amount will be refunded to your original payment source within 3 working days.
+            </span>
           </div>
-
-          {/* Refund status message - shown directly below buttons */}
-          {refundMessage && (
-            <div style={{
-              marginTop: 16,
-              padding: "14px 16px",
-              borderRadius: 12,
-              background: refundMessageType === "success"
-                ? "rgba(0, 200, 83, 0.1)"
-                : "rgba(255, 107, 107, 0.1)",
-              border: `1px solid ${refundMessageType === "success" ? "rgba(0, 200, 83, 0.3)" : "rgba(255, 107, 107, 0.3)"}`,
-            }}>
-              <p style={{
-                margin: 0,
-                fontSize: "0.88rem",
-                lineHeight: 1.5,
-                color: refundMessageType === "success" ? "#00C853" : "#FF6B6B",
-                textAlign: "center",
-              }}>
-                {refundMessage}
-              </p>
-            </div>
-          )}
         </div>
       )}
 
       {/* Action buttons for pending transactions */}
       {state === "pending" && (
-        <div style={{ display: "flex", gap: 12, width: "100%", maxWidth: 400, marginTop: 16 }}>
-          <button
-            onClick={() => navigate("/customer/app/services", { replace: true })}
-            style={{
-              flex: 1, padding: "14px 20px", borderRadius: 12,
-              background: isLight ? "#fff" : "rgba(255,255,255,0.08)",
-              border: isLight ? "1px solid #E5E7EB" : "1px solid rgba(255,255,255,0.12)",
-              color: isLight ? "#1A1A2E" : "#F0F0FF",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              fontSize: "0.95rem", fontWeight: 600, cursor: "pointer",
-            }}
-          >
+        <div style={{ display: "flex", gap: 12, width: "100%", maxWidth: 380, marginTop: 8 }}>
+          <button onClick={goHome} style={secondaryBtnStyle(isLight)}>
             <FaHome /> Go To Home
           </button>
           <button
             onClick={() => navigate("/customer/app/history", { replace: true })}
             style={{
-              flex: 1, padding: "14px 20px", borderRadius: 12,
+              flex: 1, padding: "14px 20px", borderRadius: 14,
               background: "linear-gradient(135deg, #007BFF 0%, #00BFFF 100%)",
-              border: "none",
-              color: "#fff",
+              border: "none", color: "#fff",
+              boxShadow: "0 8px 24px rgba(0,123,255,0.35)",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              fontSize: "0.95rem", fontWeight: 600, cursor: "pointer",
+              fontSize: "0.95rem", fontWeight: 700, cursor: "pointer",
             }}
           >
             <FaHistory /> Check Status
@@ -425,27 +343,32 @@ const JuspayCallbackScreen = () => {
         </div>
       )}
 
-      {/* Go To Home button for failed transactions */}
+      {/* Go To Home for failed transactions */}
       {state === "failed" && (
-        <button
-          onClick={() => navigate("/customer/app/services", { replace: true })}
-          style={{
-            marginTop: 20, padding: "14px 24px", borderRadius: 12,
-            background: isLight ? "#fff" : "rgba(255,255,255,0.08)",
-            border: isLight ? "1px solid #E5E7EB" : "1px solid rgba(255,255,255,0.12)",
-            color: isLight ? "#1A1A2E" : "#F0F0FF",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-            fontSize: "0.95rem", fontWeight: 600, cursor: "pointer",
-            width: "100%", maxWidth: 400,
-          }}
-        >
+        <button onClick={goHome} style={{ ...secondaryBtnStyle(isLight), maxWidth: 380, marginTop: 20 }}>
           <FaHome /> Go To Home
         </button>
       )}
 
-      <style>{`@keyframes jcb-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        @keyframes jcb-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes jcb-pop { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes jcb-pulse { 0% { transform: scale(1); opacity: 0.7; } 100% { transform: scale(1.45); opacity: 0; } }
+        @keyframes jcb-fade { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes jcb-modal { 0% { transform: scale(0.85) translateY(12px); opacity: 0; } 100% { transform: scale(1) translateY(0); opacity: 1; } }
+        @keyframes jcb-countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+      `}</style>
     </div>
   );
 };
+
+const secondaryBtnStyle = (isLight) => ({
+  flex: 1, padding: "14px 20px", borderRadius: 14, width: "100%",
+  background: isLight ? "#fff" : "rgba(255,255,255,0.06)",
+  border: isLight ? "1px solid rgba(0,0,0,0.08)" : "1px solid rgba(255,255,255,0.12)",
+  color: isLight ? "#1A1A2E" : "#F0F0FF",
+  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+  fontSize: "0.95rem", fontWeight: 700, cursor: "pointer",
+});
 
 export default JuspayCallbackScreen;
