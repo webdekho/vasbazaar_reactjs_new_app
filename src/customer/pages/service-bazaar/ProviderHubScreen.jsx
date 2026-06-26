@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaPlus, FaCamera } from "react-icons/fa";
 import { serviceBazaarService } from "../../services/serviceBazaarService";
+import { queueService } from "../../services/queueService";
 import { useToast } from "../../context/ToastContext";
 import "./service-bazaar.css";
 
@@ -28,6 +29,8 @@ export default function ProviderHubScreen() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [queueEnabled, setQueueEnabled] = useState(false);
+  const [queueBusy, setQueueBusy] = useState(false);
 
   const [pForm, setPForm] = useState({
     providerName: "", businessName: "", headline: "", about: "",
@@ -38,7 +41,7 @@ export default function ProviderHubScreen() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef(null);
   const [offeringModal, setOfferingModal] = useState(false);
-  const emptyOfferingForm = { id: null, title: "", description: "", basePrice: "", durationMinutes: "", serviceableArea: "", serviceRadiusKm: "" };
+  const emptyOfferingForm = { id: null, title: "", categoryId: "", description: "", basePrice: "", durationMinutes: "", serviceableArea: "", serviceRadiusKm: "" };
   const [oForm, setOForm] = useState(emptyOfferingForm);
 
   const load = useCallback(async () => {
@@ -51,6 +54,7 @@ export default function ProviderHubScreen() {
     if (profRes.success && profRes.data) {
       const p = profRes.data;
       setProfile(p);
+      setQueueEnabled(!!p.queueEnabled);
       setPForm({
         providerName: p.providerName || "", businessName: p.businessName || "",
         headline: p.headline || "", about: p.about || "",
@@ -104,6 +108,20 @@ export default function ProviderHubScreen() {
     } else showToast(res.message || "Upload failed", "error");
   };
 
+  const toggleQueue = async (next) => {
+    setQueueBusy(true);
+    setQueueEnabled(next); // optimistic
+    const res = await queueService.setQueueEnabled(next);
+    setQueueBusy(false);
+    if (res.success) {
+      setProfile((p) => (p ? { ...p, queueEnabled: next } : p));
+      showToast(next ? "Live queue enabled — customers can now see it" : "Live queue disabled", "success");
+    } else {
+      setQueueEnabled(!next); // revert
+      showToast(res.message || "Could not update queue setting", "error");
+    }
+  };
+
   const saveProfile = async () => {
     if (!pForm.providerName.trim()) { showToast("Name is required", "error"); return; }
     setBusy(true);
@@ -126,6 +144,7 @@ export default function ProviderHubScreen() {
     const payload = {
       ...(oForm.id ? { id: oForm.id } : {}),
       title: oForm.title,
+      categoryId: oForm.categoryId ? { id: Number(oForm.categoryId) } : null,
       description: oForm.description,
       basePrice: oForm.basePrice ? Number(oForm.basePrice) : 0,
       durationMinutes: oForm.durationMinutes ? Number(oForm.durationMinutes) : null,
@@ -197,6 +216,29 @@ export default function ProviderHubScreen() {
         <button className={`sb-tab ${tab === "jobs" ? "active" : ""}`} onClick={() => setTab("jobs")} disabled={!profile}>Job Requests</button>
       </div>
 
+      {profile && (
+        <div className="sb-queue-toggle">
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p className="sb-queue-toggle-title">Live token queue</p>
+            <p className="sb-card-meta" style={{ margin: 0 }}>
+              {queueEnabled
+                ? "On — customers can see your live queue and pull a token."
+                : "Off — the queue is hidden from customers."}
+            </p>
+          </div>
+          <label className="sb-switch" aria-label="Toggle live queue">
+            <input type="checkbox" checked={queueEnabled} disabled={queueBusy} onChange={(e) => toggleQueue(e.target.checked)} />
+            <span className="sb-switch-slider" />
+          </label>
+        </div>
+      )}
+
+      {profile && profile.status === "APPROVED" && queueEnabled && (
+        <button className="sb-btn ghost block" style={{ marginBottom: 10 }} onClick={() => navigate("/customer/app/service-bazaar/queue-manage")}>
+          Manage live queue
+        </button>
+      )}
+
       {tab === "profile" && (
         <div className="sb-section sb-profile-form">
           {!profile && <p className="sb-card-meta" style={{ marginBottom: 12 }}>Create your provider profile to start earning. It goes live after VasBazaar approval.</p>}
@@ -214,12 +256,6 @@ export default function ProviderHubScreen() {
           </div>
           <div className="sb-field"><label>Your name *</label><input value={pForm.providerName} onChange={(e) => setPForm({ ...pForm, providerName: e.target.value })} /></div>
           <div className="sb-field"><label>Business name</label><input value={pForm.businessName} onChange={(e) => setPForm({ ...pForm, businessName: e.target.value })} /></div>
-          <div className="sb-field"><label>Category</label>
-            <select value={pForm.categoryId} onChange={(e) => setPForm({ ...pForm, categoryId: e.target.value })}>
-              <option value="">Select category</option>
-              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
           <div className="sb-field"><label>Headline</label><input value={pForm.headline} onChange={(e) => setPForm({ ...pForm, headline: e.target.value })} placeholder="e.g. Bridal makeup specialist, 8 yrs" /></div>
           <div className="sb-field sb-col-full"><label>About</label><textarea rows={3} value={pForm.about} onChange={(e) => setPForm({ ...pForm, about: e.target.value })} /></div>
           <div className="sb-field"><label>City</label><input value={pForm.city} onChange={(e) => setPForm({ ...pForm, city: e.target.value })} /></div>
@@ -270,6 +306,7 @@ export default function ProviderHubScreen() {
                 setOForm({
                   id: o.id,
                   title: o.title || "",
+                  categoryId: o.categoryId?.id || "",
                   description: o.description || "",
                   basePrice: o.basePrice != null ? String(o.basePrice) : "",
                   durationMinutes: o.durationMinutes != null ? String(o.durationMinutes) : "",
@@ -351,6 +388,12 @@ export default function ProviderHubScreen() {
             <h3 style={{ marginTop: 0 }}>{oForm.id ? "Edit Service" : "Add a Service"}</h3>
             {oForm.id && <p className="sb-card-meta" style={{ marginTop: -6, marginBottom: 12 }}>Editing resubmits this service for approval.</p>}
             <div className="sb-field"><label>Title *</label><input value={oForm.title} onChange={(e) => setOForm({ ...oForm, title: e.target.value })} placeholder="e.g. Bridal makeup at home" /></div>
+            <div className="sb-field"><label>Category</label>
+              <select value={oForm.categoryId} onChange={(e) => setOForm({ ...oForm, categoryId: e.target.value })}>
+                <option value="">Select category</option>
+                {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
             <div className="sb-field"><label>Description</label><textarea rows={2} value={oForm.description} onChange={(e) => setOForm({ ...oForm, description: e.target.value })} /></div>
             <div className="sb-field"><label>Price (₹)</label><input type="number" value={oForm.basePrice} onChange={(e) => setOForm({ ...oForm, basePrice: e.target.value })} /></div>
             <div className="sb-field"><label>Duration (min)</label><input type="number" value={oForm.durationMinutes} onChange={(e) => setOForm({ ...oForm, durationMinutes: e.target.value })} /></div>

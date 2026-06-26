@@ -102,12 +102,35 @@ export const resibotService = {
   },
   addExpense: (payload) => authPost(`${RESIBOT_BASE}/expense/add`, payload),
   deleteExpense: (id) => authDelete(`${RESIBOT_BASE}/expense/${id}`),
+
+  // ---- Expense Automation: invoice OCR / bank SMS / Gmail / WhatsApp ingestion ----
+  // body: { channel: "SMS|OCR|EMAIL|WHATSAPP", rawText, fileUrl }
+  ingestExpense: (payload) => authPost(`${RESIBOT_BASE}/expense/ingest`, payload),
+  listIngestions: (status) => authGet(`${RESIBOT_BASE}/expense/ingest`, status ? { status } : {}),
+  confirmIngestion: (id, corrections) => authPost(`${RESIBOT_BASE}/expense/ingest/${id}/confirm`, corrections || {}),
+  ignoreIngestion: (id) => authPost(`${RESIBOT_BASE}/expense/ingest/${id}/ignore`, {}),
 };
 
 export const RESIBOT_ORDER_VENDORS = ["Amazon", "Flipkart", "Myntra", "Ajio", "Blinkit", "Instamart", "Local", "Other"];
 export const RESIBOT_ORDER_STATUSES = ["ORDERED", "PACKED", "SHIPPED", "OUT_FOR_DELIVERY", "DELIVERED", "INSTALLED"];
 export const RESIBOT_ORDER_TRACKING = ["RETURN_INITIATED", "PICKUP_SCHEDULED", "REFUND_PENDING", "REFUND_COMPLETED"];
-export const RESIBOT_EXPENSE_CATEGORIES = ["Utilities", "Recharge", "Travel", "Shopping", "Medical", "Education", "Entertainment", "Other"];
+export const RESIBOT_EXPENSE_CATEGORIES = ["Utilities", "Recharge", "Travel", "Shopping", "Food", "Maintenance", "Medical", "Insurance", "Education", "Entertainment", "Other"];
+
+// Canonical auto-expense source types (mirror backend ExpenseAutomationServiceIMP) → display label.
+export const RESIBOT_EXPENSE_SOURCES = {
+  MANUAL: "Manual",
+  BBPS: "Bill Pay",
+  RECHARGE: "Recharge",
+  RETAIL: "Retail Bazaar",
+  SERVICE: "Service Bazaar",
+  TRAVEL: "Travel",
+  RYBBO: "RYBBO",
+  INSURANCE: "Insurance",
+  OCR: "Invoice",
+  SMS: "Bank SMS",
+  EMAIL: "Email",
+  WHATSAPP: "WhatsApp",
+};
 
 /**
  * Reminder module metadata used across Resibot 360 screens.

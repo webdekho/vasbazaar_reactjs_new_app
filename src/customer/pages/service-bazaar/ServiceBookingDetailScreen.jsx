@@ -23,6 +23,8 @@ export default function ServiceBookingDetailScreen() {
   const [otp, setOtp] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [showDispute, setShowDispute] = useState(false);
+  const [dispute, setDispute] = useState({ reason: "Service not delivered", description: "" });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,6 +51,22 @@ export default function ServiceBookingDetailScreen() {
     setBusy(false);
     if (res.success) { showToast("Booking cancelled", "success"); load(); }
     else showToast(res.message || "Could not cancel", "error");
+  };
+
+  const submitDispute = async () => {
+    setBusy(true);
+    const res = await serviceBazaarService.raiseDispute({
+      bookingId: b.id,
+      reason: dispute.reason,
+      description: dispute.description,
+    });
+    setBusy(false);
+    if (res.success) {
+      showToast("Issue reported — our team will review it", "success");
+      setShowDispute(false);
+    } else {
+      showToast(res.message || "Could not report the issue", "error");
+    }
   };
 
   const checkPayment = async () => {
@@ -167,6 +185,37 @@ export default function ServiceBookingDetailScreen() {
       )}
       {status !== "COMPLETED" && status !== "CANCELLED" && (
         <button className="sb-btn danger block" disabled={busy} onClick={cancel}>{busy ? "Cancelling…" : "Cancel Booking"}</button>
+      )}
+
+      {b.paymentStatus === "PAID" && (
+        <button className="sb-btn ghost block" style={{ marginTop: 8 }} onClick={() => setShowDispute(true)}>
+          Report an issue
+        </button>
+      )}
+
+      {showDispute && (
+        <div className="sb-modal-backdrop" onClick={() => setShowDispute(false)}>
+          <div className="sb-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>Report an issue</h3>
+            <div className="sb-field">
+              <label>Reason</label>
+              <select value={dispute.reason} onChange={(e) => setDispute({ ...dispute, reason: e.target.value })}>
+                <option>Service not delivered</option>
+                <option>Poor quality of service</option>
+                <option>Provider did not show up</option>
+                <option>Overcharged</option>
+                <option>Behaviour / safety concern</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div className="sb-field">
+              <label>Describe what happened</label>
+              <textarea rows={3} value={dispute.description} onChange={(e) => setDispute({ ...dispute, description: e.target.value })} placeholder="Add details to help us resolve faster" />
+            </div>
+            <button className="sb-btn block" disabled={busy} onClick={submitDispute}>{busy ? "Submitting…" : "Submit issue"}</button>
+            <button className="sb-btn ghost block" style={{ marginTop: 8, border: "none" }} onClick={() => setShowDispute(false)}>Cancel</button>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
-import { FaArrowLeft, FaStar, FaCheckCircle, FaMapMarkerAlt, FaShareAlt } from "react-icons/fa";
+import { FaArrowLeft, FaStar, FaCheckCircle, FaMapMarkerAlt, FaShareAlt, FaEdit, FaHeart, FaRegHeart } from "react-icons/fa";
 import { serviceBazaarService } from "../../services/serviceBazaarService";
+import { subscriptionService } from "../../services/subscriptionService";
+import { queueService } from "../../services/queueService";
+import { walletService } from "../../services/walletService";
 import { savePaymentContext, extractPaymentUrl } from "../../services/juspayService";
 import { useToast } from "../../context/ToastContext";
 import "./service-bazaar.css";
@@ -39,19 +42,110 @@ export default function ProviderProfileScreen() {
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isOwner, setIsOwner] = useState(false);
   const [bookingFor, setBookingFor] = useState(null); // offering being booked
   const [form, setForm] = useState({ scheduledAt: "", serviceAddress: "", customerNotes: "" });
   const [submitting, setSubmitting] = useState(false);
+  const [favorite, setFavorite] = useState(false);
+  const [favBusy, setFavBusy] = useState(false);
+  const [walletBalance, setWalletBalance] = useState(null);
+  const [subscribeFor, setSubscribeFor] = useState(null); // offering being subscribed
+  const [subForm, setSubForm] = useState({ frequency: "DAILY", quantity: 1, serviceAddress: "" });
+  const [queue, setQueue] = useState(null);
+  const [myToken, setMyToken] = useState(null);
+  const [queueBusy, setQueueBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await serviceBazaarService.getProviderProfile(providerId);
-    if (res.success) setData(res.data);
+    const [res, mineRes] = await Promise.all([
+      serviceBazaarService.getProviderProfile(providerId),
+      serviceBazaarService.getMyProviderProfile(),
+    ]);
+    if (res.success) { setData(res.data); setFavorite(!!res.data?.isFavorite); }
     else showToast(res.message || "Provider not available", "error");
+    // The viewer owns this profile when their own provider id matches the one on screen.
+    setIsOwner(!!(mineRes?.success && mineRes.data && String(mineRes.data.id) === String(providerId)));
     setLoading(false);
   }, [providerId, showToast]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Live queue status for this provider (token-based salons/clinics).
+  const loadQueue = useCallback(async () => {
+    const res = await queueService.getProviderQueue(providerId);
+    if (res.success) setQueue(res.data);
+    const mine = await queueService.getMyTokens();
+    if (mine.success) {
+      const t = (mine.data || []).find((x) => x.provider && String(x.provider.id) === String(providerId));
+      setMyToken(t || null);
+    }
+  }, [providerId]);
+
+  useEffect(() => { loadQueue(); }, [loadQueue]);
+
+  const joinQueue = async () => {
+    setQueueBusy(true);
+    const res = await queueService.join(providerId);
+    setQueueBusy(false);
+    if (res.success) { showToast(`You got token #${res.data?.tokenNumber}`, "success"); loadQueue(); }
+    else showToast(res.message || "Could not join queue", "error");
+  };
+
+  const leaveQueue = async () => {
+    if (!myToken) return;
+    setQueueBusy(true);
+    const res = await queueService.cancelToken(myToken.tokenId);
+    setQueueBusy(false);
+    if (res.success) { showToast("Left the queue", "success"); loadQueue(); }
+    else showToast(res.message || "Could not leave", "error");
+  };
+
+  // Pull the wallet balance when a booking modal opens, to offer pay-from-wallet.
+  useEffect(() => {
+    if (!bookingFor) return;
+    let cancelled = false;
+    walletService.getWalletBalance().then((res) => {
+      if (!cancelled && res.success) setWalletBalance(Number(res.data?.balance ?? 0));
+    });
+    return () => { cancelled = true; };
+  }, [bookingFor]);
+
+  const toggleFavorite = async () => {
+    if (favBusy) return;
+    setFavBusy(true);
+    const next = !favorite;
+    setFavorite(next); // optimistic
+    const res = next
+      ? await serviceBazaarService.addFavorite(providerId)
+      : await serviceBazaarService.removeFavorite(providerId);
+    if (!res.success) {
+      setFavorite(!next); // revert
+      showToast(res.message || "Could not update saved providers", "error");
+    } else {
+      showToast(next ? "Saved to your providers" : "Removed from saved", "success");
+    }
+    setFavBusy(false);
+  };
+
+  const submitSubscription = async () => {
+    if (!subscribeFor) return;
+    if (!subForm.serviceAddress.trim()) { showToast("Service address is required", "error"); return; }
+    setSubmitting(true);
+    const res = await subscriptionService.create({
+      serviceOfferingId: subscribeFor.id,
+      frequency: subForm.frequency,
+      quantity: Number(subForm.quantity) || 1,
+      serviceAddress: subForm.serviceAddress,
+    });
+    setSubmitting(false);
+    if (res.success) {
+      showToast("Subscription created", "success");
+      setSubscribeFor(null);
+      navigate("/customer/app/service-bazaar/subscriptions");
+    } else {
+      showToast(res.message || "Could not subscribe", "error");
+    }
+  };
 
   const shareProfile = async () => {
     const url = window.location.href;
@@ -66,7 +160,7 @@ export default function ProviderProfileScreen() {
     } catch (_) { /* user dismissed share sheet */ }
   };
 
-  const submitBooking = async () => {
+  const submitBooking = async (paymentMethod = "ONLINE") => {
     if (!bookingFor) return;
     if (!form.scheduledAt) {
       showToast("Please select a preferred date and time", "error");
@@ -84,8 +178,8 @@ export default function ProviderProfileScreen() {
       serviceAddress: form.serviceAddress,
       customerNotes: form.customerNotes,
       subtotal: bookingFor.basePrice,
-      paymentMethod: "ONLINE",
-      returnUrl: buildServiceReturnUrl(),
+      paymentMethod,
+      ...(paymentMethod === "ONLINE" ? { returnUrl: buildServiceReturnUrl() } : {}),
     };
     const res = await serviceBazaarService.createBooking(payload);
     if (!res.success) {
@@ -97,6 +191,13 @@ export default function ProviderProfileScreen() {
     const data = res.data || {};
     setBookingFor(null);
     setSubmitting(false);
+
+    // Wallet path settles instantly — straight to the booking, no gateway hop.
+    if (paymentMethod === "WALLET" || data.paymentStatus === "PAID") {
+      showToast("Booking paid from wallet", "success");
+      navigate(`/customer/app/service-bazaar/bookings/${data.bookingId}`);
+      return;
+    }
 
     const paymentUrl = extractPaymentUrl(res) || data.paymentUrl;
     if (paymentUrl) {
@@ -126,7 +227,20 @@ export default function ProviderProfileScreen() {
       <div className="sb-topbar">
         <button className="sb-back" onClick={() => navigate(-1)} aria-label="Back"><FaArrowLeft /></button>
         <h1 className="sb-title">Provider</h1>
-        <button className="sb-share" onClick={shareProfile} aria-label="Share"><FaShareAlt /></button>
+        <div style={{ display: "flex", gap: 4 }}>
+          {!isOwner && (
+            <button
+              className="sb-share"
+              onClick={toggleFavorite}
+              disabled={favBusy}
+              aria-label={favorite ? "Remove from saved" : "Save provider"}
+              style={favorite ? { color: "#ef4444" } : undefined}
+            >
+              {favorite ? <FaHeart /> : <FaRegHeart />}
+            </button>
+          )}
+          <button className="sb-share" onClick={shareProfile} aria-label="Share"><FaShareAlt /></button>
+        </div>
       </div>
 
       <div className="sb-section">
@@ -154,7 +268,40 @@ export default function ProviderProfileScreen() {
             {[p.city, p.serviceAreas].filter(Boolean).join(" • ")}
           </p>
         )}
+        {isOwner && (
+          <div style={{ marginTop: 12 }}>
+            <button className="sb-btn block" onClick={() => navigate("/customer/app/service-bazaar/provider")}>
+              <FaEdit style={{ marginRight: 6 }} /> Edit profile
+            </button>
+            <p className="sb-card-meta" style={{ marginTop: 6 }}>
+              Any edit is resubmitted to VasBazaar for approval.
+            </p>
+          </div>
+        )}
       </div>
+
+      {queue?.queueEnabled && (queue?.open || myToken) && (
+        <div className="sb-section">
+          <h3>Live queue</h3>
+          {myToken ? (
+            <>
+              <div className="sb-otp-banner" style={{ marginTop: 4 }}>
+                <p className="sb-otp-label">Your token</p>
+                <p className="sb-otp-code">#{myToken.tokenNumber}</p>
+                <p className="sb-otp-hint">
+                  Now serving #{myToken.nowServing ?? 0} • {myToken.peopleAhead} ahead • ~{myToken.estWaitMinutes} min wait
+                </p>
+              </div>
+              <button className="sb-btn ghost block" style={{ marginTop: 8 }} disabled={queueBusy} onClick={leaveQueue}>Leave queue</button>
+            </>
+          ) : queue?.open ? (
+            <>
+              <p className="sb-card-meta">Now serving #{queue.nowServing ?? 0} • {queue.waiting ?? 0} waiting • ~{queue.avgServiceMinutes} min each</p>
+              <button className="sb-btn block" style={{ marginTop: 8 }} disabled={queueBusy} onClick={joinQueue}>{queueBusy ? "Please wait…" : "Join queue (get a token)"}</button>
+            </>
+          ) : null}
+        </div>
+      )}
 
       <div className="sb-section">
         <h3>Services</h3>
@@ -172,6 +319,9 @@ export default function ProviderProfileScreen() {
               <button className="sb-btn sm" style={{ marginTop: 6 }} onClick={() => { setBookingFor(o); setForm({ scheduledAt: "", serviceAddress: "", customerNotes: "" }); }}>
                 Book
               </button>
+              <button className="sb-btn ghost sm" style={{ marginTop: 6 }} onClick={() => { setSubscribeFor(o); setSubForm({ frequency: "DAILY", quantity: 1, serviceAddress: "" }); }}>
+                Subscribe
+              </button>
             </div>
           </div>
         ))}
@@ -186,6 +336,34 @@ export default function ProviderProfileScreen() {
               {r.reviewText && <p style={{ fontSize: 13, margin: "4px 0 0" }}>{r.reviewText}</p>}
             </div>
           ))}
+        </div>
+      )}
+
+      {subscribeFor && (
+        <div className="sb-modal-backdrop" onClick={() => setSubscribeFor(null)}>
+          <div className="sb-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>Subscribe: {subscribeFor.title}</h3>
+            <p className="sb-price" style={{ marginBottom: 10 }}>₹{Number(subscribeFor.basePrice || 0).toFixed(0)} per delivery</p>
+            <div className="sb-field">
+              <label>Frequency</label>
+              <select value={subForm.frequency} onChange={(e) => setSubForm({ ...subForm, frequency: e.target.value })}>
+                <option value="DAILY">Daily</option>
+                <option value="WEEKLY">Weekly</option>
+                <option value="MONTHLY">Monthly</option>
+              </select>
+            </div>
+            <div className="sb-field">
+              <label>Quantity</label>
+              <input type="number" min={1} value={subForm.quantity} onChange={(e) => setSubForm({ ...subForm, quantity: e.target.value })} />
+            </div>
+            <div className="sb-field">
+              <label>Service address</label>
+              <textarea rows={2} value={subForm.serviceAddress} onChange={(e) => setSubForm({ ...subForm, serviceAddress: e.target.value })} placeholder="Where should it be delivered?" />
+            </div>
+            <p className="sb-card-meta" style={{ marginBottom: 10 }}>Each delivery is billed from your VasBazaar wallet. Pause, skip or cancel anytime.</p>
+            <button className="sb-btn block" disabled={submitting} onClick={submitSubscription}>{submitting ? "Please wait…" : "Start subscription"}</button>
+            <button className="sb-btn ghost block" style={{ marginTop: 8, border: "none" }} onClick={() => setSubscribeFor(null)}>Cancel</button>
+          </div>
         </div>
       )}
 
@@ -206,9 +384,28 @@ export default function ProviderProfileScreen() {
               <label>Notes (optional)</label>
               <textarea rows={2} value={form.customerNotes} onChange={(e) => setForm({ ...form, customerNotes: e.target.value })} />
             </div>
-            <button className="sb-btn block" disabled={submitting} onClick={submitBooking}>
+            <button className="sb-btn block" disabled={submitting} onClick={() => submitBooking("ONLINE")}>
               {submitting ? "Please wait…" : `Pay ₹${Number(bookingFor.basePrice || 0).toFixed(0)} online`}
             </button>
+            {(() => {
+              const price = Number(bookingFor.basePrice || 0);
+              const canWallet = walletBalance != null && walletBalance >= price;
+              return (
+                <button
+                  className="sb-btn ghost block"
+                  style={{ marginTop: 8 }}
+                  disabled={submitting || !canWallet}
+                  onClick={() => submitBooking("WALLET")}
+                  title={canWallet ? "" : "Insufficient wallet balance"}
+                >
+                  {walletBalance == null
+                    ? "Checking wallet…"
+                    : canWallet
+                      ? `Pay ₹${price.toFixed(0)} from wallet (₹${walletBalance.toFixed(0)})`
+                      : `Wallet too low (₹${walletBalance.toFixed(0)})`}
+                </button>
+              );
+            })()}
             <button className="sb-btn ghost block" style={{ marginTop: 8, border: "none" }} onClick={() => setBookingFor(null)}>Cancel</button>
           </div>
         </div>

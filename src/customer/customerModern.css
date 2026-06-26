@@ -10139,10 +10139,10 @@
 
 .cm-bc-title-logo {
   width: 83px;
-  height: 30px;
+  height: 32px;
   flex-shrink: 0;
   object-fit: contain;
-  opacity: 0.7;
+  opacity: 1;
 }
 
 /* ── Operator Card ── */
@@ -12817,10 +12817,10 @@
    26. OFFER/COUPON ENHANCED ANIMATIONS & AMOUNT IN WORDS
    ═══════════════════════════════════════════════════════════════ */
 
-/* Bharat Connect logo — 50% bigger */
+/* Bharat Connect logo — 50% bigger, then +25% */
 .cm-bc-title-logo--lg {
-  width: 83px !important;
-  height: 30px !important;
+  width: 104px !important;
+  height: 40px !important;
 }
 
 /* Amount in words */
@@ -13030,10 +13030,10 @@
 
 .xpay-bc-logo {
   width: 83px;
-  height: 30px;
+  height: 32px;
   flex-shrink: 0;
   object-fit: contain;
-  opacity: 0.7;
+  opacity: 1;
 }
 
 /* Animation helpers */
