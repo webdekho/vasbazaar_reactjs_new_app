@@ -137,6 +137,9 @@ const ServiceBazaarSavedProvidersScreen = lazy(() => import("./pages/service-baz
 const ServiceBazaarAppliancesScreen = lazy(() => import("./pages/service-bazaar/AppliancesScreen"));
 const ServiceBazaarMySubscriptionsScreen = lazy(() => import("./pages/service-bazaar/MySubscriptionsScreen"));
 const ServiceBazaarQueueManageScreen = lazy(() => import("./pages/service-bazaar/QueueManageScreen"));
+const ServiceBazaarChatScreen = lazy(() => import("./pages/service-bazaar/ChatScreen"));
+const ServiceBazaarChatInboxScreen = lazy(() => import("./pages/service-bazaar/ChatInboxScreen"));
+const ServiceBazaarProviderCrmScreen = lazy(() => import("./pages/service-bazaar/ProviderCrmScreen"));
 
 // Marketplace
 const MarketplaceHomeScreen = lazy(() => import("./pages/marketplace/MarketplaceHomeScreen"));
@@ -325,6 +328,9 @@ const CustomerModernRoutes = () => {
             <Route path="service-bazaar/appliances" element={<Suspense fallback={<RouteFallback />}><ServiceBazaarAppliancesScreen /></Suspense>} />
             <Route path="service-bazaar/subscriptions" element={<Suspense fallback={<RouteFallback />}><ServiceBazaarMySubscriptionsScreen /></Suspense>} />
             <Route path="service-bazaar/queue-manage" element={<Suspense fallback={<RouteFallback />}><ServiceBazaarQueueManageScreen /></Suspense>} />
+            <Route path="service-bazaar/messages" element={<Suspense fallback={<RouteFallback />}><ServiceBazaarChatInboxScreen /></Suspense>} />
+            <Route path="service-bazaar/chat/:threadId" element={<Suspense fallback={<RouteFallback />}><ServiceBazaarChatScreen /></Suspense>} />
+            <Route path="service-bazaar/my-business" element={<Suspense fallback={<RouteFallback />}><ServiceBazaarProviderCrmScreen /></Suspense>} />
             <Route path="service-bazaar/my-bookings" element={<Suspense fallback={<RouteFallback />}><MyServiceBookingsScreen /></Suspense>} />
             <Route path="service-bazaar/bookings/:bookingId" element={<Suspense fallback={<RouteFallback />}><ServiceBookingDetailScreen /></Suspense>} />
             <Route path="service-bazaar/payment-callback" element={<Suspense fallback={<RouteFallback />}><ServicePaymentCallbackScreen /></Suspense>} />

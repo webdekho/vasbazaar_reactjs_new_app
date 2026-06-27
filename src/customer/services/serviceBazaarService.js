@@ -107,6 +107,11 @@ export const serviceBazaarService = {
 
   providerCompleteService: (id, otp) => authPost(`${BASE}/me/provider/bookings/${id}/complete`, { otp }),
 
+  // ---- Provider CRM + revenue dashboard ----
+  getProviderRevenue: () => authGet(`${BASE}/me/provider/crm/revenue`),
+
+  getProviderCustomers: () => authGet(`${BASE}/me/provider/crm/customers`),
+
   // ---- Media ----
   uploadImage,
 };

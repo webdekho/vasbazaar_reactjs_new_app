@@ -4,6 +4,12 @@
    Adding our own 720px cap here double-constrained the layout and left
    big empty gaps on the sides. Just provide light padding. */
 .sb-page {
+  /* This stylesheet was authored against --cm-card-bg / --cm-text, but the app's
+     theme actually exposes --cm-card / --cm-ink. Without this alias the fallbacks
+     (#fff / #111) leaked through in dark mode, leaving white cards + invisible text.
+     Aliasing here fixes every Service Bazaar screen at once, both themes. */
+  --cm-card-bg: var(--cm-card, #fff);
+  --cm-text: var(--cm-ink, #111);
   padding: 12px 10px 90px;
   width: 100%;
   box-sizing: border-box;
@@ -28,6 +34,27 @@
   font-size: 18px;
   font-weight: 700;
   margin: 0;
+}
+.sb-provider-cta {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  cursor: pointer;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #6366f1);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  white-space: nowrap;
+}
+.sb-provider-cta svg { font-size: 14px; }
+@media (max-width: 420px) {
+  .sb-provider-cta span { display: none; }
+  .sb-provider-cta { padding: 8px 10px; }
 }
 .sb-sub {
   font-size: 12px;
@@ -232,6 +259,113 @@
 .sb-field {
   margin-bottom: 12px;
 }
+.sb-row-between {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+/* Offering photo gallery (provider form). */
+.sb-gallery-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sb-gallery-thumb {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.sb-gallery-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sb-gallery-del {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.sb-gallery-add {
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  border: 1px dashed rgba(127, 127, 127, 0.5);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  flex: 0 0 auto;
+}
+.sb-gallery-add:disabled { opacity: 0.5; cursor: default; }
+.sb-slot-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sb-slot-toggle input { width: auto; }
+/* Customer-facing appointment slot chips. */
+.sb-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+  margin: 8px 0;
+}
+.sb-slot-chip {
+  border: 1px solid rgba(127, 127, 127, 0.3);
+  border-radius: 10px;
+  padding: 8px 6px;
+  font-size: 12px;
+  text-align: center;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  line-height: 1.3;
+}
+.sb-slot-chip.selected {
+  border-color: #6366f1;
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  font-weight: 700;
+}
+.sb-slot-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+.sb-slot-chip .sb-slot-left { display: block; font-size: 10px; opacity: 0.7; }
+/* "Pick location on map" trigger above the service-address textarea. */
+.sb-loc-btn {
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  justify-content: center;
+  border: 1px solid rgba(99, 102, 241, 0.5);
+  border-radius: 10px;
+  padding: 9px 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #818cf8;
+  background: rgba(99, 102, 241, 0.08);
+  cursor: pointer;
+}
+.sb-loc-btn:disabled { opacity: 0.6; cursor: default; }
 .sb-field label {
   display: block;
   font-size: 12px;
@@ -251,6 +385,20 @@
   color: inherit;
   outline: none;
   box-sizing: border-box;
+}
+/* The native date/time picker icon renders black, which is invisible on the dark
+   theme. Invert it for dark mode; restore the default in light theme. */
+.sb-field input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+.sb-field input[type="date"]::-webkit-calendar-picker-indicator,
+.sb-field input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.4);
+  opacity: 0.75;
+  cursor: pointer;
+}
+.theme-light .sb-field input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+.theme-light .sb-field input[type="date"]::-webkit-calendar-picker-indicator,
+.theme-light .sb-field input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: none;
 }
 .sb-tabs {
   display: flex;
@@ -323,18 +471,15 @@
 .sb-quick::-webkit-scrollbar { display: none; }
 .sb-quick-item {
   flex: 0 0 auto;
-  width: 92px;
   scroll-snap-align: start;
-  display: flex;
-  flex-direction: column;
+  display: inline-flex;
+  flex-direction: row;
   align-items: center;
-  gap: 9px;
-  padding: 14px 8px 12px;
-  border-radius: 18px;
-  border: 1px solid rgba(127, 127, 127, 0.14);
-  background: rgba(255, 255, 255, 0.62);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  gap: 8px;
+  padding: 9px 16px 9px 11px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--qc1, #6366f1) 22%, #fff);
+  background: color-mix(in srgb, var(--qc1, #6366f1) 9%, #fff);
   color: inherit;
   cursor: pointer;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
@@ -342,41 +487,27 @@
     box-shadow 0.2s ease, border-color 0.2s ease;
 }
 .sb-quick-item:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 26px -8px rgba(16, 24, 40, 0.22);
-  border-color: rgba(127, 127, 127, 0.24);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px -10px rgba(16, 24, 40, 0.28);
 }
-.sb-quick-item:active { transform: translateY(-1px) scale(0.97); }
+.sb-quick-item:active { transform: translateY(0) scale(0.97); }
 .sb-quick-ic {
-  width: 46px;
-  height: 46px;
-  border-radius: 15px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 19px;
-  color: #fff;
-  background: linear-gradient(135deg, var(--qc1, #0ea5e9), var(--qc2, #6366f1));
-  box-shadow: 0 7px 16px -5px var(--qc2, #6366f1);
+  font-size: 14px;
+  color: var(--qc1, #6366f1);
+  background: color-mix(in srgb, var(--qc1, #6366f1) 18%, #fff);
 }
 .sb-quick-lbl {
-  font-size: 11.5px;
-  font-weight: 650;
-  line-height: 1.25;
-  text-align: center;
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
   letter-spacing: 0.1px;
-}
-.sb-quick-item.primary {
-  background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);
-  border-color: transparent;
-  box-shadow: 0 12px 24px -8px rgba(99, 102, 241, 0.55);
-}
-.sb-quick-item.primary .sb-quick-lbl { color: #fff; }
-.sb-quick-item.primary .sb-quick-ic {
-  background: rgba(255, 255, 255, 0.22);
-  box-shadow: none;
-}
-@media (prefers-color-scheme: dark) {
-  .sb-quick-item { background: rgba(255, 255, 255, 0.05); }
+  color: #1f2937;
 }
 /* Provider live-queue master switch */
 .sb-queue-toggle {
@@ -622,6 +753,55 @@
 .sb-photo-preview img { width: 100%; height: 100%; object-fit: cover; }
 .sb-photo-hint { font-size: 12px; opacity: 0.7; }
 
+/* ---- Cover / banner photo ---- */
+.sb-cover-upload { margin-bottom: 14px; }
+.sb-cover-preview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 200px;
+  border-radius: 14px;
+  background: rgba(127, 127, 127, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+}
+.sb-cover-preview img { width: 100%; height: 100%; object-fit: cover; }
+.sb-cover-placeholder {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  opacity: 0.7;
+}
+.sb-cover-edit {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+.sb-cover-edit:disabled { opacity: 0.6; cursor: default; }
+.sb-cover-banner {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 220px;
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 12px;
+  background: rgba(127, 127, 127, 0.15);
+}
+.sb-cover-banner img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
 /* ---- Share button ---- */
 .sb-share {
   margin-left: auto;
@@ -808,6 +988,7 @@
 
   /* Provider-hub profile form → two columns, with full-width spans */
   .sb-profile-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; align-items: start; }
+  .sb-profile-form > .sb-cover-upload,
   .sb-profile-form > .sb-photo-upload,
   .sb-profile-form > .sb-card-meta,
   .sb-profile-form > .sb-btn,
@@ -818,4 +999,176 @@
 
 @media (min-width: 1180px) {
   .sb-results { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* ===================== Verification tiers + trust badges ===================== */
+.sb-tier {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 999px;
+  letter-spacing: 0.2px;
+}
+.sb-tier.sm { font-size: 10px; padding: 1px 7px; margin-left: 6px; }
+.sb-tier.silver { background: linear-gradient(135deg, #e5e7eb, #cbd5e1); color: #475569; }
+.sb-tier.gold { background: linear-gradient(135deg, #fde68a, #fbbf24); color: #92400e; }
+.sb-tier.pro { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; }
+.sb-tier.bronze { background: rgba(180, 120, 80, 0.18); color: #b45309; }
+
+.sb-badge.trust { background: rgba(99, 102, 241, 0.12); color: #4f46e5; }
+.sb-badge.trust.top_rated { background: rgba(245, 158, 11, 0.15); color: #d97706; }
+.sb-badge.trust.most_booked { background: rgba(236, 72, 153, 0.14); color: #db2777; }
+.sb-badge.trust.verified { background: rgba(16, 185, 129, 0.15); color: #059669; }
+.sb-badge.trust.featured { background: rgba(139, 92, 246, 0.15); color: #7c3aed; }
+
+/* ===================== Chat ===================== */
+/* The chat thread fills its layout cell (between the app topbar and the bottom edge —
+   the bottom nav is hidden for this route) so the composer stays pinned and visible,
+   instead of forcing 100dvh which overflowed past the topbar and hid the input. */
+.cm-content:has(.sb-chat-page) { padding-bottom: 0; }
+.sb-chat-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding-bottom: 0;
+}
+.sb-chat-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sb-bubble-row { display: flex; justify-content: flex-start; }
+.sb-bubble-row.mine { justify-content: flex-end; }
+.sb-bubble {
+  max-width: 78%;
+  background: rgba(127, 127, 127, 0.12);
+  border-radius: 14px 14px 14px 4px;
+  padding: 8px 11px 5px;
+}
+.sb-bubble.mine {
+  background: linear-gradient(135deg, #2563eb, #6366f1);
+  color: #fff;
+  border-radius: 14px 14px 4px 14px;
+}
+.sb-bubble-text { margin: 0; font-size: 14px; line-height: 1.35; white-space: pre-wrap; word-break: break-word; }
+.sb-bubble-time { display: block; font-size: 10px; opacity: 0.65; text-align: right; margin-top: 2px; }
+.sb-bubble-img { max-width: 200px; border-radius: 10px; display: block; margin-bottom: 4px; }
+.sb-bubble-file { color: inherit; text-decoration: underline; font-size: 13px; }
+.sb-chat-composer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 2px calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(127, 127, 127, 0.16);
+}
+.sb-chat-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid rgba(127, 127, 127, 0.25);
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 14px;
+  background: rgba(127, 127, 127, 0.06);
+  outline: none;
+}
+.sb-chat-attach, .sb-chat-send {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 16px;
+}
+.sb-chat-attach { background: rgba(127, 127, 127, 0.12); color: var(--cm-text, #374151); }
+.sb-chat-send { background: linear-gradient(135deg, #2563eb, #6366f1); color: #fff; }
+.sb-chat-send:disabled, .sb-chat-attach:disabled { opacity: 0.5; }
+
+/* Chat inbox rows */
+.sb-chat-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 1px solid rgba(127, 127, 127, 0.14);
+  border-radius: 14px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.sb-chat-badge {
+  flex: 0 0 auto;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+
+/* ===================== Provider CRM + revenue ===================== */
+.sb-crm-hero {
+  border-radius: 16px;
+  padding: 18px;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, #1e3a8a, #6366f1);
+  color: #fff;
+}
+.sb-crm-hero-label { margin: 0; font-size: 12px; opacity: 0.85; font-weight: 600; }
+.sb-crm-hero-value { margin: 4px 0 2px; font-size: 30px; font-weight: 800; }
+.sb-crm-hero-sub { margin: 0; font-size: 12px; opacity: 0.8; }
+.sb-crm-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.sb-crm-card {
+  border: 1px solid rgba(127, 127, 127, 0.16);
+  border-radius: 12px;
+  padding: 12px 8px;
+  text-align: center;
+}
+.sb-crm-card-v { margin: 0; font-size: 16px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
+.sb-crm-card-l { margin: 2px 0 0; font-size: 11px; opacity: 0.65; font-weight: 600; }
+.sb-crm-stats { display: flex; flex-wrap: wrap; gap: 8px; }
+.sb-crm-stat {
+  flex: 1 1 60px;
+  text-align: center;
+  font-size: 11px;
+  opacity: 0.75;
+  font-weight: 600;
+}
+.sb-crm-stat span {
+  display: block;
+  font-size: 20px;
+  font-weight: 800;
+  opacity: 1;
+  color: var(--cm-text, #111);
+}
+.sb-pill-repeat {
+  margin-left: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #059669;
+  vertical-align: middle;
 }

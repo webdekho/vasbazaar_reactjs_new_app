@@ -14,15 +14,38 @@ const typeColorMap = {
 
 const defaultTypeColor = { border: "#40E0D0", bg: "rgba(64, 224, 208, 0.04)", iconBg: "linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03))", color: "#40E0D0" };
 
-const timeAgo = (timestamp) => {
-  if (!timestamp) return "";
-  const diff = (Date.now() - new Date(timestamp).getTime()) / 1000;
+// Jackson serializes java.time as ISO strings by default, but can also emit
+// numeric arrays ([y,m,d] / [h,m,s]) when write-dates-as-timestamps is on.
+const arrToIsoDate = (a) =>
+  `${a[0]}-${String(a[1]).padStart(2, "0")}-${String(a[2]).padStart(2, "0")}`;
+const arrToIsoTime = (a) =>
+  `${String(a[0] || 0).padStart(2, "0")}:${String(a[1] || 0).padStart(2, "0")}:${String(a[2] || 0).padStart(2, "0")}`;
+
+// Resolve a full, parseable timestamp from the announcement record.
+// `time`/`createdTime` alone are LocalTime values and must NOT be used standalone
+// (they produce "Invalid Date").
+const resolveTimestamp = (item) => {
+  if (item.schedule) return Array.isArray(item.schedule) ? null : item.schedule; // LocalDateTime
+  if (item.createdDate) {
+    const date = Array.isArray(item.createdDate) ? arrToIsoDate(item.createdDate) : item.createdDate;
+    const rawTime = item.createdTime || item.time;
+    const time = Array.isArray(rawTime) ? arrToIsoTime(rawTime) : (rawTime || "00:00:00");
+    return `${date}T${time}`;
+  }
+  return item.timestamp || item.date || null;
+};
+
+const timeAgo = (raw) => {
+  if (!raw) return "";
+  const ms = new Date(raw).getTime();
+  if (Number.isNaN(ms)) return "";
+  const diff = (Date.now() - ms) / 1000;
   if (diff < 60) return "Just now";
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   if (diff < 172800) return "Yesterday";
   if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-  return new Date(timestamp).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  return new Date(ms).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 };
 
 const SkeletonCard = ({ delay = 0 }) => (
@@ -114,7 +137,7 @@ const NotificationsScreen = () => {
                   <div className="nt-card-body">
                     <div className="nt-card-top">
                       <div className="nt-card-title">{item.title || "Notification"}</div>
-                      <span className="nt-card-time">{timeAgo(item.timestamp || item.time || item.date)}</span>
+                      <span className="nt-card-time">{timeAgo(resolveTimestamp(item))}</span>
                     </div>
                     <div className="nt-card-msg">{item.message || item.body || "New update"}</div>
                     {item.cnf?.name && <div className="nt-card-from"><FaUser size={9} /> {item.cnf.name}</div>}

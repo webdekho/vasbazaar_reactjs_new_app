@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { FaArrowLeft, FaCheck } from "react-icons/fa";
+import { FaArrowLeft, FaCheck, FaComments } from "react-icons/fa";
 import { serviceBazaarService } from "../../services/serviceBazaarService";
+import { serviceChatService } from "../../services/serviceChatService";
 import { useToast } from "../../context/ToastContext";
 import "./service-bazaar.css";
 
@@ -67,6 +68,16 @@ export default function ServiceBookingDetailScreen() {
     } else {
       showToast(res.message || "Could not report the issue", "error");
     }
+  };
+
+  const messageProvider = async () => {
+    const providerId = b?.providerProfileId?.id;
+    if (!providerId) return;
+    setBusy(true);
+    const res = await serviceChatService.openThreadWithProvider(providerId);
+    setBusy(false);
+    if (res.success && res.data?.id) navigate(`/customer/app/service-bazaar/chat/${res.data.id}`);
+    else showToast(res.message || "Could not open chat", "error");
   };
 
   const checkPayment = async () => {
@@ -186,6 +197,10 @@ export default function ServiceBookingDetailScreen() {
       {status !== "COMPLETED" && status !== "CANCELLED" && (
         <button className="sb-btn danger block" disabled={busy} onClick={cancel}>{busy ? "Cancelling…" : "Cancel Booking"}</button>
       )}
+
+      <button className="sb-btn ghost block" style={{ marginTop: 8 }} disabled={busy} onClick={messageProvider}>
+        <FaComments style={{ marginRight: 6 }} /> Message provider
+      </button>
 
       {b.paymentStatus === "PAID" && (
         <button className="sb-btn ghost block" style={{ marginTop: 8 }} onClick={() => setShowDispute(true)}>

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaSearch, FaStar, FaCheckCircle, FaStore, FaCalendarCheck, FaMapMarkerAlt, FaHeart, FaShieldAlt, FaSyncAlt } from "react-icons/fa";
+import { FaArrowLeft, FaSearch, FaStar, FaCheckCircle, FaStore, FaCalendarCheck, FaMapMarkerAlt, FaHeart, FaShieldAlt, FaSyncAlt, FaComments } from "react-icons/fa";
 import { serviceBazaarService } from "../../services/serviceBazaarService";
+import { TierChip, TrustBadges } from "./TrustBadges";
 import { useToast } from "../../context/ToastContext";
 import "./service-bazaar.css";
 
@@ -100,6 +101,9 @@ export default function ServiceBazaarHomeScreen() {
             <FaArrowLeft />
           </button>
           <h1 className="sb-title">Service Bazaar</h1>
+          <button className="sb-provider-cta" onClick={() => navigate("/customer/app/service-bazaar/provider")}>
+            <FaStore /> <span>Become a Provider</span>
+          </button>
         </div>
         <div className="sb-hero">
           <span className="sb-hero-eyebrow"><FaCheckCircle /> Verified local pros</span>
@@ -163,9 +167,9 @@ export default function ServiceBazaarHomeScreen() {
           <span className="sb-quick-ic"><FaSyncAlt /></span>
           <span className="sb-quick-lbl">Subscriptions</span>
         </button>
-        <button className="sb-quick-item primary" onClick={() => navigate("/customer/app/service-bazaar/provider")}>
-          <span className="sb-quick-ic"><FaStore /></span>
-          <span className="sb-quick-lbl">Become a Provider</span>
+        <button className="sb-quick-item" style={{ "--qc1": "#f59e0b", "--qc2": "#fbbf24" }} onClick={() => navigate("/customer/app/service-bazaar/messages")}>
+          <span className="sb-quick-ic"><FaComments /></span>
+          <span className="sb-quick-lbl">Messages</span>
         </button>
       </div>
 
@@ -218,7 +222,10 @@ export default function ServiceBazaarHomeScreen() {
               )}
             </div>
             <div className="sb-card-body">
-              <p className="sb-card-name">{p.businessName || p.providerName}</p>
+              <p className="sb-card-name">
+                {p.businessName || p.providerName}
+                <TierChip level={p.verificationLevel} size="sm" />
+              </p>
               <p className="sb-card-meta">
                 {p.headline || p.categoryId?.name || "Service provider"}
                 {p.city ? ` • ${p.city}` : ""}
@@ -235,10 +242,8 @@ export default function ServiceBazaarHomeScreen() {
                     {Number(p.ratingAvg).toFixed(1)} ({p.reviewCount || 0})
                   </span>
                 )}
-                <span className="sb-badge">
-                  <FaCheckCircle style={{ marginRight: 3, fontSize: 10 }} /> Verified
-                </span>
               </div>
+              <TrustBadges badges={p.trustBadges} max={3} />
             </div>
           </div>
         ))

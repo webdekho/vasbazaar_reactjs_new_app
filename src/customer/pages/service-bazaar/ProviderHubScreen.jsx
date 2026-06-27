@@ -35,14 +35,59 @@ export default function ProviderHubScreen() {
   const [pForm, setPForm] = useState({
     providerName: "", businessName: "", headline: "", about: "",
     categoryId: "", city: "", pincode: "", serviceAreas: "", mobile: "",
-    travelCharge: "", locationName: "", latitude: "", longitude: "", profilePhotoUrl: "",
+    travelCharge: "", locationName: "", latitude: "", longitude: "", profilePhotoUrl: "", bannerUrl: "",
   });
   const [locating, setLocating] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
   const photoInputRef = useRef(null);
+  const coverInputRef = useRef(null);
   const [offeringModal, setOfferingModal] = useState(false);
-  const emptyOfferingForm = { id: null, title: "", categoryId: "", description: "", basePrice: "", durationMinutes: "", serviceableArea: "", serviceRadiusKm: "" };
+  const emptyOfferingForm = { id: null, title: "", catL1: "", catL2: "", catL3: "", gallery: [], description: "", basePrice: "", durationMinutes: "", serviceableArea: "", serviceRadiusKm: "" };
   const [oForm, setOForm] = useState(emptyOfferingForm);
+  const offeringImgRef = useRef(null);
+  const [uploadingGallery, setUploadingGallery] = useState(false);
+
+  // Category hierarchy helpers (flat list carries parentId + level).
+  const topCategories = categories.filter((c) => c.parentId == null);
+  const childrenOf = (pid) => (pid ? categories.filter((c) => String(c.parentId) === String(pid)) : []);
+  const subOptions = childrenOf(oForm.catL1);
+  const subSubOptions = childrenOf(oForm.catL2);
+
+  // Walk a leaf category id up to its ancestors to prefill the three selects on edit.
+  const buildCategoryChain = (leafId) => {
+    const chain = { catL1: "", catL2: "", catL3: "" };
+    const path = [];
+    let node = categories.find((c) => String(c.id) === String(leafId));
+    let guard = 0;
+    while (node && guard < 5) {
+      path.unshift(node);
+      node = node.parentId ? categories.find((c) => String(c.id) === String(node.parentId)) : null;
+      guard++;
+    }
+    if (path[0]) chain.catL1 = String(path[0].id);
+    if (path[1]) chain.catL2 = String(path[1].id);
+    if (path[2]) chain.catL3 = String(path[2].id);
+    return chain;
+  };
+  const parseGallery = (g) => { try { const a = JSON.parse(g || "[]"); return Array.isArray(a) ? a : []; } catch { return []; } };
+
+  const onPickOfferingImages = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (e.target) e.target.value = "";
+    if (!files.length) return;
+    setUploadingGallery(true);
+    const urls = [];
+    for (const f of files) {
+      if (f.size > 5 * 1024 * 1024) { showToast(`${f.name} exceeds 5 MB`, "error"); continue; }
+      const res = await serviceBazaarService.uploadImage(f, "offering");
+      if (res.success && res.url) urls.push(res.url);
+      else showToast(res.message || "Upload failed", "error");
+    }
+    setUploadingGallery(false);
+    if (urls.length) setOForm((f) => ({ ...f, gallery: [...(f.gallery || []), ...urls] }));
+  };
+  const removeGalleryImage = (url) => setOForm((f) => ({ ...f, gallery: (f.gallery || []).filter((u) => u !== url) }));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -65,6 +110,7 @@ export default function ProviderHubScreen() {
         latitude: p.latitude != null ? String(p.latitude) : "",
         longitude: p.longitude != null ? String(p.longitude) : "",
         profilePhotoUrl: p.profilePhotoUrl || "",
+        bannerUrl: p.bannerUrl || "",
       });
       const offRes = await serviceBazaarService.getMyOfferings();
       if (offRes.success) setOfferings(Array.isArray(offRes.data) ? offRes.data : []);
@@ -108,6 +154,19 @@ export default function ProviderHubScreen() {
     } else showToast(res.message || "Upload failed", "error");
   };
 
+  const onPickCover = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { showToast("Max image size is 5 MB", "error"); return; }
+    setUploadingCover(true);
+    const res = await serviceBazaarService.uploadImage(file, "banner");
+    setUploadingCover(false);
+    if (res.success && res.url) {
+      setPForm((f) => ({ ...f, bannerUrl: res.url }));
+      showToast("Cover photo uploaded — remember to save", "success");
+    } else showToast(res.message || "Upload failed", "error");
+  };
+
   const toggleQueue = async (next) => {
     setQueueBusy(true);
     setQueueEnabled(next); // optimistic
@@ -139,17 +198,35 @@ export default function ProviderHubScreen() {
   };
 
   const saveOffering = async () => {
+    if (!oForm.catL1) { showToast("Please choose a category", "error"); return; }
     if (!oForm.title.trim()) { showToast("Service title is required", "error"); return; }
+    // The booked category is the deepest level the provider selected.
+    const categoryId = oForm.catL3 || oForm.catL2 || oForm.catL1;
+    // service_radius_km is DECIMAL(8,2) — guard the input so an out-of-range value
+    // surfaces as a friendly message instead of a raw SQL truncation error.
+    let radiusKm = null;
+    if (oForm.serviceRadiusKm !== "" && oForm.serviceRadiusKm != null) {
+      radiusKm = Number(oForm.serviceRadiusKm);
+      if (!Number.isFinite(radiusKm) || radiusKm < 0) {
+        showToast("Service radius must be a positive number", "error");
+        return;
+      }
+      if (radiusKm > 999999) {
+        showToast("Service radius is too large (max 999999 km)", "error");
+        return;
+      }
+    }
     setBusy(true);
     const payload = {
       ...(oForm.id ? { id: oForm.id } : {}),
       title: oForm.title,
-      categoryId: oForm.categoryId ? { id: Number(oForm.categoryId) } : null,
+      categoryId: categoryId ? { id: Number(categoryId) } : null,
+      galleryJson: oForm.gallery && oForm.gallery.length ? JSON.stringify(oForm.gallery) : null,
       description: oForm.description,
       basePrice: oForm.basePrice ? Number(oForm.basePrice) : 0,
       durationMinutes: oForm.durationMinutes ? Number(oForm.durationMinutes) : null,
       serviceableArea: oForm.serviceableArea,
-      serviceRadiusKm: oForm.serviceRadiusKm ? Number(oForm.serviceRadiusKm) : null,
+      serviceRadiusKm: radiusKm,
       pricingType: "FIXED",
     };
     const res = await serviceBazaarService.saveMyOffering(payload);
@@ -233,6 +310,17 @@ export default function ProviderHubScreen() {
         </div>
       )}
 
+      {profile && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+          <button className="sb-btn ghost" style={{ flex: 1 }} onClick={() => navigate("/customer/app/service-bazaar/my-business")}>
+            My Business
+          </button>
+          <button className="sb-btn ghost" style={{ flex: 1 }} onClick={() => navigate("/customer/app/service-bazaar/messages")}>
+            Messages
+          </button>
+        </div>
+      )}
+
       {profile && profile.status === "APPROVED" && queueEnabled && (
         <button className="sb-btn ghost block" style={{ marginBottom: 10 }} onClick={() => navigate("/customer/app/service-bazaar/queue-manage")}>
           Manage live queue
@@ -242,6 +330,19 @@ export default function ProviderHubScreen() {
       {tab === "profile" && (
         <div className="sb-section sb-profile-form">
           {!profile && <p className="sb-card-meta" style={{ marginBottom: 12 }}>Create your provider profile to start earning. It goes live after VasBazaar approval.</p>}
+          <div className="sb-cover-upload">
+            <div className="sb-cover-preview" onClick={() => coverInputRef.current?.click()}>
+              {pForm.bannerUrl
+                ? <img src={pForm.bannerUrl} alt="cover" />
+                : <span className="sb-cover-placeholder"><FaCamera /> Add cover photo</span>}
+              <button type="button" className="sb-cover-edit" onClick={(e) => { e.stopPropagation(); coverInputRef.current?.click(); }} disabled={uploadingCover}>
+                <FaCamera style={{ marginRight: 4 }} />
+                {uploadingCover ? "Uploading…" : pForm.bannerUrl ? "Change" : "Add"}
+              </button>
+            </div>
+            <p className="sb-photo-hint">A wide banner (16:9) shown at the top of your profile. Max 5 MB.</p>
+            <input ref={coverInputRef} type="file" accept="image/*" hidden onChange={onPickCover} />
+          </div>
           <div className="sb-photo-upload">
             <div className="sb-photo-preview" onClick={() => photoInputRef.current?.click()}>
               {pForm.profilePhotoUrl ? <img src={pForm.profilePhotoUrl} alt="profile" /> : <FaCamera />}
@@ -292,6 +393,9 @@ export default function ProviderHubScreen() {
           </div>
           {offerings.length === 0 ? <p className="sb-card-meta">No services yet. Add your first one.</p> : offerings.map((o) => (
             <div className="sb-offering" key={o.id}>
+              {parseGallery(o.galleryJson)[0] && (
+                <img src={parseGallery(o.galleryJson)[0]} alt={o.title} className="sb-avatar" style={{ width: 44, height: 44 }} />
+              )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p className="sb-offering-title">{o.title}</p>
                 <p className="sb-offering-desc">₹{Number(o.basePrice || 0).toFixed(0)} • <span className={`sb-status ${o.status}`} style={{ fontSize: 10 }}>{o.status}</span></p>
@@ -303,10 +407,12 @@ export default function ProviderHubScreen() {
                 )}
               </div>
               <button className="sb-btn sm ghost" onClick={() => {
+                const chain = buildCategoryChain(o.categoryId?.id);
                 setOForm({
                   id: o.id,
                   title: o.title || "",
-                  categoryId: o.categoryId?.id || "",
+                  ...chain,
+                  gallery: parseGallery(o.galleryJson),
                   description: o.description || "",
                   basePrice: o.basePrice != null ? String(o.basePrice) : "",
                   durationMinutes: o.durationMinutes != null ? String(o.durationMinutes) : "",
@@ -387,13 +493,48 @@ export default function ProviderHubScreen() {
           <div className="sb-modal" onClick={(e) => e.stopPropagation()}>
             <h3 style={{ marginTop: 0 }}>{oForm.id ? "Edit Service" : "Add a Service"}</h3>
             {oForm.id && <p className="sb-card-meta" style={{ marginTop: -6, marginBottom: 12 }}>Editing resubmits this service for approval.</p>}
-            <div className="sb-field"><label>Title *</label><input value={oForm.title} onChange={(e) => setOForm({ ...oForm, title: e.target.value })} placeholder="e.g. Bridal makeup at home" /></div>
-            <div className="sb-field"><label>Category</label>
-              <select value={oForm.categoryId} onChange={(e) => setOForm({ ...oForm, categoryId: e.target.value })}>
+
+            <div className="sb-field"><label>Category *</label>
+              <select value={oForm.catL1} onChange={(e) => setOForm({ ...oForm, catL1: e.target.value, catL2: "", catL3: "" })}>
                 <option value="">Select category</option>
-                {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {topCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
+            {subOptions.length > 0 && (
+              <div className="sb-field"><label>Sub-category</label>
+                <select value={oForm.catL2} onChange={(e) => setOForm({ ...oForm, catL2: e.target.value, catL3: "" })}>
+                  <option value="">Select sub-category</option>
+                  {subOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            )}
+            {subSubOptions.length > 0 && (
+              <div className="sb-field"><label>Sub-sub-category</label>
+                <select value={oForm.catL3} onChange={(e) => setOForm({ ...oForm, catL3: e.target.value })}>
+                  <option value="">Select sub-sub-category</option>
+                  {subSubOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            )}
+
+            <div className="sb-field">
+              <label>Photos</label>
+              <div className="sb-gallery-row">
+                {(oForm.gallery || []).map((url) => (
+                  <div className="sb-gallery-thumb" key={url}>
+                    <img src={url} alt="service" />
+                    <button type="button" className="sb-gallery-del" onClick={() => removeGalleryImage(url)} aria-label="Remove">×</button>
+                  </div>
+                ))}
+                <button type="button" className="sb-gallery-add" onClick={() => offeringImgRef.current?.click()} disabled={uploadingGallery}>
+                  {uploadingGallery ? "…" : <FaCamera />}
+                </button>
+              </div>
+              <input ref={offeringImgRef} type="file" accept="image/*" multiple hidden onChange={onPickOfferingImages} />
+              <p className="sb-photo-hint">Add one or more photos of your work. Max 5 MB each.</p>
+            </div>
+
+            <div className="sb-field"><label>Title *</label><input value={oForm.title} onChange={(e) => setOForm({ ...oForm, title: e.target.value })} placeholder="e.g. Bridal makeup at home" /></div>
             <div className="sb-field"><label>Description</label><textarea rows={2} value={oForm.description} onChange={(e) => setOForm({ ...oForm, description: e.target.value })} /></div>
             <div className="sb-field"><label>Price (₹)</label><input type="number" value={oForm.basePrice} onChange={(e) => setOForm({ ...oForm, basePrice: e.target.value })} /></div>
             <div className="sb-field"><label>Duration (min)</label><input type="number" value={oForm.durationMinutes} onChange={(e) => setOForm({ ...oForm, durationMinutes: e.target.value })} /></div>
