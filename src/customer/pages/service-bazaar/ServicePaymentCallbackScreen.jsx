@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaCheckCircle, FaTimesCircle, FaClock } from "react-icons/fa";
 import { getPaymentContext } from "../../services/juspayService";
 import { serviceBazaarService } from "../../services/serviceBazaarService";
+import { applianceService } from "../../services/applianceService";
 import { playSuccessSound } from "../../services/audioService";
 import "./service-bazaar.css";
 
@@ -27,6 +28,32 @@ export default function ServicePaymentCallbackScreen() {
 
     const verify = async () => {
       const ctx = await getPaymentContext();
+
+      // AMC online payment returns here too — reconcile and route to Appliances & AMC.
+      if (ctx?.flow === "amc" && ctx?.amcId) {
+        for (let i = 0; i < 10; i++) {
+          try {
+            const res = await applianceService.checkAmcPayment(ctx.amcId);
+            const status = String(res?.data?.paymentStatus || "").toUpperCase();
+            if (status === "PAID") {
+              setState(STATE.SUCCESS);
+              playSuccessSound().catch(() => {});
+              setTimeout(() => navigate("/customer/app/service-bazaar/appliances", { replace: true }), 1200);
+              return;
+            }
+            if (status === "FAILED") {
+              setState(STATE.FAILED);
+              setMessage("AMC payment failed. You can retry from Appliances & AMC.");
+              return;
+            }
+          } catch (_) { /* retry */ }
+          await new Promise((r) => setTimeout(r, 3000));
+        }
+        setState(STATE.PENDING);
+        setMessage("AMC payment is still processing. We'll update it once confirmed.");
+        return;
+      }
+
       const localBookingId = ctx?.bookingId || searchParams.get("bookingId");
       if (!localBookingId) {
         setState(STATE.FAILED);

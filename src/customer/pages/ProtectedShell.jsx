@@ -355,7 +355,10 @@ const ProtectedShell = () => {
   const isServiceFlowPage = location.pathname === "/customer/app/payment";
   const isQrPage = location.pathname === "/customer/app/qr";
   const isServiceSlugPage = /^\/customer\/app\/services\/[^/]+/.test(location.pathname);
-  const hideBottomNav = isServiceFlowPage || isQrPage || isServiceSlugPage || location.pathname === "/customer/app/offers" || location.pathname === "/customer/app/success";
+  // The Service Bazaar chat thread is a full-screen conversation with its own header and
+  // a composer pinned to the bottom; the app's bottom nav would otherwise cover the input.
+  const isServiceChatPage = /^\/customer\/app\/service-bazaar\/chat\//.test(location.pathname);
+  const hideBottomNav = isServiceFlowPage || isQrPage || isServiceSlugPage || isServiceChatPage || location.pathname === "/customer/app/offers" || location.pathname === "/customer/app/success";
 
   return (
     <div className={`customer-modern-protected${!sidebarOpen ? " cm-sidebar-hidden" : ""}`}>

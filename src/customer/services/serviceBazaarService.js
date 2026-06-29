@@ -70,6 +70,20 @@ export const serviceBazaarService = {
   // ---- Reviews ----
   addReview: (payload) => authPost(`${BASE}/reviews`, payload),
 
+  // ---- Disputes ----
+  raiseDispute: (payload) => authPost(`${BASE}/disputes`, payload),
+
+  getMyDisputes: ({ pageNumber = 0, pageSize = 10 } = {}) =>
+    authGet(`${BASE}/disputes`, { pageNumber, pageSize }),
+
+  // ---- Saved / favourite providers ----
+  getMyFavorites: ({ pageNumber = 0, pageSize = 20 } = {}) =>
+    authGet(`${BASE}/me/favorites`, { pageNumber, pageSize }),
+
+  addFavorite: (providerId) => authPost(`${BASE}/me/favorites/${providerId}`, {}),
+
+  removeFavorite: (providerId) => authDelete(`${BASE}/me/favorites/${providerId}`),
+
   // ---- Provider self-service ----
   getMyProviderProfile: () => authGet(`${BASE}/me/provider`),
 
@@ -92,6 +106,11 @@ export const serviceBazaarService = {
   providerStartService: (id, otp) => authPost(`${BASE}/me/provider/bookings/${id}/start`, { otp }),
 
   providerCompleteService: (id, otp) => authPost(`${BASE}/me/provider/bookings/${id}/complete`, { otp }),
+
+  // ---- Provider CRM + revenue dashboard ----
+  getProviderRevenue: () => authGet(`${BASE}/me/provider/crm/revenue`),
+
+  getProviderCustomers: () => authGet(`${BASE}/me/provider/crm/customers`),
 
   // ---- Media ----
   uploadImage,

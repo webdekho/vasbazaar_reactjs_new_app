@@ -10139,10 +10139,10 @@
 
 .cm-bc-title-logo {
   width: 83px;
-  height: 30px;
+  height: 32px;
   flex-shrink: 0;
   object-fit: contain;
-  opacity: 0.7;
+  opacity: 1;
 }
 
 /* ── Operator Card ── */
@@ -12695,10 +12695,25 @@
    the per-breakpoint overrides below only tune the look, not the aspect ratio. */
 .cm-services-page .cm-slider-slide,
 .cm-services-page .cm-slider-slide--banner,
-.cm-services-page .cm-slider-slide--text,
-.cm-services-page .cm-slider-slide--customer {
+.cm-services-page .cm-slider-slide--text {
   aspect-ratio: 16 / 9 !important;
   min-height: 0 !important;
+  height: auto !important;
+  padding-top: 0 !important;
+  align-self: stretch;
+}
+
+/* Customer card is content-driven, NOT locked to 16:9. A fixed 16:9 box is too
+   short for the card's content (name, number, guaranteed-cashback seal, balance
+   strip), so on narrow/web widths the bottom balance strip was clipped by
+   overflow:hidden. Instead the card sizes to its content with a min-height that
+   matches a 16:9 box, so it never gets shorter than the banners but always grows
+   enough to show the full balance strip. The flex track stretches every slide to
+   the tallest one, so banners (object-fit:cover) simply fill the same height — the
+   carousel height never jumps between slides. */
+.cm-services-page .cm-slider-slide--customer {
+  aspect-ratio: auto !important;
+  min-height: 200px !important;
   height: auto !important;
   padding-top: 0 !important;
   align-self: stretch;
@@ -12802,10 +12817,10 @@
    26. OFFER/COUPON ENHANCED ANIMATIONS & AMOUNT IN WORDS
    ═══════════════════════════════════════════════════════════════ */
 
-/* Bharat Connect logo — 50% bigger */
+/* Bharat Connect logo — 50% bigger, then +25% */
 .cm-bc-title-logo--lg {
-  width: 83px !important;
-  height: 30px !important;
+  width: 104px !important;
+  height: 40px !important;
 }
 
 /* Amount in words */
@@ -13015,10 +13030,10 @@
 
 .xpay-bc-logo {
   width: 83px;
-  height: 30px;
+  height: 32px;
   flex-shrink: 0;
   object-fit: contain;
-  opacity: 0.7;
+  opacity: 1;
 }
 
 /* Animation helpers */
@@ -21372,6 +21387,50 @@
   background: rgba(0,135,90,0.1);
   border-color: rgba(0,135,90,0.2);
   color: #00875A;
+}
+.sx2-notice--info {
+  background: rgba(76,111,255,0.12);
+  border: 1px solid rgba(76,111,255,0.3);
+  color: #4C6FFF;
+}
+.theme-light .sx2-notice--info {
+  background: rgba(76,111,255,0.1);
+  border-color: rgba(76,111,255,0.2);
+  color: #3A4A7A;
+}
+.sx2-redirect-hint {
+  flex-shrink: 0;
+  text-align: center;
+  margin-top: 14px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.5);
+}
+.theme-light .sx2-redirect-hint {
+  color: #8A90A2;
+}
+
+.sx2-home-btn {
+  flex-shrink: 0;
+  display: block;
+  margin: 18px auto 0;
+  padding: 12px 32px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #2EC4B6, #2E8BC0);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(46,139,192,0.32);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.sx2-home-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(46,139,192,0.42);
+}
+.sx2-home-btn:active {
+  transform: translateY(0);
 }
 
 /* Refund card */

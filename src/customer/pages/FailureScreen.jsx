@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { FaTimesCircle, FaClock, FaWallet, FaSyncAlt, FaCopy, FaUniversity, FaCheckCircle } from "react-icons/fa";
-import { authPost } from "../services/apiClient";
+import { FaTimesCircle, FaClock, FaWallet, FaSyncAlt, FaCopy, FaUniversity } from "react-icons/fa";
 import { rechargeService } from "../services/rechargeService";
 
 const MAX_POLL_ATTEMPTS = 5;
@@ -23,12 +22,8 @@ const FailureScreen = () => {
   const location = useLocation();
   const state = location.state || {};
 
-  const [refundLoading, setRefundLoading] = useState(null);
-  const [refundMessage, setRefundMessage] = useState("");
-  const [refundMessageType, setRefundMessageType] = useState("");
-  const [showRefundPopup, setShowRefundPopup] = useState(false);
   const [copied, setCopied] = useState("");
-  const refundNavTimerRef = useRef(null);
+  const [autoRedirect, setAutoRedirect] = useState(true);
 
   const initialStatus = state.status === "pending" ? "pending" : "failed";
   const [currentStatus, setCurrentStatus] = useState(initialStatus);
@@ -68,45 +63,9 @@ const FailureScreen = () => {
           : `${productLabel} failed.`
   );
 
-  const eyebrow = isPending ? "Payment Pending" : "Payment Failed";
+  const eyebrow = isPending ? "Transaction Pending" : "Transaction Failed";
   const statusLabel = isPending ? "Pending" : "Failed";
   const statusModifier = isPending ? "sx2-page--pending" : "sx2-page--failure";
-
-  const handleRefundRequest = async (refundType) => {
-    if (!txnId) {
-      setRefundMessageType("error");
-      setRefundMessage("Transaction ID not found. Please contact support.");
-      return;
-    }
-    setRefundLoading(refundType);
-    setRefundMessage("");
-    setRefundMessageType("");
-    try {
-      const response = await authPost("/api/customer/plan_recharge/request-refund", { txnId, refundType });
-      if (response.success) {
-        setRefundMessageType("success");
-        setRefundMessage(
-          refundType === "wallet"
-            ? "Wallet refund request submitted successfully."
-            : "Bank refund request submitted. May take up to 3 working days."
-        );
-        // Show confirmation popup, then auto-redirect to home after 3 seconds
-        setShowRefundPopup(true);
-        if (refundNavTimerRef.current) clearTimeout(refundNavTimerRef.current);
-        refundNavTimerRef.current = setTimeout(() => {
-          navigate("/customer/app/services", { replace: true });
-        }, 3000);
-      } else {
-        setRefundMessageType("error");
-        setRefundMessage(response.message || "Unable to submit refund request.");
-      }
-    } catch {
-      setRefundMessageType("error");
-      setRefundMessage("Unable to submit refund request.");
-    } finally {
-      setRefundLoading(null);
-    }
-  };
 
   const clearTimers = () => {
     if (pollTimerRef.current) { clearTimeout(pollTimerRef.current); pollTimerRef.current = null; }
@@ -214,10 +173,18 @@ const FailureScreen = () => {
     return () => {
       isMountedRef.current = false;
       clearTimers();
-      if (refundNavTimerRef.current) clearTimeout(refundNavTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // For a terminal failed result (refund already handled), auto-redirect to home after 10s.
+  // Pending stays put so the user can watch the status polling.
+  // If the user interacts with the page, the auto-redirect is cancelled.
+  useEffect(() => {
+    if (currentStatus !== "failed" || !autoRedirect) return undefined;
+    const t = setTimeout(() => navigate("/customer/app/services", { replace: true }), 10000);
+    return () => clearTimeout(t);
+  }, [currentStatus, autoRedirect, navigate]);
 
   const copyToClipboard = (text, label) => {
     if (!text) return;
@@ -231,7 +198,10 @@ const FailureScreen = () => {
   const showWalletRefundNotice = !isPending && isWalletPay;
 
   return (
-    <div className={`sx2-page ${statusModifier}`}>
+    <div
+      className={`sx2-page ${statusModifier}`}
+      onClick={() => autoRedirect && setAutoRedirect(false)}
+    >
       <div className="sx2-mesh" aria-hidden>
         <div className="sx2-mesh-blob sx2-mesh-blob--a" />
         <div className="sx2-mesh-blob sx2-mesh-blob--b" />
@@ -333,50 +303,25 @@ const FailureScreen = () => {
       )}
 
       {showRefundSection && (
-        <section className="sx2-refund">
-          <div className="sx2-refund-head">
-            <div className="sx2-refund-title">Request Refund</div>
-            <div className="sx2-refund-desc">If payment was deducted, choose your refund option.</div>
-          </div>
-          <div className="sx2-refund-btns">
-            <button
-              type="button"
-              className="sx2-refund-btn sx2-refund-btn--wallet"
-              onClick={() => handleRefundRequest("wallet")}
-              disabled={refundLoading !== null}
-            >
-              <FaWallet />
-              <span>{refundLoading === "wallet" ? "Processing…" : "Wallet (Instant)"}</span>
-            </button>
-            <button
-              type="button"
-              className="sx2-refund-btn sx2-refund-btn--bank"
-              onClick={() => handleRefundRequest("bank")}
-              disabled={refundLoading !== null}
-            >
-              <FaUniversity />
-              <span>{refundLoading === "bank" ? "Processing…" : "Bank (1–3 days)"}</span>
-            </button>
-          </div>
-          {refundMessage && (
-            <p className={`sx2-refund-status ${refundMessageType === "success" ? "is-success" : "is-error"}`}>
-              {refundMessage}
-            </p>
-          )}
+        <section className="sx2-notice sx2-notice--info">
+          <FaUniversity />
+          <span>The amount will be refunded to your original payment source within 3 working days.</span>
         </section>
       )}
 
-      {showRefundPopup && (
-        <div className="sx2-refund-popup-overlay" role="dialog" aria-modal="true">
-          <div className="sx2-refund-popup">
-            <div className="sx2-refund-popup-icon"><FaCheckCircle /></div>
-            <h3 className="sx2-refund-popup-title">Refund request accepted</h3>
-            <p className="sx2-refund-popup-text">
-              Your refund will be processed as soon as possible.
-            </p>
-            <p className="sx2-refund-popup-hint">Redirecting to home…</p>
-          </div>
-        </div>
+      {!isPending && (
+        <>
+          <button
+            type="button"
+            className="sx2-home-btn"
+            onClick={() => navigate("/customer/app/services", { replace: true })}
+          >
+            Go to Home
+          </button>
+          {autoRedirect && (
+            <p className="sx2-redirect-hint">Redirecting to home in 10s…</p>
+          )}
+        </>
       )}
 
       {copied && <div className="sx2-toast">Copied!</div>}

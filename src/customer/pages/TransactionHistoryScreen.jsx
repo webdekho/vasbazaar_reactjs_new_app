@@ -16,6 +16,30 @@ const statusConfig = {
   refund: { color: "#A855F7", label: "Refunded", icon: <FiCheckCircle size={11} /> },
 };
 
+// Format a refund timestamp the same way the admin panel does: Spring serializes
+// LocalDateTime as an array [y, mo, d, h, mi, ...]; also tolerate ISO strings.
+// Returns "" when there is no usable value so the badge simply omits the time.
+const fmtRefundAt = (val) => {
+  if (!val) return "";
+  try {
+    if (Array.isArray(val)) {
+      const [y, mo, d, h = 0, mi = 0] = val;
+      const p = (n) => String(n).padStart(2, "0");
+      return `${p(d)}-${p(mo)}-${y} ${p(h)}:${p(mi)}`;
+    }
+    const dt = new Date(val);
+    if (!Number.isNaN(dt.getTime())) {
+      return dt.toLocaleString("en-IN", {
+        day: "2-digit", month: "2-digit", year: "numeric",
+        hour: "2-digit", minute: "2-digit", hour12: false,
+      });
+    }
+    return String(val);
+  } catch {
+    return String(val);
+  }
+};
+
 const getStatusKey = (status) => {
   const s = (status || "").toLowerCase();
   if (s.includes("success")) return "success";
@@ -482,9 +506,17 @@ const TransactionHistoryScreen = () => {
                           }}
                         >
                           {item.refundType === "WALLET" ? (
-                            <>💰 Refunded to Wallet — check your wallet for the credit entry</>
+                            <>
+                              💰 Refunded to Wallet
+                              {fmtRefundAt(item.refundAt) ? ` · ${fmtRefundAt(item.refundAt)}` : ""}
+                              {" — check your wallet for the credit entry"}
+                            </>
                           ) : (
-                            <>🏦 Refunded to your original payment source — will reflect in 1-3 working days</>
+                            <>
+                              🏦 Refunded to Bank
+                              {fmtRefundAt(item.refundAt) ? ` · ${fmtRefundAt(item.refundAt)}` : ""}
+                              {" — will reflect in your original payment source in 1-3 working days"}
+                            </>
                           )}
                         </div>
                       </div>
