@@ -267,7 +267,7 @@ const UpcomingDuesSection = ({ dues }) => {
 const HIDDEN_CATEGORIES = new Set(["donation", "recurring deposit", "forex"]);
 
 const quickAccessItems = [
-  { label: "Bill Pay", icon: HiMiniSquares2X2, to: "#services", color: "#40E0D0", isScroll: true, iconUrl: "/images/b.png" },
+  // Bill Pay removed as per requirement
   { label: "Resibot 360", icon: FaHeartbeat, to: "/customer/app/resibot", color: "#E11D48" },
   { label: "Retail Bazaar", icon: FaStore, to: "/customer/app/marketplace", color: "#10B981" },
   { label: "Service Bazaar", icon: FaTools, to: "/customer/app/service-bazaar", color: "#0EA5E9" },

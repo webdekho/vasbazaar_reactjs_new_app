@@ -27,7 +27,8 @@ const PWA_RELOAD_SUPPRESS_MS = 5000;
 // How often to re-check version.json for a fresh deploy.
 const BUILD_POLL_MS = 10 * 60 * 1000; // 10 minutes
 
-// Module-level flag to ensure OTA check only runs ONCE per app session
+// Module-level flag to ensure OTA check only runs ONCE per app session (web only)
+// Native apps should check every time for force update scenarios
 let _otaCheckDone = false;
 
 const pwaBar = {
@@ -69,26 +70,77 @@ const secondaryBtn = {
   cursor: "pointer",
 };
 
+// Native update progress bar styles
+const nativeProgressBar = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  zIndex: 99999,
+  background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
+  padding: "12px 16px",
+  paddingTop: "max(12px, env(safe-area-inset-top))",
+  boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+};
+
+const STAGE_LABELS = {
+  checking: "Checking for updates...",
+  token: "Preparing download...",
+  downloading: "Downloading update...",
+  verifying: "Verifying update...",
+  saving: "Saving update...",
+  installing: "Installing update...",
+  redirecting: "Redirecting to store...",
+};
+
+// Module-level state setter for background updates
+let _setNativeProgress = null;
+
 const OtaUpdateGate = () => {
   const [pwaUpdate, setPwaUpdate] = useState(false);
+  const [nativeProgress, setNativeProgress] = useState({ visible: false, stage: "", progress: 0, version: "" });
 
-  // ── Native OTA check (Android/iOS only) — FORCE UPDATE (no UI) ──
-  // Runs completely in BACKGROUND - independent of component lifecycle
+  // Store setter in module-level variable so background update can use it
+  _setNativeProgress = setNativeProgress;
+
+  // ── Native OTA check (Android/iOS only) — FORCE UPDATE ──
+  // Runs on every app load for native platforms
   useEffect(() => {
-    // Use module-level flag to ensure only ONE call per session
-    if (_otaCheckDone) {
-      console.debug("[OTA] Check already done this session, skipping");
-      return;
-    }
-    _otaCheckDone = true;
+    const isNativePlatform = otaService.isNative();
 
     // Report this build's deploy time to the backend (all platforms, best-effort).
     void otaService.reportDeployTime(BUILD_TIME);
 
-    if (!otaService.isNative()) return;
+    // For web, skip if already checked this session
+    if (!isNativePlatform) {
+      if (_otaCheckDone) {
+        console.debug("[OTA] Web: Check already done this session, skipping");
+        return;
+      }
+      _otaCheckDone = true;
+      return; // Web uses version.json check instead
+    }
+
+    // Native: Always check on app load (force update scenario)
+    console.debug("[OTA] Native platform detected, starting version check...");
 
     // Background update function - runs independently of component
     const runBackgroundUpdate = async () => {
+      const showProgress = (stage, progress = 0, version = "") => {
+        if (_setNativeProgress) {
+          _setNativeProgress({ visible: true, stage, progress, version });
+        }
+      };
+
+      const hideProgress = () => {
+        if (_setNativeProgress) {
+          _setNativeProgress({ visible: false, stage: "", progress: 0, version: "" });
+        }
+      };
+
+      // Show progress immediately
+      showProgress("checking", 0);
+
       // Wait for auth token with retry
       let hasToken = false;
       for (let attempt = 1; attempt <= 5; attempt++) {
@@ -100,6 +152,7 @@ const OtaUpdateGate = () => {
 
       if (!hasToken) {
         console.debug("[OTA] No auth token after max attempts, skipping OTA check");
+        hideProgress();
         return;
       }
 
@@ -110,48 +163,89 @@ const OtaUpdateGate = () => {
 
         if (!res?.success) {
           console.debug("[OTA] Check failed:", res?.message);
+          hideProgress();
           return;
         }
 
         const info = res.data || {};
         if (!info.updateAvailable) {
           console.debug("[OTA] No update available");
+          hideProgress();
           return;
         }
 
-        console.debug("[OTA] Update available:", info.latestVersion, "- Starting BACKGROUND install...");
+        console.debug("[OTA] Update available:", info.latestVersion);
 
-        // FORCE UPDATE: Download and install in BACKGROUND - no UI dependency
+        // If isRedirect is true, redirect to app store instead of downloading APK
+        if (info.isRedirect) {
+          const platform = otaService.getPlatform();
+          let storeUrl = null;
+          if (platform === "android" && info.android) {
+            storeUrl = info.android;
+          } else if (platform === "ios" && info.ios) {
+            storeUrl = info.ios;
+          }
+
+          if (storeUrl) {
+            showProgress("redirecting", 100, info.latestVersion);
+            console.debug("[OTA] Redirecting to store:", storeUrl);
+            await new Promise(r => setTimeout(r, 1000)); // Show message briefly
+            window.open(storeUrl, "_system");
+            hideProgress();
+            return;
+          }
+          console.debug("[OTA] isRedirect=true but no store URL for platform:", platform);
+        }
+
+        console.debug("[OTA] Starting BACKGROUND install...");
+
+        // FORCE UPDATE: Download and install with progress bar
         const updateRes = await otaService.runUpdateFlow({
-          onStage: (stage) => console.debug("[OTA] Stage:", stage),
-          onProgress: (pct) => console.debug("[OTA] Progress:", pct + "%"),
+          onStage: (stage) => {
+            console.debug("[OTA] Stage:", stage);
+            showProgress(stage, stage === "downloading" ? 0 : undefined, info.latestVersion);
+          },
+          onProgress: (pct) => {
+            console.debug("[OTA] Progress:", pct + "%");
+            showProgress("downloading", pct, info.latestVersion);
+          },
         });
 
         if (!updateRes.success) {
           console.debug("[OTA] Update failed:", updateRes.message);
+          hideProgress();
           return;
         }
 
         if (updateRes.requiresStoreRedirect) {
-          console.debug("[OTA] iOS - Opening App Store...");
-          window.open("https://apps.apple.com/app/vasbazaar/id0000000000", "_system");
+          // Fallback: iOS without isRedirect (uses hardcoded URL)
+          const info2 = res.data || {};
+          const iosUrl = info2.ios || "https://apps.apple.com/in/app/vasbazaar/id6776498373";
+          showProgress("redirecting", 100, info.latestVersion);
+          console.debug("[OTA] iOS - Opening App Store...", iosUrl);
+          await new Promise(r => setTimeout(r, 1000));
+          window.open(iosUrl, "_system");
         }
 
         console.debug("[OTA] Update completed:", updateRes);
+        hideProgress();
       } catch (e) {
         console.debug("[OTA] Check error:", e.message);
+        if (_setNativeProgress) {
+          _setNativeProgress({ visible: false, stage: "", progress: 0, version: "" });
+        }
       }
     };
 
-    // Start background update after 2 seconds - runs independently
+    // Start immediately (small delay for component mount)
     setTimeout(() => {
       runBackgroundUpdate();
-    }, 2000);
+    }, 500);
 
     // NO cleanup - we WANT this to continue running even if component unmounts
   }, []);
 
-  // ── PWA version check (non-native) — uses same server API as native ──
+  // ── PWA version check (non-native) — only uses version.json, no OTA API ──
   useEffect(() => {
     if (otaService.isNative()) return;
 
@@ -166,36 +260,8 @@ const OtaUpdateGate = () => {
       sessionStorage.removeItem(PWA_RELOADING_KEY);
     } catch {}
     const recentlyReloaded = () => reloadedAt > 0 && Date.now() - reloadedAt < PWA_RELOAD_SUPPRESS_MS;
-    const checkPwa = async () => {
-      try {
-        const res = await otaService.checkUpdate();
-        if (cancelled) return;
-        if (!res?.success) return;
 
-        const info = res.data || {};
-        if (!info.updateAvailable) return;
-
-        const forced = String(info.forceUpdate).toLowerCase() === "true";
-
-        // Honor user "Later" choice unless it's a force update
-        try {
-          const skipped = JSON.parse(localStorage.getItem(PWA_SKIPPED_KEY) || "null");
-          if (!forced && skipped && skipped.version === info.latestVersion) {
-            if (Date.now() - (skipped.at || 0) < SKIP_COOLDOWN_MS) return;
-          }
-        } catch {}
-
-        setPwaUpdate({
-          version: info.latestVersion,
-          forced,
-          releaseNotes: info.releaseNotes
-        });
-      } catch (e) {
-        // Silently ignore - network errors are expected offline
-        console.debug("PWA version check skipped:", e.message);
-      }
-    };
-
+    // Web platform: No OTA API call needed - just check version.json for new builds
     // Deploy-driven check: compare the served version.json buildId to the one
     // compiled into THIS bundle. They differ only after a new deploy is live —
     // which is exactly when we want the "new version" bar. No server config
@@ -216,9 +282,8 @@ const OtaUpdateGate = () => {
       }
     };
 
-    // Delay the checks to let the app fully load first
-    const timer = setTimeout(checkPwa, 3000);
-    const buildTimer = setTimeout(checkBuild, 3500);
+    // Delay the check to let the app fully load first
+    const buildTimer = setTimeout(checkBuild, 3000);
     const buildInterval = setInterval(checkBuild, BUILD_POLL_MS);
     // Re-check whenever the user returns to the tab/app (common after a deploy).
     const onVisible = () => { if (document.visibilityState === "visible") checkBuild(); };
@@ -246,7 +311,6 @@ const OtaUpdateGate = () => {
 
     return () => {
       cancelled = true;
-      clearTimeout(timer);
       clearTimeout(buildTimer);
       clearInterval(buildInterval);
       document.removeEventListener("visibilitychange", onVisible);
@@ -304,7 +368,67 @@ const OtaUpdateGate = () => {
     setPwaUpdate(false);
   }, [pwaUpdate]);
 
-  // ── Render (PWA only - Native updates are silent) ──
+  // ── Render: Native progress bar (Android/iOS) ──
+  if (nativeProgress.visible) {
+    const stageLabel = STAGE_LABELS[nativeProgress.stage] || "Updating...";
+    const progressPct = nativeProgress.progress || 0;
+
+    return (
+      <div style={nativeProgressBar} role="status">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: "#4ade80",
+              animation: "pulse 1.5s infinite",
+            }} />
+            <span style={{ color: "#fff", fontSize: 13, fontWeight: 600 }}>
+              {stageLabel}
+            </span>
+          </div>
+          {nativeProgress.version && (
+            <span style={{ color: "#9ca3af", fontSize: 11 }}>
+              v{nativeProgress.version}
+            </span>
+          )}
+        </div>
+        <div style={{
+          height: 4,
+          background: "rgba(255,255,255,0.1)",
+          borderRadius: 2,
+          overflow: "hidden",
+        }}>
+          <div style={{
+            height: "100%",
+            width: nativeProgress.stage === "downloading" ? `${progressPct}%` : "100%",
+            background: "linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%)",
+            borderRadius: 2,
+            transition: "width 0.3s ease",
+            animation: nativeProgress.stage !== "downloading" ? "indeterminate 1.5s infinite" : "none",
+          }} />
+        </div>
+        {nativeProgress.stage === "downloading" && progressPct > 0 && (
+          <div style={{ color: "#9ca3af", fontSize: 11, marginTop: 6, textAlign: "right" }}>
+            {progressPct}%
+          </div>
+        )}
+        <style>{`
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+          }
+          @keyframes indeterminate {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  // ── Render: PWA reload bar (Web only) ──
   if (pwaUpdate) {
     const pwaForced = !!pwaUpdate.forced;
     return (
