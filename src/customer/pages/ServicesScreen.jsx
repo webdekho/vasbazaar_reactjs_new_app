@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaSearch, FaDownload, FaSyncAlt, FaClock, FaRupeeSign, FaPlaneDeparture, FaStore, FaBook, FaBookOpen, FaRocket, FaUsers, FaHeartbeat, FaTools } from "react-icons/fa";
+import { FaSearch, FaDownload, FaSyncAlt, FaClock, FaRupeeSign, FaPlaneDeparture, FaStore, FaBook, FaBookOpen, FaRocket, FaUsers, FaHeartbeat, FaTools, FaCreditCard } from "react-icons/fa";
+import { otaService } from "../services/otaService";
 import { FiShare, FiPlusSquare, FiAlertTriangle, FiClock, FiShield, FiChevronRight } from "react-icons/fi";
-import { HiOutlineCurrencyRupee, HiMiniSquares2X2 } from "react-icons/hi2";
+import { HiOutlineCurrencyRupee } from "react-icons/hi2";
 import { FaCalendarAlt, FaChevronRight } from "react-icons/fa";
 import { serviceService } from "../services/serviceService";
 import { advertisementService } from "../services/advertisementService";
@@ -266,8 +267,11 @@ const UpcomingDuesSection = ({ dues }) => {
 // Forex is excluded as it is not part of the Bharat Connect (BBPS) ecosystem.
 const HIDDEN_CATEGORIES = new Set(["donation", "recurring deposit", "forex"]);
 
+// Bill Pay and BBPS are web-only (hidden on native Android/iOS)
+const isNativePlatform = () => otaService.isNative();
+
 const quickAccessItems = [
-  // Bill Pay removed as per requirement
+  { label: "Bill Pay", icon: FaCreditCard, isScroll: true, color: "#007BFF", webOnly: true },
   { label: "Resibot 360", icon: FaHeartbeat, to: "/customer/app/resibot", color: "#E11D48" },
   { label: "Retail Bazaar", icon: FaStore, to: "/customer/app/marketplace", color: "#10B981" },
   { label: "Service Bazaar", icon: FaTools, to: "/customer/app/service-bazaar", color: "#0EA5E9" },
@@ -353,8 +357,8 @@ const QuickAccessCard = ({ services = [] }) => {
           );
         })}
 
-        {/* Fixed quick access items */}
-        {quickAccessItems.map((item, i) => {
+        {/* Fixed quick access items (filter out webOnly items on native) */}
+        {quickAccessItems.filter((item) => !item.webOnly || !isNativePlatform()).map((item, i) => {
           const isEarnLifetime = item.label === "Earn Money";
           return (
           <button
@@ -563,9 +567,11 @@ const ServicesScreen = () => {
               <FaSearch style={{ color: "var(--cm-disabled, #6B6B6B)", fontSize: 14, flexShrink: 0 }} />
               <span style={{ color: "var(--cm-disabled, #6B6B6B)", fontSize: 14 }}>Search services...</span>
             </div>
-            <div className="cm-bc-entry">
-              <img src="/images/bbps.svg" alt="Bharat Connect" className="cm-bc-logo" />
-            </div>
+            {!isNativePlatform() && (
+              <div className="cm-bc-entry">
+                <img src="/images/bbps.svg" alt="Bharat Connect" className="cm-bc-logo" />
+              </div>
+            )}
           </div>
         </div>
         <SkeletonGrid />
@@ -603,14 +609,16 @@ const ServicesScreen = () => {
                 onBlur={() => setSearchFocused(false)}
               />
             </div>
-            <button
-              type="button"
-              className="cm-bc-entry cm-bc-entry--btn"
-              onClick={() => document.getElementById("services-grid-section")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-              aria-label="Bharat Connect bill-pay services"
-            >
-              <img src="/images/bbps.svg" alt="Bharat Connect" className="cm-bc-logo" />
-            </button>
+            {!isNativePlatform() && (
+              <button
+                type="button"
+                className="cm-bc-entry cm-bc-entry--btn"
+                onClick={() => document.getElementById("services-grid-section")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                aria-label="Bharat Connect bill-pay services"
+              >
+                <img src="/images/bbps.svg" alt="Bharat Connect" className="cm-bc-logo" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -685,9 +693,11 @@ const ServicesScreen = () => {
         <div id="services-grid-section" className={`cm-quick-access${query ? " is-searching" : ""}`}>
           <div className="cm-services-title-row">
             <div className="cm-quick-access-title">Services</div>
-            <div className="cm-bc-entry cm-bc-entry--inline">
-              <img src="/images/bbps.svg" alt="Bharat Connect" className="cm-bc-logo" />
-            </div>
+            {!isNativePlatform() && (
+              <div className="cm-bc-entry cm-bc-entry--inline">
+                <img src="/images/bbps.svg" alt="Bharat Connect" className="cm-bc-logo" />
+              </div>
+            )}
           </div>
         <div className="cm-services-grid-4" style={{ padding: "0 4px 8px", border: "none", boxShadow: "none", background: "transparent" }}>
           {filtered.length === 0 ? (

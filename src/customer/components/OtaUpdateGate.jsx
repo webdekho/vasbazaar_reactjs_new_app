@@ -15,8 +15,6 @@ import { BUILD_ID, BUILD_TIME } from "../../generated/buildId";
  * PWA: Shows reload bar when new version available.
  */
 
-// Skip update check for this many ms after the user dismisses a non-force update.
-const SKIP_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
 const PWA_SKIPPED_KEY = "vb_pwa_skipped_version";
 // Build the user dismissed via "Later" — suppressed until a newer build ships.
 const PWA_DISMISSED_BUILD_KEY = "vb_pwa_dismissed_build";

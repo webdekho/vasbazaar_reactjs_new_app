@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaStar, FaCheckCircle, FaMapMarkerAlt, FaHeart } from "react-icons/fa";
+import { FaArrowLeft, FaStar, FaCheckCircle, FaHeart } from "react-icons/fa";
 import { serviceBazaarService } from "../../services/serviceBazaarService";
 import { useToast } from "../../context/ToastContext";
 import "./service-bazaar.css";

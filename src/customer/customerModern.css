@@ -1877,10 +1877,7 @@
 #services-grid-section { scroll-margin-top: calc(56px + env(safe-area-inset-top, 0px) + 12px); }
 
 .cm-services-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-/* Bharat Connect logos hidden as per requirement */
-.cm-bc-entry { display: none !important; }
-.cm-bc-entry--inline { display: none !important; }
-.cm-bc-entry--btn { display: none !important; }
+/* Bharat Connect logos: shown on web, hidden on native (Android/iOS) via JS */
 .cm-bc-entry-caption { font-size: 0.6rem; font-weight: 700; color: var(--cm-accent, #0B5FBA); letter-spacing: 0.3px; line-height: 1; }
 
 .cm-services-grid-4 {
