@@ -62,7 +62,8 @@ export default function ProviderHubScreen() {
     let guard = 0;
     while (node && guard < 5) {
       path.unshift(node);
-      node = node.parentId ? categories.find((c) => String(c.id) === String(node.parentId)) : null;
+      const parentId = node.parentId;
+      node = parentId ? categories.find((c) => String(c.id) === String(parentId)) : null;
       guard++;
     }
     if (path[0]) chain.catL1 = String(path[0].id);

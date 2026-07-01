@@ -1877,8 +1877,7 @@
 #services-grid-section { scroll-margin-top: calc(56px + env(safe-area-inset-top, 0px) + 12px); }
 
 .cm-services-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.cm-bc-entry--inline { margin-left: auto; }
-.cm-bc-entry .cm-bc-logo { width: 83px; height: 30px; }
+/* Bharat Connect logos: shown on web, hidden on native (Android/iOS) via JS */
 .cm-bc-entry-caption { font-size: 0.6rem; font-weight: 700; color: var(--cm-accent, #0B5FBA); letter-spacing: 0.3px; line-height: 1; }
 
 .cm-services-grid-4 {
@@ -8785,14 +8784,14 @@
 
 .cm-quick-access {
   border-radius: 20px;
-  padding: 0;
+  padding: 0 0 12px;
   background: var(--cm-card);
   border: 1px solid var(--cm-line);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   animation: cm-slide-up 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
   animation-delay: 0.25s;
   transition: background 0.3s, border-color 0.3s;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .cm-quick-access-title {

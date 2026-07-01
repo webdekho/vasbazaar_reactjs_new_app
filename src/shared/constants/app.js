@@ -1,7 +1,8 @@
 import { DEFAULT_API_URL, getConfiguredApiUrl } from "../../utils/constants";
+import { APP_VERSION } from "../../utils/appVersion";
 
-// App-wide constants — keep in sync with backend
-export const APP_VERSION = '1.2.9';
+// Re-export APP_VERSION from single source of truth (utils/appVersion.js)
+export { APP_VERSION };
 export const APP_NAME = 'vasbazaar';
 
 // Allowed API hosts — prevents localStorage tampering from redirecting API calls
