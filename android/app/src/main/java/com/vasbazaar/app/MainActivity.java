@@ -30,9 +30,17 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onStart() {
         super.onStart();
+        WebView webView = getBridge().getWebView();
+
+        // Lock the WebView text zoom to 100% so the app ignores the device's
+        // system "Font size" accessibility setting. Without this, phones set to
+        // a large font scale inflate all in-app text and break the layout
+        // (native apps like Paytm behave the same way by design).
+        webView.getSettings().setTextZoom(100);
+
         // Add JavaScript interfaces to WebView
-        getBridge().getWebView().addJavascriptInterface(new NavigationBarInterface(), "AndroidNavigationBar");
-        getBridge().getWebView().addJavascriptInterface(new UpiIntentInterface(), "AndroidUpiIntent");
+        webView.addJavascriptInterface(new NavigationBarInterface(), "AndroidNavigationBar");
+        webView.addJavascriptInterface(new UpiIntentInterface(), "AndroidUpiIntent");
     }
 
     private void setNavigationBarColor(String color, boolean isLight) {
