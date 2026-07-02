@@ -471,26 +471,15 @@ const PaymentScreen = () => {
       payload.couponDesc = paymentState.couponDesc;
     }
 
-    // For UPI, determine flow type and build options
+    // Gateway is chosen backend-side from `platform` (set inside rechargeWithJuspay):
+    //   native app → HDFC UPI Intent (upi:// deep link) ; web → HDFC SmartGateway page.
+    // No UPI Collect params are sent — the SmartGateway hosted page handles UPI itself.
     const isNative = Capacitor.isNativePlatform();
     const isMobileWeb = !isNative && isMobileWebBrowser();
-    const upiOptions = {};
 
-    if (payType === "upi") {
-      if (isNative || isMobileWeb) {
-        // Native app OR Mobile web browser: UPI Intent flow
-        upiOptions.isUpiIntentRequest = false;
-      } else if (upiId) {
-        // Desktop web with UPI ID entered: UPI Collect flow
-        upiOptions.isUpiIntentRequest = true;
-        upiOptions.upi_id = upiId.trim();
-      }
-      // else: Desktop web without UPI ID = existing default flow (no extra params)
-    }
-
-    // For UPI, use Juspay with upiOptions; for wallet, use direct recharge
+    // For UPI, use Juspay/HDFC gateway; for wallet, use direct recharge
     const rechargeCall = payType === "upi"
-      ? juspayService.rechargeWithJuspay(payload, upiOptions)
+      ? juspayService.rechargeWithJuspay(payload)
       : rechargeService.recharge(payload);
 
     const response = await rechargeCall;
@@ -527,16 +516,7 @@ const PaymentScreen = () => {
         return;
       }
 
-      // === PATTERN 2: UPI Collect (web, hash = null, upiId provided) ===
-      if (!hash && !isNative && upiOptions.isUpiIntentRequest) {
-        setLoading(false);
-        // Connect WebSocket and wait for status
-        connectPaymentWebSocket(txnId);
-        setStatus("UPI collect request sent. Please approve in your UPI app.");
-        return;
-      }
-
-      // === PATTERN 1: Existing default flow (payment-page URL) ===
+      // === PATTERN 1: SmartGateway hosted page (web) / redirect flow ===
       if (paymentUrl) {
         const orderId = juspayService.extractOrderId(response);
         const paymentContext = {
@@ -802,27 +782,12 @@ const PaymentScreen = () => {
           className="xpay-pay-btn"
           disabled={loading || upiFlowActive}
           onClick={() => {
-            // UPI flow decision:
-            // - Native app (Android/iOS) → UPI Intent chooser
-            // - Mobile web browser → UPI Intent via upi:// URL
-            // - Desktop web → Show UPI ID modal for collect flow
-            if (selectedMethod === "upi") {
-              const isNative = Capacitor.isNativePlatform();
-              const isMobileWeb = !isNative && isMobileWebBrowser();
-
-              if (isNative || isMobileWeb) {
-                // Native or Mobile web: proceed directly for UPI Intent
-                proceed(selectedMethod);
-              } else {
-                // Desktop web: show UPI ID modal
-                setUpiId("");
-                setUpiError("");
-                setShowUpiModal(true);
-              }
-            } else {
-              // Wallet: proceed directly
-              proceed(selectedMethod);
-            }
+            // Payment surface decides the gateway (wired backend-side by `platform`):
+            // - Native app (Android/iOS) → HDFC UPI Intent (upi:// deep link → app chooser)
+            // - Web / browser (mobile or desktop) → HDFC SmartGateway hosted page (redirect)
+            // Wallet always pays directly. In every case we just proceed — no UPI-ID
+            // collect modal, since the SmartGateway page collects UPI/card itself.
+            proceed(selectedMethod);
           }}
         >
           {loading ? (
