@@ -119,8 +119,15 @@ const OtaUpdateGate = () => {
       return; // Web uses version.json check instead
     }
 
-    // Native: Always check on app load (force update scenario)
-    console.debug("[OTA] Native platform detected, starting version check...");
+    // Native: Only check if user is already logged in (has token)
+    // This prevents OTA check from running on login screen
+    const hasToken = !!localStorage.getItem("customerSessionToken");
+    if (!hasToken) {
+      console.debug("[OTA] Native: No auth token, skipping OTA check (user not logged in)");
+      return;
+    }
+
+    console.debug("[OTA] Native platform detected, user logged in, starting version check...");
 
     // Background update function - runs independently of component
     const runBackgroundUpdate = async () => {
@@ -138,21 +145,6 @@ const OtaUpdateGate = () => {
 
       // Show progress immediately
       showProgress("checking", 0);
-
-      // Wait for auth token with retry
-      let hasToken = false;
-      for (let attempt = 1; attempt <= 5; attempt++) {
-        hasToken = !!localStorage.getItem("customerSessionToken");
-        if (hasToken) break;
-        console.debug(`[OTA] Attempt ${attempt}: No auth token yet, retrying in 2s...`);
-        await new Promise(r => setTimeout(r, 2000));
-      }
-
-      if (!hasToken) {
-        console.debug("[OTA] No auth token after max attempts, skipping OTA check");
-        hideProgress();
-        return;
-      }
 
       try {
         console.debug("[OTA] Checking for updates...", { platform: otaService.getPlatform() });

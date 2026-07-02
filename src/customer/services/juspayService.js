@@ -135,15 +135,31 @@ export const getReturnUrl = () => {
  * Execute a recharge with Juspay as the payment gateway.
  * For native apps: uses deep link return URL and platform:'app'
  * For web: uses HTTP return URL and platform:'web'
+ *
+ * @param {Object} payload - Base recharge payload
+ * @param {Object} upiOptions - Optional UPI-specific params for new UPI flows
+ * @param {boolean} upiOptions.isUpiIntentRequest - true for collect (web), false for intent (native)
+ * @param {string} upiOptions.upi_id - Required when isUpiIntentRequest is true (UPI Collect)
  */
-export const rechargeWithJuspay = async (payload) => {
+export const rechargeWithJuspay = async (payload, upiOptions = {}) => {
   const isNative = Capacitor.isNativePlatform();
-  return rechargeService.recharge({
+
+  const finalPayload = {
     ...payload,
     paymentGateway: "juspay",
     platform: isNative ? "app" : "web",
     returnUrl: getReturnUrl(),
-  });
+  };
+
+  // Add UPI params if provided (for new UPI Collect/Intent flows)
+  if (upiOptions.isUpiIntentRequest !== undefined) {
+    finalPayload.isUpiIntentRequest = upiOptions.isUpiIntentRequest;
+  }
+  if (upiOptions.upi_id) {
+    finalPayload.upi_id = upiOptions.upi_id;
+  }
+
+  return rechargeService.recharge(finalPayload);
 };
 
 /**

@@ -1,13 +1,16 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaWallet, FaShieldAlt, FaLock, FaCheckCircle, FaTimes } from "react-icons/fa";
+import { FaArrowLeft, FaWallet, FaShieldAlt, FaLock, FaCheckCircle, FaTimes, FaSpinner } from "react-icons/fa";
 import { FiCreditCard } from "react-icons/fi";
 import { Capacitor } from "@capacitor/core";
 import { Browser } from "@capacitor/browser";
 import { App } from "@capacitor/app";
+import { QRCodeSVG } from "qrcode.react";
 import { userService } from "../services/userService";
 import { rechargeService } from "../services/rechargeService";
 import juspayService, { isPwaStandalone } from "../services/juspayService";
+import { createPaymentWebSocket } from "../services/websocketService";
+import { openUpiUrlIOS } from "../services/upiIntentPlugin";
 
 const FALLBACK_LOGO = "/assets/images/Brand_favicon.png";
 const handleLogoError = (e) => { e.target.onerror = null; e.target.src = FALLBACK_LOGO; };
@@ -20,6 +23,16 @@ let _navigationDone = false; // Prevent multiple navigations
 const resetPaymentFlags = () => {
   _statusCheckCalled = false;
   _navigationDone = false;
+};
+
+/**
+ * Detect if user is on a mobile device (Android/iOS) via web browser.
+ * Returns true for mobile web browsers, false for desktop browsers.
+ * Note: Capacitor.isNativePlatform() handles native app detection separately.
+ */
+const isMobileWebBrowser = () => {
+  if (typeof navigator === "undefined") return false;
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 };
 
 const numberToWords = (num) => {
@@ -53,6 +66,18 @@ const PaymentScreen = () => {
   const [ready, setReady] = useState(false);
   const [nativePaymentPending, setNativePaymentPending] = useState(false);
   const paymentContextRef = useRef(null);
+
+  // UPI Collect/Intent flow state
+  const [showUpiModal, setShowUpiModal] = useState(false);
+  const [upiId, setUpiId] = useState("");
+  const [upiError, setUpiError] = useState("");
+  const [upiFlowActive, setUpiFlowActive] = useState(false);
+  const wsRef = useRef(null);
+
+  // QR Code state for web UPI flow
+  const [showQrCode, setShowQrCode] = useState(false);
+  const [qrCodeUrl, setQrCodeUrl] = useState("");
+  const [qrTxnId, setQrTxnId] = useState("");
   const amount = Math.round(Number(paymentState.amount) * 100) / 100;
   const discount = Math.round(Number(paymentState.discountValue || 0) * 100) / 100;
   const finalAmount = Math.round(Math.max(0, amount - discount) * 100) / 100;
@@ -81,6 +106,129 @@ const PaymentScreen = () => {
     viewBillResponse: context.viewBillResponse || {},
     serviceId: context.serviceId || null,
   }), [paymentState]);
+
+  // Validate UPI ID format (xxx@yyy)
+  const validateUpiId = (id) => {
+    if (!id || !id.trim()) return false;
+    const upiRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9]+$/;
+    return upiRegex.test(id.trim());
+  };
+
+  // Connect WebSocket for UPI Collect/Intent status updates
+  const connectPaymentWebSocket = useCallback((txnId) => {
+    const token = localStorage.getItem("customerSessionToken");
+    if (!token || !txnId) return;
+
+    // Cleanup existing connection
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+
+    setUpiFlowActive(true);
+
+    wsRef.current = createPaymentWebSocket(
+      txnId,
+      token,
+      // onMessage
+      (data) => {
+        if (data.status === "SUCCESS" && data.is_paid) {
+          setUpiFlowActive(false);
+          if (!_navigationDone) {
+            _navigationDone = true;
+            navigate("/customer/app/success", {
+              state: buildSuccessState(data, "upi", txnId),
+              replace: true,
+            });
+          }
+        } else if (["FAILED", "ERROR"].includes(data.status)) {
+          setUpiFlowActive(false);
+          if (!_navigationDone) {
+            _navigationDone = true;
+            navigate("/customer/app/failure", {
+              state: {
+                status: "failed",
+                message: data.message || "Payment failed",
+                orderId: txnId,
+                amount: paymentState.amount,
+                type: paymentState.type,
+                payType: "upi",
+                isPaid: data.is_paid ?? false,
+              },
+              replace: true,
+            });
+          }
+        } else if (data.status === "REFUND_INITIATED") {
+          setUpiFlowActive(false);
+          if (!_navigationDone) {
+            _navigationDone = true;
+            navigate("/customer/app/failure", {
+              state: {
+                status: "failed",
+                message: data.message || "Payment refund initiated",
+                orderId: txnId,
+                amount: paymentState.amount,
+                type: paymentState.type,
+                payType: "upi",
+                isPaid: true,
+                isRefund: true,
+              },
+              replace: true,
+            });
+          }
+        }
+        // PENDING: keep waiting
+      },
+      // onError
+      (error) => {
+        console.error("WebSocket error:", error);
+        // On WebSocket error, fallback to showing manual check option
+      },
+      // onClose
+      () => {
+        console.log("WebSocket closed");
+      }
+    );
+  }, [navigate, buildSuccessState, paymentState]);
+
+  // Open UPI deep link for native intent flow
+  const openUpiIntent = async (upiUrl) => {
+    const platform = Capacitor.getPlatform();
+
+    // Method 1: Use Android native JavaScript interface
+    if (platform === "android" && window.AndroidUpiIntent && typeof window.AndroidUpiIntent.openUpiUrl === "function") {
+      try {
+        const result = window.AndroidUpiIntent.openUpiUrl(upiUrl);
+        console.log("UPI intent via Android native:", result);
+        return result;
+      } catch (e) {
+        console.error("Android native UPI failed:", e);
+      }
+    }
+
+    // Method 2: Use iOS Capacitor plugin
+    if (platform === "ios") {
+      try {
+        const result = await openUpiUrlIOS(upiUrl);
+        console.log("UPI intent via iOS native:", result);
+        return result?.success ?? true;
+      } catch (e) {
+        console.error("iOS native UPI failed:", e);
+        setStatus("No UPI app found. Please install a UPI app.");
+        return false;
+      }
+    }
+
+    // Method 3: Fallback to window.location.href (for mobile web browsers)
+    try {
+      window.location.href = upiUrl;
+      console.log("UPI intent via location.href:", upiUrl);
+      return true;
+    } catch (e) {
+      console.error("UPI intent failed:", e);
+      setStatus("Could not open UPI app. Please try again.");
+      return false;
+    }
+  };
 
   // Shared resolver for a UPI check-status response.
   // Returns true if it reached a terminal state and navigated; false if it left the
@@ -258,6 +406,11 @@ const PaymentScreen = () => {
       if (appUrlListener) {
         appUrlListener.remove();
       }
+      // Cleanup WebSocket on unmount
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
     };
   }, [handlePaymentCallback]);
 
@@ -318,17 +471,72 @@ const PaymentScreen = () => {
       payload.couponDesc = paymentState.couponDesc;
     }
 
-    // For UPI, use Juspay redirect flow
+    // For UPI, determine flow type and build options
+    const isNative = Capacitor.isNativePlatform();
+    const isMobileWeb = !isNative && isMobileWebBrowser();
+    const upiOptions = {};
+
+    if (payType === "upi") {
+      if (isNative || isMobileWeb) {
+        // Native app OR Mobile web browser: UPI Intent flow
+        upiOptions.isUpiIntentRequest = false;
+      } else if (upiId) {
+        // Desktop web with UPI ID entered: UPI Collect flow
+        upiOptions.isUpiIntentRequest = true;
+        upiOptions.upi_id = upiId.trim();
+      }
+      // else: Desktop web without UPI ID = existing default flow (no extra params)
+    }
+
+    // For UPI, use Juspay with upiOptions; for wallet, use direct recharge
     const rechargeCall = payType === "upi"
-      ? juspayService.rechargeWithJuspay(payload)
+      ? juspayService.rechargeWithJuspay(payload, upiOptions)
       : rechargeService.recharge(payload);
 
     const response = await rechargeCall;
     if (!response.success) { if (pwaWindow) pwaWindow.close(); setLoading(false); setStatus(response.message || "Payment could not be processed."); return; }
 
-    // Check if Juspay returned a payment URL (UPI redirect flow)
+    // Handle UPI response patterns
     if (payType === "upi") {
+      const txnId = juspayService.extractOrderId(response) || response.data?.requestId;
+      const hash = response.data?.hash;
       const paymentUrl = juspayService.extractPaymentUrl(response);
+
+      // === PATTERN 3: UPI Intent/QR (hash = upi://...) ===
+      if (hash && hash.startsWith("upi://")) {
+        setLoading(false);
+
+        if (isNative) {
+          // Native app: Open UPI deep link via Capacitor
+          const opened = await openUpiIntent(hash);
+          if (opened) {
+            connectPaymentWebSocket(txnId);
+          }
+        } else if (isMobileWeb) {
+          // Mobile web browser: Open UPI URL directly (browser shows app chooser)
+          connectPaymentWebSocket(txnId);
+          setUpiFlowActive(true);
+          window.location.href = hash;
+        } else {
+          // Desktop web: Show QR code for user to scan
+          setQrCodeUrl(hash);
+          setQrTxnId(txnId);
+          setShowQrCode(true);
+          connectPaymentWebSocket(txnId);
+        }
+        return;
+      }
+
+      // === PATTERN 2: UPI Collect (web, hash = null, upiId provided) ===
+      if (!hash && !isNative && upiOptions.isUpiIntentRequest) {
+        setLoading(false);
+        // Connect WebSocket and wait for status
+        connectPaymentWebSocket(txnId);
+        setStatus("UPI collect request sent. Please approve in your UPI app.");
+        return;
+      }
+
+      // === PATTERN 1: Existing default flow (payment-page URL) ===
       if (paymentUrl) {
         const orderId = juspayService.extractOrderId(response);
         const paymentContext = {
@@ -592,8 +800,30 @@ const PaymentScreen = () => {
         <button
           type="button"
           className="xpay-pay-btn"
-          disabled={loading}
-          onClick={() => proceed(selectedMethod)}
+          disabled={loading || upiFlowActive}
+          onClick={() => {
+            // UPI flow decision:
+            // - Native app (Android/iOS) → UPI Intent chooser
+            // - Mobile web browser → UPI Intent via upi:// URL
+            // - Desktop web → Show UPI ID modal for collect flow
+            if (selectedMethod === "upi") {
+              const isNative = Capacitor.isNativePlatform();
+              const isMobileWeb = !isNative && isMobileWebBrowser();
+
+              if (isNative || isMobileWeb) {
+                // Native or Mobile web: proceed directly for UPI Intent
+                proceed(selectedMethod);
+              } else {
+                // Desktop web: show UPI ID modal
+                setUpiId("");
+                setUpiError("");
+                setShowUpiModal(true);
+              }
+            } else {
+              // Wallet: proceed directly
+              proceed(selectedMethod);
+            }
+          }}
         >
           {loading ? (
             <span className="xpay-pay-loading"><span className="xpay-spinner" /> Processing...</span>
@@ -631,6 +861,121 @@ const PaymentScreen = () => {
             <button type="button" className="xpay-webview-done" onClick={handleCheckPaymentStatus} disabled={loading}>
               {loading ? "Checking payment status..." : "I've completed the payment"}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* UPI ID Modal for Web (UPI Collect flow) */}
+      {showUpiModal && (
+        <div className="upi-modal-overlay" onClick={() => setShowUpiModal(false)}>
+          <div className="upi-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 className="upi-modal-title">Enter UPI ID</h3>
+            <p className="upi-modal-subtitle">Pay using your UPI ID</p>
+
+            <input
+              type="text"
+              className="upi-modal-input"
+              placeholder="yourname@upi"
+              value={upiId}
+              onChange={(e) => {
+                setUpiId(e.target.value);
+                setUpiError("");
+              }}
+              autoFocus
+            />
+
+            {upiError && <p className="upi-modal-error">{upiError}</p>}
+
+            <div className="upi-modal-actions">
+              <button
+                type="button"
+                className="upi-modal-btn upi-modal-btn--cancel"
+                onClick={() => {
+                  setShowUpiModal(false);
+                  setUpiId("");
+                  setUpiError("");
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="upi-modal-btn upi-modal-btn--pay"
+                onClick={() => {
+                  if (!validateUpiId(upiId)) {
+                    setUpiError("Enter valid UPI ID (e.g. name@bank)");
+                    return;
+                  }
+                  setShowUpiModal(false);
+                  proceed("upi");
+                }}
+              >
+                Pay ₹{amount}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QR Code Overlay for Web UPI */}
+      {showQrCode && qrCodeUrl && (
+        <div className="upi-qr-overlay">
+          <div className="upi-qr-modal">
+            <button
+              type="button"
+              className="upi-qr-close"
+              onClick={() => {
+                setShowQrCode(false);
+                setQrCodeUrl("");
+                setQrTxnId("");
+                setUpiFlowActive(false);
+                if (wsRef.current) {
+                  wsRef.current.close();
+                  wsRef.current = null;
+                }
+              }}
+            >
+              <FaTimes />
+            </button>
+
+            <h3 className="upi-qr-title">Scan to Pay</h3>
+            <p className="upi-qr-amount">₹{amount}</p>
+
+            <div className="upi-qr-code-wrapper">
+              <QRCodeSVG
+                value={qrCodeUrl}
+                size={200}
+                level="M"
+                includeMargin={true}
+                bgColor="#FFFFFF"
+                fgColor="#000000"
+              />
+            </div>
+
+            <p className="upi-qr-instruction">
+              Open any UPI app on your phone and scan this QR code to pay
+            </p>
+
+            <div className="upi-qr-status">
+              <FaSpinner className="spin" />
+              <span>Waiting for payment...</span>
+            </div>
+
+            <p className="upi-qr-txn">Order ID: {qrTxnId}</p>
+          </div>
+        </div>
+      )}
+
+      {/* UPI Flow Waiting Overlay (WebSocket status) */}
+      {upiFlowActive && (
+        <div className="xpay-webview-overlay">
+          <div className="xpay-native-pending">
+            <div className="xpay-native-pending-icon">
+              <FaSpinner className="spin" />
+            </div>
+            <h3>Waiting for payment...</h3>
+            <p>Complete payment in your UPI app</p>
+            {status && <div className="xpay-native-pending-status">{status}</div>}
           </div>
         </div>
       )}
