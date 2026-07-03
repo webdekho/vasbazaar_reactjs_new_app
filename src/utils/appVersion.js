@@ -9,7 +9,7 @@
  * The OTA service (otaService.checkUpdate) sends this value as
  * `currentVersion` to the backend on every app launch.
  */
-export const APP_VERSION = "1.3.0";
+export const APP_VERSION = "1.3.1";
 
 // Build timestamp is embedded at build time via process.env if available;
 // otherwise falls back to a compile-time constant.
