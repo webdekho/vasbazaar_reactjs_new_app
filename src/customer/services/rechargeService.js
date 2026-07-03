@@ -147,4 +147,11 @@ export const rechargeService = {
   },
 
   checkRechargeStatus: (payload) => authPost("/api/customer/plan_recharge/check-status", payload),
+
+  /**
+   * Status-only API - does NOT trigger recharge (UPI Intent only)
+   * Used for WebSocket reconnect/timeout scenarios
+   * @param {string} txnId - Transaction ID
+   */
+  checkStatusOnly: (txnId) => authPost("/api/customer/plan_recharge/status-only", { txnId }),
 };

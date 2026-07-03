@@ -71,8 +71,26 @@ const PaymentScreen = () => {
   const [showUpiModal, setShowUpiModal] = useState(false);
   const [upiId, setUpiId] = useState("");
   const [upiError, setUpiError] = useState("");
+  // Check if there's a pending UPI payment that needs status check
+  const [checkingPendingPayment, setCheckingPendingPayment] = useState(() => {
+    try {
+      const pending = localStorage.getItem("upiPaymentPending");
+      if (pending) {
+        const parsed = JSON.parse(pending);
+        // If pending payment exists and not expired, we need to check status first
+        if (parsed.txnId && Date.now() - parsed.startTime < 10 * 60 * 1000) {
+          return true;
+        }
+      }
+    } catch (e) {
+      // Ignore
+    }
+    return false;
+  });
   const [upiFlowActive, setUpiFlowActive] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false); // WebSocket connection indicator
   const wsRef = useRef(null);
+  const currentTxnIdRef = useRef(null); // Track current UPI txnId for status check
 
   // QR Code state for web UPI flow
   const [showQrCode, setShowQrCode] = useState(false);
@@ -114,6 +132,56 @@ const PaymentScreen = () => {
     return upiRegex.test(id.trim());
   };
 
+  // Status-only API check handler (for reconnect/timeout)
+  // NOTE: Do NOT call setUpiFlowActive(false) before navigate - keep overlay visible until navigation completes
+  const checkStatusOnlyAndNavigate = useCallback(async (txnId) => {
+    if (_navigationDone) return;
+    try {
+      console.log("[UPI] Checking status-only API for txnId:", txnId);
+      const statusResponse = await rechargeService.checkStatusOnly(txnId);
+      if (_navigationDone) return;
+
+      const status = (statusResponse?.data?.status || "").toUpperCase();
+      const data = statusResponse?.data || {};
+
+      console.log("[UPI] Status-only response:", status, data);
+
+      // Terminal statuses - navigate (keep overlay visible until navigation completes)
+      if (status === "SUCCESS") {
+        localStorage.removeItem("upiPaymentPending");
+        _navigationDone = true;
+        navigate("/customer/app/success", {
+          state: buildSuccessState(data, "upi", txnId),
+          replace: true,
+        });
+      } else if (status === "FAILED") {
+        localStorage.removeItem("upiPaymentPending");
+        _navigationDone = true;
+        navigate("/customer/app/failure", {
+          state: { status: "failed", message: data.message || "Payment failed", orderId: txnId, amount: paymentState.amount, isPaid: data.is_paid ?? false },
+          replace: true,
+        });
+      } else if (status === "PENDING") {
+        localStorage.removeItem("upiPaymentPending");
+        _navigationDone = true;
+        navigate("/customer/app/failure", {
+          state: { status: "pending", message: data.message || "Payment is being processed.", orderId: txnId, amount: paymentState.amount },
+          replace: true,
+        });
+      } else if (status === "REFUNDED") {
+        localStorage.removeItem("upiPaymentPending");
+        _navigationDone = true;
+        navigate("/customer/app/failure", {
+          state: { status: "failed", message: data.message, orderId: txnId, amount: paymentState.amount, isPaid: true, isRefund: true },
+          replace: true,
+        });
+      }
+      // INITIATE/PAYMENT_INITIATE/NOT_FOUND - keep waiting for WebSocket
+    } catch (e) {
+      console.error("[UPI] Status-only check failed:", e);
+    }
+  }, [navigate, buildSuccessState, paymentState]);
+
   // Connect WebSocket for UPI Collect/Intent status updates
   const connectPaymentWebSocket = useCallback((txnId) => {
     const token = localStorage.getItem("customerSessionToken");
@@ -124,15 +192,18 @@ const PaymentScreen = () => {
       wsRef.current.close();
     }
 
+    currentTxnIdRef.current = txnId;
     setUpiFlowActive(true);
+    setWsConnected(false);
 
     wsRef.current = createPaymentWebSocket(
       txnId,
       token,
       // onMessage
+      // NOTE: Do NOT call setUpiFlowActive(false) before navigate - keep overlay visible until navigation completes
       (data) => {
         if (data.status === "SUCCESS" && data.is_paid) {
-          setUpiFlowActive(false);
+          localStorage.removeItem("upiPaymentPending");
           if (!_navigationDone) {
             _navigationDone = true;
             navigate("/customer/app/success", {
@@ -141,7 +212,7 @@ const PaymentScreen = () => {
             });
           }
         } else if (["FAILED", "ERROR"].includes(data.status)) {
-          setUpiFlowActive(false);
+          localStorage.removeItem("upiPaymentPending");
           if (!_navigationDone) {
             _navigationDone = true;
             navigate("/customer/app/failure", {
@@ -158,7 +229,7 @@ const PaymentScreen = () => {
             });
           }
         } else if (data.status === "REFUND_INITIATED") {
-          setUpiFlowActive(false);
+          localStorage.removeItem("upiPaymentPending");
           if (!_navigationDone) {
             _navigationDone = true;
             navigate("/customer/app/failure", {
@@ -175,20 +246,76 @@ const PaymentScreen = () => {
               replace: true,
             });
           }
+        } else if (data.status === "PENDING") {
+          // Navigate to pending page
+          localStorage.removeItem("upiPaymentPending");
+          if (!_navigationDone) {
+            _navigationDone = true;
+            navigate("/customer/app/failure", {
+              state: {
+                status: "pending",
+                message: data.message || "Payment is being processed. Please wait.",
+                orderId: txnId,
+                amount: paymentState.amount,
+                type: paymentState.type,
+                payType: "upi",
+                isPaid: data.is_paid ?? false,
+              },
+              replace: true,
+            });
+          }
         }
-        // PENDING: keep waiting
       },
       // onError
       (error) => {
         console.error("WebSocket error:", error);
-        // On WebSocket error, fallback to showing manual check option
+        setWsConnected(false);
       },
       // onClose
       () => {
         console.log("WebSocket closed");
+        setWsConnected(false);
+      },
+      // onOpen
+      () => {
+        console.log("WebSocket connected");
+        setWsConnected(true);
+      },
+      // onReconnect - check status via API when reconnected
+      () => {
+        console.log("[WS] Reconnected - checking status");
+        checkStatusOnlyAndNavigate(txnId);
+      },
+      // onStatusPoll - called every 5s for continuous status polling (up to 60s)
+      // NOTE: Do NOT call setUpiFlowActive(false) before navigate - keep overlay visible
+      async (isFinal) => {
+        console.log(`[WS] Status poll (final: ${isFinal}) - checking status`);
+        await checkStatusOnlyAndNavigate(txnId);
+
+        // If final poll (60s timeout) and still no navigation, show pending page
+        if (isFinal && !_navigationDone) {
+          console.log("[WS] 60s timeout reached - navigating to pending page");
+          localStorage.removeItem("upiPaymentPending");
+          _navigationDone = true;
+          if (wsRef.current) {
+            wsRef.current.terminate();
+            wsRef.current = null;
+          }
+          navigate("/customer/app/failure", {
+            state: {
+              status: "pending",
+              message: "Payment status could not be verified. Please check your transaction history.",
+              orderId: txnId,
+              amount: paymentState.amount,
+              type: paymentState.type,
+              payType: "upi",
+            },
+            replace: true,
+          });
+        }
       }
     );
-  }, [navigate, buildSuccessState, paymentState]);
+  }, [navigate, buildSuccessState, paymentState, checkStatusOnlyAndNavigate]);
 
   // Open UPI deep link for native intent flow
   const openUpiIntent = async (upiUrl) => {
@@ -251,6 +378,7 @@ const PaymentScreen = () => {
     };
 
     const go = (path, state) => {
+      localStorage.removeItem("upiPaymentPending"); // Clear UPI Intent pending state
       _navigationDone = true;
       setNativePaymentPending(false);
       paymentContextRef.current = null;
@@ -387,6 +515,86 @@ const PaymentScreen = () => {
         const bal = parseFloat(raw?.balance ?? raw?.walletBalance ?? 0);
         setWalletBalance(isNaN(bal) ? 0 : bal);
       }
+
+      // Check for pending UPI payment on app resume (UPI Intent flow only)
+      // CRITICAL: If pending payment exists, immediately check status and navigate
+      // DO NOT show payment selection screen at all
+      const pendingPayment = localStorage.getItem("upiPaymentPending");
+      if (pendingPayment) {
+        try {
+          const parsed = JSON.parse(pendingPayment);
+
+          // Check if not expired (10 minutes)
+          if (parsed.txnId && Date.now() - parsed.startTime < 10 * 60 * 1000) {
+            console.log("[UPI] Found pending payment, checking status immediately:", parsed.txnId);
+
+            // Immediately check status and navigate - don't show payment screen
+            try {
+              const statusResponse = await rechargeService.checkStatusOnly(parsed.txnId);
+              const status = (statusResponse?.data?.status || "").toUpperCase();
+              const data = statusResponse?.data || {};
+
+              console.log("[UPI] Pending payment status:", status);
+              localStorage.removeItem("upiPaymentPending");
+
+              if (status === "SUCCESS") {
+                _navigationDone = true;
+                navigate("/customer/app/success", {
+                  state: buildSuccessState(data, "upi", parsed.txnId),
+                  replace: true,
+                });
+                return;
+              } else if (status === "FAILED") {
+                _navigationDone = true;
+                navigate("/customer/app/failure", {
+                  state: { status: "failed", message: data.message || "Payment failed", orderId: parsed.txnId, amount: parsed.amount, isPaid: data.is_paid ?? false },
+                  replace: true,
+                });
+                return;
+              } else if (status === "PENDING") {
+                _navigationDone = true;
+                navigate("/customer/app/failure", {
+                  state: { status: "pending", message: data.message || "Payment is being processed.", orderId: parsed.txnId, amount: parsed.amount },
+                  replace: true,
+                });
+                return;
+              } else if (status === "REFUNDED") {
+                _navigationDone = true;
+                navigate("/customer/app/failure", {
+                  state: { status: "failed", message: data.message, orderId: parsed.txnId, amount: parsed.amount, isPaid: true, isRefund: true },
+                  replace: true,
+                });
+                return;
+              }
+              // INITIATE/PAYMENT_INITIATE - payment still in progress, connect WebSocket
+              console.log("[UPI] Payment still in progress, connecting WebSocket");
+              setCheckingPendingPayment(false);
+              setUpiFlowActive(true);
+              setReady(true);
+              connectPaymentWebSocket(parsed.txnId);
+              return;
+            } catch (e) {
+              console.error("[UPI] Status check failed, connecting WebSocket:", e);
+              // On error, still try WebSocket
+              setCheckingPendingPayment(false);
+              setUpiFlowActive(true);
+              setReady(true);
+              connectPaymentWebSocket(parsed.txnId);
+              return;
+            }
+          } else {
+            // Expired, clear it
+            console.log("[UPI] Pending payment expired, clearing");
+            localStorage.removeItem("upiPaymentPending");
+            setCheckingPendingPayment(false);
+          }
+        } catch (e) {
+          console.error("[UPI] Failed to parse pending payment:", e);
+          localStorage.removeItem("upiPaymentPending");
+          setCheckingPendingPayment(false);
+        }
+      }
+
       setReady(true);
     };
     load();
@@ -412,7 +620,7 @@ const PaymentScreen = () => {
         wsRef.current = null;
       }
     };
-  }, [handlePaymentCallback]);
+  }, [handlePaymentCallback, connectPaymentWebSocket]);
 
   // While the "Payment In Progress" overlay is shown, poll the backend so the screen
   // resolves itself (success / refunded / failed) even if the user never taps verify —
@@ -439,6 +647,19 @@ const PaymentScreen = () => {
   }, [nativePaymentPending, finalizePaymentStatus]);
 
   if (!paymentState.amount) return <Navigate to="/customer/app/services" replace />;
+
+  // Show loading screen while checking pending UPI payment status
+  // This prevents the payment selection screen from showing briefly
+  if (checkingPendingPayment) {
+    return (
+      <div className="xpay" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+        <div style={{ textAlign: "center" }}>
+          <FaSpinner className="spin" style={{ fontSize: "32px", color: "#4CAF50", marginBottom: "16px" }} />
+          <p style={{ color: "#fff", fontSize: "14px" }}>Checking payment status...</p>
+        </div>
+      </div>
+    );
+  }
 
   const proceed = async (payType) => {
     // Reset flags for new payment
@@ -496,10 +717,26 @@ const PaymentScreen = () => {
         setLoading(false);
 
         if (isNative) {
+          // Save UPI payment context for app resume (SEPARATE from SmartGateway context)
+          const upiPaymentState = {
+            txnId,
+            amount: paymentState.amount,
+            type: paymentState.type,
+            label: paymentState.label,
+            operatorName: paymentState.operatorName,
+            serviceId: paymentState.serviceId,
+            startTime: Date.now(),
+          };
+          localStorage.setItem("upiPaymentPending", JSON.stringify(upiPaymentState));
+          console.log("[UPI] Saved payment state to localStorage:", txnId);
+
           // Native app: Open UPI deep link via Capacitor
           const opened = await openUpiIntent(hash);
           if (opened) {
             connectPaymentWebSocket(txnId);
+          } else {
+            // Intent failed to open, clear localStorage
+            localStorage.removeItem("upiPaymentPending");
           }
         } else if (isMobileWeb) {
           // Mobile web browser: Open UPI URL directly (browser shows app chooser)
@@ -934,7 +1171,46 @@ const PaymentScreen = () => {
       {/* UPI Flow Waiting Overlay (WebSocket status) */}
       {upiFlowActive && (
         <div className="xpay-webview-overlay">
+          <div className="xpay-webview-header">
+            <button
+              type="button"
+              className="xpay-webview-close"
+              onClick={() => {
+                console.log("[UPI] User cancelled waiting overlay");
+                localStorage.removeItem("upiPaymentPending");
+                setUpiFlowActive(false);
+                setWsConnected(false);
+                if (wsRef.current) {
+                  wsRef.current.terminate();
+                  wsRef.current = null;
+                }
+              }}
+            >
+              <FaTimes />
+            </button>
+            <span className="xpay-webview-title">UPI Payment</span>
+            <div className="xpay-webview-amount">₹{paymentState.amount || finalAmount}</div>
+          </div>
           <div className="xpay-native-pending">
+            {/* WebSocket connection indicator */}
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "6px",
+              marginBottom: "12px",
+              fontSize: "12px",
+              color: wsConnected ? "#4CAF50" : "#f44336"
+            }}>
+              <span style={{
+                width: "8px",
+                height: "8px",
+                borderRadius: "50%",
+                backgroundColor: wsConnected ? "#4CAF50" : "#f44336"
+              }} />
+              {wsConnected ? "Connected" : "Connecting..."}
+            </div>
+
             <div className="xpay-native-pending-icon">
               <FaSpinner className="spin" />
             </div>

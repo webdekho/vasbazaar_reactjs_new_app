@@ -15,9 +15,12 @@ import { server_api } from "../../utils/constants";
  * @param {function} onMessage - Callback for incoming messages
  * @param {function} onError - Callback for errors
  * @param {function} onClose - Callback when connection closes
- * @returns {WebSocket} WebSocket instance
+ * @param {function} onOpen - Callback when connection opens
+ * @param {function} onReconnect - Callback when reconnected (for status API check)
+ * @param {function} onStatusPoll - Callback for periodic status polling (every 5s, max 60s)
+ * @returns {object} WebSocket wrapper with close() method
  */
-export const createPaymentWebSocket = (txnId, token, onMessage, onError, onClose) => {
+export const createPaymentWebSocket = (txnId, token, onMessage, onError, onClose, onOpen, onReconnect, onStatusPoll) => {
   if (!txnId || !token) {
     console.error("[WS] Missing txnId or token");
     return null;
@@ -27,49 +30,151 @@ export const createPaymentWebSocket = (txnId, token, onMessage, onError, onClose
   const baseUrl = server_api().replace(/^http/, "ws");
   const wsUrl = `${baseUrl}/ws/message/${txnId}?access_token=${token}`;
 
-  console.log("[WS] Connecting to:", wsUrl);
+  let ws = null;
+  let reconnectAttempts = 0;
+  const maxReconnectAttempts = 5;
+  const reconnectDelay = 3000; // 3 seconds
+  let isTerminated = false;
+  let wasConnectedBefore = false;
 
-  const ws = new WebSocket(wsUrl);
+  // Polling state
+  let pollIntervalId = null;
+  let pollCount = 0;
+  const POLL_INTERVAL = 5000; // 5 seconds
+  const MAX_POLL_COUNT = 12; // 12 polls = 60 seconds max
 
-  ws.onopen = () => {
-    console.log("[WS] Connected for txnId:", txnId);
+  // Clear polling interval
+  const clearPolling = () => {
+    if (pollIntervalId) {
+      clearInterval(pollIntervalId);
+      pollIntervalId = null;
+    }
   };
 
-  ws.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      console.log("[WS] Message received:", data);
+  // Start periodic status polling
+  const startPolling = () => {
+    clearPolling();
+    pollCount = 0;
 
-      if (onMessage) {
-        onMessage(data);
+    console.log("[WS] Starting status polling every 5 seconds");
+
+    pollIntervalId = setInterval(() => {
+      pollCount++;
+      console.log(`[WS] Polling status... attempt ${pollCount}/${MAX_POLL_COUNT}`);
+
+      if (isTerminated) {
+        console.log("[WS] Terminated, stopping polling");
+        clearPolling();
+        return;
       }
 
-      // Auto-close on terminal status
-      const terminalStatuses = ["SUCCESS", "FAILED", "ERROR", "REFUND_INITIATED"];
-      if (terminalStatuses.includes(data.status)) {
-        console.log("[WS] Terminal status received, closing connection");
-        ws.close();
+      if (pollCount >= MAX_POLL_COUNT) {
+        console.log("[WS] Max poll attempts reached (60s), stopping polling");
+        clearPolling();
+        // Final poll attempt
+        if (onStatusPoll && !isTerminated) {
+          onStatusPoll(true); // true = final attempt
+        }
+        return;
       }
-    } catch (e) {
-      console.error("[WS] Failed to parse message:", e);
-    }
+
+      if (onStatusPoll && !isTerminated) {
+        onStatusPoll(false); // false = not final
+      }
+    }, POLL_INTERVAL);
   };
 
-  ws.onerror = (error) => {
-    console.error("[WS] Error:", error);
-    if (onError) {
-      onError(error);
-    }
+  const connect = () => {
+    console.log("[WS] Connecting to:", wsUrl);
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log("[WS] Connected for txnId:", txnId);
+
+      // Start polling when connected
+      startPolling();
+
+      // If this is a RECONNECT (not first connection), immediately check status
+      if (wasConnectedBefore && onReconnect) {
+        console.log("[WS] Reconnected - checking status via API");
+        onReconnect();
+      }
+
+      wasConnectedBefore = true;
+      reconnectAttempts = 0; // Reset on successful connection
+
+      if (onOpen) {
+        onOpen();
+      }
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log("[WS] Message received:", data);
+
+        // Stop polling when message received
+        clearPolling();
+
+        if (onMessage) {
+          onMessage(data);
+        }
+
+        // Auto-close on terminal status
+        const terminalStatuses = ["SUCCESS", "FAILED", "ERROR", "REFUND_INITIATED", "PENDING"];
+        if (terminalStatuses.includes(data.status)) {
+          console.log("[WS] Terminal status received, closing connection");
+          isTerminated = true;
+          ws.close();
+        }
+      } catch (e) {
+        console.error("[WS] Failed to parse message:", e);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error("[WS] Error:", error);
+      if (onError) {
+        onError(error);
+      }
+    };
+
+    ws.onclose = (event) => {
+      console.log("[WS] Connection closed:", event.code, event.reason);
+
+      if (onClose) {
+        onClose(event);
+      }
+
+      // Auto-reconnect if not terminated and under max attempts
+      if (!isTerminated && reconnectAttempts < maxReconnectAttempts) {
+        reconnectAttempts++;
+        console.log(`[WS] Reconnecting... attempt ${reconnectAttempts}/${maxReconnectAttempts}`);
+        setTimeout(connect, reconnectDelay);
+      }
+    };
   };
 
-  ws.onclose = (event) => {
-    console.log("[WS] Connection closed:", event.code, event.reason);
-    if (onClose) {
-      onClose(event);
+  connect();
+
+  // Return object with close method
+  return {
+    close: () => {
+      console.log("[WS] Manual close called");
+      isTerminated = true;
+      clearPolling();
+      if (ws) ws.close();
+    },
+    getState: () => ws?.readyState,
+    // Allow external termination flag check
+    isTerminated: () => isTerminated,
+    // Force stop everything
+    terminate: () => {
+      isTerminated = true;
+      clearPolling();
+      if (ws) ws.close();
     }
   };
-
-  return ws;
 };
 
 /**

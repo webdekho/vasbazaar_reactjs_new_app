@@ -73,10 +73,24 @@ public class MainActivity extends BridgeActivity {
             try {
                 android.util.Log.d("UpiIntent", "Opening UPI URL: " + upiUrl);
 
-                // Use simple ACTION_VIEW without specifying package
-                // Let the system handle app selection
                 final Intent intent = new Intent(Intent.ACTION_VIEW);
                 intent.setData(Uri.parse(upiUrl));
+
+                // Required for Android 13+ (TIRAMISU) when starting from WebView context
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                }
+
+                // Check if any UPI app can handle the intent BEFORE trying to start
+                if (intent.resolveActivity(getPackageManager()) == null) {
+                    android.util.Log.e("UpiIntent", "No UPI app found to handle intent");
+                    runOnUiThread(() -> {
+                        Toast.makeText(MainActivity.this,
+                            "No UPI app found. Please install GPay, PhonePe, or Paytm.",
+                            Toast.LENGTH_LONG).show();
+                    });
+                    return false;
+                }
 
                 // Run on UI thread to ensure proper activity context
                 runOnUiThread(() -> {
@@ -85,10 +99,13 @@ public class MainActivity extends BridgeActivity {
                         android.util.Log.d("UpiIntent", "Activity started successfully");
                     } catch (android.content.ActivityNotFoundException e) {
                         android.util.Log.e("UpiIntent", "No activity found: " + e.getMessage());
-                        Toast.makeText(MainActivity.this, "No UPI app ready. Please login to your UPI app (GPay/PhonePe/Paytm) first.", Toast.LENGTH_LONG).show();
+                        Toast.makeText(MainActivity.this,
+                            "No UPI app ready. Please login to your UPI app first.",
+                            Toast.LENGTH_LONG).show();
                     } catch (Exception e) {
                         android.util.Log.e("UpiIntent", "Error: " + e.getMessage());
-                        Toast.makeText(MainActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        Toast.makeText(MainActivity.this, "Error: " + e.getMessage(),
+                            Toast.LENGTH_LONG).show();
                     }
                 });
 
