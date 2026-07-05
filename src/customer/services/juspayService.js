@@ -147,7 +147,11 @@ export const rechargeWithJuspay = async (payload, upiOptions = {}) => {
   const finalPayload = {
     ...payload,
     paymentGateway: "juspay",
+    // `platform` (app/web) drives backend PG routing — DO NOT change its values.
     platform: isNative ? "app" : "web",
+    // `channel` is the precise origin (android/ios/web) used only for the Business 360
+    // dashboard's web/iOS/Android split. Additive; backend stamps it on the txn.
+    channel: Capacitor.getPlatform(),
     returnUrl: getReturnUrl(),
   };
 
