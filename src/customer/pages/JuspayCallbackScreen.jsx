@@ -345,7 +345,7 @@ const JuspayCallbackScreen = () => {
 
       {/* Go To Home for failed transactions */}
       {state === "failed" && (
-        <button onClick={goHome} style={{ ...secondaryBtnStyle(isLight), maxWidth: 380, marginTop: 20 }}>
+        <button onClick={goHome} style={{ ...secondaryBtnStyle(isLight), flex: "none", maxWidth: 380, marginTop: 20 }}>
           <FaHome /> Go To Home
         </button>
       )}

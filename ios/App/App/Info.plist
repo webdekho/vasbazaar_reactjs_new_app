@@ -72,13 +72,22 @@
 			</array>
 		</dict>
 	</array>
+	<!-- UPI app URL schemes the app is allowed to query/open (iOS equivalent of the
+	     AndroidManifest <queries> package list). Required so canOpenURL() can detect
+	     and UIApplication.open() can launch these UPI apps for UPI Intent payments. -->
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>upi</string>
+		<string>gpay</string>
+		<string>tez</string>
 		<string>phonepe</string>
 		<string>paytmmp</string>
-		<string>gpay</string>
+		<string>paytm</string>
 		<string>bhim</string>
+		<string>credpay</string>
+		<string>mobikwik</string>
+		<string>amazonpay</string>
+		<string>whatsapp</string>
 	</array>
 </dict>
 </plist>
