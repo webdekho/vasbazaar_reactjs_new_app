@@ -1,5 +1,5 @@
 {
-  "buildCommand": "CI=false react-scripts build",
+  "buildCommand": "GENERATE_SOURCEMAP=false CI=false node --max-old-space-size=4096 node_modules/.bin/react-scripts build",
   "headers": [
     {
       "source": "/(.*)",
