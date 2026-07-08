@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import "./customerModern.css";
 import { CustomerModernProvider } from "./context/CustomerModernContext";
 import { MarketplaceCartProvider } from "./context/MarketplaceCartContext";
+import { MarketplaceCompareProvider } from "./context/MarketplaceCompareContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import AuthGuard from "./components/AuthGuard";
 import ImpersonationBanner from "./components/ImpersonationBanner";
@@ -145,6 +146,8 @@ const ServiceBazaarProviderCrmScreen = lazy(() => import("./pages/service-bazaar
 const MarketplaceHomeScreen = lazy(() => import("./pages/marketplace/MarketplaceHomeScreen"));
 const StoreDetailScreen = lazy(() => import("./pages/marketplace/StoreDetailScreen"));
 const MarketplaceCartScreen = lazy(() => import("./pages/marketplace/CartScreen"));
+const MarketplaceCompareScreen = lazy(() => import("./pages/marketplace/CompareScreen"));
+const MyMarketplaceSavedItemsScreen = lazy(() => import("./pages/marketplace/MySavedItemsScreen"));
 const MultiStoreCheckoutScreen = lazy(() => import("./pages/marketplace/MultiStoreCheckoutScreen"));
 const StoreOnboardingScreen = lazy(() => import("./pages/marketplace/StoreOnboardingScreen"));
 const MyStoreManageScreen = lazy(() => import("./pages/marketplace/MyStoreManageScreen"));
@@ -195,6 +198,7 @@ const CustomerModernRoutes = () => {
       <ToastProvider>
       <CustomerModernProvider>
       <MarketplaceCartProvider>
+      <MarketplaceCompareProvider>
         <OtaUpdateGate />
         <ImpersonationBanner />
         <Routes>
@@ -342,6 +346,8 @@ const CustomerModernRoutes = () => {
             <Route path="marketplace" element={<Suspense fallback={<RouteFallback />}><MarketplaceHomeScreen /></Suspense>} />
             <Route path="marketplace/store/:storeId" element={<Suspense fallback={<RouteFallback />}><StoreDetailScreen /></Suspense>} />
             <Route path="marketplace/cart" element={<Suspense fallback={<RouteFallback />}><MarketplaceCartScreen /></Suspense>} />
+            <Route path="marketplace/compare" element={<Suspense fallback={<RouteFallback />}><MarketplaceCompareScreen /></Suspense>} />
+            <Route path="marketplace/my-saved" element={<Suspense fallback={<RouteFallback />}><MyMarketplaceSavedItemsScreen /></Suspense>} />
             <Route path="marketplace/checkout-all" element={<Suspense fallback={<RouteFallback />}><MultiStoreCheckoutScreen /></Suspense>} />
             <Route path="marketplace/onboard" element={<Suspense fallback={<RouteFallback />}><StoreOnboardingScreen /></Suspense>} />
             <Route path="marketplace/my-store" element={<Suspense fallback={<RouteFallback />}><MyStoreManageScreen /></Suspense>} />
@@ -366,6 +372,7 @@ const CustomerModernRoutes = () => {
           </Route>
           <Route path="*" element={<SmartRedirect />} />
         </Routes>
+      </MarketplaceCompareProvider>
       </MarketplaceCartProvider>
       </CustomerModernProvider>
       </ToastProvider>

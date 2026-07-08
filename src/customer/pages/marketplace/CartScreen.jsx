@@ -35,6 +35,13 @@ const haversineKm = (lat1, lng1, lat2, lng2) => {
 // Average delivery rider speed (km/h) used to convert distance into travel time.
 const AVG_DELIVERY_SPEED_KMH = 22;
 
+// Named delivery presets (feature 7). Pure display labels sent as `deliveryPreset`
+// alongside the existing scheduling fields the client already computes — the
+// backend stores the string verbatim and derives NO scheduling from it.
+const DELIVERY_PRESETS = ["Express", "Same Day", "Tomorrow", "Morning", "Afternoon", "Evening"];
+const pad2 = (n) => String(n).padStart(2, "0");
+const localDateStr = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
 // Totals for a single store bucket — mirrors the per-store math the cart
 // context uses when aggregating, so a single-store checkout stays correct even
 // when other stores' items also sit in the cart.
@@ -100,6 +107,9 @@ const CartScreen = () => {
   const [deliveryMode, setDeliveryMode] = useState("NOW");
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
+  // Named delivery preset label (feature 7) carried alongside the computed
+  // schedule fields; null = shopper is on the raw NOW/SCHEDULE controls.
+  const [deliveryPreset, setDeliveryPreset] = useState(null);
   // Subscription config.
   const [subFrequency, setSubFrequency] = useState("DAILY"); // DAILY | WEEKLY | MONTHLY | INTERVAL
   const [subDays, setSubDays] = useState([]); // ["MON", ...] for WEEKLY
@@ -494,6 +504,46 @@ const CartScreen = () => {
     return time ? `${scheduleDate}T${time}` : null;
   };
 
+  // Apply a named delivery preset: it just drives the EXISTING scheduling
+  // controls (mode / date / time / slot) — no new delivery or refund logic.
+  // "Express" = deliver now; the rest schedule a date+time window and, when the
+  // store defines slots, auto-pick the first slot that fits.
+  const applyPreset = (preset) => {
+    setError(null);
+    setDeliveryPreset(preset);
+    const now = new Date();
+    if (preset === "Express") {
+      setDeliveryMode("NOW");
+      setScheduleDate(""); setScheduleTime(""); setSelectedSlotId("");
+      return;
+    }
+    setDeliveryMode("SCHEDULE");
+    const target = new Date(now);
+    let timeStr;
+    if (preset === "Same Day") {
+      target.setTime(now.getTime() + 2 * 60 * 60 * 1000); // ~2h out, still today-ish
+      timeStr = `${pad2(target.getHours())}:${pad2(target.getMinutes())}`;
+    } else if (preset === "Tomorrow") {
+      target.setDate(target.getDate() + 1);
+      timeStr = "10:00";
+    } else {
+      // Morning / Afternoon / Evening — today if the window hasn't passed, else tomorrow.
+      const hour = preset === "Morning" ? 9 : preset === "Afternoon" ? 14 : 18;
+      if (now.getHours() >= hour) target.setDate(target.getDate() + 1);
+      timeStr = `${pad2(hour)}:00`;
+    }
+    const dStr = localDateStr(target);
+    setScheduleDate(dStr);
+    setScheduleTime(timeStr);
+    if (deliverySlots.length > 0) {
+      const daySlots = slotsForDate(dStr);
+      const pick = daySlots.find((s) => slotTime(s) >= timeStr) || daySlots[0] || null;
+      setSelectedSlotId(pick ? String(pick.id) : "");
+    } else {
+      setSelectedSlotId("");
+    }
+  };
+
   const placeOrder = async (method = "ONLINE") => {
     if (placing) return;
     // Delivery requires an address; pickup does not (collect from store).
@@ -538,6 +588,8 @@ const CartScreen = () => {
       ...(coords && !isPickup ? { deliveryLat: coords.lat, deliveryLng: coords.lng } : {}),
       ...(scheduledForIso() ? { scheduledFor: scheduledForIso() } : {}),
       ...(deliveryMode === "SCHEDULE" && selectedSlotId ? { deliverySlotId: Number(selectedSlotId) } : {}),
+      // Pure display label (feature 7) — persisted verbatim; drives no scheduling.
+      ...(!isPickup && deliveryPreset ? { deliveryPreset } : {}),
     };
 
     const res = await marketplaceService.placeOrder(payload);
@@ -882,6 +934,28 @@ const CartScreen = () => {
             {!isPickup && (
             <>
             <div className="mkt-form-section-title">When to deliver</div>
+            {/* Quick delivery presets (feature 7) — drive the existing schedule fields */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+              {DELIVERY_PRESETS.map((p) => {
+                const on = deliveryPreset === p;
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => applyPreset(p)}
+                    style={{
+                      padding: "7px 13px", borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                      border: on ? "1px solid transparent" : "1px solid var(--cm-line)",
+                      background: on ? "linear-gradient(135deg, #40E0D0 0%, #007BFF 100%)" : "var(--cm-card)",
+                      color: on ? "#fff" : "var(--cm-ink)",
+                      boxShadow: on ? "0 4px 12px rgba(0,123,255,0.3)" : "none",
+                    }}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
+            </div>
             <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
               {[
                 { key: "NOW", label: "Deliver now" },
@@ -893,7 +967,7 @@ const CartScreen = () => {
                   <button
                     key={m.key}
                     type="button"
-                    onClick={() => { setDeliveryMode(m.key); setError(null); }}
+                    onClick={() => { setDeliveryMode(m.key); setDeliveryPreset(null); setError(null); }}
                     style={{
                       flex: 1, padding: "9px 6px", borderRadius: 12, fontSize: 12.5, fontWeight: 700, cursor: "pointer",
                       border: on ? "1px solid transparent" : "1px solid var(--cm-line)",
@@ -915,13 +989,13 @@ const CartScreen = () => {
                     <label className="mkt-field-label">Date</label>
                     <input type="date" className="mkt-input" value={scheduleDate}
                       min={new Date().toISOString().slice(0, 10)}
-                      onChange={(e) => { setScheduleDate(e.target.value); setSelectedSlotId(""); }} />
+                      onChange={(e) => { setScheduleDate(e.target.value); setSelectedSlotId(""); setDeliveryPreset(null); }} />
                   </div>
                   {!hasSlots && (
                     <div className="mkt-field" style={{ flex: 1, margin: 0 }}>
                       <label className="mkt-field-label">Time</label>
                       <input type="time" className="mkt-input" value={scheduleTime}
-                        onChange={(e) => setScheduleTime(e.target.value)} />
+                        onChange={(e) => { setScheduleTime(e.target.value); setDeliveryPreset(null); }} />
                     </div>
                   )}
                 </div>
@@ -929,7 +1003,7 @@ const CartScreen = () => {
                   <div className="mkt-field" style={{ margin: "10px 0 0" }}>
                     <label className="mkt-field-label">Delivery slot</label>
                     <select className="mkt-input" value={selectedSlotId}
-                      onChange={(e) => setSelectedSlotId(e.target.value)}>
+                      onChange={(e) => { setSelectedSlotId(e.target.value); setDeliveryPreset(null); }}>
                       <option value="">-- Select a slot --</option>
                       {slotsForDate(scheduleDate).map((s) => (
                         <option key={s.id} value={s.id}>
@@ -1041,7 +1115,7 @@ const CartScreen = () => {
                   <div className="mkt-field" style={{ margin: "0 0 10px" }}>
                     <label className="mkt-field-label">Delivery slot</label>
                     <select className="mkt-input" value={selectedSlotId}
-                      onChange={(e) => setSelectedSlotId(e.target.value)}>
+                      onChange={(e) => { setSelectedSlotId(e.target.value); setDeliveryPreset(null); }}>
                       <option value="">-- Select a slot --</option>
                       {deliverySlots.map((s) => (
                         <option key={s.id} value={s.id}>

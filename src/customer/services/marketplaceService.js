@@ -178,10 +178,19 @@ export const marketplaceService = {
   // GST tax invoice data (customer or store owner).
   getOrderInvoice: (orderId) => authGet(`/api/customer/marketplace/orders/${orderId}/invoice`),
 
-  // ===== Wishlist (manual want-list) =====
+  // ===== Wishlist (manual 'request-an-item' want-list) =====
   createWishlist: (payload) => authPost("/api/customer/marketplace/wishlist", payload),
   getMyWishlist: () => authGet("/api/customer/marketplace/wishlist/my"),
   deleteWishlist: (id) => authDelete(`/api/customer/marketplace/wishlist/${id}`),
+
+  // ===== Saved-product wishlist (Retail Wave 1) =====
+  // Separate feature from the 'request-an-item' wishlist above. This one saves a
+  // catalog product and is keyed by ITEM id (not the saved-row id). Save is
+  // upsert-idempotent server-side (UNIQUE user_id+item_id); delete-by-item-id is
+  // idempotent too. Each list element carries the embedded { item } StoreItem.
+  getSavedItems: () => authGet("/api/customer/marketplace/saved-items"),
+  saveItem: (itemId) => authPost("/api/customer/marketplace/saved-items", { itemId }),
+  removeSavedItem: (itemId) => authDelete(`/api/customer/marketplace/saved-items/${itemId}`),
 
   checkOrderPayment: (orderId) =>
     authGet(`/api/customer/marketplace/orders/${orderId}/check-payment`),

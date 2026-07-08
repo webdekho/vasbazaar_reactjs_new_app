@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaCheckCircle, FaTimesCircle, FaClock, FaHome, FaHistory, FaUniversity } from "react-icons/fa";
 import { isSuccessStatus, isPendingStatus } from "../../shared/constants/juspay";
@@ -33,6 +33,25 @@ const setVerifiedOrder = (orderId, result) => {
 
 const HOME_ROUTE = "/customer/app/services";
 
+// Time-based re-check cadence, measured from when the transaction was initiated:
+//   0–40s : just show a loader, don't hit the gateway yet (it hasn't settled; an
+//           early check can even flip a not-yet-paid order to FAILED)
+//   40s–2m: re-check every 10s
+//   2m–3m : re-check every 20s
+//   3m–5m : re-check every 30s
+//   >5m   : stop auto-polling, leave the manual "Check Status" button
+const INITIAL_CHECK_DELAY_MS = 40 * 1000;
+const POLL_STOP_MS = 5 * 60 * 1000;
+
+// Given elapsed time since initiation, return the delay until the next auto check,
+// or null once we've passed the 5-minute window and should stop polling.
+const nextPollDelay = (elapsedMs) => {
+  if (elapsedMs >= POLL_STOP_MS) return null;
+  if (elapsedMs < 2 * 60 * 1000) return 10 * 1000;
+  if (elapsedMs < 3 * 60 * 1000) return 20 * 1000;
+  return 30 * 1000;
+};
+
 const JuspayCallbackScreen = () => {
   const navigate = useNavigate();
   const { theme } = useTheme();
@@ -42,8 +61,108 @@ const JuspayCallbackScreen = () => {
   const [txnId, setTxnId] = useState("");
   const [paymentCtx, setPaymentCtx] = useState(null);
   const [isPaid, setIsPaid] = useState(true); // Default to true for backward compatibility
+  const [checking, setChecking] = useState(false); // manual "Check Status" re-verify in flight
+  const [autoPolling, setAutoPolling] = useState(true); // auto re-check loop still running
+  const [pollTick, setPollTick] = useState(0); // bumps to schedule the next auto poll
+  const initiatedAtRef = useRef(null); // epoch ms when the transaction was initiated
 
   const isLight = theme === "light";
+
+  // Apply a status-check response to the UI: update state, cache the result,
+  // and navigate to the success screen when the gateway reports the payment charged.
+  // Returns the resolved state ("success" | "pending" | "failed") so callers can react.
+  const applyStatusResponse = (response, ctx, orderId) => {
+    const status = (
+      response?.data?.status ||
+      response?.data?.txnStatus ||
+      response?.data?.Status ||
+      ""
+    ).toUpperCase();
+
+    if (isSuccessStatus(status)) {
+      setState("success");
+      setMessage("Payment successful!");
+      const successState = {
+        type: ctx?.type || "recharge",
+        amount: ctx?.amount,
+        label: ctx?.label,
+        txnId: orderId,
+        statusPayload: response.data,
+        paymentType: "upi",
+        couponCode: ctx?.couponCode || null,
+        couponName: ctx?.couponName || null,
+        discountValue: ctx?.discountValue || 0,
+        cashbackValue: ctx?.cashbackValue || 0,
+        offerType: ctx?.offerType || null,
+        mobile: ctx?.mobile || ctx?.field1 || "",
+        field1: ctx?.field1 || ctx?.mobile || "",
+        field2: ctx?.field2 || null,
+        operatorId: ctx?.operatorId || null,
+        operatorName: ctx?.operatorName || ctx?.label || "",
+        logo: ctx?.logo || "",
+        validity: ctx?.validity || null,
+        viewBillResponse: ctx?.viewBillResponse || {},
+        serviceId: ctx?.serviceId || null,
+      };
+      setVerifiedOrder(orderId, { state: "success", message: "Payment successful!", successState });
+      setTimeout(() => {
+        navigate("/customer/app/success", { replace: true, state: successState });
+      }, 1500);
+      return "success";
+    }
+
+    if (isPendingStatus(status)) {
+      setState("pending");
+      const pendingMsg = "Your payment is being processed. Please check your transaction history for the latest status.";
+      setMessage(pendingMsg);
+      setVerifiedOrder(orderId, { state: "pending", message: pendingMsg });
+      return "pending";
+    }
+
+    setState("failed");
+    // Check if payment was actually made (is_paid flag from API)
+    const paidStatus = response?.data?.is_paid ?? response?.data?.isPaid ?? false;
+    setIsPaid(paidStatus);
+    const rawReason =
+      response?.data?.failureReason ||
+      response?.data?.failure_reason ||
+      response?.data?.errorMessage ||
+      response?.data?.error_message ||
+      response?.data?.reason ||
+      response?.data?.message ||
+      response?.message ||
+      "";
+    // Hide technical/internal messages from the user
+    const isTechnical = /login failed|ip \d|automatic refund|internal server|exception|stacktrace|null pointer/i.test(rawReason);
+    const failReason = isTechnical || !rawReason
+      ? (paidStatus ? "Payment could not be completed. Please choose a refund option below." : "Payment was not completed. No amount was deducted from your account.")
+      : rawReason;
+    setMessage(failReason);
+    setVerifiedOrder(orderId, { state: "failed", message: failReason, isPaid: paidStatus });
+    return "failed";
+  };
+
+  // Re-query the gateway on demand when the user taps "Check Status" on a pending
+  // transaction. Bypasses the sessionStorage cache so a genuinely-updated status
+  // (charged / failed) is picked up instead of the stale "pending" snapshot.
+  const handleRecheck = async () => {
+    if (!txnId || checking) return;
+    setChecking(true);
+    setState("verifying");
+    setMessage("Checking your payment status...");
+    try {
+      const response = await juspayService.checkOrderStatus(txnId);
+      const result = applyStatusResponse(response, paymentCtx, txnId);
+      if (result === "pending") {
+        setMessage("Still processing. This can take a few minutes — your transaction history will update automatically once the bank confirms it.");
+      }
+    } catch {
+      setState("pending");
+      setMessage("Couldn't check right now. Please try again in a moment or view your transaction history.");
+    } finally {
+      setChecking(false);
+    }
+  };
 
   useEffect(() => {
     // Use module-level flag to prevent duplicate verification
@@ -52,6 +171,7 @@ const JuspayCallbackScreen = () => {
       return;
     }
     _verificationInProgress = true;
+    let initialTimer;
 
     const verify = async () => {
       // 1. Get order ID from URL params or saved context
@@ -94,95 +214,67 @@ const JuspayCallbackScreen = () => {
 
       setTxnId(orderId);
 
-      try {
-        // 2. Verify order status with backend (single API call only)
-        _verificationDone = true;
-        const response = await juspayService.checkOrderStatus(orderId);
-        const status = (
-          response?.data?.status ||
-          response?.data?.txnStatus ||
-          response?.data?.Status ||
-          ""
-        ).toUpperCase();
+      // Anchor all polling timing to when the payment was initiated (falls back to
+      // now if we have no saved context), then defer the FIRST status check until
+      // INITIAL_CHECK_DELAY_MS has passed. Until then we just show the loader.
+      const initiatedAt = ctx?.timestamp || Date.now();
+      initiatedAtRef.current = initiatedAt;
+      const waitMs = Math.max(0, INITIAL_CHECK_DELAY_MS - (Date.now() - initiatedAt));
 
-        if (isSuccessStatus(status)) {
-          setState("success");
-          setMessage("Payment successful!");
+      setState("verifying");
+      setMessage("Confirming your payment. This can take up to a minute…");
+      _verificationDone = true;
 
-          const successState = {
-            type: ctx?.type || "recharge",
-            amount: ctx?.amount,
-            label: ctx?.label,
-            txnId: orderId,
-            statusPayload: response.data,
-            paymentType: "upi",
-            couponCode: ctx?.couponCode || null,
-            couponName: ctx?.couponName || null,
-            discountValue: ctx?.discountValue || 0,
-            cashbackValue: ctx?.cashbackValue || 0,
-            offerType: ctx?.offerType || null,
-            mobile: ctx?.mobile || ctx?.field1 || "",
-            field1: ctx?.field1 || ctx?.mobile || "",
-            field2: ctx?.field2 || null,
-            operatorId: ctx?.operatorId || null,
-            operatorName: ctx?.operatorName || ctx?.label || "",
-            logo: ctx?.logo || "",
-            validity: ctx?.validity || null,
-            viewBillResponse: ctx?.viewBillResponse || {},
-            serviceId: ctx?.serviceId || null,
-          };
-
-          // Cache the result
-          setVerifiedOrder(orderId, { state: "success", message: "Payment successful!", successState });
-
-          // Navigate to success screen with context
-          setTimeout(() => {
-            navigate("/customer/app/success", {
-              replace: true,
-              state: successState,
-            });
-          }, 1500);
-        } else if (isPendingStatus(status)) {
+      initialTimer = setTimeout(async () => {
+        try {
+          // 2. First status check with backend
+          const response = await juspayService.checkOrderStatus(orderId);
+          applyStatusResponse(response, ctx, orderId);
+        } catch (err) {
+          // Network/exception (not a failed payment) — drop to pending so the
+          // time-based auto-poll loop keeps retrying instead of failing the txn.
           setState("pending");
-          const pendingMsg = "Your payment is being processed. Please check your transaction history for the latest status.";
-          setMessage(pendingMsg);
-          // Cache pending result
-          setVerifiedOrder(orderId, { state: "pending", message: pendingMsg });
-        } else {
-          setState("failed");
-          // Check if payment was actually made (is_paid flag from API)
-          const paidStatus = response?.data?.is_paid ?? response?.data?.isPaid ?? false;
-          setIsPaid(paidStatus);
-
-          const rawReason =
-            response?.data?.failureReason ||
-            response?.data?.failure_reason ||
-            response?.data?.errorMessage ||
-            response?.data?.error_message ||
-            response?.data?.reason ||
-            response?.data?.message ||
-            response?.message ||
-            "";
-          // Hide technical/internal messages from the user
-          const isTechnical = /login failed|ip \d|automatic refund|internal server|exception|stacktrace|null pointer/i.test(rawReason);
-          const failReason = isTechnical || !rawReason
-            ? (paidStatus ? "Payment could not be completed. Please choose a refund option below." : "Payment was not completed. No amount was deducted from your account.")
-            : rawReason;
-          setMessage(failReason);
-          // Cache failed result
-          setVerifiedOrder(orderId, { state: "failed", message: failReason, isPaid: paidStatus });
+          setMessage("Your payment is being processed. Please check your transaction history for the latest status.");
         }
-      } catch (err) {
-        setState("failed");
-        const errorMsg = "Unable to verify payment status. Please check your transaction history.";
-        setMessage(errorMsg);
-        // Cache error result
-        setVerifiedOrder(orderId, { state: "failed", message: errorMsg });
-      }
+      }, waitMs);
     };
 
     verify();
+    return () => { if (initialTimer) clearTimeout(initialTimer); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto re-check loop: while the transaction is pending, silently re-query the
+  // gateway at the nextPollDelay() cadence so a status update (charged/failed) —
+  // whether from the user finishing the payment or a backend callback landing — is
+  // reflected without any tap. Stops on a terminal status or past the 5-min window,
+  // leaving the manual "Check Status" button.
+  useEffect(() => {
+    if (state !== "pending" || !txnId) return undefined;
+
+    const initiatedAt = initiatedAtRef.current || Date.now();
+    const delay = nextPollDelay(Date.now() - initiatedAt);
+    if (delay === null) {
+      setAutoPolling(false); // past the 5-min window — hand off to manual re-check
+      return undefined;
+    }
+
+    const id = setTimeout(async () => {
+      let result = "pending";
+      try {
+        const response = await juspayService.checkOrderStatus(txnId);
+        result = applyStatusResponse(response, paymentCtx, txnId);
+      } catch {
+        result = "pending"; // transient error — keep waiting and retry next tick
+      }
+      // Still pending → schedule the next poll at the current cadence, or stop.
+      if (result === "pending") {
+        if (nextPollDelay(Date.now() - initiatedAt) === null) setAutoPolling(false);
+        else setPollTick((t) => t + 1);
+      }
+    }, delay);
+
+    return () => clearTimeout(id);
+  }, [state, txnId, paymentCtx, pollTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Block browser "back" from landing on this payment-status page.
   // The Juspay gateway redirect leaves this callback URL in history, so without
@@ -323,24 +415,51 @@ const JuspayCallbackScreen = () => {
 
       {/* Action buttons for pending transactions */}
       {state === "pending" && (
-        <div style={{ display: "flex", gap: 12, width: "100%", maxWidth: 380, marginTop: 8 }}>
-          <button onClick={goHome} style={secondaryBtnStyle(isLight)}>
-            <FaHome /> Go To Home
-          </button>
+        <>
+          {autoPolling && (
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+              marginBottom: 18, fontSize: "0.82rem", fontWeight: 600,
+              color: isLight ? "#8A6D00" : "#FFB300",
+            }}>
+              <div style={{
+                width: 16, height: 16, border: "2px solid #FFB300",
+                borderTopColor: "transparent", borderRadius: "50%",
+                animation: "jcb-spin 0.8s linear infinite",
+              }} />
+              Checking status automatically…
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 12, width: "100%", maxWidth: 380, marginTop: 8 }}>
+            <button onClick={goHome} style={secondaryBtnStyle(isLight)}>
+              <FaHome /> Go To Home
+            </button>
+            <button
+              onClick={handleRecheck}
+              disabled={checking}
+              style={{
+                flex: 1, padding: "14px 20px", borderRadius: 14,
+                background: "linear-gradient(135deg, #007BFF 0%, #00BFFF 100%)",
+                border: "none", color: "#fff",
+                boxShadow: "0 8px 24px rgba(0,123,255,0.35)",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                fontSize: "0.95rem", fontWeight: 700,
+                cursor: checking ? "not-allowed" : "pointer", opacity: checking ? 0.7 : 1,
+              }}
+            >
+              <FaHistory /> {checking ? "Checking..." : "Check Status"}
+            </button>
+          </div>
           <button
             onClick={() => navigate("/customer/app/history", { replace: true })}
             style={{
-              flex: 1, padding: "14px 20px", borderRadius: 14,
-              background: "linear-gradient(135deg, #007BFF 0%, #00BFFF 100%)",
-              border: "none", color: "#fff",
-              boxShadow: "0 8px 24px rgba(0,123,255,0.35)",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              fontSize: "0.95rem", fontWeight: 700, cursor: "pointer",
+              background: "none", border: "none", marginTop: 14, cursor: "pointer",
+              color: isLight ? "#6B7280" : "#9CA3C0", fontSize: "0.82rem", textDecoration: "underline",
             }}
           >
-            <FaHistory /> Check Status
+            View transaction history
           </button>
-        </div>
+        </>
       )}
 
       {/* Go To Home for failed transactions */}

@@ -1,21 +1,52 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { FaArrowLeft, FaStore, FaClock, FaRupeeSign, FaPlus, FaMinus, FaShareAlt, FaStar, FaCamera } from "react-icons/fa";
+import { FaArrowLeft, FaStore, FaClock, FaRupeeSign, FaPlus, FaMinus, FaShareAlt, FaStar, FaCamera, FaHeart, FaRegHeart, FaBalanceScale, FaBolt } from "react-icons/fa";
 import { FiSearch, FiGrid, FiList } from "react-icons/fi";
 import { marketplaceService } from "../../services/marketplaceService";
 import { marketplaceDiscoveryService } from "../../services/marketplaceDiscoveryService";
 import { marketplaceItemExtrasService } from "../../services/marketplaceItemExtrasService";
 import { useMarketplaceCart } from "../../context/MarketplaceCartContext";
+import { useMarketplaceCompare } from "../../context/MarketplaceCompareContext";
+import { useToast } from "../../context/ToastContext";
 import { shareStore } from "./shareStore";
 import { shareProduct } from "../../utils/shareProduct";
 import { parseVariants, variantDimensions, dimensionValues, findVariantByOptions, minVariantPrice } from "./variantUtils";
 import "./marketplace.css";
+
+// Client-side sort options for a store's item grid (applied to the already-
+// loaded list only — the backend keeps its own default order).
+const SORT_OPTIONS = [
+  { id: "relevance", label: "Relevance" },
+  { id: "price_asc", label: "Price ↑" },
+  { id: "price_desc", label: "Price ↓" },
+  { id: "newest", label: "Newest" },
+  { id: "rating", label: "Rating" },
+];
+
+// Effective (payable) price for an item, honouring variants and offer price.
+const itemSortPrice = (item) => {
+  const variants = parseVariants(item);
+  if (variants.length > 0) return minVariantPrice(variants);
+  return Number(item.offerPrice && Number(item.offerPrice) > 0 ? item.offerPrice : item.sellingPrice) || 0;
+};
+
+const itemRating = (item) => Number(item.avgRating ?? item.rating ?? 0);
 
 const StoreDetailScreen = () => {
   const { storeId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { addItem, decrementItem, getItemQty, getItemTotalQty, totals, cart } = useMarketplaceCart();
+  const compare = useMarketplaceCompare();
+  const { showToast } = useToast();
+
+  // Client-side controls for the item grid (Retail Wave 1).
+  const [sortBy, setSortBy] = useState("relevance");
+  const [selectedBrand, setSelectedBrand] = useState(null);
+
+  // Saved-product wishlist: set of item ids the user has hearted.
+  const [savedIds, setSavedIds] = useState(() => new Set());
+  const [savingIds, setSavingIds] = useState(() => new Set());
 
   // Item whose variant picker sheet is open (null = closed).
   const [variantItem, setVariantItem] = useState(null);
@@ -155,18 +186,97 @@ const StoreDetailScreen = () => {
     if (selectedSubcategoryId) {
       result = result.filter((i) => i.storeItemSubcategoryId?.id === selectedSubcategoryId);
     }
+    // Filter by selected brand (client-side, from the loaded items)
+    if (selectedBrand) {
+      result = result.filter((i) => (i.brand || "").trim() === selectedBrand);
+    }
     // Filter by search text
     if (debouncedSearch) {
       const q = debouncedSearch.toLowerCase();
       result = result.filter((i) => (i.name || "").toLowerCase().includes(q));
     }
     return result;
-  }, [items, debouncedSearch, selectedCategoryId, selectedSubcategoryId]);
+  }, [items, debouncedSearch, selectedCategoryId, selectedSubcategoryId, selectedBrand]);
+
+  // Distinct brands across the loaded items — powers the brand filter chips.
+  const brands = useMemo(() => {
+    const set = new Set();
+    items.forEach((i) => { const b = (i.brand || "").trim(); if (b) set.add(b); });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [items]);
+
+  // Apply the client-side sort on top of the filtered list. "relevance" keeps
+  // the backend order; the others sort a shallow copy.
+  const sortedItems = useMemo(() => {
+    if (sortBy === "relevance") return filteredItems;
+    const arr = [...filteredItems];
+    if (sortBy === "price_asc") arr.sort((a, b) => itemSortPrice(a) - itemSortPrice(b));
+    else if (sortBy === "price_desc") arr.sort((a, b) => itemSortPrice(b) - itemSortPrice(a));
+    else if (sortBy === "newest") arr.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    else if (sortBy === "rating") arr.sort((a, b) => itemRating(b) - itemRating(a));
+    return arr;
+  }, [filteredItems, sortBy]);
+
+  // Load the user's saved products once, to light up the heart on saved items.
+  useEffect(() => {
+    marketplaceService.getSavedItems()
+      .then((res) => {
+        if (res.success && Array.isArray(res.data)) {
+          setSavedIds(new Set(res.data.map((r) => String(r.itemId))));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleAdd = useCallback((item, variant) => {
     if (!store) return;
     addItem(store, item, variant ? { variant } : undefined);
   }, [addItem, store]);
+
+  // Buy Now: add just this item (optionally a chosen variant) and jump straight
+  // to the existing single-store checkout — no new payment path.
+  const handleBuyNow = useCallback((item, variant, extras = {}) => {
+    if (!store) return;
+    addItem(store, item, { ...(variant ? { variant } : {}), ...extras });
+    navigate(`/customer/app/marketplace/cart?store=${store.id}`);
+  }, [addItem, store, navigate]);
+
+  // Toggle the saved-product heart (optimistic; endpoints are idempotent).
+  const toggleSave = useCallback(async (item) => {
+    const id = String(item.id);
+    if (savingIds.has(id)) return;
+    const wasSaved = savedIds.has(id);
+    setSavingIds((prev) => new Set(prev).add(id));
+    setSavedIds((prev) => {
+      const next = new Set(prev);
+      if (wasSaved) next.delete(id); else next.add(id);
+      return next;
+    });
+    const res = wasSaved
+      ? await marketplaceService.removeSavedItem(item.id)
+      : await marketplaceService.saveItem(item.id);
+    setSavingIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
+    if (!res.success) {
+      // Revert on failure.
+      setSavedIds((prev) => {
+        const next = new Set(prev);
+        if (wasSaved) next.add(id); else next.delete(id);
+        return next;
+      });
+      showToast(res.message || "Could not update saved products", "error");
+    } else {
+      showToast(wasSaved ? "Removed from saved" : "Saved to your products", "success");
+    }
+  }, [savedIds, savingIds, showToast]);
+
+  // Toggle this item in the compare tray (max 3), with a friendly cap toast.
+  const toggleCompare = useCallback((item) => {
+    if (!compare.isSelected(item.id) && compare.atLimit) {
+      showToast(`You can compare up to ${compare.limit} products`, "error");
+      return;
+    }
+    compare.toggle(item, store?.id);
+  }, [compare, showToast, store]);
 
   if (loading) {
     return (
@@ -409,11 +519,62 @@ const StoreDetailScreen = () => {
         </div>
       )}
 
-      {filteredItems.length === 0 ? (
+      {/* Sort control (client-side) */}
+      {items.length > 1 && (
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6, padding: "10px 14px 0" }}>
+          <label htmlFor="mkt-store-sort" style={{ fontSize: 11, color: "var(--cm-muted)", fontWeight: 600 }}>Sort</label>
+          <select
+            id="mkt-store-sort"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            style={{ padding: "6px 10px", borderRadius: 10, border: "1px solid var(--cm-line)", background: "var(--cm-card)", color: "var(--cm-ink)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+          >
+            {SORT_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </select>
+        </div>
+      )}
+
+      {/* Brand filter chips (client-side, from distinct brands in loaded items) */}
+      {brands.length > 0 && (
+        <div style={{ display: "flex", gap: 6, overflowX: "auto", padding: "8px 14px 0", scrollbarWidth: "none" }}>
+          <button
+            type="button"
+            onClick={() => setSelectedBrand(null)}
+            style={{
+              flexShrink: 0, padding: "5px 12px", borderRadius: 999,
+              border: `1px solid ${!selectedBrand ? "transparent" : "var(--cm-line)"}`,
+              background: !selectedBrand ? "linear-gradient(135deg, #40E0D0, #007BFF)" : "var(--cm-card)",
+              color: !selectedBrand ? "#fff" : "var(--cm-muted)", fontSize: 11.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+            }}
+          >
+            All brands
+          </button>
+          {brands.map((b) => {
+            const active = selectedBrand === b;
+            return (
+              <button
+                key={b}
+                type="button"
+                onClick={() => setSelectedBrand(active ? null : b)}
+                style={{
+                  flexShrink: 0, padding: "5px 12px", borderRadius: 999,
+                  border: `1px solid ${active ? "transparent" : "var(--cm-line)"}`,
+                  background: active ? "linear-gradient(135deg, #40E0D0, #007BFF)" : "var(--cm-card)",
+                  color: active ? "#fff" : "var(--cm-muted)", fontSize: 11.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+                }}
+              >
+                {b}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {sortedItems.length === 0 ? (
         <div className="mkt-empty">No items available</div>
       ) : (
         <div className={`mkt-item-grid${viewMode === "list" ? " mkt-item-grid--list" : ""}`}>
-          {filteredItems.map((item) => {
+          {sortedItems.map((item) => {
             const variants = parseVariants(item);
             const hasVariants = variants.length > 0;
             const unavailable = item.isAvailable === false || closed;
@@ -442,12 +603,32 @@ const StoreDetailScreen = () => {
                   className="mkt-item-image"
                   role="button"
                   tabIndex={0}
-                  style={{ cursor: "pointer" }}
+                  style={{ cursor: "pointer", position: "relative" }}
                   onClick={() => setVariantItem(item)}
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setVariantItem(item); } }}
                   aria-label={`View ${item.name} details`}
                 >
                   {item.imageUrl ? <img src={item.imageUrl} alt="" /> : <FaStore size={32} />}
+                  <div style={{ position: "absolute", top: 6, right: 6, display: "flex", flexDirection: "column", gap: 6 }}>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); toggleSave(item); }}
+                      aria-label={savedIds.has(String(item.id)) ? "Remove from saved" : "Save product"}
+                      title={savedIds.has(String(item.id)) ? "Saved" : "Save"}
+                      style={{ width: 28, height: 28, borderRadius: 999, border: "none", background: "rgba(0,0,0,0.45)", color: savedIds.has(String(item.id)) ? "#f87171" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}
+                    >
+                      {savedIds.has(String(item.id)) ? <FaHeart size={13} /> : <FaRegHeart size={13} />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); toggleCompare(item); }}
+                      aria-label={compare.isSelected(item.id) ? "Remove from compare" : "Add to compare"}
+                      title={compare.isSelected(item.id) ? "In compare" : "Compare"}
+                      style={{ width: 28, height: 28, borderRadius: 999, border: "none", background: compare.isSelected(item.id) ? "linear-gradient(135deg, #40E0D0, #007BFF)" : "rgba(0,0,0,0.45)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}
+                    >
+                      <FaBalanceScale size={12} />
+                    </button>
+                  </div>
                 </div>
                 <div className="mkt-item-body">
                   <p
@@ -457,6 +638,11 @@ const StoreDetailScreen = () => {
                   >
                     {item.name}
                   </p>
+                  {(item.brand || item.packSize) && (
+                    <div style={{ fontSize: 11, color: "var(--cm-muted)", marginBottom: 2 }}>
+                      {[item.brand, item.packSize].filter(Boolean).join(" · ")}
+                    </div>
+                  )}
                   <div className="mkt-item-row">
                     <div>
                       <div className="mkt-item-price">{hasVariants ? "From " : ""}₹{Number(effPrice || 0).toFixed(0)}</div>
@@ -666,6 +852,23 @@ const StoreDetailScreen = () => {
         )}
       </div>
 
+      {compare.count > 0 && (
+        <div
+          className="mkt-cart-bar"
+          style={{
+            background: "linear-gradient(135deg, #6366f1 0%, #007BFF 100%)",
+            boxShadow: "0 12px 32px rgba(99,102,241,0.35)",
+            bottom: totals.count > 0 && cart && cart.storeId === store.id ? 80 : 16,
+          }}
+          onClick={() => navigate("/customer/app/marketplace/compare")}
+        >
+          <div className="mkt-cart-bar-info" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <FaBalanceScale size={13} /> {compare.count} to compare
+          </div>
+          <div className="mkt-cart-bar-cta">Compare →</div>
+        </div>
+      )}
+
       {totals.count > 0 && cart && cart.storeId === store.id && (
         <div className="mkt-cart-bar" onClick={() => navigate("/customer/app/marketplace/cart")}>
           <div className="mkt-cart-bar-info">
@@ -686,6 +889,9 @@ const StoreDetailScreen = () => {
           getItemQty={getItemQty}
           addItem={addItem}
           decrementItem={decrementItem}
+          onBuyNow={handleBuyNow}
+          saved={savedIds.has(String(variantItem.id))}
+          onToggleSave={() => toggleSave(variantItem)}
         />
       )}
     </div>
@@ -697,7 +903,7 @@ const StoreDetailScreen = () => {
  * dimension (Size / Colour …); legacy flat variants fall back to a single
  * group of labels. The resolved variant drives price, MRP, stock and add/qty.
  */
-const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, onClose, getItemQty, addItem, decrementItem }) => {
+const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, onClose, getItemQty, addItem, decrementItem, onBuyNow, saved, onToggleSave }) => {
   const variants = useMemo(() => parseVariants(item), [item]);
   const dims = useMemo(() => variantDimensions(variants), [variants]);
   const { updateLineExtras, storeList } = useMarketplaceCart();
@@ -896,6 +1102,11 @@ const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, on
           </div>
           <div style={{ flex: 1 }}>
             <div className="mkt-vsheet-title">{item.name}</div>
+            {(item.brand || item.packSize) && (
+              <div style={{ fontSize: 12, color: "var(--cm-muted)", marginTop: 1 }}>
+                {[item.brand, item.packSize].filter(Boolean).join(" · ")}
+              </div>
+            )}
             {selected && <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>{selected.label}</div>}
             {reviewData?.summary && Number(reviewData.summary.count) > 0 && (
               <button
@@ -910,6 +1121,18 @@ const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, on
               </button>
             )}
           </div>
+          {onToggleSave && (
+            <button
+              type="button"
+              className="mkt-store-share-btn"
+              onClick={onToggleSave}
+              aria-label={saved ? "Remove from saved" : "Save product"}
+              title={saved ? "Saved" : "Save"}
+              style={{ color: saved ? "#f87171" : undefined }}
+            >
+              {saved ? <FaHeart size={14} /> : <FaRegHeart size={14} />}
+            </button>
+          )}
           <button
             type="button"
             className="mkt-store-share-btn"
@@ -1041,22 +1264,36 @@ const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, on
           </div>
         )}
 
-        {qty === 0 ? (
-          <button
-            className="mkt-btn mkt-btn--primary"
-            disabled={!canAdd}
-            style={{ opacity: canAdd ? 1 : 0.5 }}
-            onClick={() => { addItem(store, item, { variant, ...custExtras }); }}
-          >
-            {closed ? "Store closed" : (minQty > 1 ? `Add ${minQty} to cart` : "Add to cart")}
-          </button>
-        ) : (
-          <div className="mkt-stepper" style={{ alignSelf: "flex-start", width: "fit-content" }}>
-            <button className="mkt-stepper-btn" onClick={() => decrementItem(lineKey)} aria-label="Decrease"><FaMinus size={10} /></button>
-            <span className="mkt-stepper-qty">{qty}</span>
-            <button className="mkt-stepper-btn" disabled={!canAdd} onClick={() => addItem(store, item, { variant, ...custExtras })} aria-label="Increase"><FaPlus size={10} /></button>
-          </div>
-        )}
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {qty === 0 ? (
+            <button
+              className="mkt-btn mkt-btn--primary"
+              disabled={!canAdd}
+              style={{ opacity: canAdd ? 1 : 0.5, flex: 1 }}
+              onClick={() => { addItem(store, item, { variant, ...custExtras }); }}
+            >
+              {closed ? "Store closed" : (minQty > 1 ? `Add ${minQty} to cart` : "Add to cart")}
+            </button>
+          ) : (
+            <div className="mkt-stepper" style={{ width: "fit-content" }}>
+              <button className="mkt-stepper-btn" onClick={() => decrementItem(lineKey)} aria-label="Decrease"><FaMinus size={10} /></button>
+              <span className="mkt-stepper-qty">{qty}</span>
+              <button className="mkt-stepper-btn" disabled={!canAdd} onClick={() => addItem(store, item, { variant, ...custExtras })} aria-label="Increase"><FaPlus size={10} /></button>
+            </div>
+          )}
+          {onBuyNow && (
+            <button
+              type="button"
+              className="mkt-btn mkt-btn--secondary"
+              disabled={!canAdd}
+              style={{ opacity: canAdd ? 1 : 0.5, flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+              onClick={() => onBuyNow(item, variant, custExtras)}
+              title="Buy this item now"
+            >
+              <FaBolt size={12} /> Buy now
+            </button>
+          )}
+        </div>
 
         {/* Customization (bakery cake message / photo) — stored on the cart line */}
         {allowsCustomization && (

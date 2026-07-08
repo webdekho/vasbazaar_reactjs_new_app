@@ -37,6 +37,7 @@ import {
   FaRedo,
   FaBarcode,
   FaShoppingBasket,
+  FaBookmark,
 } from "react-icons/fa";
 import { FiSearch, FiMapPin, FiZap, FiTag, FiTrendingUp, FiClock } from "react-icons/fi";
 import { marketplaceService } from "../../services/marketplaceService";
@@ -655,6 +656,15 @@ const MarketplaceHomeScreen = () => {
             <FiMapPin size={12} />
             <span className="mkt-loc-chip-label">{locationLabel}</span>
             <span aria-hidden="true">▾</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/customer/app/marketplace/my-saved")}
+            className="mkt-hero-action mkt-hero-action--icon"
+            aria-label="Saved Products"
+            title="Saved Products"
+          >
+            <FaBookmark size={14} />
           </button>
           <button
             type="button"
