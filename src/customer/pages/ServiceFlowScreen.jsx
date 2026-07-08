@@ -129,9 +129,29 @@ const RechargePlansView = ({ contactName, mobile, operatorData: initialOperatorD
   const { showToast } = useToast();
 
   const matchedOperator = useMemo(() => {
-    const code = operatorData?.opCode || operatorData?.operatorCode || "";
-    return operators.find((o) => o.opCode === code || o.operatorCode === code);
+    const norm = (v) => (v == null ? "" : v.toString().trim().toLowerCase());
+    const code = norm(operatorData?.opCode || operatorData?.operatorCode);
+    const name = norm(operatorData?.operatorName || operatorData?.operator);
+    // Primary: match on operator code (either field, either side), case/space-insensitive.
+    let m = code ? operators.find((o) => norm(o.opCode) === code || norm(o.operatorCode) === code) : null;
+    // Fallback: the detect API's code can differ from the operator master list's code
+    // (e.g. BSNL). Match on operator name so a valid id is still resolved instead of
+    // silently sending operatorId 0 to the backend.
+    if (!m && name) m = operators.find((o) => norm(o.operatorName) === name || norm(o.name) === name);
+    return m || null;
   }, [operatorData, operators]);
+
+  // Auto-open the operator picker once when we can't resolve the operator for this
+  // number. Without a matched operator the plans would map to operatorId 0 and the
+  // payment would fail at the backend — so prompt the user to pick it up front.
+  const autoPromptedRef = useRef(false);
+  useEffect(() => {
+    if (autoPromptedRef.current) return;
+    if (operators.length > 0 && !matchedOperator) {
+      autoPromptedRef.current = true;
+      setShowOperatorSheet(true);
+    }
+  }, [operators, matchedOperator]);
 
   const opName = operatorData?.operatorName || operatorData?.operator || matchedOperator?.operatorName || matchedOperator?.name || "Operator";
   const circleName = operatorData?.circleName || operatorData?.circle || operatorData?.circleCode || "";
@@ -200,8 +220,16 @@ const RechargePlansView = ({ contactName, mobile, operatorData: initialOperatorD
       showToast(`₹${amount} is not available for ${opName}. Please choose a different amount.`, "error");
       return;
     }
+    // Guard: never advance to payment without a resolved operator id. An empty id
+    // coerces to 0 downstream and the backend rejects it ("Operator not found with
+    // ID: 0"). Prompt the user to pick the operator manually instead.
+    if (!matchedOperator?.id) {
+      showToast(`We couldn't identify the operator for ${opName}. Please select it manually.`, "error");
+      setShowOperatorSheet(true);
+      return;
+    }
     navigate("/customer/app/offers", {
-      state: { type: "recharge", operatorId: matchedOperator?.id || "", amount: plan.rs, label: serviceData.name, validity: plan.validity, planDescription: plan.desc, mobile, contactName, opCode, circleCode, serviceId: serviceData.id, operatorName: opName, logo: opLogo },
+      state: { type: "recharge", operatorId: matchedOperator.id, amount: plan.rs, label: serviceData.name, validity: plan.validity, planDescription: plan.desc, mobile, contactName, opCode, circleCode, serviceId: serviceData.id, operatorName: opName, logo: opLogo },
     });
   };
 

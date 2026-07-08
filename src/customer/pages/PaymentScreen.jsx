@@ -662,6 +662,16 @@ const PaymentScreen = () => {
   }
 
   const proceed = async (payType) => {
+    // Guard: a valid operator must be resolved before any payment is attempted.
+    // A missing/blank operatorId coerces to 0 (Number("") === 0), which the backend
+    // rejects with the opaque "Operator not found with ID: 0". Catch it here with a
+    // clear, user-actionable message instead of letting the payment round-trip fail.
+    const opId = Number(paymentState.operatorId);
+    if (!Number.isInteger(opId) || opId <= 0) {
+      setStatus("We couldn't identify the operator for this recharge. Please go back and re-select the operator, then try again.");
+      return;
+    }
+
     // Reset flags for new payment
     resetPaymentFlags();
 
@@ -674,8 +684,8 @@ const PaymentScreen = () => {
     }
 
     const payload = paymentState.type === "bill"
-      ? { amount, operatorId: Number(paymentState.operatorId), validity: 30, payType, mobile: paymentState.field1, name: "Customer", field1: paymentState.field1, field2: paymentState.field2, viewBillResponse: paymentState.viewBillResponse || {} }
-      : { amount, operatorId: Number(paymentState.operatorId), validity: Number.parseInt(String(paymentState.validity).replace(/\D/g, ""), 10) || 30, payType, mobile: paymentState.mobile, name: "Customer", field1: paymentState.mobile, field2: null, viewBillResponse: {} };
+      ? { amount, operatorId: opId, validity: 30, payType, mobile: paymentState.field1, name: "Customer", field1: paymentState.field1, field2: paymentState.field2, viewBillResponse: paymentState.viewBillResponse || {} }
+      : { amount, operatorId: opId, validity: Number.parseInt(String(paymentState.validity).replace(/\D/g, ""), 10) || 30, payType, mobile: paymentState.mobile, name: "Customer", field1: paymentState.mobile, field2: null, viewBillResponse: {} };
 
     if (paymentState.couponId) {
       payload.couponId = paymentState.couponId;
