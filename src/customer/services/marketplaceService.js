@@ -284,13 +284,84 @@ export const marketplaceService = {
   raiseDispute: (payload) => authPost("/api/customer/marketplace/disputes", payload),
   getMyDisputes: () => authGet("/api/customer/marketplace/disputes/my"),
 
+  // ===== RMA — Returns / Replacements (Retail Wave 2) =====
+  // Structured reverse-logistics + refund state machine, distinct from the
+  // free-form disputes above. Refund rides the existing order refund machinery
+  // server-side; the app only calls these endpoints.
+  createReturn: (payload) => authPost("/api/customer/marketplace/returns", payload),
+
+  getMyReturns: ({ pageNumber = 0, pageSize = 50 } = {}) =>
+    authGet("/api/customer/marketplace/returns/my", { pageNumber, pageSize }),
+
+  getReturn: (id) => authGet(`/api/customer/marketplace/returns/${id}`),
+
+  // Seller side — incoming RMAs on my store + lifecycle actions.
+  getMyStoreReturns: ({ status, pageNumber = 0, pageSize = 50 } = {}) =>
+    authGet("/api/customer/marketplace/store/my/returns", {
+      pageNumber,
+      pageSize,
+      ...(status ? { status } : {}),
+    }),
+
+  approveReturn: (id, resolutionNote) =>
+    authPost(`/api/customer/marketplace/seller/returns/${id}/approve`,
+      resolutionNote ? { resolutionNote } : {}),
+
+  rejectReturn: (id, reason) =>
+    authPost(`/api/customer/marketplace/seller/returns/${id}/reject`, { reason: reason || "" }),
+
+  assignReverseRider: (id, { riderId, awb } = {}) =>
+    authPost(`/api/customer/marketplace/seller/returns/${id}/assign-reverse-rider`, {
+      ...(riderId != null ? { riderId } : {}),
+      ...(awb ? { awb } : {}),
+    }),
+
+  markReturnPicked: (id) =>
+    authPost(`/api/customer/marketplace/seller/returns/${id}/mark-picked`, {}),
+
+  completeReturn: (id) =>
+    authPost(`/api/customer/marketplace/seller/returns/${id}/complete`, {}),
+
   // Merchant: enable/disable delivery & pickup without re-approval
   updateFulfillmentModes: ({ deliveryEnabled, pickupEnabled }) =>
     authPut("/api/customer/marketplace/store/my/fulfillment", { deliveryEnabled, pickupEnabled }),
 
   // ===== Merchant Analytics =====
-  getMyStoreAnalytics: (days = 30) =>
-    authGet("/api/customer/marketplace/store/my/analytics", { days }),
+  // Accepts either a plain number (legacy `days`) or an object
+  // { from, to, days }. When from/to are supplied the backend uses the explicit
+  // date range and `days` is ignored; otherwise it falls back to `days`.
+  getMyStoreAnalytics: (arg = 30) => {
+    const params =
+      arg && typeof arg === "object"
+        ? {
+            ...(arg.from ? { from: arg.from } : {}),
+            ...(arg.to ? { to: arg.to } : {}),
+            ...(arg.days != null ? { days: arg.days } : {}),
+          }
+        : { days: arg };
+    return authGet("/api/customer/marketplace/store/my/analytics", params);
+  },
+
+  // ===== Rewards: Loyalty points (Retail Wave 3) =====
+  // Balance returns { points, valueInRupees }.
+  getLoyaltyBalance: () => authGet("/api/customer/marketplace/loyalty/balance"),
+
+  // Convert points -> wallet ₹ (server writes a REDEEM ledger row; guarded so
+  // the balance can never go negative). Returns the credited amount.
+  redeemLoyalty: (points) =>
+    authPost("/api/customer/marketplace/loyalty/redeem", { points }),
+
+  // ===== Rewards: Cashback ledger (read-only) =====
+  getMyCashback: () => authGet("/api/customer/marketplace/cashback/my"),
+
+  // ===== Rewards: Membership (Retail Wave 3) =====
+  getMembershipPlans: () => authGet("/api/customer/marketplace/membership/plans"),
+
+  getMyMembership: () => authGet("/api/customer/marketplace/membership/my"),
+
+  // Wallet-only purchase; server is idempotent on its purchase_ref.
+  purchaseMembership: (planId) =>
+    authPost("/api/customer/marketplace/membership/purchase", { planId }),
 
   // ===== Image upload =====
   uploadImage: async (file, purpose) => {

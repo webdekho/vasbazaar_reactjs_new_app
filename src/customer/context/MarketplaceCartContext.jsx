@@ -9,6 +9,12 @@ const MarketplaceCartContext = createContext(null);
 const lineKey = (itemId, variantLabel) =>
   variantLabel ? `${itemId}::${variantLabel}` : `${itemId}`;
 
+// Per-unit sum of a line's chosen add-on services (Wave 4). Add-ons carry only
+// CODES to the backend; these display prices are the item's own authored prices
+// (the server re-computes the charged amount authoritatively at order create).
+export const addOnPerUnit = (line) =>
+  (Array.isArray(line?.addOns) ? line.addOns : []).reduce((s, a) => s + (Number(a?.price) || 0), 0);
+
 // ----- persistence -----------------------------------------------------------
 // New schema: { stores: { [storeId]: bucket } }. We still read the legacy
 // single-store shape ({ storeId, items }) and migrate it into a bucket so old
@@ -86,7 +92,7 @@ export const MarketplaceCartProvider = ({ children }) => {
     let count = 0, subtotal = 0, deliveryCharges = 0;
     storeList.forEach((b) => {
       const lines = Object.values(b.items || {});
-      const sub = lines.reduce((s, i) => s + Number(i.price) * Number(i.qty || 0), 0);
+      const sub = lines.reduce((s, i) => s + (Number(i.price) + addOnPerUnit(i)) * Number(i.qty || 0), 0);
       count += lines.reduce((s, i) => s + (i.qty || 0), 0);
       subtotal += sub;
       if (sub > 0) deliveryCharges += Number(b.deliveryCharges || 0);
@@ -98,7 +104,7 @@ export const MarketplaceCartProvider = ({ children }) => {
   // (optional): per-line customization (e.g. cake message + reference photo),
   // sent to the backend as the line's note/imageUrl. No store-replace prompt
   // anymore — different stores simply coexist in their own buckets.
-  const addItem = useCallback((store, item, { variant, note, imageUrl } = {}) => {
+  const addItem = useCallback((store, item, { variant, note, imageUrl, addOns } = {}) => {
     const vLabel = variant?.label || null;
     const unitPrice = vLabel
       ? Number(variant.price)
@@ -139,6 +145,9 @@ export const MarketplaceCartProvider = ({ children }) => {
         // line already carried (increments shouldn't wipe the cake message).
         note: note !== undefined ? (note || null) : (existing?.note || null),
         noteImageUrl: imageUrl !== undefined ? (imageUrl || null) : (existing?.noteImageUrl || null),
+        // Chosen add-on services (Wave 4): [{code,label,price}]. New selection
+        // wins; increments keep what the line already carried.
+        addOns: addOns !== undefined ? (Array.isArray(addOns) ? addOns : []) : (existing?.addOns || []),
       };
       return {
         ...prev,
@@ -171,7 +180,7 @@ export const MarketplaceCartProvider = ({ children }) => {
 
   // Update a line's customization (note / reference image) in place without
   // touching its quantity.
-  const updateLineExtras = useCallback((storeId, key, { note, imageUrl } = {}) => {
+  const updateLineExtras = useCallback((storeId, key, { note, imageUrl, addOns } = {}) => {
     setStores((prev) => {
       const b = prev[storeId];
       if (!b || !b.items[key]) return prev;
@@ -180,6 +189,7 @@ export const MarketplaceCartProvider = ({ children }) => {
         ...line,
         ...(note !== undefined ? { note: note || null } : {}),
         ...(imageUrl !== undefined ? { noteImageUrl: imageUrl || null } : {}),
+        ...(addOns !== undefined ? { addOns: Array.isArray(addOns) ? addOns : [] } : {}),
       };
       return { ...prev, [storeId]: { ...b, items: { ...b.items, [key]: next } } };
     });

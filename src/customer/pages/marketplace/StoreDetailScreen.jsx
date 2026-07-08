@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { FaArrowLeft, FaStore, FaClock, FaRupeeSign, FaPlus, FaMinus, FaShareAlt, FaStar, FaCamera, FaHeart, FaRegHeart, FaBalanceScale, FaBolt } from "react-icons/fa";
+import { FaArrowLeft, FaStore, FaClock, FaRupeeSign, FaPlus, FaMinus, FaShareAlt, FaStar, FaCamera, FaHeart, FaRegHeart, FaBalanceScale, FaBolt, FaSnowflake, FaUndoAlt, FaExchangeAlt, FaGift, FaCoins, FaCalendarCheck, FaCheck } from "react-icons/fa";
 import { FiSearch, FiGrid, FiList } from "react-icons/fi";
 import { marketplaceService } from "../../services/marketplaceService";
 import { marketplaceDiscoveryService } from "../../services/marketplaceDiscoveryService";
+import { marketplaceWave6Service } from "../../services/marketplaceWave6Service";
 import { marketplaceItemExtrasService } from "../../services/marketplaceItemExtrasService";
+import { marketplaceWave4Service } from "../../services/marketplaceWave4Service";
 import { useMarketplaceCart } from "../../context/MarketplaceCartContext";
 import { useMarketplaceCompare } from "../../context/MarketplaceCompareContext";
 import { useToast } from "../../context/ToastContext";
@@ -31,6 +33,102 @@ const itemSortPrice = (item) => {
 };
 
 const itemRating = (item) => Number(item.avgRating ?? item.rating ?? 0);
+
+// ===== Wave 4 helpers =====
+// A `services` node is a PRICED add-on iff it carries a numeric price AND a
+// non-blank code; everything else is a legacy display-only assurance highlight.
+const isAddOnNode = (s) =>
+  s && s.code != null && String(s.code).trim() !== "" && s.price != null && Number.isFinite(Number(s.price));
+const splitServices = (services) => {
+  const addOns = [], assurances = [];
+  (Array.isArray(services) ? services : []).forEach((s) => {
+    if (isAddOnNode(s)) addOns.push({ code: String(s.code).trim(), label: s.label || s.code, price: Number(s.price), group: s.group || null });
+    else assurances.push(s);
+  });
+  return { addOns, assurances };
+};
+
+// Parse an item's attributes_json (string or object) into a plain map.
+const parseAttributes = (item) => {
+  const raw = item?.attributesJson ?? item?.attributes;
+  if (!raw) return {};
+  if (typeof raw === "object") return raw;
+  try { const o = JSON.parse(raw); return o && typeof o === "object" ? o : {}; } catch { return {}; }
+};
+const humanizeKey = (k) => String(k).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+const formatAttrValue = (val, def) => {
+  if (val == null || val === "") return null;
+  if (def?.dataType === "BOOL" || typeof val === "boolean") return (val === true || val === "true") ? "Yes" : "No";
+  return def?.unit ? `${val} ${def.unit}` : String(val);
+};
+
+// Effective cashback % for an item: per-item override falls back to the store
+// rate. Display-only — the server stays authoritative on the actual credit.
+const effectiveCashbackPct = (item, store) => {
+  const itemPct = Number(item?.cashbackPercent);
+  if (Number.isFinite(itemPct) && itemPct > 0) return itemPct;
+  const storePct = Number(store?.cashbackPercent);
+  return Number.isFinite(storePct) && storePct > 0 ? storePct : 0;
+};
+
+// Small green pill: "Earn X% cashback" and/or "Y pt/₹" when the store offers it.
+const CashbackHint = ({ item, store, style }) => {
+  const pct = effectiveCashbackPct(item, store);
+  const earnRate = Number(store?.loyaltyEarnRate);
+  const hasLoyalty = Number.isFinite(earnRate) && earnRate > 0;
+  if (pct <= 0 && !hasLoyalty) return null;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, ...(style || {}) }}>
+      {pct > 0 && (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, fontWeight: 700, color: "#059669", background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.35)", borderRadius: 999, padding: "1px 7px" }}>
+          <FaGift size={9} /> {pct % 1 === 0 ? pct : pct.toFixed(1)}% cashback
+        </span>
+      )}
+      {hasLoyalty && (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, fontWeight: 700, color: "#7c3aed", background: "rgba(124,58,237,0.12)", border: "1px solid rgba(124,58,237,0.35)", borderRadius: 999, padding: "1px 7px" }}>
+          <FaCoins size={9} /> {earnRate % 1 === 0 ? earnRate : earnRate.toFixed(2)} pt/₹
+        </span>
+      )}
+    </div>
+  );
+};
+
+// Global fallback near-expiry threshold (days) — mirrors the backend constant.
+const GLOBAL_NEAR_EXPIRY_DAYS = 30;
+
+// Best-before / near-expiry helper. Mirrors the backend pricing rule so the
+// displayed near-expiry price matches what the server actually charges. The
+// backend stays server-authoritative — this is display only.
+const nearExpiryInfo = (item, store) => {
+  const out = { hasExpiry: false, expired: false, isNearExpiry: false, effectivePrice: null, discountedPrice: null, pct: 0, daysLeft: null, expiryDate: null };
+  const raw = item?.expiryDate;
+  if (!raw) return out;
+  const exp = new Date(raw);
+  if (Number.isNaN(exp.getTime())) return out;
+  out.hasExpiry = true;
+  out.expiryDate = exp;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expDay = new Date(exp.getFullYear(), exp.getMonth(), exp.getDate());
+  const daysLeft = Math.round((expDay.getTime() - today.getTime()) / 86400000);
+  out.daysLeft = daysLeft;
+  if (daysLeft < 0) { out.expired = true; return out; }
+  const pct = Number(item?.nearExpiryDiscountPercent) || 0;
+  const threshold = Number(store?.nearExpiryDays) || GLOBAL_NEAR_EXPIRY_DAYS;
+  if (pct >= 1 && pct <= 100 && daysLeft <= threshold) {
+    out.isNearExpiry = true;
+    out.pct = pct;
+    const base = Number(item.offerPrice && Number(item.offerPrice) > 0 ? item.offerPrice : item.sellingPrice) || 0;
+    out.effectivePrice = Math.round(base * (100 - pct)) / 100;
+    out.discountedPrice = out.effectivePrice;
+  }
+  return out;
+};
+
+const fmtExpiry = (d) => {
+  try { return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }); }
+  catch { return ""; }
+};
 
 const StoreDetailScreen = () => {
   const { storeId } = useParams();
@@ -81,6 +179,9 @@ const StoreDetailScreen = () => {
   const [subcategories, setSubcategories] = useState([]);
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState(null);
 
+  // Wave 4: category attribute defs (labels/units/filter flags for dynamic specs).
+  const [attrDefs, setAttrDefs] = useState([]);
+
   // Ratings & reviews
   const [reviewSummary, setReviewSummary] = useState(null);
   const [reviews, setReviews] = useState([]);
@@ -97,7 +198,17 @@ const StoreDetailScreen = () => {
       marketplaceService.getStoreItemCategories(storeId).catch(() => ({ success: false, data: [] })),
     ])
       .then(([sRes, iRes, cRes]) => {
-        if (sRes.success && sRes.data) setStore(sRes.data);
+        if (sRes.success && sRes.data) {
+          setStore(sRes.data);
+          // Best-effort: pull the global-category attribute defs so specs render
+          // with proper labels/units and expose filterable chips. Non-fatal.
+          const gcid = sRes.data.storeCategoryId || sRes.data.categoryId || sRes.data.storeCategory?.id;
+          if (gcid) {
+            marketplaceWave4Service.getAttributeDefs(gcid)
+              .then((dRes) => { if (dRes.success) setAttrDefs(Array.isArray(dRes.data) ? dRes.data : (dRes.data?.records || [])); })
+              .catch(() => {});
+          }
+        }
         else setError(sRes.message || "Store not found");
         if (iRes.success) setItems(Array.isArray(iRes.data) ? iRes.data : []);
         if (cRes.success) setItemCategories(Array.isArray(cRes.data) ? cRes.data : []);
@@ -396,6 +507,50 @@ const StoreDetailScreen = () => {
 
       {/* Coupons moved to the cart/payment page (Apply coupon section). */}
 
+      {/* Store-level cashback / loyalty offer banner (display-only). */}
+      {(effectiveCashbackPct({}, store) > 0 || Number(store.loyaltyEarnRate) > 0) && (
+        <div style={{ padding: "10px 14px 0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 12, background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.28)" }}>
+            <FaGift size={16} color="#059669" style={{ flexShrink: 0 }} />
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--cm-ink)" }}>
+              {effectiveCashbackPct({}, store) > 0 && (
+                <>Earn {(() => { const p = effectiveCashbackPct({}, store); return p % 1 === 0 ? p : p.toFixed(1); })()}% cashback on this store</>
+              )}
+              {effectiveCashbackPct({}, store) > 0 && Number(store.loyaltyEarnRate) > 0 && " · "}
+              {Number(store.loyaltyEarnRate) > 0 && (
+                <>{(() => { const r = Number(store.loyaltyEarnRate); return r % 1 === 0 ? r : r.toFixed(2); })()} loyalty pt / ₹</>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Store policies (return + cancellation) — display-only info panel. */}
+      {(store.returnPolicyText || store.cancellationPolicyText) && (
+        <div style={{ padding: "10px 14px 0" }}>
+          <details className="mkt-store-policies">
+            <summary style={{ cursor: "pointer", listStyle: "none", display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 12, border: "1px solid var(--cm-line)", background: "var(--cm-card)", fontSize: 13, fontWeight: 700, color: "var(--cm-ink)" }}>
+              <FaUndoAlt size={13} color="#007BFF" /> Store policies
+              <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--cm-muted)", fontWeight: 500 }}>Tap to view</span>
+            </summary>
+            <div style={{ padding: "10px 12px 2px", display: "flex", flexDirection: "column", gap: 10 }}>
+              {store.returnPolicyText && (
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--cm-ink)", marginBottom: 3 }}>Return / Replacement</div>
+                  <div style={{ fontSize: 12.5, color: "var(--cm-muted)", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{store.returnPolicyText}</div>
+                </div>
+              )}
+              {store.cancellationPolicyText && (
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--cm-ink)", marginBottom: 3 }}>Cancellation</div>
+                  <div style={{ fontSize: 12.5, color: "var(--cm-muted)", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{store.cancellationPolicyText}</div>
+                </div>
+              )}
+            </div>
+          </details>
+        </div>
+      )}
+
       <div className="mkt-search-bar" style={{ position: "static", paddingTop: 12 }}>
         <div className="mkt-search-input-wrap">
           <FiSearch size={18} />
@@ -580,14 +735,20 @@ const StoreDetailScreen = () => {
             const unavailable = item.isAvailable === false || closed;
             // Variant items show a "From ₹X" price and open a grouped picker sheet;
             // plain items keep the inline ADD / stepper.
-            const effPrice = hasVariants
-              ? minVariantPrice(variants)
-              : Number(item.offerPrice && Number(item.offerPrice) > 0 ? item.offerPrice : item.sellingPrice);
-            const strikePrice = hasVariants
+            // Best-before / near-expiry: mirrors the backend discount so the
+            // shown price equals the charged price (server stays authoritative).
+            const nexp = hasVariants ? null : nearExpiryInfo(item, store);
+            const baseEff = Number(item.offerPrice && Number(item.offerPrice) > 0 ? item.offerPrice : item.sellingPrice);
+            let effPrice = hasVariants ? minVariantPrice(variants) : baseEff;
+            let strikePrice = hasVariants
               ? null
               : (item.offerPrice && Number(item.offerPrice) > 0 && Number(item.sellingPrice) > Number(item.offerPrice)
                   ? Number(item.sellingPrice)
                   : (item.mrp && Number(item.mrp) > Number(item.sellingPrice) ? Number(item.mrp) : null));
+            if (nexp && nexp.isNearExpiry) {
+              effPrice = nexp.effectivePrice;
+              strikePrice = baseEff; // strike the pre-discount effective price
+            }
             const qty = hasVariants ? getItemTotalQty(item.id) : getItemQty(item.id);
             const extraCount =
               ((() => { try { return JSON.parse(item.offers || "[]").length; } catch { return 0; } })()) +
@@ -641,6 +802,25 @@ const StoreDetailScreen = () => {
                   {(item.brand || item.packSize) && (
                     <div style={{ fontSize: 11, color: "var(--cm-muted)", marginBottom: 2 }}>
                       {[item.brand, item.packSize].filter(Boolean).join(" · ")}
+                    </div>
+                  )}
+                  {(item.coldChain || (nexp && (nexp.isNearExpiry || nexp.hasExpiry))) && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 3 }}>
+                      {item.coldChain && (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, fontWeight: 700, color: "#0ea5e9", background: "rgba(14,165,233,0.12)", border: "1px solid rgba(14,165,233,0.35)", borderRadius: 999, padding: "1px 7px" }}>
+                          <FaSnowflake size={9} /> Cold chain
+                        </span>
+                      )}
+                      {nexp && nexp.isNearExpiry && (
+                        <span style={{ fontSize: 10, fontWeight: 700, color: "#f59e0b", background: "rgba(245,158,11,0.14)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: 999, padding: "1px 7px" }}>
+                          {nexp.pct}% off · near expiry
+                        </span>
+                      )}
+                      {nexp && nexp.hasExpiry && !nexp.expired && (
+                        <span style={{ fontSize: 10, fontWeight: 600, color: "var(--cm-muted)", background: "var(--cm-card)", border: "1px solid var(--cm-line)", borderRadius: 999, padding: "1px 7px" }}>
+                          Best before {fmtExpiry(nexp.expiryDate)}
+                        </span>
+                      )}
                     </div>
                   )}
                   <div className="mkt-item-row">
@@ -697,6 +877,7 @@ const StoreDetailScreen = () => {
                   {item.unit && (
                     <div style={{ fontSize: 11, color: "var(--cm-muted)" }}>{item.unit}</div>
                   )}
+                  <CashbackHint item={item} store={store} style={{ marginTop: 4 }} />
                 </div>
               </div>
             );
@@ -892,6 +1073,7 @@ const StoreDetailScreen = () => {
           onBuyNow={handleBuyNow}
           saved={savedIds.has(String(variantItem.id))}
           onToggleSave={() => toggleSave(variantItem)}
+          attrDefs={attrDefs}
         />
       )}
     </div>
@@ -903,7 +1085,8 @@ const StoreDetailScreen = () => {
  * dimension (Size / Colour …); legacy flat variants fall back to a single
  * group of labels. The resolved variant drives price, MRP, stock and add/qty.
  */
-const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, onClose, getItemQty, addItem, decrementItem, onBuyNow, saved, onToggleSave }) => {
+const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, onClose, getItemQty, addItem, decrementItem, onBuyNow, saved, onToggleSave, attrDefs = [] }) => {
+  const navigate = useNavigate();
   const variants = useMemo(() => parseVariants(item), [item]);
   const dims = useMemo(() => variantDimensions(variants), [variants]);
   const { updateLineExtras, storeList } = useMarketplaceCart();
@@ -915,6 +1098,9 @@ const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, on
   const [custUploading, setCustUploading] = useState(false);
   const [custError, setCustError] = useState(null);
   const custFileInput = useRef(null);
+
+  // ===== Wave 4: add-on services (priced), chosen by CODE only =====
+  const [addOnCodes, setAddOnCodes] = useState(() => new Set());
 
   // ===== Product reviews =====
   const [reviewData, setReviewData] = useState(null); // { summary, records, ... }
@@ -1001,10 +1187,14 @@ const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, on
   // already-loaded store items so tapping swaps the sheet (like grouped items).
   const [fbtCards, setFbtCards] = useState([]);
   const [similarCards, setSimilarCards] = useState([]);
+  // Cross-category "goes well with" companions (Wave 6) — may be from OTHER
+  // stores, so these are shown as their own cards and tap through to that store.
+  const [bundleCards, setBundleCards] = useState([]);
   useEffect(() => {
     let alive = true;
     setFbtCards([]);
     setSimilarCards([]);
+    setBundleCards([]);
     if (!item?.id) return undefined;
     marketplaceDiscoveryService.getFrequentlyBoughtTogether(item.id)
       .then((res) => { if (alive && res.success) setFbtCards(Array.isArray(res.data) ? res.data : []); })
@@ -1012,8 +1202,19 @@ const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, on
     marketplaceDiscoveryService.getSimilarProducts(item.id)
       .then((res) => { if (alive && res.success) setSimilarCards(Array.isArray(res.data) ? res.data : []); })
       .catch(() => {});
+    marketplaceWave6Service.getItemBundle(item.id)
+      .then((res) => { if (alive && res.success) setBundleCards(Array.isArray(res.data) ? res.data : []); })
+      .catch(() => {});
     return () => { alive = false; };
   }, [item?.id]);
+
+  const bundleCompanions = useMemo(() => {
+    const seen = new Set();
+    return (bundleCards || [])
+      .map((row) => ({ card: row.companion || row, category: row.companionCategory, score: row.score }))
+      .filter((b) => b.card && b.card.id && b.card.id !== item.id)
+      .filter((b) => (seen.has(`${b.card.storeId}-${b.card.id}`) ? false : seen.add(`${b.card.storeId}-${b.card.id}`)));
+  }, [bundleCards, item]);
 
   const itemsById = useMemo(() => new Map((allItems || []).map((it) => [it.id, it])), [allItems]);
   const fbtItems = useMemo(
@@ -1049,10 +1250,15 @@ const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, on
   // Effective price/MRP: variant when present, else the item's own price.
   const basePrice = Number(item.offerPrice && Number(item.offerPrice) > 0 ? item.offerPrice : item.sellingPrice);
   const baseMrp = item.mrp && Number(item.mrp) > basePrice ? Number(item.mrp) : null;
-  const dispPrice = hasVar ? (selected ? Number(selected.price) : null) : basePrice;
+  // Best-before / near-expiry discount (non-variant items) — matches backend.
+  const nexp = hasVar ? null : nearExpiryInfo(item, store);
+  const nearExpiryActive = !!(nexp && nexp.isNearExpiry);
+  const dispPrice = hasVar
+    ? (selected ? Number(selected.price) : null)
+    : (nearExpiryActive ? nexp.effectivePrice : basePrice);
   const dispMrp = hasVar
     ? (selected?.mrp && Number(selected.mrp) > Number(selected.price) ? Number(selected.mrp) : null)
-    : baseMrp;
+    : (nearExpiryActive ? basePrice : baseMrp);
 
   const qty = hasVar ? (selected ? getItemQty(item.id, selected.label) : 0) : getItemQty(item.id);
   const stock = hasVar && selected && selected.stock != null ? Number(selected.stock) : null;
@@ -1090,6 +1296,89 @@ const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, on
   const parseArr = (raw) => { try { const a = raw ? JSON.parse(raw) : []; return Array.isArray(a) ? a : []; } catch { return []; } };
   const offers = parseArr(item.offers);
   const services = parseArr(item.services);
+  // Split legacy assurance highlights from new priced add-on services.
+  const { addOns: addOnServices, assurances } = splitServices(services);
+  const chosenAddOns = addOnServices.filter((a) => addOnCodes.has(a.code));
+  const addOnPerUnit = chosenAddOns.reduce((s, a) => s + a.price, 0);
+
+  // Extras carried onto the cart line: cake note/photo + chosen add-ons.
+  const addExtras = {
+    ...custExtras,
+    ...(addOnServices.length > 0 ? { addOns: chosenAddOns } : {}),
+  };
+
+  // Prefill chosen add-ons from the existing cart line so re-opening the sheet
+  // shows the saved selection.
+  useEffect(() => {
+    const bucket = (storeList || []).find((b) => String(b.storeId) === String(store?.id));
+    const line = bucket?.items?.[lineKey];
+    const saved = Array.isArray(line?.addOns) ? line.addOns.map((a) => a.code) : [];
+    setAddOnCodes(new Set(saved));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lineKey, store?.id]);
+
+  const toggleAddOn = (code) => {
+    setAddOnCodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code); else next.add(code);
+      // Live-sync to the cart line when this item is already in the cart.
+      if (qty > 0) {
+        const objs = addOnServices.filter((a) => next.has(a.code));
+        updateLineExtras(store.id, lineKey, { addOns: objs });
+      }
+      return next;
+    });
+  };
+
+  // Wave 4: dynamic attribute specs (from attributes_json + category defs).
+  const attrValues = parseAttributes(item);
+  const defByKey = {};
+  (attrDefs || []).forEach((d) => { if (d?.attrKey) defByKey[d.attrKey] = d; });
+  const specRows = (() => {
+    const rows = [];
+    const seen = new Set();
+    // Defs first (ordered), then any extra keys present on the item.
+    (attrDefs || [])
+      .slice()
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+      .forEach((d) => {
+        if (d.active === false) return;
+        const v = formatAttrValue(attrValues[d.attrKey], d);
+        if (v == null) return;
+        seen.add(d.attrKey);
+        rows.push({ label: d.label || humanizeKey(d.attrKey), value: v });
+      });
+    Object.keys(attrValues).forEach((k) => {
+      if (seen.has(k)) return;
+      const v = formatAttrValue(attrValues[k], defByKey[k]);
+      if (v == null) return;
+      rows.push({ label: defByKey[k]?.label || humanizeKey(k), value: v });
+    });
+    return rows;
+  })();
+
+  // Gold/jewellery: indicative price = rate/g × net weight (display only).
+  const metal = attrValues.metal || attrValues.Metal;
+  const purity = attrValues.purity || attrValues.Purity || attrValues.hallmark;
+  const netWeight = Number(attrValues.net_weight ?? attrValues.weight_gram ?? attrValues.weight);
+  const [goldRate, setGoldRate] = useState(null);
+  useEffect(() => {
+    if (!metal) { setGoldRate(null); return; }
+    let alive = true;
+    marketplaceWave4Service.getCurrentGoldRate({ metal: String(metal).toUpperCase().includes("SILVER") ? "SILVER" : "GOLD", purity: purity ? String(purity) : "22K" })
+      .then((r) => { if (alive && r.success && r.data) setGoldRate(r.data); })
+      .catch(() => {});
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
+  const indicativeGold = goldRate && Number.isFinite(netWeight) && netWeight > 0
+    ? Number(goldRate.ratePerGram) * netWeight
+    : null;
+
+  // Items eligible for an appointment (jewellery / installable / trial goods).
+  const apptPurpose = metal ? "JEWELLERY_VISIT"
+    : (attrValues.installation_required ? "INSTALLATION"
+      : (item.allowsTrial ? "TRIAL" : null));
 
   return (
     <div className="mkt-vsheet-overlay" onClick={onClose}>
@@ -1156,6 +1445,44 @@ const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, on
             {item.ageGroup && (
               <span style={{ fontSize: 11, fontWeight: 700, color: "#14b8a6", background: "rgba(20,184,166,0.12)", border: "1px solid rgba(20,184,166,0.4)", borderRadius: 999, padding: "3px 10px" }}>
                 Age {item.ageGroup}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Cold-chain / best-before / returnable badges (Retail Wave 2) */}
+        {(item.coldChain || (nexp && nexp.hasExpiry) || item.isReturnable || item.replacementAllowed) && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "2px 0 4px" }}>
+            {item.coldChain && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, color: "#0ea5e9", background: "rgba(14,165,233,0.12)", border: "1px solid rgba(14,165,233,0.4)", borderRadius: 999, padding: "3px 10px" }}>
+                <FaSnowflake size={10} /> Cold chain — kept chilled
+              </span>
+            )}
+            {nexp && nexp.isNearExpiry && (
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#f59e0b", background: "rgba(245,158,11,0.14)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: 999, padding: "3px 10px" }}>
+                {nexp.pct}% off · near expiry
+              </span>
+            )}
+            {nexp && nexp.hasExpiry && !nexp.expired && (
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--cm-muted)", background: "var(--cm-card)", border: "1px solid var(--cm-line)", borderRadius: 999, padding: "3px 10px" }}>
+                Best before {fmtExpiry(nexp.expiryDate)}
+                {nexp.daysLeft != null ? ` · ${nexp.daysLeft}d left` : ""}
+              </span>
+            )}
+            {item.isReturnable && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, color: "#14b8a6", background: "rgba(20,184,166,0.12)", border: "1px solid rgba(20,184,166,0.4)", borderRadius: 999, padding: "3px 10px" }}>
+                <FaUndoAlt size={10} /> Returnable
+                {Number(store?.returnWindowDays) > 0 ? ` in ${store.returnWindowDays}d` : ""}
+              </span>
+            )}
+            {item.replacementAllowed && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, color: "#8b5cf6", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.4)", borderRadius: 999, padding: "3px 10px" }}>
+                <FaExchangeAlt size={10} /> Replacement available
+              </span>
+            )}
+            {item.batchNo && (
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--cm-muted)", background: "var(--cm-card)", border: "1px solid var(--cm-line)", borderRadius: 999, padding: "3px 10px" }}>
+                Batch {item.batchNo}
               </span>
             )}
           </div>
@@ -1251,6 +1578,22 @@ const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, on
             <span style={{ fontSize: 13, color: "var(--cm-muted)" }}>This combination isn't available</span>
           )}
         </div>
+        <CashbackHint item={item} store={store} style={{ margin: "6px 0 0" }} />
+
+        {/* Wave 4: live gold/silver rate badge + indicative price (display only) */}
+        {goldRate && (
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 8 }}>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: "#b45309", background: "rgba(245,158,11,0.14)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: 999, padding: "4px 10px", display: "inline-flex", alignItems: "center", gap: 5 }}>
+              <FaCoins size={11} /> {goldRate.metal || "GOLD"} {goldRate.purity || purity || ""} · ₹{Number(goldRate.ratePerGram).toFixed(0)}/g
+            </span>
+            {indicativeGold != null && (
+              <span style={{ fontSize: 12, color: "var(--cm-muted)" }}>
+                Indicative: <strong style={{ color: "var(--cm-ink)" }}>₹{indicativeGold.toFixed(0)}</strong> ({netWeight}g)
+              </span>
+            )}
+          </div>
+        )}
+
         {stock != null && stock > 0 && stock <= 5 && (
           <div className="mkt-vsheet-stock">Only {stock} left</div>
         )}
@@ -1270,7 +1613,7 @@ const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, on
               className="mkt-btn mkt-btn--primary"
               disabled={!canAdd}
               style={{ opacity: canAdd ? 1 : 0.5, flex: 1 }}
-              onClick={() => { addItem(store, item, { variant, ...custExtras }); }}
+              onClick={() => { addItem(store, item, { variant, ...addExtras }); }}
             >
               {closed ? "Store closed" : (minQty > 1 ? `Add ${minQty} to cart` : "Add to cart")}
             </button>
@@ -1278,7 +1621,7 @@ const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, on
             <div className="mkt-stepper" style={{ width: "fit-content" }}>
               <button className="mkt-stepper-btn" onClick={() => decrementItem(lineKey)} aria-label="Decrease"><FaMinus size={10} /></button>
               <span className="mkt-stepper-qty">{qty}</span>
-              <button className="mkt-stepper-btn" disabled={!canAdd} onClick={() => addItem(store, item, { variant, ...custExtras })} aria-label="Increase"><FaPlus size={10} /></button>
+              <button className="mkt-stepper-btn" disabled={!canAdd} onClick={() => addItem(store, item, { variant, ...addExtras })} aria-label="Increase"><FaPlus size={10} /></button>
             </div>
           )}
           {onBuyNow && (
@@ -1287,13 +1630,80 @@ const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, on
               className="mkt-btn mkt-btn--secondary"
               disabled={!canAdd}
               style={{ opacity: canAdd ? 1 : 0.5, flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}
-              onClick={() => onBuyNow(item, variant, custExtras)}
+              onClick={() => onBuyNow(item, variant, addExtras)}
               title="Buy this item now"
             >
               <FaBolt size={12} /> Buy now
             </button>
           )}
         </div>
+
+        {/* Wave 4: priced add-on services — pick by CODE, server re-computes price */}
+        {addOnServices.length > 0 && (
+          <div className="mkt-isheet-sec">
+            <div className="mkt-isheet-sec-title">Add-on services</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {addOnServices.map((a) => {
+                const on = addOnCodes.has(a.code);
+                return (
+                  <button
+                    key={a.code}
+                    type="button"
+                    onClick={() => toggleAddOn(a.code)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10, textAlign: "left", cursor: "pointer",
+                      borderRadius: 12, padding: "10px 12px", background: "var(--cm-card)",
+                      border: `1.5px solid ${on ? "var(--cm-accent, #6366f1)" : "var(--cm-line)"}`,
+                    }}
+                  >
+                    <span style={{
+                      width: 20, height: 20, borderRadius: 6, flexShrink: 0, display: "grid", placeItems: "center",
+                      background: on ? "var(--cm-accent, #6366f1)" : "transparent",
+                      border: `1.5px solid ${on ? "var(--cm-accent, #6366f1)" : "var(--cm-line)"}`,
+                      color: "#fff",
+                    }}>
+                      {on && <FaCheck size={10} />}
+                    </span>
+                    <span style={{ flex: 1, fontSize: 13.5, fontWeight: 600, color: "var(--cm-ink)" }}>{a.label}</span>
+                    <span style={{ fontSize: 13.5, fontWeight: 800, color: "var(--cm-ink)" }}>+₹{a.price.toFixed(0)}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {addOnPerUnit > 0 && (
+              <div style={{ fontSize: 12.5, color: "var(--cm-muted)", marginTop: 8, textAlign: "right" }}>
+                Add-ons: <strong style={{ color: "var(--cm-ink)" }}>+₹{addOnPerUnit.toFixed(0)}</strong> / unit
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Wave 4: book an appointment / trial for eligible items */}
+        {apptPurpose && (
+          <button
+            type="button"
+            className="mkt-btn mkt-btn--secondary"
+            style={{ width: "100%", marginTop: 10, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+            onClick={() => navigate(`/customer/app/marketplace/appointments?storeId=${store.id}&itemId=${item.id}&purpose=${apptPurpose}&book=1`)}
+          >
+            <FaCalendarCheck size={12} /> {apptPurpose === "TRIAL" ? "Book a trial" : "Book appointment"}
+          </button>
+        )}
+
+        {/* Wave 4: dynamic spec rows from category attributes */}
+        {specRows.length > 0 && (
+          <div className="mkt-isheet-sec">
+            <div className="mkt-isheet-sec-title">Specifications</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+              {specRows.map((r, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "7px 0", borderBottom: i < specRows.length - 1 ? "1px solid var(--cm-line)" : "none" }}>
+                  <span style={{ fontSize: 12.5, color: "var(--cm-muted)" }}>{r.label}</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--cm-ink)", textAlign: "right" }}>{r.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Customization (bakery cake message / photo) — stored on the cart line */}
         {allowsCustomization && (
@@ -1473,11 +1883,11 @@ const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, on
           </div>
         )}
 
-        {services.length > 0 && (
+        {assurances.length > 0 && (
           <div className="mkt-isheet-sec">
             <div className="mkt-isheet-sec-title">Services</div>
             <div className="mkt-service-row">
-              {services.map((s, i) => (
+              {assurances.map((s, i) => (
                 <div key={i} className="mkt-service-item">
                   <div className="mkt-service-label">{s.label}</div>
                   {s.detail && <div className="mkt-service-detail">{s.detail}</div>}
@@ -1527,6 +1937,36 @@ const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, on
                     className="mkt-group-chip"
                     onClick={() => onOpenItem && onOpenItem(g)}
                   >
+                    <span className="mkt-group-chip-img">
+                      {g.imageUrl ? <img src={g.imageUrl} alt="" /> : <FaStore size={16} />}
+                    </span>
+                    <span className="mkt-group-chip-name">{g.name}</span>
+                    <span className="mkt-group-chip-price">₹{gPrice.toFixed(0)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Goes well with — cross-category companions (Wave 6, may be other stores) */}
+        {bundleCompanions.length > 0 && (
+          <div className="mkt-isheet-sec">
+            <div className="mkt-isheet-sec-title">Goes well with</div>
+            <div className="mkt-group-row">
+              {bundleCompanions.map((b) => {
+                const g = b.card;
+                const sameStore = String(g.storeId) === String(store?.id);
+                const gPrice = Number(g.offerPrice && Number(g.offerPrice) > 0 ? g.offerPrice : g.sellingPrice) || 0;
+                const onTap = () => {
+                  if (sameStore && onOpenItem) {
+                    const local = (allItems || []).find((it) => it.id === g.id);
+                    if (local) { onOpenItem(local); return; }
+                  }
+                  navigate(`/customer/app/marketplace/store/${g.storeId}?item=${g.id}`);
+                };
+                return (
+                  <button key={`${g.storeId}-${g.id}`} type="button" className="mkt-group-chip" onClick={onTap}>
                     <span className="mkt-group-chip-img">
                       {g.imageUrl ? <img src={g.imageUrl} alt="" /> : <FaStore size={16} />}
                     </span>

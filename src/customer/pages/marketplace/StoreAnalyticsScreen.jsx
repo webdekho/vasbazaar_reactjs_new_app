@@ -47,6 +47,23 @@ const StoreAnalyticsScreen = () => {
   const topItems = Array.isArray(data?.topItems) ? data.topItems : [];
   const maxRevenue = dailySeries.reduce((m, p) => Math.max(m, Number(p.revenue || 0)), 0);
 
+  // Category split (Wave 3): [{ category, revenue, orders? }]. Tolerate a few
+  // field-name shapes so the panel renders whatever the backend sends.
+  const categorySplit = (Array.isArray(data?.categorySplit) ? data.categorySplit : [])
+    .map((c) => ({
+      category: c.category || c.name || c.categoryName || "Uncategorised",
+      revenue: Number(c.revenue ?? c.amount ?? c.total ?? 0),
+    }))
+    .sort((a, b) => b.revenue - a.revenue);
+  const maxCatRevenue = categorySplit.reduce((m, c) => Math.max(m, c.revenue), 0);
+
+  // Explicit cancellation headline (Wave 3): prefer the server field, else derive
+  // it from the status breakdown (CANCELLED + REJECTED).
+  const cancellationCount =
+    data?.cancellationCount ??
+    kpis?.cancellationCount ??
+    (Number(statusBreakdown.CANCELLED || 0) + Number(statusBreakdown.REJECTED || 0));
+
   const kpiCards = [
     { label: "Today's revenue", value: rupee(kpis.todayRevenue) },
     { label: "Today's orders", value: kpis.todayOrders ?? 0 },
@@ -55,6 +72,7 @@ const StoreAnalyticsScreen = () => {
     { label: "AOV", value: rupee(kpis.aov) },
     { label: "Unique customers", value: kpis.uniqueCustomers ?? 0 },
     { label: "Repeat rate", value: `${Number(kpis.repeatRatePct || 0).toFixed(1)}%` },
+    { label: "Cancellations", value: cancellationCount },
     { label: "Avg rating", value: `${Number(data?.avgRating || 0).toFixed(1)} (${data?.reviewCount ?? 0})` },
   ];
 
@@ -159,6 +177,29 @@ const StoreAnalyticsScreen = () => {
                 })
               )}
             </div>
+
+            {/* Category split (Wave 3) */}
+            {categorySplit.length > 0 && (
+              <>
+                <div className="mkt-form-section-title" style={{ margin: "0 0 8px" }}>Revenue by category</div>
+                <div style={{ padding: 14, borderRadius: 14, border: "1px solid var(--cm-line)", background: "var(--cm-card)", marginBottom: 18, display: "flex", flexDirection: "column", gap: 10 }}>
+                  {categorySplit.map((c, idx) => {
+                    const pct = maxCatRevenue > 0 ? Math.max(3, Math.round((c.revenue / maxCatRevenue) * 100)) : 3;
+                    return (
+                      <div key={`${c.category}-${idx}`}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                          <span style={{ color: "var(--cm-ink)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60%" }}>{c.category}</span>
+                          <span style={{ color: "var(--cm-muted)", fontWeight: 700 }}>{rupee(c.revenue)}</span>
+                        </div>
+                        <div style={{ height: 8, borderRadius: 999, background: "var(--cm-bg-secondary)", overflow: "hidden" }}>
+                          <div style={{ width: `${pct}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg, #40E0D0, #007BFF)" }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
 
             {/* Top items leaderboard */}
             <div className="mkt-form-section-title" style={{ margin: "0 0 8px" }}>Top items</div>

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaPlus, FaPencilAlt, FaTrash, FaStore, FaCamera, FaCheckCircle, FaTimesCircle, FaClock, FaBan, FaEdit, FaRegClock, FaChevronRight, FaPowerOff, FaChevronDown, FaChevronUp, FaToggleOn, FaToggleOff, FaTags, FaChartLine, FaStar, FaTruck, FaShoppingBag, FaFileCsv, FaBook, FaUsers, FaCalendarTimes, FaClipboardCheck } from "react-icons/fa";
+import { FaArrowLeft, FaPlus, FaPencilAlt, FaTrash, FaStore, FaCamera, FaCheckCircle, FaTimesCircle, FaClock, FaBan, FaEdit, FaRegClock, FaChevronRight, FaPowerOff, FaChevronDown, FaChevronUp, FaToggleOn, FaToggleOff, FaTags, FaChartLine, FaStar, FaTruck, FaShoppingBag, FaFileCsv, FaBook, FaUsers, FaCalendarTimes, FaClipboardCheck, FaUndoAlt, FaBolt, FaMotorcycle, FaBoxOpen, FaChartPie } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
+import { marketplaceLogisticsAiService } from "../../services/marketplaceLogisticsAiService";
 import { useToast } from "../../context/ToastContext";
 import { parseVariants, variantDimensions } from "./variantUtils";
 import BarcodeScannerModal from "../../components/BarcodeScannerModal";
@@ -176,6 +177,32 @@ const MyStoreManageScreen = () => {
       setTimeout(() => setFulfillMsg(null), 2500);
     } else {
       setFulfillMsg({ type: "error", text: res.message || "Failed to update" });
+    }
+  };
+
+  // Auto-assign riders (Logistics v2 / Wave 5) — opt-in per store. Loaded on
+  // mount; NULL/false = engine inert until the seller turns it on here.
+  const [autoAssign, setAutoAssign] = useState(null);
+  const [autoAssignSaving, setAutoAssignSaving] = useState(false);
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await marketplaceLogisticsAiService.getAutoAssign();
+        if (res?.success) setAutoAssign(res.data?.autoAssignRiders === true);
+      } catch { /* non-fatal — toggle just shows as off */ }
+    })();
+  }, []);
+
+  const handleToggleAutoAssign = async () => {
+    const next = !autoAssign;
+    setAutoAssignSaving(true);
+    const res = await marketplaceLogisticsAiService.setAutoAssign(next);
+    setAutoAssignSaving(false);
+    if (res.success) {
+      setAutoAssign(res.data?.autoAssignRiders === true);
+      showToast(next ? "Auto-assign turned on" : "Auto-assign turned off", next ? "success" : "info");
+    } else {
+      showToast(res.message || "Could not update auto-assign", "error");
     }
   };
 
@@ -401,11 +428,15 @@ const MyStoreManageScreen = () => {
               {[
                 { icon: FaTags, title: "Offers & Promotions", sub: "Flat, percent & BOGO promo codes", to: "/customer/app/marketplace/my-store/offers" },
                 { icon: FaChartLine, title: "Analytics", sub: "Revenue, orders & top items", to: "/customer/app/marketplace/my-store/analytics" },
+                { icon: FaBoxOpen, title: "Restock Suggestions", sub: "Low & fast-selling items with reorder qty", to: "/customer/app/marketplace/my-store/restock" },
+                { icon: FaChartPie, title: "Customer Insights", sub: "Lifetime value & churn risk per customer", to: "/customer/app/marketplace/my-store/customer-insights" },
                 { icon: FaStar, title: "Reviews", sub: "Read & reply to customer reviews", to: "/customer/app/marketplace/my-store/reviews" },
                 { icon: FaBook, title: "Khata / Credit", sub: "Customer credit ledger & reminders", to: "/customer/app/marketplace/my-store/khata" },
                 { icon: FaCalendarTimes, title: "Holidays & Pincodes", sub: "Closed days & serviceable pincodes", to: "/customer/app/marketplace/my-store/holidays" },
                 { icon: FaUsers, title: "My Customers", sub: "Customer list, spend & repeat buyers", to: "/customer/app/marketplace/my-store/crm" },
                 { icon: FaClipboardCheck, title: "Seller Scorecard", sub: "Cancellation & rejection rates vs benchmark", to: "/customer/app/marketplace/my-store/scorecard" },
+                { icon: FaMotorcycle, title: "Rider Performance", sub: "Deliveries, on-time %, avg mins & load per rider", to: "/customer/app/marketplace/my-store/rider-performance" },
+                { icon: FaUndoAlt, title: "Returns & Replacements", sub: "Approve, pick up & refund returned items", to: "/customer/app/marketplace/my-store/returns" },
               ].map((it) => {
                 const Icon = it.icon;
                 return (
@@ -473,6 +504,27 @@ const MyStoreManageScreen = () => {
                   {store.pickupEnabled ? <FaToggleOn size={26} /> : <FaToggleOff size={26} />}
                 </button>
               </div>
+              {/* Auto-assign riders (Wave 5) — only relevant when delivery is on. */}
+              {store.deliveryEnabled && (
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: 14, borderTop: "1px solid var(--cm-line)" }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, display: "grid", placeItems: "center", background: "rgba(139,92,246,0.12)", color: "#8b5cf6", flexShrink: 0 }}>
+                    <FaBolt size={15} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "var(--cm-ink)" }}>Auto-assign riders</div>
+                    <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>Route new delivery orders to your least-loaded rider — cold-chain & express first</div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={autoAssignSaving || autoAssign == null}
+                    onClick={handleToggleAutoAssign}
+                    style={{ background: "none", border: "none", cursor: autoAssignSaving ? "not-allowed" : "pointer", color: autoAssign ? "#8b5cf6" : "var(--cm-muted)", padding: 2 }}
+                    title={autoAssign ? "Disable auto-assign" : "Enable auto-assign"}
+                  >
+                    {autoAssign ? <FaToggleOn size={26} /> : <FaToggleOff size={26} />}
+                  </button>
+                </div>
+              )}
             </div>
             {fulfillMsg && (
               <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: fulfillMsg.type === "success" ? "#059669" : "#dc2626" }}>

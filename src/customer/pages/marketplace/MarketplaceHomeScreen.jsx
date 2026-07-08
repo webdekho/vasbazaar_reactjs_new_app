@@ -43,6 +43,7 @@ import { FiSearch, FiMapPin, FiZap, FiTag, FiTrendingUp, FiClock } from "react-i
 import { marketplaceService } from "../../services/marketplaceService";
 import { marketplaceDiscoveryService } from "../../services/marketplaceDiscoveryService";
 import { marketplaceLogisticsAiService, hasPricePhrase } from "../../services/marketplaceLogisticsAiService";
+import { marketplaceWave6Service } from "../../services/marketplaceWave6Service";
 import { useMarketplaceCart } from "../../context/MarketplaceCartContext";
 import { useToast } from "../../context/ToastContext";
 import { shareStore } from "./shareStore";
@@ -238,6 +239,67 @@ const DiscoveryRail = ({ title, icon, items, onOpen, onAdd, onDecrement, qtyOf }
   );
 };
 
+/**
+ * "For You" rail — personalized ranking of already-valid store offers and
+ * cashback near the shopper. Purely a ranking surface (no new discount is
+ * created); each card carries a human "reason" and taps through to the store.
+ */
+const ForYouRail = ({ items, onOpenStore }) => {
+  if (!items || items.length === 0) return null;
+  return (
+    <div className="mkt-section" style={{ paddingBottom: 0 }}>
+      <div className="mkt-section-head">
+        <h2 className="mkt-section-title" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <FiZap size={14} color="#8b5cf6" />
+          For You
+        </h2>
+      </div>
+      <div style={{ display: "flex", gap: 10, overflowX: "auto", padding: "2px 2px 8px", scrollbarWidth: "none" }}>
+        {items.map((o, idx) => {
+          const cashback = Number(o.cashbackPercent || 0) > 0 && o.offerId == null;
+          const headline = cashback
+            ? `${Number(o.cashbackPercent).toFixed(0)}% cashback`
+            : (o.title || o.code || "Offer");
+          return (
+            <article
+              key={`${o.storeId}-${o.offerId ?? "cb"}-${idx}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => onOpenStore(o.storeId)}
+              onKeyDown={(e) => { if (e.key === "Enter") onOpenStore(o.storeId); }}
+              style={{
+                flexShrink: 0, width: 210, borderRadius: 14, cursor: "pointer",
+                border: "1px solid rgba(139,92,246,0.30)",
+                background: "linear-gradient(135deg, rgba(139,92,246,0.12), rgba(59,130,246,0.08))",
+                padding: 12, display: "flex", flexDirection: "column", gap: 6,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 30, height: 30, borderRadius: 9, overflow: "hidden", background: "var(--cm-card)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                  {o.storeLogoUrl ? <img src={o.storeLogoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <FaStore size={12} color="var(--cm-muted)" />}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--cm-ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.storeName}</div>
+                  {o.distanceKm != null && (
+                    <div style={{ fontSize: 10, color: "var(--cm-muted)" }}>{Number(o.distanceKm).toFixed(1)} km</div>
+                  )}
+                </div>
+                {o.isFlash && (
+                  <span style={{ fontSize: 9, fontWeight: 800, padding: "3px 7px", borderRadius: 999, background: "rgba(239,68,68,0.14)", color: "#ef4444", flexShrink: 0 }}>FLASH</span>
+                )}
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: "var(--cm-ink)", lineHeight: 1.25 }}>{headline}</div>
+              {o.reason && (
+                <div style={{ fontSize: 11, color: "#8b5cf6", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.reason}</div>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 const matchesQuickFilter = (store, filter) => {
   if (!filter) return true;
   if (filter === "free_delivery") return Number(store.deliveryCharges || 0) === 0;
@@ -353,6 +415,7 @@ const MarketplaceHomeScreen = () => {
   const [featuredItems, setFeaturedItems] = useState([]);
   const [recentViews, setRecentViews] = useState([]);
   const [buyAgain, setBuyAgain] = useState([]);
+  const [forYou, setForYou] = useState([]);
   const lastDiscoveryKey = useRef("");
   // Client-side sort for the product feed (v1 — sorts the fetched list only).
   const [sortBy, setSortBy] = useState("relevance");
@@ -413,6 +476,12 @@ const MarketplaceHomeScreen = () => {
     marketplaceDiscoveryService.getBuyAgain(loc).then((res) => {
       if (res.success) setBuyAgain(Array.isArray(res.data) ? res.data : []);
     }).catch(() => {});
+    // "For You" — personalized ranking of already-valid offers / cashback near you.
+    if (loc.lat != null) {
+      marketplaceWave6Service.getForYou(loc).then((res) => {
+        if (res.success) setForYou(Array.isArray(res.data) ? res.data : []);
+      }).catch(() => {});
+    }
   }, [coords]);
 
   // Load stores with deduplication to prevent infinite API calls
@@ -677,6 +746,15 @@ const MarketplaceHomeScreen = () => {
           </button>
           <button
             type="button"
+            onClick={() => navigate("/customer/app/marketplace/rewards")}
+            className="mkt-hero-action mkt-hero-action--icon"
+            aria-label="Rewards"
+            title="Rewards & Membership"
+          >
+            <FaGifts size={14} />
+          </button>
+          <button
+            type="button"
             onClick={() => navigate("/customer/app/marketplace/my-orders")}
             className="mkt-hero-action mkt-hero-action--icon"
             aria-label="My Orders"
@@ -754,6 +832,14 @@ const MarketplaceHomeScreen = () => {
         />
       )}
 
+      {/* For You — personalized ranking of valid offers / cashback near you */}
+      {showRails && (
+        <ForYouRail
+          items={forYou}
+          onOpenStore={(storeId) => navigate(`/customer/app/marketplace/store/${storeId}`)}
+        />
+      )}
+
       {/* Categories — modern morphic rail */}
       {categories.length > 0 && (
         <div className="mkt-section mkt-cat-section">
@@ -808,6 +894,32 @@ const MarketplaceHomeScreen = () => {
               </span>
             </span>
             <span aria-hidden="true" style={{ color: "#14b8a6", fontWeight: 800 }}>→</span>
+          </button>
+        </div>
+      )}
+
+      {/* Recipes → shopping list — curated recipes, add all ingredients in one tap */}
+      {showRails && (
+        <div style={{ padding: "0 14px", marginTop: 10 }}>
+          <button
+            type="button"
+            onClick={() => navigate("/customer/app/marketplace/recipes")}
+            style={{
+              width: "100%", display: "flex", alignItems: "center", gap: 10,
+              padding: "10px 14px", borderRadius: 14, cursor: "pointer",
+              border: "1px solid rgba(249,115,22,0.35)",
+              background: "linear-gradient(135deg, rgba(249,115,22,0.12), rgba(234,88,12,0.08))",
+              color: "var(--cm-ink)",
+            }}
+          >
+            <FaUtensils size={16} color="#f97316" />
+            <span style={{ flex: 1, textAlign: "left" }}>
+              <span style={{ display: "block", fontSize: 13, fontWeight: 800 }}>Cook from a recipe</span>
+              <span style={{ display: "block", fontSize: 11, color: "var(--cm-muted)" }}>
+                Add every ingredient to your cart in one tap
+              </span>
+            </span>
+            <span aria-hidden="true" style={{ color: "#f97316", fontWeight: 800 }}>→</span>
           </button>
         </div>
       )}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaStore, FaFileExcel, FaMotorcycle, FaCamera } from "react-icons/fa";
+import { FaArrowLeft, FaStore, FaFileExcel, FaMotorcycle, FaCamera, FaUndoAlt, FaChartLine, FaBolt, FaSnowflake } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
 import { marketplaceLogisticsAiService } from "../../services/marketplaceLogisticsAiService";
 import "./marketplace.css";
@@ -71,6 +71,10 @@ const StoreOrdersScreen = () => {
   const podInputRef = useRef(null);
   const podOrderRef = useRef(null); // order awaiting the chosen POD file
 
+  // ===== Logistics v2 (Wave 5): auto-assign engine =====
+  const [autoAssign, setAutoAssign] = useState(null);   // store toggle state
+  const [autoAssigning, setAutoAssigning] = useState({}); // { [orderId]: bool }
+
   // Rider assignments live in a side table — fetch them for the delivery
   // orders that can carry one (active statuses only, capped to stay light).
   const loadRiderAssignments = useCallback(async (list) => {
@@ -108,6 +112,16 @@ const StoreOrdersScreen = () => {
   }, [filter, loadRiderAssignments]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Auto-assign toggle state — loaded once; drives the status pill and the hint.
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await marketplaceLogisticsAiService.getAutoAssign();
+        if (res?.success) setAutoAssign(res.data?.autoAssignRiders === true);
+      } catch { /* non-fatal — pill just stays hidden */ }
+    })();
+  }, []);
 
   // Date-range filter applied client-side over the loaded page. Good enough
   // for the order volumes we show (pageSize=200) — server-side range filter
@@ -296,6 +310,21 @@ const StoreOrdersScreen = () => {
     }
   };
 
+  // "Assign best rider now" — runs the least-loaded engine on demand. Ignores
+  // the store toggle since the seller explicitly asked. Manual assign still wins.
+  const autoAssignNow = async (order) => {
+    setAutoAssigning((m) => ({ ...m, [order.id]: true }));
+    const res = await marketplaceLogisticsAiService.autoAssignOrder(order.id);
+    setAutoAssigning((m) => ({ ...m, [order.id]: false }));
+    if (res.success && res.data) {
+      const name = res.data.name || res.data.rider?.name;
+      const mobile = res.data.mobile || res.data.rider?.mobile;
+      if (name) setRiderByOrder((m) => ({ ...m, [order.id]: { name, mobile } }));
+    } else {
+      window.alert(res.message || "Could not auto-assign a rider — add active riders first.");
+    }
+  };
+
   const addRiderInline = async () => {
     if (!riderSheet) return;
     const name = riderSheet.newName.trim();
@@ -362,17 +391,62 @@ const StoreOrdersScreen = () => {
         <h1 className="mkt-header-title">Store Orders</h1>
         <button
           type="button"
-          onClick={() => navigate("/customer/app/marketplace/my-store/riders")}
-          title="Manage delivery riders"
+          onClick={() => navigate("/customer/app/marketplace/my-store/returns")}
+          title="Returns & replacements"
           style={{
             marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6,
             padding: "6px 12px", borderRadius: 10, border: "1px solid var(--cm-line)",
             background: "var(--cm-card)", color: "var(--cm-ink)", fontSize: 12, fontWeight: 700, cursor: "pointer",
           }}
         >
+          <FaUndoAlt size={12} /> Returns
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate("/customer/app/marketplace/my-store/riders")}
+          title="Manage delivery riders"
+          style={{
+            marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "6px 12px", borderRadius: 10, border: "1px solid var(--cm-line)",
+            background: "var(--cm-card)", color: "var(--cm-ink)", fontSize: 12, fontWeight: 700, cursor: "pointer",
+          }}
+        >
           <FaMotorcycle size={12} /> Riders
         </button>
+        <button
+          type="button"
+          onClick={() => navigate("/customer/app/marketplace/my-store/rider-performance")}
+          title="Rider performance"
+          style={{
+            marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "6px 12px", borderRadius: 10, border: "1px solid var(--cm-line)",
+            background: "var(--cm-card)", color: "var(--cm-ink)", fontSize: 12, fontWeight: 700, cursor: "pointer",
+          }}
+        >
+          <FaChartLine size={12} /> Performance
+        </button>
       </div>
+
+      {/* Auto-assign status + cold-chain ordering hint (Wave 5) */}
+      {autoAssign != null && (
+        <div style={{ padding: "10px 14px 0", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700,
+              padding: "4px 10px", borderRadius: 8,
+              background: autoAssign ? "rgba(16,185,129,0.12)" : "rgba(148,163,184,0.15)",
+              color: autoAssign ? "#10b981" : "var(--cm-muted)",
+            }}
+          >
+            <FaBolt size={11} /> Auto-assign {autoAssign ? "ON" : "OFF"}
+          </span>
+          <span style={{ fontSize: 11, color: "var(--cm-muted)" }}>
+            {autoAssign
+              ? "New delivery orders get the least-loaded rider automatically — cold-chain & express first."
+              : "Turn on auto-assign in Store settings to route riders automatically."}
+          </span>
+        </div>
+      )}
 
       {/* Hidden picker for proof-of-delivery photos */}
       <input
@@ -503,6 +577,11 @@ const StoreOrdersScreen = () => {
                     Rejection reason: {o.rejectionReason}
                   </div>
                 )}
+                {!pickup && o.hasColdChain && !["DELIVERED", "CANCELLED", "REJECTED", "PICKED_UP"].includes(o.orderStatus) && (
+                  <div style={{ marginTop: 6, marginRight: 6, display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#0ea5e9", background: "rgba(14,165,233,0.12)", padding: "3px 10px", borderRadius: 6 }}>
+                    <FaSnowflake size={11} /> Cold-chain · priority
+                  </div>
+                )}
                 {!pickup && riderByOrder[o.id] && (
                   <div style={{ marginTop: 6, display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#8b5cf6", background: "rgba(139, 92, 246, 0.12)", padding: "3px 10px", borderRadius: 6 }}>
                     <FaMotorcycle size={11} /> Rider: {riderByOrder[o.id].name} · {riderByOrder[o.id].mobile}
@@ -545,6 +624,17 @@ const StoreOrdersScreen = () => {
                     {!pickup && RIDER_STATUSES.includes(o.orderStatus) && (
                       <button onClick={() => openRiderSheet(o)} className="mkt-btn mkt-btn--secondary" style={{ width: "auto", padding: "6px 12px", fontSize: 12 }}>
                         {riderByOrder[o.id] ? "Change rider" : "Assign rider"}
+                      </button>
+                    )}
+                    {!pickup && RIDER_STATUSES.includes(o.orderStatus) && !riderByOrder[o.id] && (
+                      <button
+                        onClick={() => autoAssignNow(o)}
+                        disabled={autoAssigning[o.id]}
+                        className="mkt-btn mkt-btn--secondary"
+                        title="Assign the least-loaded rider automatically"
+                        style={{ width: "auto", padding: "6px 12px", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 5, opacity: autoAssigning[o.id] ? 0.7 : 1 }}
+                      >
+                        <FaBolt size={11} /> {autoAssigning[o.id] ? "Assigning…" : "Auto-assign"}
                       </button>
                     )}
                     {!pickup && o.orderStatus === "OUT_FOR_DELIVERY" && (

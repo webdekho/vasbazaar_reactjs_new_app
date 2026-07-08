@@ -28,8 +28,32 @@ export const marketplaceLogisticsAiService = {
     authPost(`${BASE}/seller/orders/${orderId}/assign-rider`, { riderId }),
 
   // Customer or store owner — returns { rider|null, podImageUrl,
-  // deliveryFailedReason, deliveryAttempts, orderStatus }.
+  // deliveryFailedReason, deliveryAttempts, orderStatus } and (Wave 5)
+  // promisedBy, deliveryPriority, hasColdChain, location:{lat,lng,at}|null.
   getOrderLogistics: (orderId) => authGet(`${BASE}/orders/${orderId}/rider`),
+
+  // ===== Auto-assign engine (Wave 5, seller) =====
+  // Opt-in per store; NULL/false = engine inert. Returns { autoAssignRiders }.
+  getAutoAssign: () => authGet(`${BASE}/store/my/auto-assign`),
+  setAutoAssign: (enabled) => authPost(`${BASE}/store/my/auto-assign`, { enabled: !!enabled }),
+
+  // "Assign best rider now" — runs the least-loaded engine on demand, ignoring
+  // the store toggle (seller explicitly asked). Returns the assignment card.
+  autoAssignOrder: (orderId) => authPost(`${BASE}/seller/orders/${orderId}/auto-assign`, {}),
+
+  // Per-rider analytics: deliveries, failed attempts, avg mins, on-time %, open load.
+  // Optional { from, to } ISO dates window the result by delivered_at.
+  getRiderPerformance: ({ from, to } = {}) =>
+    authGet(`${BASE}/store/my/riders/performance`, {
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+    }),
+
+  // GPS stub — writes last_lat/last_lng/last_location_at on the order's rider row.
+  // Guarded to the store owner today; forward-compatible with a rider-app token.
+  // Requires an assignment to exist (404 otherwise). Non-money, best-effort.
+  postRiderLocation: (orderId, lat, lng) =>
+    authPost(`${BASE}/seller/orders/${orderId}/rider-location`, { lat, lng }),
 
   // ===== Proof of delivery (seller; upload the image first, pass its URL) =====
   submitPod: (orderId, imageUrl) =>

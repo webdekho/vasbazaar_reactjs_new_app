@@ -4,7 +4,7 @@ import { FaArrowLeft, FaPlus, FaMinus, FaTrash, FaStore, FaMapMarkerAlt, FaClock
 import { marketplaceService } from "../../services/marketplaceService";
 import { userService } from "../../services/userService";
 import { FaWallet, FaArrowRight, FaMoneyBillWave, FaLock } from "react-icons/fa";
-import { useMarketplaceCart } from "../../context/MarketplaceCartContext";
+import { useMarketplaceCart, addOnPerUnit } from "../../context/MarketplaceCartContext";
 import { useCustomerModern } from "../../context/CustomerModernContext";
 import { savePaymentContext, extractPaymentUrl } from "../../services/juspayService";
 import { customerStorage } from "../../services/storageService";
@@ -48,7 +48,7 @@ const localDateStr = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2
 const bucketTotals = (b) => {
   if (!b || !b.items) return { count: 0, subtotal: 0, total: 0, deliveryCharges: 0 };
   const lines = Object.values(b.items);
-  const subtotal = lines.reduce((s, i) => s + Number(i.price) * Number(i.qty || 0), 0);
+  const subtotal = lines.reduce((s, i) => s + (Number(i.price) + addOnPerUnit(i)) * Number(i.qty || 0), 0);
   const count = lines.reduce((s, i) => s + (i.qty || 0), 0);
   const deliveryCharges = subtotal > 0 ? Number(b.deliveryCharges || 0) : 0;
   return { count, subtotal, total: subtotal + deliveryCharges, deliveryCharges };
@@ -132,6 +132,12 @@ const CartScreen = () => {
   // Gift purchase: pack as a gift + optional message (≤300 chars).
   const [isGift, setIsGift] = useState(false);
   const [giftMessage, setGiftMessage] = useState("");
+
+  // Wave 4: protection / financing INTENT capture (money-neutral — no charge).
+  const [warrantyMonths, setWarrantyMonths] = useState("");
+  const [amcOpted, setAmcOpted] = useState(false);
+  const [emiSelected, setEmiSelected] = useState("");
+  const [insuranceOpted, setInsuranceOpted] = useState(false);
 
   // Offers / coupons.
   const [offers, setOffers] = useState([]);
@@ -468,6 +474,8 @@ const CartScreen = () => {
       // Per-line customization captured on the product sheet (cake message/photo).
       ...(i.note ? { note: i.note } : {}),
       ...(i.noteImageUrl ? { imageUrl: i.noteImageUrl } : {}),
+      // Wave 4: chosen add-on service CODES only — server re-prices authoritatively.
+      ...(Array.isArray(i.addOns) && i.addOns.length ? { addOns: i.addOns.map((a) => a.code) } : {}),
     }));
 
   // Pharmacy gate: does any line require a prescription?
@@ -583,6 +591,11 @@ const CartScreen = () => {
       fulfillmentType,
       ...(needsPrescription && prescriptionUrl ? { prescriptionUrl } : {}),
       ...(isGift ? { isGift: true, ...(giftMessage.trim() ? { giftMessage: giftMessage.trim().slice(0, 300) } : {}) } : {}),
+      // Wave 4 protection/financing INTENT — captured on the order, no charge change.
+      ...(warrantyMonths ? { warrantyMonths: Number(warrantyMonths) } : {}),
+      ...(amcOpted ? { amcOpted: true } : {}),
+      ...(emiSelected ? { emiSelected } : {}),
+      ...(insuranceOpted ? { insuranceOpted: true } : {}),
       ...(appliedOffer?.code ? { offerCode: appliedOffer.code } : {}),
       ...(method === "ONLINE" ? { returnUrl: buildMarketplaceReturnUrl() } : {}),
       ...(coords && !isPickup ? { deliveryLat: coords.lat, deliveryLng: coords.lng } : {}),
@@ -735,6 +748,11 @@ const CartScreen = () => {
                     ✏️ {it.note ? `"${it.note}"` : "Photo attached"}{it.note && it.noteImageUrl ? " · 📷" : ""}
                   </div>
                 )}
+                {Array.isArray(it.addOns) && it.addOns.length > 0 && (
+                  <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: 2 }}>
+                    + {it.addOns.map((a) => `${a.label} (₹${Number(a.price).toFixed(0)})`).join(", ")}
+                  </div>
+                )}
                 {it.requiresPrescription && (
                   <div style={{ fontSize: 11, color: "#f87171", marginTop: 2, fontWeight: 600 }}>℞ Prescription required</div>
                 )}
@@ -745,7 +763,7 @@ const CartScreen = () => {
                 </div>
               </div>
               <div style={{ textAlign: "right" }}>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>₹{(Number(it.price) * it.qty).toFixed(0)}</div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>₹{((Number(it.price) + addOnPerUnit(it)) * it.qty).toFixed(0)}</div>
                 <button
                   onClick={() => removeItem(key)}
                   style={{ background: "none", border: "none", color: "#f87171", marginTop: 8, cursor: "pointer" }}
@@ -1221,6 +1239,44 @@ const CartScreen = () => {
                   <div style={{ fontSize: 10.5, color: "var(--cm-muted)", marginTop: 4 }}>{giftMessage.length}/300 · Prices are hidden on the packing slip.</div>
                 </div>
               )}
+            </div>
+
+            {/* Wave 4: Protection & financing (intent capture only, no charge) */}
+            <div style={{ padding: "12px", borderRadius: 14, border: "1px solid var(--cm-line)", background: "var(--cm-card)", marginBottom: 14 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: "var(--cm-ink)", marginBottom: 4 }}>Protect your purchase</div>
+              <div style={{ fontSize: 11, color: "var(--cm-muted)", marginBottom: 10 }}>Optional — the store will get in touch to arrange these. No extra charge is added now.</div>
+
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 13, color: "var(--cm-ink)" }}>Extended warranty</span>
+                <select className="mkt-input" style={{ width: 130 }} value={warrantyMonths} onChange={(e) => setWarrantyMonths(e.target.value)}>
+                  <option value="">None</option>
+                  <option value="6">6 months</option>
+                  <option value="12">1 year</option>
+                  <option value="24">2 years</option>
+                  <option value="36">3 years</option>
+                </select>
+              </div>
+
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--cm-ink)", cursor: "pointer", marginBottom: 8 }}>
+                <input type="checkbox" checked={amcOpted} onChange={(e) => setAmcOpted(e.target.checked)} />
+                Add annual maintenance (AMC)
+              </label>
+
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--cm-ink)", cursor: "pointer", marginBottom: 8 }}>
+                <input type="checkbox" checked={insuranceOpted} onChange={(e) => setInsuranceOpted(e.target.checked)} />
+                Add product insurance
+              </label>
+
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                <span style={{ fontSize: 13, color: "var(--cm-ink)" }}>EMI (no-cost intent)</span>
+                <select className="mkt-input" style={{ width: 130 }} value={emiSelected} onChange={(e) => setEmiSelected(e.target.value)}>
+                  <option value="">One-time</option>
+                  <option value="3 months">3 months</option>
+                  <option value="6 months">6 months</option>
+                  <option value="9 months">9 months</option>
+                  <option value="12 months">12 months</option>
+                </select>
+              </div>
             </div>
 
             {/* Coupons / Offers */}

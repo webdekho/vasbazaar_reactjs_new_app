@@ -21,6 +21,11 @@ import {
   FaHandHolding,
   FaMotorcycle,
   FaCamera,
+  FaUndoAlt,
+  FaExchangeAlt,
+  FaSnowflake,
+  FaHistory,
+  FaShieldAlt,
 } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
 import { marketplaceLogisticsAiService } from "../../services/marketplaceLogisticsAiService";
@@ -79,6 +84,29 @@ const itemTotal = (it) =>
   Number(it?.total ?? it?.amount ?? itemQty(it) * itemPrice(it));
 
 const CONFETTI_COLORS = ["#00E5A0", "#3B82F6", "#A855F7", "#FFD700", "#FF6B6B", "#06B6D4"];
+
+// Reason codes for return / replacement requests (reason_code is VARCHAR(5)).
+const RETURN_REASONS = [
+  { code: "R01", label: "Damaged or defective item" },
+  { code: "R02", label: "Wrong item delivered" },
+  { code: "R03", label: "Item expired / near expiry" },
+  { code: "R04", label: "Missing parts or accessories" },
+  { code: "R05", label: "Quality not as described" },
+  { code: "R00", label: "Other reason" },
+];
+
+// RMA status → shopper-friendly label + tone.
+const RETURN_STATUS_LABEL = {
+  REQUESTED: "Requested",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
+  PICKED_UP: "Picked up",
+  REFUNDED: "Refunded",
+  REPLACED: "Replaced",
+  CLOSED: "Closed",
+};
+const RETURN_FLOW = ["REQUESTED", "APPROVED", "PICKED_UP", "REFUNDED"];
+const RETURN_FLOW_REPLACE = ["REQUESTED", "APPROVED", "PICKED_UP", "REPLACED"];
 
 // ONDC-aligned customer cancellation reasons (code → shopper-friendly label).
 const CANCEL_REASONS = [
@@ -185,6 +213,72 @@ const OrderDetailScreen = () => {
     }
   }, [orderId]);
 
+  // Return / Replacement (RMA) — reverse-logistics + refund state machine.
+  // Existing RMAs for this order, keyed for per-line status display.
+  const [returns, setReturns] = useState([]); // raw RMA rows for THIS order
+  // The line currently being returned (opens the modal). `null` = closed.
+  // { line } for a per-item return, or { wholeOrder: true }.
+  const [returnTarget, setReturnTarget] = useState(null);
+  const [returnKind, setReturnKind] = useState("RETURN"); // RETURN | REPLACEMENT
+  const [returnReasonCode, setReturnReasonCode] = useState("R01");
+  const [returnNote, setReturnNote] = useState("");
+  const [returnPhotos, setReturnPhotos] = useState([]); // uploaded image URLs
+  const [returnUploading, setReturnUploading] = useState(false);
+  const [returnSubmitting, setReturnSubmitting] = useState(false);
+  const [returnError, setReturnError] = useState("");
+  const returnPhotoInputRef = useRef(null);
+
+  const openReturn = useCallback((target, item) => {
+    setReturnTarget(target);
+    // Default the kind to REPLACEMENT only when the item allows it but is not
+    // returnable; otherwise default to RETURN.
+    const canReturn = item ? item.isReturnable !== false : true;
+    const canReplace = item ? item.replacementAllowed === true : false;
+    setReturnKind(canReturn ? "RETURN" : canReplace ? "REPLACEMENT" : "RETURN");
+    setReturnReasonCode("R01");
+    setReturnNote("");
+    setReturnPhotos([]);
+    setReturnError("");
+  }, []);
+
+  const onReturnPhotoChosen = useCallback(async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setReturnUploading(true);
+    const res = await marketplaceService.uploadImage(file, "return_photo");
+    setReturnUploading(false);
+    if (res.success && res.data?.url) {
+      setReturnPhotos((p) => [...p, res.data.url]);
+    } else {
+      window.alert(res.message || "Could not upload the photo. Please try again.");
+    }
+  }, []);
+
+  const submitReturn = useCallback(async () => {
+    if (!returnTarget) return;
+    setReturnError("");
+    setReturnSubmitting(true);
+    const reasonLabel = RETURN_REASONS.find((r) => r.code === returnReasonCode)?.label || "";
+    const reason = returnNote.trim() ? `${reasonLabel} — ${returnNote.trim()}` : reasonLabel;
+    const payload = {
+      orderId: Number(orderId),
+      orderItemLineId: returnTarget.wholeOrder ? null : returnTarget.line.id,
+      type: returnKind,
+      reason,
+      reasonCode: returnReasonCode,
+      photosJson: returnPhotos.length ? JSON.stringify(returnPhotos) : null,
+    };
+    const res = await marketplaceService.createReturn(payload);
+    setReturnSubmitting(false);
+    if (res.success) {
+      setReturnTarget(null);
+      load();
+    } else {
+      setReturnError(res.message || "Could not submit your request. Please try again.");
+    }
+  }, [returnTarget, returnKind, returnReasonCode, returnNote, returnPhotos, orderId]);
+
   // GST invoice — fetch data and print via a dedicated window.
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const printInvoice = useCallback(async () => {
@@ -280,7 +374,8 @@ const OrderDetailScreen = () => {
           // non-fatal — logistics extras just stay hidden
         }
       }
-      // Once the order is completed, load review eligibility / existing review.
+      // Once the order is completed, load review eligibility / existing review
+      // plus any return/replacement (RMA) requests raised on this order.
       const st = res.data?.orderStatus;
       if (st === "DELIVERED" || st === "PICKED_UP") {
         try {
@@ -288,6 +383,15 @@ const OrderDetailScreen = () => {
           if (rev?.success) setReviewState(rev.data);
         } catch {
           // non-fatal — review section just stays hidden
+        }
+        try {
+          const ret = await marketplaceService.getMyReturns({ pageSize: 100 });
+          if (ret?.success) {
+            const rows = Array.isArray(ret.data?.records) ? ret.data.records : (Array.isArray(ret.data) ? ret.data : []);
+            setReturns(rows.filter((r) => String(r.orderId?.id ?? r.orderId) === String(orderId)));
+          }
+        } catch {
+          // non-fatal — returns section just stays hidden
         }
       }
     }
@@ -330,6 +434,26 @@ const OrderDetailScreen = () => {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Live delivery tracking (Wave 5) — while the order is OUT_FOR_DELIVERY, poll
+  // the rider/logistics side-table so a fresh GPS ping or POD shows up without a
+  // manual refresh. Stops the moment the order leaves that status.
+  const refreshLogistics = useCallback(async () => {
+    if (order?.fulfillmentType === "PICKUP") return;
+    try {
+      const log = await marketplaceLogisticsAiService.getOrderLogistics(orderId);
+      if (log?.success) setLogistics(log.data);
+    } catch {
+      // non-fatal — keep the last good snapshot
+    }
+  }, [orderId, order?.fulfillmentType]);
+
+  useEffect(() => {
+    if (order?.orderStatus !== "OUT_FOR_DELIVERY") return undefined;
+    if (order?.fulfillmentType === "PICKUP") return undefined;
+    const id = setInterval(refreshLogistics, 20000);
+    return () => clearInterval(id);
+  }, [order?.orderStatus, order?.fulfillmentType, refreshLogistics]);
 
   useEffect(() => {
     if (!celebrate || celebrateFiredRef.current) return;
@@ -399,6 +523,50 @@ const OrderDetailScreen = () => {
   const total = Number(order.totalAmount || subtotal + delivery + platformCharge + tax - discount);
   const store = order.storeId || {};
   const buyer = order.userId || {};
+
+  // ===== Return / Replacement eligibility (Retail Wave 2) =====
+  const isCompleted = order.orderStatus === "DELIVERED" || order.orderStatus === "PICKED_UP";
+  const returnWindowDays = Number(store.returnWindowDays) || 0;
+  const completedAt = order.deliveredAt || order.pickedUpAt || order.completedAt || order.updatedAt || null;
+  // Within window if the store set no window (backend still gates) OR the days
+  // elapsed since completion is within the configured window.
+  const withinReturnWindow = (() => {
+    if (!returnWindowDays) return true; // unknown → let the server decide
+    if (!completedAt) return true;
+    const days = (Date.now() - new Date(completedAt).getTime()) / 86400000;
+    return days <= returnWindowDays;
+  })();
+  // Map lineId → its (latest) RMA row, plus any whole-order RMA.
+  const returnByLine = {};
+  let wholeOrderReturn = null;
+  returns.forEach((r) => {
+    const lid = r.orderItemLineId?.id ?? r.orderItemLineId;
+    if (lid == null) wholeOrderReturn = r;
+    else returnByLine[String(lid)] = r;
+  });
+  const itemFor = (it) => (it && typeof it.itemId === "object" ? it.itemId : {}) || {};
+  const lineReturnable = (it) => {
+    const item = itemFor(it);
+    const active = !it.lineStatus || it.lineStatus === "ACTIVE";
+    if (!active) return false;
+    return item.isReturnable !== false || item.replacementAllowed === true;
+  };
+  const eligibleReturnLines = isCompleted && withinReturnWindow
+    ? items.filter((it) => lineReturnable(it) && !returnByLine[String(it.id)])
+    : [];
+  const hasColdChain = order.hasColdChain === true
+    || items.some((it) => itemFor(it).coldChain === true);
+
+  const ReturnStatusBadge = ({ status }) => {
+    const rejected = status === "REJECTED";
+    const done = status === "REFUNDED" || status === "REPLACED" || status === "CLOSED";
+    const tone = rejected ? "#f87171" : done ? "#34d399" : "#f59e0b";
+    return (
+      <span style={{ fontSize: 11, fontWeight: 800, padding: "2px 8px", borderRadius: 6, background: `${tone}22`, color: tone }}>
+        {RETURN_STATUS_LABEL[status] || status}
+      </span>
+    );
+  };
 
   return (
     <div className="mkt">
@@ -525,6 +693,27 @@ const OrderDetailScreen = () => {
             <FaReceipt size={11} />
             {String(order.orderStatus || "PLACED").replace(/_/g, " ")}
           </div>
+
+          {hasColdChain && (
+            <div
+              style={{
+                marginTop: 8,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 12,
+                fontWeight: 700,
+                color: "#0ea5e9",
+                background: "rgba(14,165,233,0.10)",
+                border: "1px solid rgba(14,165,233,0.35)",
+                borderRadius: 8,
+                padding: "6px 10px",
+              }}
+            >
+              <FaSnowflake size={12} />
+              Contains cold-chain items — kept chilled and delivered fast to preserve freshness.
+            </div>
+          )}
         </div>
 
         {/* Click & Collect pickup code */}
@@ -633,6 +822,44 @@ const OrderDetailScreen = () => {
           </div>
         )}
 
+        {/* Promised-by SLA + cold-chain priority (Wave 5) — display-only. */}
+        {!isPickup && !isCancelled && !isRejected && !isCompleted
+          && logistics?.promisedBy
+          && ["ACCEPTED", "PREPARING", "OUT_FOR_DELIVERY"].includes(order.orderStatus) && (
+          <div
+            className="mkt-receipt-card no-print"
+            style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 10 }}
+          >
+            <div
+              style={{
+                width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+                display: "grid", placeItems: "center",
+                background: "rgba(20,184,166,0.12)", color: "#14b8a6",
+              }}
+            >
+              <FaClock size={16} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>Arriving by</div>
+              <div style={{ fontWeight: 800, fontSize: 15, color: "var(--cm-ink)" }}>
+                {formatDateTime(logistics.promisedBy)}
+              </div>
+            </div>
+            {(logistics.hasColdChain || hasColdChain) && (
+              <span
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 5,
+                  fontSize: 11, fontWeight: 800, color: "#0ea5e9",
+                  background: "rgba(14,165,233,0.10)", border: "1px solid rgba(14,165,233,0.35)",
+                  borderRadius: 8, padding: "4px 8px",
+                }}
+              >
+                <FaSnowflake size={11} /> Priority
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Assigned delivery rider (Logistics v1) */}
         {!isPickup && logistics?.rider && !isCancelled && !isRejected && (
           <div className="mkt-receipt-card no-print" style={{ marginTop: 12 }}>
@@ -664,6 +891,31 @@ const OrderDetailScreen = () => {
                 <FaPhoneAlt size={11} /> Call
               </a>
             </div>
+            {/* Live rider location (Wave 5 GPS stub) — a Google Maps link when a
+                ping is present; otherwise the card is byte-identical to before. */}
+            {logistics.location && logistics.location.lat != null && logistics.location.lng != null && (
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${logistics.location.lat},${logistics.location.lng}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: "flex", alignItems: "center", gap: 8, marginTop: 10,
+                  padding: "8px 12px", borderRadius: 10, textDecoration: "none",
+                  background: "rgba(139,92,246,0.10)", border: "1px solid rgba(139,92,246,0.30)",
+                  color: "#8b5cf6", fontWeight: 700, fontSize: 12,
+                }}
+              >
+                <FaMapMarkerAlt size={12} />
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  Track rider live on the map
+                  {logistics.location.at && (
+                    <span style={{ display: "block", fontSize: 11, fontWeight: 500, color: "var(--cm-muted)" }}>
+                      Updated {formatDateTime(logistics.location.at)}
+                    </span>
+                  )}
+                </span>
+              </a>
+            )}
           </div>
         )}
 
@@ -703,6 +955,44 @@ const OrderDetailScreen = () => {
             </div>
           )}
         </div>
+
+        {/* Wave 4: Warranty / protection card (shown when any intent was captured) */}
+        {(Number(order.warrantyMonths) > 0 || order.amcOpted || order.emiSelected || order.insuranceOpted) && (
+          <div className="mkt-receipt-card" style={{ marginTop: 12 }}>
+            <div className="mkt-receipt-section-title" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <FaShieldAlt size={12} style={{ color: "#10b981" }} /> Protection & plans
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+              {Number(order.warrantyMonths) > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                  <span style={{ color: "var(--cm-muted)" }}>Extended warranty</span>
+                  <span style={{ fontWeight: 700 }}>{Number(order.warrantyMonths) >= 12 && Number(order.warrantyMonths) % 12 === 0 ? `${Number(order.warrantyMonths) / 12} year(s)` : `${order.warrantyMonths} months`}</span>
+                </div>
+              )}
+              {order.amcOpted && (
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                  <span style={{ color: "var(--cm-muted)" }}>Annual maintenance (AMC)</span>
+                  <span style={{ fontWeight: 700, color: "#10b981" }}>Opted in</span>
+                </div>
+              )}
+              {order.insuranceOpted && (
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                  <span style={{ color: "var(--cm-muted)" }}>Product insurance</span>
+                  <span style={{ fontWeight: 700, color: "#10b981" }}>Opted in</span>
+                </div>
+              )}
+              {order.emiSelected && (
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                  <span style={{ color: "var(--cm-muted)" }}>EMI plan</span>
+                  <span style={{ fontWeight: 700 }}>{order.emiSelected}</span>
+                </div>
+              )}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: 8 }}>
+              The store will contact you to activate these. Charges, if any, are handled separately.
+            </div>
+          </div>
+        )}
 
         {/* Items */}
         <div className="mkt-receipt-card" style={{ marginTop: 12 }}>
@@ -1124,6 +1414,222 @@ const OrderDetailScreen = () => {
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* Returns & Replacements (Retail Wave 2) — completed orders only */}
+        {isCompleted && (returns.length > 0 || eligibleReturnLines.length > 0) && (
+          <div className="mkt-receipt-card no-print" style={{ marginTop: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div className="mkt-receipt-section-title" style={{ margin: 0 }}>Returns &amp; Replacements</div>
+              <button
+                onClick={() => navigate("/customer/app/marketplace/my-returns")}
+                style={{ background: "none", border: "none", color: "var(--cm-primary, #14b8a6)", fontWeight: 700, fontSize: 12, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}
+              >
+                <FaHistory size={11} /> My Returns
+              </button>
+            </div>
+
+            {returnWindowDays > 0 && (
+              <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: 4 }}>
+                Return window: {returnWindowDays} day{returnWindowDays > 1 ? "s" : ""} from delivery
+                {!withinReturnWindow ? " — window closed" : ""}.
+              </div>
+            )}
+
+            {/* Existing requests on this order */}
+            {returns.length > 0 && (
+              <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+                {returns.map((r) => {
+                  const flow = r.type === "REPLACEMENT" ? RETURN_FLOW_REPLACE : RETURN_FLOW;
+                  const isRejected = r.status === "REJECTED";
+                  const idx = flow.indexOf(r.status === "CLOSED" ? flow[flow.length - 1] : r.status);
+                  const lineName = (() => {
+                    const lid = r.orderItemLineId?.id ?? r.orderItemLineId;
+                    if (lid == null) return "Whole order";
+                    const line = items.find((it) => String(it.id) === String(lid));
+                    return line ? itemName(line) : `Item #${lid}`;
+                  })();
+                  return (
+                    <div key={r.id} style={{ border: "1px solid var(--cm-line)", borderRadius: 10, padding: 10 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: 13 }}>
+                          {r.type === "REPLACEMENT" ? <FaExchangeAlt size={11} /> : <FaUndoAlt size={11} />}
+                          {r.type === "REPLACEMENT" ? "Replacement" : "Return"}
+                        </div>
+                        <ReturnStatusBadge status={r.status} />
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--cm-muted)", marginTop: 3 }}>{lineName}</div>
+                      {isRejected ? (
+                        <div style={{ fontSize: 12, color: "#f87171", marginTop: 6 }}>
+                          {r.resolutionNote || r.reason || "Request rejected by the store."}
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", gap: 4, marginTop: 8 }}>
+                          {flow.map((s, i) => (
+                            <div key={s} style={{ flex: 1, textAlign: "center" }}>
+                              <div style={{ height: 4, borderRadius: 4, background: i <= idx ? "linear-gradient(135deg, #14b8a6, #10b981)" : "var(--cm-line)" }} />
+                              <div style={{ fontSize: 9, marginTop: 3, color: i <= idx ? "var(--cm-ink)" : "var(--cm-muted)", fontWeight: i === idx ? 700 : 500 }}>
+                                {RETURN_STATUS_LABEL[s]}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {Number(r.refundAmount) > 0 && (
+                        <div style={{ fontSize: 12, color: "#34d399", fontWeight: 700, marginTop: 6 }}>
+                          {inr(r.refundAmount)} refund {r.refundStatus === "WALLET_REFUNDED" ? "credited to wallet" : r.refundStatus === "SOURCE_INITIATED" || r.refundStatus === "SOURCE_REFUNDED" ? "to original payment (3–7 days)" : "processing"}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Eligible lines to return / replace */}
+            {eligibleReturnLines.length > 0 && (
+              <div style={{ marginTop: returns.length > 0 ? 12 : 10, display: "grid", gap: 8 }}>
+                {eligibleReturnLines.map((it) => {
+                  const item = itemFor(it);
+                  const canReplace = item.replacementAllowed === true;
+                  const canReturn = item.isReturnable !== false;
+                  return (
+                    <div key={it.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, border: "1px solid var(--cm-line)", borderRadius: 10, padding: "8px 10px" }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{itemName(it)}</div>
+                        <div style={{ fontSize: 11, color: "var(--cm-muted)" }}>
+                          {canReturn ? "Returnable" : ""}{canReturn && canReplace ? " · " : ""}{canReplace ? "Replacement available" : ""}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => openReturn({ line: it }, item)}
+                        style={{ flexShrink: 0, padding: "7px 12px", borderRadius: 9, border: "1px solid var(--cm-primary, #14b8a6)", background: "transparent", color: "var(--cm-primary, #14b8a6)", fontWeight: 700, fontSize: 12, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}
+                      >
+                        {canReplace && !canReturn ? <FaExchangeAlt size={11} /> : <FaUndoAlt size={11} />}
+                        {canReplace && !canReturn ? "Replace" : "Return / Replace"}
+                      </button>
+                    </div>
+                  );
+                })}
+                {/* Whole-order return when every active line is eligible */}
+                {!wholeOrderReturn && eligibleReturnLines.length > 1 &&
+                  eligibleReturnLines.length === items.filter((it) => !it.lineStatus || it.lineStatus === "ACTIVE").length && (
+                  <button
+                    onClick={() => { setReturnTarget({ wholeOrder: true }); setReturnKind("RETURN"); setReturnReasonCode("R01"); setReturnNote(""); setReturnPhotos([]); setReturnError(""); }}
+                    style={{ marginTop: 2, padding: "9px 12px", borderRadius: 10, border: "1px dashed var(--cm-primary, #14b8a6)", background: "transparent", color: "var(--cm-primary, #14b8a6)", fontWeight: 700, fontSize: 12, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+                  >
+                    <FaUndoAlt size={11} /> Return the whole order instead
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Create-return modal */}
+        {returnTarget && (
+          <div
+            onClick={() => setReturnTarget(null)}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+          >
+            <input ref={returnPhotoInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onReturnPhotoChosen} />
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{ width: "100%", maxWidth: 520, background: "var(--cm-card, #fff)", borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: 18, maxHeight: "88vh", overflowY: "auto" }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ fontWeight: 800, fontSize: 16 }}>
+                  {returnTarget.wholeOrder ? "Return whole order" : "Return or replace item"}
+                </div>
+                <button onClick={() => setReturnTarget(null)} className="mkt-header-back" aria-label="Close">×</button>
+              </div>
+              {!returnTarget.wholeOrder && (
+                <div style={{ fontSize: 13, color: "var(--cm-muted)", marginTop: 4 }}>{itemName(returnTarget.line)}</div>
+              )}
+
+              {/* RETURN vs REPLACEMENT */}
+              {(() => {
+                const item = returnTarget.wholeOrder ? {} : itemFor(returnTarget.line);
+                const canReturn = returnTarget.wholeOrder ? true : item.isReturnable !== false;
+                const canReplace = returnTarget.wholeOrder ? false : item.replacementAllowed === true;
+                return (
+                  <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                    {canReturn && (
+                      <button
+                        onClick={() => setReturnKind("RETURN")}
+                        style={{ flex: 1, padding: "10px", borderRadius: 10, border: `1px solid ${returnKind === "RETURN" ? "var(--cm-primary, #14b8a6)" : "var(--cm-line)"}`, background: returnKind === "RETURN" ? "rgba(20,184,166,0.10)" : "transparent", color: "var(--cm-ink)", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+                      >
+                        <FaUndoAlt size={12} /> Return &amp; refund
+                      </button>
+                    )}
+                    {canReplace && (
+                      <button
+                        onClick={() => setReturnKind("REPLACEMENT")}
+                        style={{ flex: 1, padding: "10px", borderRadius: 10, border: `1px solid ${returnKind === "REPLACEMENT" ? "var(--cm-primary, #14b8a6)" : "var(--cm-line)"}`, background: returnKind === "REPLACEMENT" ? "rgba(20,184,166,0.10)" : "transparent", color: "var(--cm-ink)", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+                      >
+                        <FaExchangeAlt size={12} /> Replace
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
+
+              <div style={{ fontSize: 13, fontWeight: 700, marginTop: 16, marginBottom: 6 }}>Reason</div>
+              <div style={{ display: "grid", gap: 8 }}>
+                {RETURN_REASONS.map((r) => (
+                  <label key={r.code} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "var(--cm-ink)", cursor: "pointer" }}>
+                    <input type="radio" name="returnReason" checked={returnReasonCode === r.code} onChange={() => setReturnReasonCode(r.code)} />
+                    {r.label}
+                  </label>
+                ))}
+              </div>
+
+              <textarea
+                value={returnNote}
+                onChange={(e) => setReturnNote(e.target.value)}
+                placeholder="Add more details for the store (optional)"
+                rows={2}
+                style={{ marginTop: 12, width: "100%", resize: "vertical", padding: 10, borderRadius: 10, border: "1px solid var(--cm-line)", background: "var(--cm-card, rgba(255,255,255,0.04))", color: "var(--cm-ink)", fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }}
+              />
+
+              {/* Photo evidence */}
+              <div style={{ marginTop: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  {returnPhotos.map((url) => (
+                    <img key={url} src={url} alt="" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8, border: "1px solid var(--cm-line)" }} />
+                  ))}
+                  <button
+                    onClick={() => returnPhotoInputRef.current?.click()}
+                    disabled={returnUploading}
+                    style={{ width: 56, height: 56, borderRadius: 8, border: "1px dashed var(--cm-line)", background: "transparent", color: "var(--cm-muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                    aria-label="Add photo"
+                  >
+                    {returnUploading ? "…" : <FaCamera size={16} />}
+                  </button>
+                </div>
+                <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: 6 }}>
+                  Add photos of the item to help the store review your request faster.
+                </div>
+              </div>
+
+              {returnKind === "REPLACEMENT" && (
+                <div style={{ fontSize: 12, color: "var(--cm-muted)", marginTop: 10, background: "rgba(14,165,233,0.08)", border: "1px solid rgba(14,165,233,0.25)", borderRadius: 8, padding: "8px 10px" }}>
+                  The store will pick up this item and reship a fresh one. No extra charge, no refund.
+                </div>
+              )}
+
+              {returnError && <div style={{ color: "#f87171", fontSize: 12, marginTop: 10 }}>{returnError}</div>}
+
+              <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+                <button onClick={() => setReturnTarget(null)} style={{ flex: 1, padding: "12px", borderRadius: 10, border: "1px solid var(--cm-line)", background: "transparent", color: "var(--cm-ink)", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                  Cancel
+                </button>
+                <button onClick={submitReturn} disabled={returnSubmitting} style={{ flex: 2, padding: "12px", borderRadius: 10, border: "none", background: returnSubmitting ? "var(--cm-line)" : "linear-gradient(135deg, #14b8a6, #10b981)", color: "#fff", fontWeight: 800, fontSize: 14, cursor: returnSubmitting ? "default" : "pointer" }}>
+                  {returnSubmitting ? "Submitting…" : returnKind === "REPLACEMENT" ? "Request replacement" : "Request return"}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
