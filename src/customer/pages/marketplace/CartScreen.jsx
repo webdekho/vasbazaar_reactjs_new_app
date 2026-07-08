@@ -114,6 +114,15 @@ const CartScreen = () => {
   const [deliverySlots, setDeliverySlots] = useState([]);
   const [selectedSlotId, setSelectedSlotId] = useState("");
 
+  // Pharmacy: any cart line flagged requiresPrescription forces a prescription
+  // image upload before the order can be placed (pure gate — no money math).
+  const [prescriptionUrl, setPrescriptionUrl] = useState("");
+  const [rxUploading, setRxUploading] = useState(false);
+
+  // Gift purchase: pack as a gift + optional message (≤300 chars).
+  const [isGift, setIsGift] = useState(false);
+  const [giftMessage, setGiftMessage] = useState("");
+
   // Offers / coupons.
   const [offers, setOffers] = useState([]);
   const [couponCode, setCouponCode] = useState("");
@@ -442,7 +451,29 @@ const CartScreen = () => {
   };
 
   const itemsPayload = () =>
-    items.map((i) => ({ itemId: i.id, quantity: i.qty, ...(i.variantLabel ? { variantLabel: i.variantLabel } : {}) }));
+    items.map((i) => ({
+      itemId: i.id,
+      quantity: i.qty,
+      ...(i.variantLabel ? { variantLabel: i.variantLabel } : {}),
+      // Per-line customization captured on the product sheet (cake message/photo).
+      ...(i.note ? { note: i.note } : {}),
+      ...(i.noteImageUrl ? { imageUrl: i.noteImageUrl } : {}),
+    }));
+
+  // Pharmacy gate: does any line require a prescription?
+  const needsPrescription = items.some((i) => i.requiresPrescription);
+
+  const handlePrescriptionUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { setError("Prescription image must be under 5 MB"); return; }
+    setError(null);
+    setRxUploading(true);
+    const res = await marketplaceService.uploadImage(file, "item");
+    setRxUploading(false);
+    if (res.success && res.data?.url) setPrescriptionUrl(res.data.url);
+    else setError(res.message || "Prescription upload failed");
+  };
 
   const hasSlots = deliverySlots.length > 0;
   const selectedSlot = () => deliverySlots.find((s) => String(s.id) === String(selectedSlotId)) || null;
@@ -480,6 +511,14 @@ const CartScreen = () => {
       setError("Your account mobile is missing. Please re-login and try again.");
       return;
     }
+    if (needsPrescription && !prescriptionUrl) {
+      setError("This order contains medicines — please upload a prescription photo before placing it.");
+      return;
+    }
+    if (isGift && giftMessage.length > 300) {
+      setError("Gift message can be at most 300 characters.");
+      return;
+    }
     setError(null);
     setPlacing(true);
     setPlacingMethod(method);
@@ -492,6 +531,8 @@ const CartScreen = () => {
       contactMobile: orderMobile,
       paymentMethod: method,
       fulfillmentType,
+      ...(needsPrescription && prescriptionUrl ? { prescriptionUrl } : {}),
+      ...(isGift ? { isGift: true, ...(giftMessage.trim() ? { giftMessage: giftMessage.trim().slice(0, 300) } : {}) } : {}),
       ...(appliedOffer?.code ? { offerCode: appliedOffer.code } : {}),
       ...(method === "ONLINE" ? { returnUrl: buildMarketplaceReturnUrl() } : {}),
       ...(coords && !isPickup ? { deliveryLat: coords.lat, deliveryLng: coords.lng } : {}),
@@ -637,6 +678,14 @@ const CartScreen = () => {
               <div className="mkt-cart-line-info">
                 <p className="mkt-cart-line-name">{it.name}{it.variantLabel ? <span style={{ color: "var(--cm-muted)", fontWeight: 500 }}> · {it.variantLabel}</span> : null}</p>
                 <div className="mkt-cart-line-price">₹{Number(it.price).toFixed(0)} each</div>
+                {(it.note || it.noteImageUrl) && (
+                  <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: 2 }}>
+                    ✏️ {it.note ? `"${it.note}"` : "Photo attached"}{it.note && it.noteImageUrl ? " · 📷" : ""}
+                  </div>
+                )}
+                {it.requiresPrescription && (
+                  <div style={{ fontSize: 11, color: "#f87171", marginTop: 2, fontWeight: 600 }}>℞ Prescription required</div>
+                )}
                 <div className="mkt-stepper" style={{ marginTop: 6 }}>
                   <button className="mkt-stepper-btn" onClick={() => decrementItem(key)}><FaMinus size={10} /></button>
                   <span className="mkt-stepper-qty">{it.qty}</span>
@@ -1049,6 +1098,56 @@ const CartScreen = () => {
             )}
             </>
             )}
+
+            {/* Pharmacy: mandatory prescription upload when any line needs it */}
+            {needsPrescription && (
+              <>
+                <div className="mkt-form-section-title">Prescription <span className="mkt-req">*</span></div>
+                <div style={{ padding: 12, borderRadius: 14, border: `1px solid ${prescriptionUrl ? "var(--cm-primary, #22c55e)" : "#f87171"}`, background: "var(--cm-card)", marginBottom: 14 }}>
+                  <div style={{ fontSize: 12, color: "var(--cm-muted)", marginBottom: 8 }}>
+                    Some items in this order are medicines. Upload a clear photo of your doctor's prescription — the seller verifies it before accepting the order.
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <label
+                      className="mkt-btn mkt-btn--secondary"
+                      style={{ width: "auto", padding: "8px 14px", fontSize: 12.5, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, margin: 0 }}
+                    >
+                      {rxUploading ? "Uploading…" : prescriptionUrl ? "Change prescription" : "Upload prescription photo"}
+                      <input type="file" accept="image/*" hidden onChange={handlePrescriptionUpload} disabled={rxUploading} />
+                    </label>
+                    {prescriptionUrl && (
+                      <img src={prescriptionUrl} alt="Prescription" style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover" }} />
+                    )}
+                  </div>
+                  {prescriptionUrl ? (
+                    <div style={{ fontSize: 11.5, color: "var(--cm-primary, #22c55e)", marginTop: 6, fontWeight: 600 }}>Prescription attached ✓</div>
+                  ) : (
+                    <div style={{ fontSize: 11.5, color: "#f87171", marginTop: 6, fontWeight: 600 }}>Required before placing this order</div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Gift option */}
+            <div style={{ padding: "10px 12px", borderRadius: 14, border: "1px solid var(--cm-line)", background: "var(--cm-card)", marginBottom: 14 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 700, color: "var(--cm-ink)", cursor: "pointer" }}>
+                <input type="checkbox" checked={isGift} onChange={(e) => setIsGift(e.target.checked)} />
+                This is a gift 🎁
+              </label>
+              {isGift && (
+                <div style={{ marginTop: 8 }}>
+                  <textarea
+                    className="mkt-textarea"
+                    maxLength={300}
+                    placeholder="Gift message (optional, printed on the slip)"
+                    value={giftMessage}
+                    onChange={(e) => setGiftMessage(e.target.value)}
+                    style={{ minHeight: 52 }}
+                  />
+                  <div style={{ fontSize: 10.5, color: "var(--cm-muted)", marginTop: 4 }}>{giftMessage.length}/300 · Prices are hidden on the packing slip.</div>
+                </div>
+              )}
+            </div>
 
             {/* Coupons / Offers */}
             <div className="mkt-form-section-title">Apply coupon</div>

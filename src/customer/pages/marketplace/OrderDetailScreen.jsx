@@ -19,8 +19,11 @@ import {
   FaTag,
   FaQrcode,
   FaHandHolding,
+  FaMotorcycle,
+  FaCamera,
 } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
+import { marketplaceLogisticsAiService } from "../../services/marketplaceLogisticsAiService";
 import "./marketplace.css";
 
 const DELIVERY_STATUS_FLOW = ["PLACED", "ACCEPTED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED"];
@@ -77,6 +80,30 @@ const itemTotal = (it) =>
 
 const CONFETTI_COLORS = ["#00E5A0", "#3B82F6", "#A855F7", "#FFD700", "#FF6B6B", "#06B6D4"];
 
+// ONDC-aligned customer cancellation reasons (code → shopper-friendly label).
+const CANCEL_REASONS = [
+  { code: "012", label: "I don't need it anymore" },
+  { code: "010", label: "I need to change the address / order details" },
+  { code: "006", label: "It's taking too long" },
+  { code: "000", label: "Other reason" },
+];
+
+// Where the customer's money went after a cancel/reject (refund_status → line).
+const refundStatusLine = (order) => {
+  const amt = `₹${Number(order?.totalAmount || 0).toFixed(2)}`;
+  switch (order?.refundStatus) {
+    case "WALLET_REFUNDED":
+      return `${amt} refunded to your VasBazaar wallet.`;
+    case "SOURCE_INITIATED":
+    case "SOURCE_REFUNDED":
+      return `${amt} refund to your original payment method initiated (reflects in 3–7 days).`;
+    case "FAILED":
+      return `Your refund of ${amt} is being processed and will reach you shortly.`;
+    default:
+      return null; // NOT_REQUIRED / not cancelled
+  }
+};
+
 // Interactive / read-only 1-5 star selector. Pass readOnly to disable input.
 const StarRating = ({ value = 0, onChange, size = 26, readOnly = false }) => (
   <div style={{ display: "inline-flex", gap: 6 }}>
@@ -130,6 +157,95 @@ const OrderDetailScreen = () => {
   const [disputeError, setDisputeError] = useState("");
   const [disputeDone, setDisputeDone] = useState(false);
 
+  // Self-serve cancellation (allowed while PLACED / ACCEPTED / PREPARING)
+  const [showCancel, setShowCancel] = useState(false);
+  const [cancelReasonCode, setCancelReasonCode] = useState("012");
+  const [cancelNote, setCancelNote] = useState("");
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+  const [cancelMessage, setCancelMessage] = useState("");
+
+  // Logistics v1 — rider assignment + POD photo + failed-delivery notice
+  // (side-table data fetched separately so the order endpoint stays untouched).
+  const [logistics, setLogistics] = useState(null);
+
+  // Partial (per-item) cancel — refund executes server-side before the line closes.
+  const [removingLineId, setRemovingLineId] = useState(null);
+  const removeItem = useCallback(async (line) => {
+    if (!window.confirm(`Remove ${line.itemName || "this item"} from the order?${
+      Number(line.total) > 0 ? " Any paid amount for it will be refunded." : ""}`)) return;
+    setRemovingLineId(line.id);
+    const res = await marketplaceService.cancelOrderItem(orderId, line.id);
+    setRemovingLineId(null);
+    if (res.success) {
+      if (res.data?.message) window.alert(res.data.message);
+      load();
+    } else {
+      window.alert(res.message || "Could not remove the item. Please try again.");
+    }
+  }, [orderId]);
+
+  // GST invoice — fetch data and print via a dedicated window.
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const printInvoice = useCallback(async () => {
+    setInvoiceLoading(true);
+    const res = await marketplaceService.getOrderInvoice(orderId);
+    setInvoiceLoading(false);
+    if (!res.success || !res.data) { window.alert(res.message || "Could not load the invoice"); return; }
+    const inv = res.data;
+    const rows = (inv.lines || []).map((l) =>
+      `<tr><td>${l.name || ""}</td><td>${l.hsn || "—"}</td><td style="text-align:center">${l.quantity}</td>` +
+      `<td style="text-align:right">₹${Number(l.taxableValue || 0).toFixed(2)}</td>` +
+      `<td style="text-align:center">${Number(l.taxRate || 0)}%</td>` +
+      `<td style="text-align:right">₹${Number(l.cgst || 0).toFixed(2)}</td>` +
+      `<td style="text-align:right">₹${Number(l.sgst || 0).toFixed(2)}</td>` +
+      `<td style="text-align:right">₹${Number(l.lineTotal || 0).toFixed(2)}</td></tr>`).join("");
+    const html = `<html><head><title>${inv.invoiceNo}</title><style>
+      body{font-family:Arial,sans-serif;font-size:12px;color:#111;margin:24px}
+      h2{margin:0 0 2px} .muted{color:#555} table{width:100%;border-collapse:collapse;margin-top:12px}
+      th,td{border:1px solid #ccc;padding:6px 8px;font-size:11px} th{background:#f3f4f6;text-align:left}
+      .tot{margin-top:12px;width:280px;margin-left:auto} .tot div{display:flex;justify-content:space-between;padding:2px 0}
+      .grand{font-weight:bold;border-top:1px solid #111;margin-top:4px;padding-top:4px}
+    </style></head><body>
+      <h2>TAX INVOICE</h2>
+      <div class="muted">${inv.invoiceNo} · ${inv.invoiceDate ? new Date(inv.invoiceDate).toLocaleDateString("en-IN") : ""}</div>
+      <div style="margin-top:10px"><b>${inv.storeName || ""}</b><br/>${inv.storeAddress || ""}<br/>
+      ${inv.storeGstNumber ? "GSTIN: " + inv.storeGstNumber : "GSTIN: Unregistered"}</div>
+      <div style="margin-top:8px"><b>Billed to:</b> ${inv.customerName || ""} · ${inv.customerMobile || ""}<br/>
+      ${inv.deliveryAddress || ""}</div>
+      <table><thead><tr><th>Item</th><th>HSN</th><th>Qty</th><th>Taxable</th><th>GST%</th><th>CGST</th><th>SGST</th><th>Total</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+      <div class="tot">
+        <div><span>Taxable value</span><span>₹${Number(inv.taxableTotal || 0).toFixed(2)}</span></div>
+        <div><span>Total GST</span><span>₹${Number(inv.taxTotal || 0).toFixed(2)}</span></div>
+        <div><span>Delivery</span><span>₹${Number(inv.deliveryCharges || 0).toFixed(2)}</span></div>
+        <div><span>Platform charge</span><span>₹${Number(inv.platformCharge || 0).toFixed(2)}</span></div>
+        <div><span>Discount</span><span>− ₹${Number(inv.discount || 0).toFixed(2)}</span></div>
+        <div class="grand"><span>Grand total</span><span>₹${Number(inv.totalAmount || 0).toFixed(2)}</span></div>
+      </div>
+      <p class="muted" style="margin-top:16px">System-generated invoice · Powered by VasBazaar</p>
+      <script>window.onload=function(){window.print()}</script>
+    </body></html>`;
+    const w = window.open("", "_blank");
+    if (w) { w.document.write(html); w.document.close(); }
+  }, [orderId]);
+
+  const submitCancel = useCallback(async () => {
+    setCancelError("");
+    setCancelSubmitting(true);
+    const reasonLabel = CANCEL_REASONS.find((r) => r.code === cancelReasonCode)?.label || "";
+    const reason = cancelNote.trim() ? `${reasonLabel} — ${cancelNote.trim()}` : reasonLabel;
+    const res = await marketplaceService.cancelMyOrder(orderId, cancelReasonCode, reason);
+    setCancelSubmitting(false);
+    if (res.success) {
+      setCancelMessage(res.data?.message || "Your order has been cancelled.");
+      setShowCancel(false);
+      setOrder((prev) => (prev ? { ...prev, ...res.data, orderStatus: "CANCELLED", cancellationReason: reason, cancelledBy: "CUSTOMER" } : prev));
+    } else {
+      setCancelError(res.message || "Could not cancel the order. Please try again.");
+    }
+  }, [orderId, cancelReasonCode, cancelNote]);
+
   const submitDispute = useCallback(async () => {
     if (!disputeReason.trim()) { setDisputeError("Please describe the issue"); return; }
     setDisputeError("");
@@ -154,6 +270,15 @@ const OrderDetailScreen = () => {
       if (res.data?.paymentStatus === "PAID" && !sessionStorage.getItem(seenKey)) {
         sessionStorage.setItem(seenKey, "1");
         setCelebrate(true);
+      }
+      // Delivery logistics (rider / POD / failed attempts) — non-fatal extras.
+      if (res.data?.fulfillmentType !== "PICKUP") {
+        try {
+          const log = await marketplaceLogisticsAiService.getOrderLogistics(orderId);
+          if (log?.success) setLogistics(log.data);
+        } catch {
+          // non-fatal — logistics extras just stay hidden
+        }
       }
       // Once the order is completed, load review eligibility / existing review.
       const st = res.data?.orderStatus;
@@ -262,6 +387,10 @@ const OrderDetailScreen = () => {
   const isCancelled = order.orderStatus === "CANCELLED";
   const isRejected = order.orderStatus === "REJECTED";
   const paymentPaid = order.paymentStatus === "PAID";
+  const canRemoveItems = ["PLACED", "ACCEPTED", "PREPARING"].includes(order.orderStatus);
+  const activeItemCount = items.filter(
+    (it) => !it.lineStatus || it.lineStatus === "ACTIVE"
+  ).length;
   const subtotal = Number(order.subtotal ?? itemsSubtotal);
   const delivery = Number(order.deliveryCharges || 0);
   const platformCharge = Number(order.orderCharge || 0);
@@ -491,6 +620,69 @@ const OrderDetailScreen = () => {
           </div>
         )}
 
+        {/* Delivery attempt failed — the store will retry (Logistics v1) */}
+        {!isPickup && logistics?.deliveryFailedReason && order.orderStatus === "ACCEPTED" && (
+          <div
+            className="mkt-status-banner mkt-status--pending no-print"
+            style={{ marginTop: 12 }}
+          >
+            <FaTruck size={16} style={{ marginTop: 2 }} />
+            <div>
+              Delivery attempt failed: {logistics.deliveryFailedReason} — the store will retry your delivery.
+            </div>
+          </div>
+        )}
+
+        {/* Assigned delivery rider (Logistics v1) */}
+        {!isPickup && logistics?.rider && !isCancelled && !isRejected && (
+          <div className="mkt-receipt-card no-print" style={{ marginTop: 12 }}>
+            <div className="mkt-receipt-section-title">Your delivery rider</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>
+              <div
+                style={{
+                  width: 40, height: 40, borderRadius: "50%",
+                  background: "linear-gradient(135deg, #8b5cf6, #6366f1)",
+                  display: "flex", alignItems: "center", justifyContent: "center", color: "#fff",
+                }}
+              >
+                <FaMotorcycle size={16} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{logistics.rider.name}</div>
+                <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>{logistics.rider.mobile}</div>
+              </div>
+              <a
+                href={`tel:${logistics.rider.mobile}`}
+                aria-label={`Call ${logistics.rider.name}`}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  padding: "8px 14px", borderRadius: 10, textDecoration: "none",
+                  background: "linear-gradient(135deg, #14b8a6, #10b981)", color: "#fff",
+                  fontWeight: 700, fontSize: 12,
+                }}
+              >
+                <FaPhoneAlt size={11} /> Call
+              </a>
+            </div>
+          </div>
+        )}
+
+        {/* Proof-of-delivery photo (Logistics v1) */}
+        {!isPickup && logistics?.podImageUrl && (
+          <div className="mkt-receipt-card no-print" style={{ marginTop: 12 }}>
+            <div className="mkt-receipt-section-title" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <FaCamera size={11} /> Proof of delivery
+            </div>
+            <a href={logistics.podImageUrl} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8 }}>
+              <img
+                src={logistics.podImageUrl}
+                alt="Proof of delivery"
+                style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 10, border: "1px solid var(--cm-line)" }}
+              />
+            </a>
+          </div>
+        )}
+
         {/* Customer & delivery */}
         <div className="mkt-receipt-card" style={{ marginTop: 12 }}>
           <div className="mkt-receipt-section-title">Bill To</div>
@@ -532,14 +724,35 @@ const OrderDetailScreen = () => {
                   </td>
                 </tr>
               ) : (
-                items.map((it, idx) => (
-                  <tr key={it.id || it.itemId?.id || idx}>
-                    <td>{itemName(it)}</td>
-                    <td style={{ textAlign: "center" }}>{itemQty(it)}</td>
-                    <td style={{ textAlign: "right" }}>{inr(itemPrice(it))}</td>
-                    <td style={{ textAlign: "right", fontWeight: 600 }}>{inr(itemTotal(it))}</td>
-                  </tr>
-                ))
+                items.map((it, idx) => {
+                  const removed = it.lineStatus === "CANCELLED" || it.lineStatus === "UNAVAILABLE";
+                  return (
+                    <tr key={it.id || it.itemId?.id || idx} style={removed ? { opacity: 0.55 } : undefined}>
+                      <td>
+                        <span style={removed ? { textDecoration: "line-through" } : undefined}>{itemName(it)}</span>
+                        {removed && (
+                          <div style={{ fontSize: 11, color: "#f87171", fontWeight: 700 }}>
+                            {it.lineStatus === "UNAVAILABLE" ? "Unavailable at store" : "Removed"}
+                            {Number(it.lineRefundAmount) > 0 ? ` — ${inr(it.lineRefundAmount)} refunded` : ""}
+                          </div>
+                        )}
+                        {!removed && canRemoveItems && activeItemCount > 1 && (
+                          <button
+                            className="no-print"
+                            onClick={() => removeItem(it)}
+                            disabled={removingLineId === it.id}
+                            style={{ display: "block", marginTop: 2, padding: 0, border: "none", background: "none", color: "#ef4444", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                          >
+                            {removingLineId === it.id ? "Removing…" : "Remove item"}
+                          </button>
+                        )}
+                      </td>
+                      <td style={{ textAlign: "center" }}>{itemQty(it)}</td>
+                      <td style={{ textAlign: "right" }}>{inr(itemPrice(it))}</td>
+                      <td style={{ textAlign: "right", fontWeight: 600 }}>{inr(itemTotal(it))}</td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -620,6 +833,18 @@ const OrderDetailScreen = () => {
           )}
         </div>
 
+        {/* GST invoice (available once the order is placed and money story is fixed) */}
+        <div className="mkt-receipt-card no-print" style={{ marginTop: 12 }}>
+          <button
+            onClick={printInvoice}
+            disabled={invoiceLoading}
+            style={{ width: "100%", padding: "11px 14px", borderRadius: 10, border: "1px solid var(--cm-line)", background: "transparent", color: "var(--cm-ink)", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+          >
+            <FaPrint size={12} />
+            {invoiceLoading ? "Preparing invoice…" : "Download GST invoice"}
+          </button>
+        </div>
+
         {/* Tracking timeline */}
         <div className="mkt-receipt-card no-print" style={{ marginTop: 12 }}>
           <div className="mkt-receipt-section-title">Order Tracking</div>
@@ -663,14 +888,86 @@ const OrderDetailScreen = () => {
             <div className="mkt-status-banner mkt-status--rejected" style={{ margin: "8px 0 0" }}>
               <FaTimesCircle size={16} style={{ marginTop: 2 }} />
               <div>
-                {isRejected ? "Order rejected" : "Order cancelled"}
+                {isRejected
+                  ? "Order rejected"
+                  : order.cancelledBy === "CUSTOMER"
+                  ? "Order cancelled by you"
+                  : order.cancelledBy === "SYSTEM"
+                  ? "Order cancelled — the store didn't respond in time"
+                  : order.cancelledBy === "ADMIN"
+                  ? "Order cancelled by VasBazaar"
+                  : "Order cancelled by the store"}
                 {(isRejected ? order.rejectionReason : order.cancellationReason)
                   ? ` — ${isRejected ? order.rejectionReason : order.cancellationReason}`
                   : ""}
+                {refundStatusLine(order) && (
+                  <div style={{ marginTop: 6, fontWeight: 700 }}>{refundStatusLine(order)}</div>
+                )}
               </div>
             </div>
           )}
         </div>
+
+        {/* Self-serve cancellation — free until the store packs / dispatches the order */}
+        {cancelMessage && (
+          <div className="mkt-receipt-card no-print" style={{ marginTop: 12, textAlign: "center" }}>
+            <FaCheckCircle size={24} style={{ color: "#34d399" }} />
+            <div style={{ fontWeight: 800, fontSize: 14, marginTop: 6 }}>Order cancelled</div>
+            <div style={{ fontSize: 12, color: "var(--cm-muted)", marginTop: 4 }}>{cancelMessage}</div>
+          </div>
+        )}
+        {!cancelMessage && ["PLACED", "ACCEPTED", "PREPARING"].includes(order.orderStatus) && (
+          <div className="mkt-receipt-card no-print" style={{ marginTop: 12 }}>
+            {!showCancel ? (
+              <button
+                onClick={() => setShowCancel(true)}
+                style={{ width: "100%", padding: "11px 14px", borderRadius: 10, border: "1px solid rgba(239,68,68,0.5)", background: "transparent", color: "#ef4444", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+              >
+                Cancel this order
+              </button>
+            ) : (
+              <>
+                <div className="mkt-receipt-section-title">Cancel order</div>
+                <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+                  {CANCEL_REASONS.map((r) => (
+                    <label key={r.code} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "var(--cm-ink)", cursor: "pointer" }}>
+                      <input
+                        type="radio"
+                        name="cancelReason"
+                        checked={cancelReasonCode === r.code}
+                        onChange={() => setCancelReasonCode(r.code)}
+                      />
+                      {r.label}
+                    </label>
+                  ))}
+                </div>
+                <textarea
+                  value={cancelNote}
+                  onChange={(e) => setCancelNote(e.target.value)}
+                  placeholder="Anything else you'd like to tell the store? (optional)"
+                  rows={2}
+                  style={{ marginTop: 10, width: "100%", resize: "vertical", padding: 10, borderRadius: 10, border: "1px solid var(--cm-line)", background: "var(--cm-card, rgba(255,255,255,0.04))", color: "var(--cm-ink)", fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }}
+                />
+                <div style={{ marginTop: 10, fontSize: 12, color: "var(--cm-muted)" }}>
+                  {order.paymentStatus === "PAID"
+                    ? (order.paymentTxnId || "").startsWith("WALLET:")
+                      ? `${inr(total)} will be refunded to your VasBazaar wallet instantly.`
+                      : `${inr(total)} will be refunded to your original payment method (3–7 days).`
+                    : "No payment was collected for this order — there is nothing to refund."}
+                </div>
+                {cancelError && <div style={{ color: "#f87171", fontSize: 12, marginTop: 8 }}>{cancelError}</div>}
+                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                  <button onClick={() => setShowCancel(false)} style={{ flex: 1, padding: "10px", borderRadius: 10, border: "1px solid var(--cm-line)", background: "transparent", color: "var(--cm-ink)", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                    Keep order
+                  </button>
+                  <button onClick={submitCancel} disabled={cancelSubmitting} style={{ flex: 2, padding: "10px", borderRadius: 10, border: "none", background: cancelSubmitting ? "var(--cm-line)" : "linear-gradient(135deg, #f43f5e, #ef4444)", color: "#fff", fontWeight: 800, fontSize: 13, cursor: cancelSubmitting ? "default" : "pointer" }}>
+                    {cancelSubmitting ? "Cancelling…" : "Confirm cancel"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Ratings & Reviews */}
         {reviewState && (reviewThanks || reviewState.alreadyReviewed || reviewState.canReview) && (

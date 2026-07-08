@@ -94,9 +94,11 @@ export const MarketplaceCartProvider = ({ children }) => {
     return { count, subtotal, total: subtotal + deliveryCharges, deliveryCharges };
   }, [storeList]);
 
-  // Add one unit. `variant` (optional): { label, price }. No store-replace
-  // prompt anymore — different stores simply coexist in their own buckets.
-  const addItem = useCallback((store, item, { variant } = {}) => {
+  // Add one unit. `variant` (optional): { label, price }. `note`/`imageUrl`
+  // (optional): per-line customization (e.g. cake message + reference photo),
+  // sent to the backend as the line's note/imageUrl. No store-replace prompt
+  // anymore — different stores simply coexist in their own buckets.
+  const addItem = useCallback((store, item, { variant, note, imageUrl } = {}) => {
     const vLabel = variant?.label || null;
     const unitPrice = vLabel
       ? Number(variant.price)
@@ -117,6 +119,12 @@ export const MarketplaceCartProvider = ({ children }) => {
       const maxQty = itemHasLimits ? itemMaxQty : (Number(existing?.maxQty) > 0 ? Number(existing.maxQty) : null);
       let nextQty = existing ? existing.qty + 1 : minQty;
       if (maxQty != null && nextQty > maxQty) nextQty = maxQty; // never exceed the cap
+      // Category-flow flag: item requires a prescription on the order. Falls
+      // back to the existing line's flag when the caller rebuilt a bare item
+      // (e.g. the cart stepper), same as the qty limits above.
+      const requiresPrescription = item.requiresPrescription != null
+        ? !!item.requiresPrescription
+        : !!existing?.requiresPrescription;
       const line = {
         id: item.id,
         name: item.name,
@@ -126,6 +134,11 @@ export const MarketplaceCartProvider = ({ children }) => {
         minQty,
         maxQty,
         qty: nextQty,
+        requiresPrescription,
+        // Per-line customization — new value wins, otherwise keep what the
+        // line already carried (increments shouldn't wipe the cake message).
+        note: note !== undefined ? (note || null) : (existing?.note || null),
+        noteImageUrl: imageUrl !== undefined ? (imageUrl || null) : (existing?.noteImageUrl || null),
       };
       return {
         ...prev,
@@ -153,6 +166,22 @@ export const MarketplaceCartProvider = ({ children }) => {
       if (Object.keys(items).length === 0) delete next[storeId];
       else next[storeId] = { ...b, items };
       return next;
+    });
+  }, []);
+
+  // Update a line's customization (note / reference image) in place without
+  // touching its quantity.
+  const updateLineExtras = useCallback((storeId, key, { note, imageUrl } = {}) => {
+    setStores((prev) => {
+      const b = prev[storeId];
+      if (!b || !b.items[key]) return prev;
+      const line = b.items[key];
+      const next = {
+        ...line,
+        ...(note !== undefined ? { note: note || null } : {}),
+        ...(imageUrl !== undefined ? { noteImageUrl: imageUrl || null } : {}),
+      };
+      return { ...prev, [storeId]: { ...b, items: { ...b.items, [key]: next } } };
     });
   }, []);
 
@@ -229,6 +258,7 @@ export const MarketplaceCartProvider = ({ children }) => {
         removeItem,
         decrementLine,
         removeLine,
+        updateLineExtras,
         clearStore,
         clearCart,
         getItemQty,

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaPlus, FaPencilAlt, FaTrash, FaStore, FaCamera, FaCheckCircle, FaTimesCircle, FaClock, FaBan, FaEdit, FaRegClock, FaChevronRight, FaPowerOff, FaChevronDown, FaChevronUp, FaToggleOn, FaToggleOff, FaTags, FaChartLine, FaStar, FaTruck, FaShoppingBag, FaFileCsv, FaBook } from "react-icons/fa";
+import { FaArrowLeft, FaPlus, FaPencilAlt, FaTrash, FaStore, FaCamera, FaCheckCircle, FaTimesCircle, FaClock, FaBan, FaEdit, FaRegClock, FaChevronRight, FaPowerOff, FaChevronDown, FaChevronUp, FaToggleOn, FaToggleOff, FaTags, FaChartLine, FaStar, FaTruck, FaShoppingBag, FaFileCsv, FaBook, FaUsers, FaCalendarTimes, FaClipboardCheck } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
 import { useToast } from "../../context/ToastContext";
 import { parseVariants, variantDimensions } from "./variantUtils";
@@ -403,6 +403,9 @@ const MyStoreManageScreen = () => {
                 { icon: FaChartLine, title: "Analytics", sub: "Revenue, orders & top items", to: "/customer/app/marketplace/my-store/analytics" },
                 { icon: FaStar, title: "Reviews", sub: "Read & reply to customer reviews", to: "/customer/app/marketplace/my-store/reviews" },
                 { icon: FaBook, title: "Khata / Credit", sub: "Customer credit ledger & reminders", to: "/customer/app/marketplace/my-store/khata" },
+                { icon: FaCalendarTimes, title: "Holidays & Pincodes", sub: "Closed days & serviceable pincodes", to: "/customer/app/marketplace/my-store/holidays" },
+                { icon: FaUsers, title: "My Customers", sub: "Customer list, spend & repeat buyers", to: "/customer/app/marketplace/my-store/crm" },
+                { icon: FaClipboardCheck, title: "Seller Scorecard", sub: "Cancellation & rejection rates vs benchmark", to: "/customer/app/marketplace/my-store/scorecard" },
               ].map((it) => {
                 const Icon = it.icon;
                 return (
@@ -1273,6 +1276,12 @@ const ItemFormModal = ({ initial, allItems = [], onClose, onSaved }) => {
     lowStockThreshold: initial?.lowStockThreshold ?? "",
     minOrderQty: initial?.minOrderQty ?? "",
     maxOrderQty: initial?.maxOrderQty ?? "",
+    // Category-flow flags (pharmacy / bakery / baby / weight-based).
+    requiresPrescription: !!initial?.requiresPrescription,
+    allowsCustomization: !!initial?.allowsCustomization,
+    customizationHint: initial?.customizationHint || "",
+    ageGroup: initial?.ageGroup || "",
+    isWeightBased: !!initial?.isWeightBased,
     imageUrl: initial?.imageUrl || "",
     storeItemCategoryId: initial?.storeItemCategoryId?.id || "",
     storeItemSubcategoryId: initial?.storeItemSubcategoryId?.id || "",
@@ -1484,6 +1493,11 @@ const ItemFormModal = ({ initial, allItems = [], onClose, onSaved }) => {
       lowStockThreshold: form.lowStockThreshold !== "" ? Number(form.lowStockThreshold) : null,
       minOrderQty: form.minOrderQty !== "" ? Number(form.minOrderQty) : null,
       maxOrderQty: form.maxOrderQty !== "" ? Number(form.maxOrderQty) : null,
+      requiresPrescription: !!form.requiresPrescription,
+      allowsCustomization: !!form.allowsCustomization,
+      customizationHint: form.allowsCustomization ? (form.customizationHint.trim().slice(0, 120) || null) : null,
+      ageGroup: form.ageGroup.trim().slice(0, 40) || null,
+      isWeightBased: !!form.isWeightBased,
       variants: cleanVariants.length ? JSON.stringify(cleanVariants) : null,
       services: (() => {
         const clean = services
@@ -1656,6 +1670,56 @@ const ItemFormModal = ({ initial, allItems = [], onClose, onSaved }) => {
           </div>
           <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: -4 }}>
             Limits how many units a customer can buy per order. Leave blank for no limit.
+          </div>
+
+          {/* Category flags — pharmacy / bakery / baby / weight-based flows. */}
+          <div className="mkt-field">
+            <label className="mkt-field-label">Category flags (optional)</label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 12px", borderRadius: 12, border: "1px solid var(--cm-line)", background: "var(--cm-card)" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--cm-ink)", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={form.requiresPrescription}
+                  onChange={(e) => setField("requiresPrescription", e.target.checked)}
+                />
+                Requires prescription (pharmacy)
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--cm-ink)", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={form.allowsCustomization}
+                  onChange={(e) => setField("allowsCustomization", e.target.checked)}
+                />
+                Allows customization (e.g. cake message &amp; photo)
+              </label>
+              {form.allowsCustomization && (
+                <input
+                  className="mkt-input"
+                  maxLength={120}
+                  placeholder='Customization hint, e.g. "Add cake message & photo"'
+                  value={form.customizationHint}
+                  onChange={(e) => setField("customizationHint", e.target.value)}
+                />
+              )}
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--cm-ink)", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={form.isWeightBased}
+                  onChange={(e) => setField("isWeightBased", e.target.checked)}
+                />
+                Sold by weight (price via variants like 500g / 1kg)
+              </label>
+              <div>
+                <label className="mkt-field-label" style={{ display: "block", marginBottom: 3 }}>Age group (baby products)</label>
+                <input
+                  className="mkt-input"
+                  maxLength={40}
+                  placeholder='e.g. "0-6m", "6-12m", "1-2y"'
+                  value={form.ageGroup}
+                  onChange={(e) => setField("ageGroup", e.target.value)}
+                />
+              </div>
+            </div>
           </div>
 
           {/* Grouped variants (Amazon-style). Optional option dimensions (Size,

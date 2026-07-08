@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaStore, FaFileExcel } from "react-icons/fa";
+import { FaArrowLeft, FaStore, FaFileExcel, FaMotorcycle, FaCamera } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
+import { marketplaceLogisticsAiService } from "../../services/marketplaceLogisticsAiService";
 import "./marketplace.css";
+
+// DELIVERY-order statuses during which a rider can be (re)assigned.
+const RIDER_STATUSES = ["ACCEPTED", "PREPARING", "OUT_FOR_DELIVERY"];
 
 const STATUS_FILTER = ["All", "PLACED", "ACCEPTED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED", "REJECTED", "CANCELLED"];
 // PLACED state shows accept/reject buttons separately (not in NEXT_STATUS).
@@ -59,6 +63,34 @@ const StoreOrdersScreen = () => {
   const [verifyMsg, setVerifyMsg] = useState({});      // { [orderId]: { type, text } }
   const [verifying, setVerifying] = useState({});      // { [orderId]: bool }
 
+  // ===== Logistics v1: rider assignment + POD + failed delivery =====
+  const [riderByOrder, setRiderByOrder] = useState({}); // { [orderId]: { name, mobile } }
+  // Bottom-sheet: { order, riders, loading, newName, newMobile, adding, assigningId, error }
+  const [riderSheet, setRiderSheet] = useState(null);
+  const [podUploading, setPodUploading] = useState({}); // { [orderId]: bool }
+  const podInputRef = useRef(null);
+  const podOrderRef = useRef(null); // order awaiting the chosen POD file
+
+  // Rider assignments live in a side table — fetch them for the delivery
+  // orders that can carry one (active statuses only, capped to stay light).
+  const loadRiderAssignments = useCallback(async (list) => {
+    const targets = (list || [])
+      .filter((o) => !isPickup(o) && RIDER_STATUSES.includes(o.orderStatus))
+      .slice(0, 25);
+    if (targets.length === 0) return;
+    const entries = await Promise.all(targets.map(async (o) => {
+      try {
+        const res = await marketplaceLogisticsAiService.getOrderLogistics(o.id);
+        return [o.id, res.success ? res.data?.rider || null : null];
+      } catch { return [o.id, null]; }
+    }));
+    setRiderByOrder((prev) => {
+      const next = { ...prev };
+      entries.forEach(([id, rider]) => { if (rider) next[id] = rider; });
+      return next;
+    });
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     const res = await marketplaceService.getMyStoreOrders({
@@ -67,11 +99,13 @@ const StoreOrdersScreen = () => {
     });
     setLoading(false);
     if (res.success) {
-      setOrders(res.data?.records || []);
+      const records = res.data?.records || [];
+      setOrders(records);
+      loadRiderAssignments(records);
     } else {
       setError(res.message);
     }
-  }, [filter]);
+  }, [filter, loadRiderAssignments]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -185,8 +219,14 @@ const StoreOrdersScreen = () => {
   };
 
   const cancel = async (order) => {
-    if (!window.confirm("Cancel this order?")) return;
-    const res = await marketplaceService.updateOrderStatus(order.id, "CANCELLED");
+    // Reason is required — it reaches the customer's cancellation notification,
+    // and the backend auto-refunds any prepaid amount when the store cancels.
+    const reason = window.prompt(
+      "Why are you cancelling this order? The customer will see this and any payment will be auto-refunded."
+    );
+    if (reason === null) return; // seller backed out
+    if (!reason.trim()) { setError("A cancellation reason is required"); return; }
+    const res = await marketplaceService.updateOrderStatus(order.id, "CANCELLED", reason.trim());
     if (res.success) load();
     else setError(res.message);
   };
@@ -197,6 +237,35 @@ const StoreOrdersScreen = () => {
     else setError(res.message);
   };
 
+  // Partial availability — mark selected lines out of stock; backend
+  // auto-refunds those lines (or cancels the order when nothing is left).
+  const [itemsModal, setItemsModal] = useState(null); // { order, items, selected:Set, submitting }
+  const openItemsModal = async (order) => {
+    const res = await marketplaceService.getMyOrder(order.id);
+    if (!res.success) { setError(res.message || "Could not load order items"); return; }
+    const active = (res.data?.orderItems || []).filter(
+      (it) => !it.lineStatus || it.lineStatus === "ACTIVE"
+    );
+    if (active.length === 0) { setError("No active items on this order"); return; }
+    setItemsModal({ order, items: active, selected: new Set(), submitting: false });
+  };
+  const submitUnavailable = async () => {
+    if (!itemsModal || itemsModal.selected.size === 0) return;
+    const all = itemsModal.selected.size >= itemsModal.items.length;
+    if (!window.confirm(all
+      ? "ALL items are out of stock — the whole order will be cancelled and the customer fully refunded. Continue?"
+      : `Mark ${itemsModal.selected.size} item(s) out of stock? The customer will be auto-refunded for them.`)) return;
+    setItemsModal((m) => ({ ...m, submitting: true }));
+    const res = await marketplaceService.markItemsUnavailable(itemsModal.order.id, [...itemsModal.selected]);
+    if (res.success) {
+      setItemsModal(null);
+      load();
+    } else {
+      setItemsModal((m) => ({ ...m, submitting: false }));
+      setError(res.message || "Could not update items");
+    }
+  };
+
   const reject = async (order) => {
     const reason = window.prompt("Reason for rejecting this order? (optional)") || "";
     if (reason === null) return; // user cancelled
@@ -205,12 +274,115 @@ const StoreOrdersScreen = () => {
     else setError(res.message);
   };
 
+  // ===== Logistics v1 handlers =====
+
+  const openRiderSheet = async (order) => {
+    setRiderSheet({ order, riders: [], loading: true, newName: "", newMobile: "", adding: false, assigningId: null, error: "" });
+    const res = await marketplaceLogisticsAiService.getMyRiders();
+    setRiderSheet((s) => (s && s.order.id === order.id
+      ? { ...s, loading: false, riders: res.success ? (res.data || []) : [], error: res.success ? "" : (res.message || "Could not load riders") }
+      : s));
+  };
+
+  const assignRiderTo = async (rider) => {
+    if (!riderSheet) return;
+    setRiderSheet((s) => ({ ...s, assigningId: rider.id, error: "" }));
+    const res = await marketplaceLogisticsAiService.assignRider(riderSheet.order.id, rider.id);
+    if (res.success) {
+      setRiderByOrder((m) => ({ ...m, [riderSheet.order.id]: { name: rider.name, mobile: rider.mobile } }));
+      setRiderSheet(null);
+    } else {
+      setRiderSheet((s) => ({ ...s, assigningId: null, error: res.message || "Could not assign the rider" }));
+    }
+  };
+
+  const addRiderInline = async () => {
+    if (!riderSheet) return;
+    const name = riderSheet.newName.trim();
+    const mobile = riderSheet.newMobile.trim();
+    if (!name || !/^\d{10}$/.test(mobile)) {
+      setRiderSheet((s) => ({ ...s, error: "Enter the rider's name and a 10-digit mobile number" }));
+      return;
+    }
+    setRiderSheet((s) => ({ ...s, adding: true, error: "" }));
+    const res = await marketplaceLogisticsAiService.addRider(name, mobile);
+    if (res.success && res.data) {
+      setRiderSheet((s) => ({ ...s, adding: false, newName: "", newMobile: "", riders: [res.data, ...s.riders] }));
+    } else {
+      setRiderSheet((s) => ({ ...s, adding: false, error: res.message || "Could not add the rider" }));
+    }
+  };
+
+  const deliveryFailed = async (order) => {
+    const reason = window.prompt(
+      "Why did this delivery fail? The customer will see this reason and the order goes back to Accepted so you can retry."
+    );
+    if (reason === null) return;
+    if (!reason.trim()) { setError("A failure reason is required"); return; }
+    const res = await marketplaceLogisticsAiService.reportDeliveryFailed(order.id, reason.trim());
+    if (res.success) {
+      if (res.data?.suggestCancel) {
+        window.alert("This order has failed delivery 3 or more times. Consider cancelling it — the customer will be auto-refunded.");
+      }
+      load();
+    } else {
+      setError(res.message || "Could not record the failed delivery");
+    }
+  };
+
+  const pickPodPhoto = (order) => {
+    podOrderRef.current = order;
+    if (podInputRef.current) {
+      podInputRef.current.value = "";
+      podInputRef.current.click();
+    }
+  };
+
+  const onPodFileChosen = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    const order = podOrderRef.current;
+    if (!file || !order) return;
+    setPodUploading((m) => ({ ...m, [order.id]: true }));
+    const up = await marketplaceService.uploadImage(file, "item");
+    if (!up.success || !up.data?.url) {
+      setPodUploading((m) => ({ ...m, [order.id]: false }));
+      setError(up.message || "Could not upload the photo");
+      return;
+    }
+    const res = await marketplaceLogisticsAiService.submitPod(order.id, up.data.url);
+    setPodUploading((m) => ({ ...m, [order.id]: false }));
+    if (res.success) load();
+    else setError(res.message || "Could not save the delivery photo");
+  };
+
   return (
     <div className="mkt">
       <div className="mkt-header">
         <button className="mkt-header-back" onClick={() => navigate(-1)}><FaArrowLeft /></button>
         <h1 className="mkt-header-title">Store Orders</h1>
+        <button
+          type="button"
+          onClick={() => navigate("/customer/app/marketplace/my-store/riders")}
+          title="Manage delivery riders"
+          style={{
+            marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "6px 12px", borderRadius: 10, border: "1px solid var(--cm-line)",
+            background: "var(--cm-card)", color: "var(--cm-ink)", fontSize: 12, fontWeight: 700, cursor: "pointer",
+          }}
+        >
+          <FaMotorcycle size={12} /> Riders
+        </button>
       </div>
+
+      {/* Hidden picker for proof-of-delivery photos */}
+      <input
+        ref={podInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: "none" }}
+        onChange={onPodFileChosen}
+      />
 
       <div className="mkt-categories">
         {STATUS_FILTER.map((f) => (
@@ -331,6 +503,24 @@ const StoreOrdersScreen = () => {
                     Rejection reason: {o.rejectionReason}
                   </div>
                 )}
+                {!pickup && riderByOrder[o.id] && (
+                  <div style={{ marginTop: 6, display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#8b5cf6", background: "rgba(139, 92, 246, 0.12)", padding: "3px 10px", borderRadius: 6 }}>
+                    <FaMotorcycle size={11} /> Rider: {riderByOrder[o.id].name} · {riderByOrder[o.id].mobile}
+                  </div>
+                )}
+                {!pickup && Number(o.deliveryAttempts) > 0 && o.orderStatus !== "DELIVERED" && (
+                  <div style={{ marginTop: 6, fontSize: 12, color: "#f59e0b" }}>
+                    Failed delivery attempt{Number(o.deliveryAttempts) > 1 ? "s" : ""}: {o.deliveryAttempts}
+                    {o.deliveryFailedReason ? ` — last reason: ${o.deliveryFailedReason}` : ""}
+                    {Number(o.deliveryAttempts) >= 3 ? " · Consider cancelling — customer will be auto-refunded" : ""}
+                  </div>
+                )}
+                {!pickup && o.podImageUrl && (
+                  <div style={{ marginTop: 6, display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#10b981", fontWeight: 600 }}>
+                    <FaCamera size={11} /> POD photo added
+                    <a href={o.podImageUrl} target="_blank" rel="noreferrer" style={{ color: "#10b981" }}>view</a>
+                  </div>
+                )}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, flexWrap: "wrap", gap: 8 }}>
                   <span style={{
                     fontSize: 11,
@@ -348,6 +538,24 @@ const StoreOrdersScreen = () => {
                         <button onClick={() => reject(o)} className="mkt-btn mkt-btn--secondary" style={{ width: "auto", padding: "6px 12px", fontSize: 12 }}>Reject</button>
                         <button onClick={() => accept(o)} className="mkt-btn mkt-btn--primary" style={{ width: "auto", padding: "6px 12px", fontSize: 12 }}>Accept</button>
                       </>
+                    )}
+                    {["PLACED", "ACCEPTED", "PREPARING"].includes(o.orderStatus) && (
+                      <button onClick={() => openItemsModal(o)} className="mkt-btn mkt-btn--secondary" style={{ width: "auto", padding: "6px 12px", fontSize: 12 }}>Items out of stock</button>
+                    )}
+                    {!pickup && RIDER_STATUSES.includes(o.orderStatus) && (
+                      <button onClick={() => openRiderSheet(o)} className="mkt-btn mkt-btn--secondary" style={{ width: "auto", padding: "6px 12px", fontSize: 12 }}>
+                        {riderByOrder[o.id] ? "Change rider" : "Assign rider"}
+                      </button>
+                    )}
+                    {!pickup && o.orderStatus === "OUT_FOR_DELIVERY" && (
+                      <button onClick={() => deliveryFailed(o)} className="mkt-btn mkt-btn--secondary" style={{ width: "auto", padding: "6px 12px", fontSize: 12, color: "#ef4444" }}>
+                        Delivery failed
+                      </button>
+                    )}
+                    {!pickup && (o.orderStatus === "OUT_FOR_DELIVERY" || o.orderStatus === "DELIVERED") && !o.podImageUrl && (
+                      <button onClick={() => pickPodPhoto(o)} disabled={podUploading[o.id]} className="mkt-btn mkt-btn--secondary" style={{ width: "auto", padding: "6px 12px", fontSize: 12, opacity: podUploading[o.id] ? 0.7 : 1 }}>
+                        {podUploading[o.id] ? "Uploading…" : "Add POD photo"}
+                      </button>
                     )}
                     {o.orderStatus !== "CANCELLED" && o.orderStatus !== "DELIVERED" && o.orderStatus !== "PICKED_UP" && o.orderStatus !== "REJECTED" && o.orderStatus !== "PLACED" && (
                       <button onClick={() => cancel(o)} className="mkt-btn mkt-btn--secondary" style={{ width: "auto", padding: "6px 12px", fontSize: 12 }}>Cancel</button>
@@ -453,6 +661,151 @@ const StoreOrdersScreen = () => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Partial availability — pick the lines that are out of stock */}
+      {itemsModal && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+          onClick={() => !itemsModal.submitting && setItemsModal(null)}
+        >
+          <div
+            style={{ background: "var(--cm-card)", width: "100%", maxWidth: 480, borderRadius: "16px 16px 0 0", padding: 16, maxHeight: "75vh", overflowY: "auto" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontWeight: 800, fontSize: 15 }}>Items out of stock</div>
+            <div style={{ fontSize: 12, color: "var(--cm-muted)", marginTop: 4 }}>
+              Order {itemsModal.order.orderNo} — selected items will be removed and the customer auto-refunded for them.
+            </div>
+            <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+              {itemsModal.items.map((it) => (
+                <label key={it.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "var(--cm-ink)", cursor: "pointer", padding: "6px 0", borderBottom: "1px solid var(--cm-line)" }}>
+                  <input
+                    type="checkbox"
+                    checked={itemsModal.selected.has(it.id)}
+                    onChange={(e) => setItemsModal((m) => {
+                      const sel = new Set(m.selected);
+                      if (e.target.checked) sel.add(it.id); else sel.delete(it.id);
+                      return { ...m, selected: sel };
+                    })}
+                  />
+                  <span style={{ flex: 1 }}>{it.itemName} × {it.quantity}</span>
+                  <span style={{ fontWeight: 700 }}>₹{Number(it.total || 0).toFixed(0)}</span>
+                </label>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+              <button
+                onClick={() => setItemsModal(null)}
+                disabled={itemsModal.submitting}
+                className="mkt-btn mkt-btn--secondary"
+                style={{ flex: 1, padding: "10px", fontSize: 13 }}
+              >
+                Back
+              </button>
+              <button
+                onClick={submitUnavailable}
+                disabled={itemsModal.submitting || itemsModal.selected.size === 0}
+                className="mkt-btn mkt-btn--primary"
+                style={{ flex: 2, padding: "10px", fontSize: 13, opacity: itemsModal.submitting || itemsModal.selected.size === 0 ? 0.6 : 1 }}
+              >
+                {itemsModal.submitting ? "Updating…" : `Mark ${itemsModal.selected.size || ""} unavailable`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assign rider — bottom sheet with the store's rider list + inline add */}
+      {riderSheet && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+          onClick={() => !riderSheet.adding && riderSheet.assigningId == null && setRiderSheet(null)}
+        >
+          <div
+            style={{ background: "var(--cm-card)", width: "100%", maxWidth: 480, borderRadius: "16px 16px 0 0", padding: 16, maxHeight: "75vh", overflowY: "auto" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontWeight: 800, fontSize: 15, display: "flex", alignItems: "center", gap: 8 }}>
+              <FaMotorcycle /> Assign rider
+            </div>
+            <div style={{ fontSize: 12, color: "var(--cm-muted)", marginTop: 4 }}>
+              Order {riderSheet.order.orderNo} — the customer is notified with the rider's name and number.
+            </div>
+
+            {riderSheet.loading ? (
+              <div style={{ padding: "18px 0", textAlign: "center", color: "var(--cm-muted)", fontSize: 13 }}>Loading riders…</div>
+            ) : riderSheet.riders.length === 0 ? (
+              <div style={{ padding: "14px 0", color: "var(--cm-muted)", fontSize: 13 }}>
+                No riders yet — add your first rider below.
+              </div>
+            ) : (
+              <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+                {riderSheet.riders.map((r) => (
+                  <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--cm-line)" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--cm-ink)" }}>{r.name}</div>
+                      <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>{r.mobile}</div>
+                    </div>
+                    <button
+                      onClick={() => assignRiderTo(r)}
+                      disabled={riderSheet.assigningId != null}
+                      className="mkt-btn mkt-btn--primary"
+                      style={{ width: "auto", padding: "6px 14px", fontSize: 12, opacity: riderSheet.assigningId != null ? 0.7 : 1 }}
+                    >
+                      {riderSheet.assigningId === r.id ? "Assigning…" : "Assign"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Inline add rider */}
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--cm-line)" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--cm-ink)", marginBottom: 8 }}>Add a rider</div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <input
+                  type="text"
+                  className="mkt-input"
+                  placeholder="Rider name"
+                  value={riderSheet.newName}
+                  onChange={(e) => setRiderSheet((s) => ({ ...s, newName: e.target.value }))}
+                  style={{ flex: "1 1 140px", minWidth: 0 }}
+                />
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
+                  className="mkt-input"
+                  placeholder="10-digit mobile"
+                  value={riderSheet.newMobile}
+                  onChange={(e) => setRiderSheet((s) => ({ ...s, newMobile: e.target.value.replace(/\D/g, "").slice(0, 10) }))}
+                  style={{ flex: "1 1 120px", minWidth: 0 }}
+                />
+                <button
+                  onClick={addRiderInline}
+                  disabled={riderSheet.adding}
+                  className="mkt-btn mkt-btn--secondary"
+                  style={{ width: "auto", padding: "8px 14px", fontSize: 12, opacity: riderSheet.adding ? 0.7 : 1 }}
+                >
+                  {riderSheet.adding ? "Adding…" : "Add"}
+                </button>
+              </div>
+            </div>
+
+            {riderSheet.error && (
+              <div style={{ marginTop: 10, fontSize: 12, color: "#ef4444" }}>{riderSheet.error}</div>
+            )}
+
+            <button
+              onClick={() => setRiderSheet(null)}
+              className="mkt-btn mkt-btn--secondary"
+              style={{ width: "100%", marginTop: 14, padding: "10px", fontSize: 13 }}
+            >
+              Close
+            </button>
+          </div>
         </div>
       )}
     </div>

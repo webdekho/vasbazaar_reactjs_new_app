@@ -155,6 +155,10 @@ const MarketplaceOrderDetailScreen = lazy(() => import("./pages/marketplace/Orde
 const StoreOrdersScreen = lazy(() => import("./pages/marketplace/StoreOrdersScreen"));
 const StoreOffersScreen = lazy(() => import("./pages/marketplace/StoreOffersScreen"));
 const StoreAnalyticsScreen = lazy(() => import("./pages/marketplace/StoreAnalyticsScreen"));
+const StoreHolidaysScreen = lazy(() => import("./pages/marketplace/StoreHolidaysScreen"));
+const StoreCrmScreen = lazy(() => import("./pages/marketplace/StoreCrmScreen"));
+const StoreScorecardScreen = lazy(() => import("./pages/marketplace/StoreScorecardScreen"));
+const StoreRidersScreen = lazy(() => import("./pages/marketplace/StoreRidersScreen"));
 const StoreReviewsScreen = lazy(() => import("./pages/marketplace/StoreReviewsScreen"));
 const StoreKhataScreen = lazy(() => import("./pages/marketplace/StoreKhataScreen"));
 const MyKhataScreen = lazy(() => import("./pages/marketplace/MyKhataScreen"));
@@ -349,6 +353,10 @@ const CustomerModernRoutes = () => {
             <Route path="marketplace/store-orders" element={<Suspense fallback={<RouteFallback />}><StoreOrdersScreen /></Suspense>} />
             <Route path="marketplace/my-store/offers" element={<Suspense fallback={<RouteFallback />}><StoreOffersScreen /></Suspense>} />
             <Route path="marketplace/my-store/analytics" element={<Suspense fallback={<RouteFallback />}><StoreAnalyticsScreen /></Suspense>} />
+            <Route path="marketplace/my-store/holidays" element={<Suspense fallback={<RouteFallback />}><StoreHolidaysScreen /></Suspense>} />
+            <Route path="marketplace/my-store/crm" element={<Suspense fallback={<RouteFallback />}><StoreCrmScreen /></Suspense>} />
+            <Route path="marketplace/my-store/scorecard" element={<Suspense fallback={<RouteFallback />}><StoreScorecardScreen /></Suspense>} />
+            <Route path="marketplace/my-store/riders" element={<Suspense fallback={<RouteFallback />}><StoreRidersScreen /></Suspense>} />
             <Route path="marketplace/my-store/reviews" element={<Suspense fallback={<RouteFallback />}><StoreReviewsScreen /></Suspense>} />
             <Route path="marketplace/my-store/khata" element={<Suspense fallback={<RouteFallback />}><StoreKhataScreen /></Suspense>} />
             <Route path="marketplace/my-khata" element={<Suspense fallback={<RouteFallback />}><MyKhataScreen /></Suspense>} />

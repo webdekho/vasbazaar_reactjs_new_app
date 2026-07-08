@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaClock, FaPause, FaPlay, FaTrash, FaStore, FaSyncAlt, FaCalendarAlt, FaPen } from "react-icons/fa";
+import { FaArrowLeft, FaClock, FaPause, FaPlay, FaTrash, FaStore, FaSyncAlt, FaCalendarAlt, FaPen, FaForward, FaUmbrellaBeach, FaBolt, FaMapMarkerAlt } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
+import { marketplaceSubscriptionService } from "../../services/marketplaceSubscriptionService";
 import { useToast } from "../../context/ToastContext";
 import "./marketplace.css";
 
@@ -48,6 +49,17 @@ const MySubscriptionsScreen = () => {
   const [ePay, setEPay] = useState("WALLET");
   const [eEnd, setEEnd] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Vacation hold modal state
+  const [vSub, setVSub] = useState(null);
+  const [vFrom, setVFrom] = useState("");
+  const [vTo, setVTo] = useState("");
+
+  // Temporary address modal state
+  const [tSub, setTSub] = useState(null);
+  const [tAddr, setTAddr] = useState("");
+  const [tFrom, setTFrom] = useState("");
+  const [tTo, setTTo] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -139,6 +151,107 @@ const MySubscriptionsScreen = () => {
     }
   };
 
+  // ----- Skip next delivery -----
+  const skipNext = async (sub) => {
+    if (!window.confirm("Skip the next delivery? Your schedule continues from the following one.")) return;
+    setBusyId(sub.id);
+    const res = await marketplaceSubscriptionService.skipNextDelivery(sub.id);
+    setBusyId(null);
+    if (res.success) {
+      showToast(res.message || "Next delivery skipped", "success");
+      load();
+    } else {
+      showToast(res.message || "Could not skip", "error");
+    }
+  };
+
+  // ----- Deliver once now -----
+  const deliverNow = async (sub) => {
+    const pay = PAY_LABEL[sub.paymentMethod] || sub.paymentMethod;
+    if (!window.confirm(`Place one extra order right now, paid via ${pay}? Your regular schedule stays unchanged.`)) return;
+    setBusyId(sub.id);
+    const res = await marketplaceSubscriptionService.deliverOnceNow(sub.id);
+    setBusyId(null);
+    if (res.success) {
+      showToast(res.message || "Order placed", "success");
+      load();
+    } else {
+      showToast(res.message || "Could not place the order", "error");
+    }
+  };
+
+  // ----- Vacation hold -----
+  const openVacation = (sub) => {
+    setVSub(sub);
+    setVFrom(dateText(sub.pausedFrom) || today());
+    setVTo(dateText(sub.pausedTo) || "");
+  };
+  const submitVacation = async () => {
+    if (!vFrom || !vTo) { showToast("Pick both start and end dates", "error"); return; }
+    if (vTo < vFrom) { showToast("End date is before the start date", "error"); return; }
+    setSaving(true);
+    const res = await marketplaceSubscriptionService.setVacationHold(vSub.id, { pausedFrom: vFrom, pausedTo: vTo });
+    setSaving(false);
+    if (res.success) {
+      showToast("Vacation hold set", "success");
+      setVSub(null);
+      load();
+    } else {
+      showToast(res.message || "Could not set the hold", "error");
+    }
+  };
+  const clearVacation = async () => {
+    setSaving(true);
+    const res = await marketplaceSubscriptionService.clearVacationHold(vSub.id);
+    setSaving(false);
+    if (res.success) {
+      showToast("Vacation hold removed", "info");
+      setVSub(null);
+      load();
+    } else {
+      showToast(res.message || "Could not remove the hold", "error");
+    }
+  };
+
+  // ----- Temporary address -----
+  const openTempAddress = (sub) => {
+    setTSub(sub);
+    setTAddr(sub.tempAddress || "");
+    setTFrom(dateText(sub.tempAddressFrom) || today());
+    setTTo(dateText(sub.tempAddressTo) || "");
+  };
+  const submitTempAddress = async () => {
+    if (!tAddr.trim()) { showToast("Enter the temporary address", "error"); return; }
+    if (!tFrom || !tTo) { showToast("Pick both start and end dates", "error"); return; }
+    if (tTo < tFrom) { showToast("End date is before the start date", "error"); return; }
+    setSaving(true);
+    const res = await marketplaceSubscriptionService.setTempAddress(tSub.id, {
+      tempAddress: tAddr.trim(),
+      tempAddressFrom: tFrom,
+      tempAddressTo: tTo,
+    });
+    setSaving(false);
+    if (res.success) {
+      showToast("Temporary address set", "success");
+      setTSub(null);
+      load();
+    } else {
+      showToast(res.message || "Could not save the address", "error");
+    }
+  };
+  const clearTempAddress = async () => {
+    setSaving(true);
+    const res = await marketplaceSubscriptionService.clearTempAddress(tSub.id);
+    setSaving(false);
+    if (res.success) {
+      showToast("Temporary address removed", "info");
+      setTSub(null);
+      load();
+    } else {
+      showToast(res.message || "Could not remove the address", "error");
+    }
+  };
+
   return (
     <div className="mkt">
       <div className="mkt-header">
@@ -192,6 +305,16 @@ const MySubscriptionsScreen = () => {
                   {dateText(s.endDate) && (
                     <div style={{ fontSize: 11, color: "var(--cm-muted)" }}>Ends {dateText(s.endDate)}</div>
                   )}
+                  {dateText(s.pausedFrom) && dateText(s.pausedTo) && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#f59e0b", fontWeight: 700, marginTop: 4 }}>
+                      <FaUmbrellaBeach size={11} /> On hold {dateText(s.pausedFrom)} → {dateText(s.pausedTo)}
+                    </div>
+                  )}
+                  {s.tempAddress && dateText(s.tempAddressTo) && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#8b5cf6", fontWeight: 700, marginTop: 4 }}>
+                      <FaMapMarkerAlt size={11} /> Temp address till {dateText(s.tempAddressTo)}
+                    </div>
+                  )}
                   {s.lastError && (
                     <div style={{ fontSize: 11, color: "#ef4444", marginTop: 4 }}>Last run: {s.lastError}</div>
                   )}
@@ -204,6 +327,26 @@ const MySubscriptionsScreen = () => {
                     <button type="button" onClick={() => openModify(s)} disabled={busyId === s.id}
                       className="mkt-btn mkt-btn--secondary" style={{ flex: 1, padding: "9px 8px", fontSize: 12.5 }}>
                       <FaPen size={11} style={{ marginRight: 6 }} /> Modify
+                    </button>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                    <button type="button" onClick={() => skipNext(s)} disabled={busyId === s.id || paused}
+                      className="mkt-btn mkt-btn--secondary" style={{ flex: 1, padding: "9px 8px", fontSize: 12.5 }}>
+                      <FaForward size={11} style={{ marginRight: 6 }} /> Skip next
+                    </button>
+                    <button type="button" onClick={() => deliverNow(s)} disabled={busyId === s.id}
+                      className="mkt-btn mkt-btn--secondary" style={{ flex: 1, padding: "9px 8px", fontSize: 12.5 }}>
+                      <FaBolt size={11} style={{ marginRight: 6 }} /> Deliver now
+                    </button>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                    <button type="button" onClick={() => openVacation(s)} disabled={busyId === s.id}
+                      className="mkt-btn mkt-btn--secondary" style={{ flex: 1, padding: "9px 8px", fontSize: 12.5 }}>
+                      <FaUmbrellaBeach size={11} style={{ marginRight: 6 }} /> Vacation
+                    </button>
+                    <button type="button" onClick={() => openTempAddress(s)} disabled={busyId === s.id || s.fulfillmentType === "PICKUP"}
+                      className="mkt-btn mkt-btn--secondary" style={{ flex: 1, padding: "9px 8px", fontSize: 12.5 }}>
+                      <FaMapMarkerAlt size={11} style={{ marginRight: 6 }} /> Temp address
                     </button>
                   </div>
                   <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
@@ -332,6 +475,74 @@ const MySubscriptionsScreen = () => {
             <div style={{ display: "flex", gap: 8 }}>
               <button type="button" className="mkt-btn mkt-btn--secondary" style={{ flex: 1 }} disabled={saving} onClick={() => setESub(null)}>Cancel</button>
               <button type="button" className="mkt-btn" style={{ flex: 1 }} disabled={saving} onClick={submitModify}>{saving ? "Saving…" : "Save changes"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Vacation hold modal ===== */}
+      {vSub && (
+        <div className="mkt-modal-backdrop" onClick={() => !saving && setVSub(null)}>
+          <div className="mkt-modal-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="mkt-modal-title">Vacation hold</div>
+            <div style={{ fontSize: 11.5, color: "var(--cm-muted)", marginBottom: 12 }}>
+              Deliveries inside these dates are skipped. Your schedule resumes automatically afterwards.
+            </div>
+            <div className="mkt-field" style={{ margin: "0 0 10px" }}>
+              <label className="mkt-field-label">From</label>
+              <input type="date" className="mkt-input" value={vFrom} min={today()} onChange={(e) => setVFrom(e.target.value)} />
+            </div>
+            <div className="mkt-field" style={{ margin: "0 0 14px" }}>
+              <label className="mkt-field-label">To</label>
+              <input type="date" className="mkt-input" value={vTo} min={vFrom || today()} onChange={(e) => setVTo(e.target.value)} />
+            </div>
+            {dateText(vSub.pausedFrom) && dateText(vSub.pausedTo) && (
+              <button type="button" className="mkt-btn mkt-btn--secondary" disabled={saving} onClick={clearVacation}
+                style={{ width: "100%", marginBottom: 8, color: "#ef4444", borderColor: "rgba(239,68,68,0.4)" }}>
+                Remove current hold ({dateText(vSub.pausedFrom)} → {dateText(vSub.pausedTo)})
+              </button>
+            )}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="button" className="mkt-btn mkt-btn--secondary" style={{ flex: 1 }} disabled={saving} onClick={() => setVSub(null)}>Cancel</button>
+              <button type="button" className="mkt-btn" style={{ flex: 1 }} disabled={saving} onClick={submitVacation}>{saving ? "Saving…" : "Set hold"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Temporary address modal ===== */}
+      {tSub && (
+        <div className="mkt-modal-backdrop" onClick={() => !saving && setTSub(null)}>
+          <div className="mkt-modal-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="mkt-modal-title">Temporary address</div>
+            <div style={{ fontSize: 11.5, color: "var(--cm-muted)", marginBottom: 12 }}>
+              Deliveries inside these dates go to this address, then revert to your usual one.
+            </div>
+            <div className="mkt-field" style={{ margin: "0 0 10px" }}>
+              <label className="mkt-field-label">Deliver to</label>
+              <textarea className="mkt-input" rows={3} value={tAddr} placeholder="Full temporary address"
+                style={{ height: "auto", resize: "vertical", paddingTop: 10 }}
+                onChange={(e) => setTAddr(e.target.value)} />
+            </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+              <div className="mkt-field" style={{ flex: 1, margin: 0 }}>
+                <label className="mkt-field-label">From</label>
+                <input type="date" className="mkt-input" value={tFrom} min={today()} onChange={(e) => setTFrom(e.target.value)} />
+              </div>
+              <div className="mkt-field" style={{ flex: 1, margin: 0 }}>
+                <label className="mkt-field-label">To</label>
+                <input type="date" className="mkt-input" value={tTo} min={tFrom || today()} onChange={(e) => setTTo(e.target.value)} />
+              </div>
+            </div>
+            {tSub.tempAddress && (
+              <button type="button" className="mkt-btn mkt-btn--secondary" disabled={saving} onClick={clearTempAddress}
+                style={{ width: "100%", marginBottom: 8, color: "#ef4444", borderColor: "rgba(239,68,68,0.4)" }}>
+                Remove temporary address
+              </button>
+            )}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="button" className="mkt-btn mkt-btn--secondary" style={{ flex: 1 }} disabled={saving} onClick={() => setTSub(null)}>Cancel</button>
+              <button type="button" className="mkt-btn" style={{ flex: 1 }} disabled={saving} onClick={submitTempAddress}>{saving ? "Saving…" : "Save address"}</button>
             </div>
           </div>
         </div>

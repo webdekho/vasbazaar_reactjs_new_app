@@ -68,6 +68,14 @@ export const createPaymentWebSocket = (txnId, token, onMessage, onError, onClose
         return;
       }
 
+      // Skip the very first tick (5s): the customer is usually still entering
+      // their UPI PIN — checking that early is never conclusive. First real
+      // status check happens at 10s; WebSocket push still wins if it's faster.
+      if (pollCount === 1) {
+        console.log("[WS] Skipping first poll tick (customer likely still paying)");
+        return;
+      }
+
       if (pollCount >= MAX_POLL_COUNT) {
         console.log("[WS] Max poll attempts reached (60s), stopping polling");
         clearPolling();

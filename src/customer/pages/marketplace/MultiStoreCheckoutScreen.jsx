@@ -42,6 +42,14 @@ const MultiStoreCheckoutScreen = () => {
   const [placingMethod, setPlacingMethod] = useState(null);
   const [error, setError] = useState(null);
 
+  // Pharmacy: one prescription upload covers every store that needs it.
+  const [prescriptionUrl, setPrescriptionUrl] = useState("");
+  const [rxUploading, setRxUploading] = useState(false);
+
+  // Gift purchase (applies to every order in the combined checkout).
+  const [isGift, setIsGift] = useState(false);
+  const [giftMessage, setGiftMessage] = useState("");
+
   const isPickup = fulfillmentType === "PICKUP";
   const effectiveDelivery = isPickup ? 0 : totals.deliveryCharges;
   const payTotal = Math.max(0, totals.subtotal + effectiveDelivery);
@@ -95,6 +103,17 @@ const MultiStoreCheckoutScreen = () => {
     [storeList]
   );
 
+  // Which store buckets contain prescription-flagged lines.
+  const rxStoreIds = useMemo(
+    () => new Set(
+      (storeList || [])
+        .filter((b) => Object.values(b.items || {}).some((i) => i.requiresPrescription))
+        .map((b) => b.storeId)
+    ),
+    [storeList]
+  );
+  const needsPrescription = rxStoreIds.size > 0;
+
   const storesPayload = useMemo(
     () => (storeList || []).map((b) => ({
       storeId: b.storeId,
@@ -102,10 +121,28 @@ const MultiStoreCheckoutScreen = () => {
         itemId: i.id,
         quantity: i.qty,
         ...(i.variantLabel ? { variantLabel: i.variantLabel } : {}),
+        // Per-line customization captured on the product sheet.
+        ...(i.note ? { note: i.note } : {}),
+        ...(i.noteImageUrl ? { imageUrl: i.noteImageUrl } : {}),
       })),
+      // Order-level extras go per-store: prescription only where required.
+      ...(rxStoreIds.has(b.storeId) && prescriptionUrl ? { prescriptionUrl } : {}),
+      ...(isGift ? { isGift: true, ...(giftMessage.trim() ? { giftMessage: giftMessage.trim().slice(0, 300) } : {}) } : {}),
     })),
-    [storeList]
+    [storeList, rxStoreIds, prescriptionUrl, isGift, giftMessage]
   );
+
+  const handlePrescriptionUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { setError("Prescription image must be under 5 MB"); return; }
+    setError(null);
+    setRxUploading(true);
+    const res = await marketplaceService.uploadImage(file, "item");
+    setRxUploading(false);
+    if (res.success && res.data?.url) setPrescriptionUrl(res.data.url);
+    else setError(res.message || "Prescription upload failed");
+  };
 
   const placeOrder = async (method) => {
     if (placing) return;
@@ -116,6 +153,10 @@ const MultiStoreCheckoutScreen = () => {
     }
     if (!isPickup && !address.trim()) { setError("Please enter delivery address"); return; }
     if (!isPickup && pincode.length !== 6) { setError("Please enter a valid 6-digit delivery pincode"); return; }
+    if (needsPrescription && !prescriptionUrl) {
+      setError("This order contains medicines — please upload a prescription photo before placing it.");
+      return;
+    }
     const orderMobile = String(userData?.mobile || userData?.mobileNumber || "").trim();
     if (!orderMobile || !/^\d{10}$/.test(orderMobile)) {
       setError("Your account mobile is missing. Please re-login and try again.");
@@ -268,6 +309,54 @@ const MultiStoreCheckoutScreen = () => {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* Pharmacy: mandatory prescription when any store's lines need it */}
+      {needsPrescription && (
+        <div style={{ padding: "16px 14px 0" }}>
+          <div style={{ padding: 12, borderRadius: 14, border: `1px solid ${prescriptionUrl ? "var(--cm-primary, #22c55e)" : "#f87171"}`, background: "var(--cm-card)" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--cm-ink)", marginBottom: 4 }}>Prescription required</div>
+            <div style={{ fontSize: 12, color: "var(--cm-muted)", marginBottom: 8 }}>
+              Some items are medicines. Upload a clear photo of your doctor's prescription — it's attached to each pharmacy order.
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <label className="mkt-btn mkt-btn--secondary" style={{ width: "auto", padding: "8px 14px", fontSize: 12.5, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, margin: 0 }}>
+                {rxUploading ? "Uploading…" : prescriptionUrl ? "Change prescription" : "Upload prescription photo"}
+                <input type="file" accept="image/*" hidden onChange={handlePrescriptionUpload} disabled={rxUploading} />
+              </label>
+              {prescriptionUrl && (
+                <img src={prescriptionUrl} alt="Prescription" style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover" }} />
+              )}
+            </div>
+            {!prescriptionUrl && (
+              <div style={{ fontSize: 11.5, color: "#f87171", marginTop: 6, fontWeight: 600 }}>Required before placing this order</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Gift option */}
+      <div style={{ padding: "16px 14px 0" }}>
+        <div style={{ padding: "10px 12px", borderRadius: 14, border: "1px solid var(--cm-line)", background: "var(--cm-card)" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 700, color: "var(--cm-ink)", cursor: "pointer" }}>
+            <input type="checkbox" checked={isGift} onChange={(e) => setIsGift(e.target.checked)} />
+            This is a gift 🎁
+          </label>
+          {isGift && (
+            <div style={{ marginTop: 8 }}>
+              <textarea
+                className="mkt-input"
+                rows={2}
+                maxLength={300}
+                placeholder="Gift message (optional, printed on the slip)"
+                value={giftMessage}
+                onChange={(e) => setGiftMessage(e.target.value)}
+                style={{ resize: "vertical" }}
+              />
+              <div style={{ fontSize: 10.5, color: "var(--cm-muted)", marginTop: 4 }}>{giftMessage.length}/300 · Applied to every store's order.</div>
+            </div>
+          )}
         </div>
       </div>
 

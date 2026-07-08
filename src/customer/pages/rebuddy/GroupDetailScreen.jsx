@@ -320,25 +320,22 @@ const GroupDetailScreen = ({ publicView = false }) => {
 
   const handleShare = async () => {
     // Always share the public production link (not localhost / the current
-    // origin). `?shared=1` opens the group in a locked, view-only mode for the
-    // recipient. The message also invites them to register on the super app.
+    // origin). The group page is public (login-free, view-only for outsiders),
+    // so the message carries exactly ONE link — the group URL. A separate
+    // register link confused recipients: share targets append `url` after
+    // `text`, so two URLs ran together in the message body.
     const base = "https://web.vasbazaar.com";
     const groupUrl = `${base}/customer/rebuddy/group/${group.id}`;
-    const registerUrl = `${base}/customer/login`;
-    // Full message (used for clipboard / shows both links).
+    // Full message (used for clipboard).
     const fullText =
       `Hey!\n\n` +
       `View our "${group.name}" group to split and track trip expenses easily:\n` +
-      `${groupUrl}\n\n` +
-      `Also register on VasBazaar Super App here:\n` +
-      `${registerUrl}`;
-    // Share-sheet text: keep the GROUP link out of the body and pass it as the
-    // canonical `url` instead — otherwise the OS preview grabs the LAST url in
-    // the text (the sign-up link) and looks like we're sharing login.
+      `${groupUrl}`;
+    // Share-sheet text: keep the link out of the body and pass it as the
+    // canonical `url` so the OS preview card points at the group page.
     const shareText =
       `Hey!\n\n` +
-      `View our "${group.name}" group to split and track trip expenses easily.\n\n` +
-      `Also register on VasBazaar Super App here:\n${registerUrl}`;
+      `View our "${group.name}" group to split and track trip expenses easily:`;
     try {
       if (navigator.share) {
         await navigator.share({ title: `ReBuddy · ${group.name}`, text: shareText, url: groupUrl });

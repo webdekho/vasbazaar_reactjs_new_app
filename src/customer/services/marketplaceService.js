@@ -139,8 +139,8 @@ export const marketplaceService = {
   rejectOrder: (orderId, reason) =>
     authPost(`/api/customer/marketplace/seller/orders/${orderId}/reject`, { reason: reason || '' }),
 
-  updateOrderStatus: (orderId, status) =>
-    authPost(`/api/customer/marketplace/seller/orders/${orderId}/status`, { status }),
+  updateOrderStatus: (orderId, status, reason) =>
+    authPost(`/api/customer/marketplace/seller/orders/${orderId}/status`, { status, ...(reason ? { reason } : {}) }),
 
   // ===== Customer orders =====
   placeOrder: (payload) => authPost("/api/customer/marketplace/orders", payload),
@@ -158,6 +158,25 @@ export const marketplaceService = {
     authGet("/api/customer/marketplace/orders/my", { pageNumber, pageSize }),
 
   getMyOrder: (orderId) => authGet(`/api/customer/marketplace/orders/${orderId}`),
+
+  // Customer self-serve cancel (allowed while PLACED/ACCEPTED/PREPARING);
+  // backend auto-refunds (wallet instantly, online/autopay to source) and notifies the store.
+  cancelMyOrder: (orderId, reasonCode, reason) =>
+    authPost(`/api/customer/marketplace/orders/${orderId}/cancel`, {
+      ...(reasonCode ? { reasonCode } : {}),
+      ...(reason ? { reason } : {}),
+    }),
+
+  // Partial cancel — remove one item from an active order (auto partial refund).
+  cancelOrderItem: (orderId, lineId) =>
+    authPost(`/api/customer/marketplace/orders/${orderId}/items/${lineId}/cancel`, {}),
+
+  // Seller: mark order lines out of stock (partial availability, auto partial refund).
+  markItemsUnavailable: (orderId, lineIds) =>
+    authPost(`/api/customer/marketplace/seller/orders/${orderId}/items-unavailable`, { lineIds }),
+
+  // GST tax invoice data (customer or store owner).
+  getOrderInvoice: (orderId) => authGet(`/api/customer/marketplace/orders/${orderId}/invoice`),
 
   // ===== Wishlist (manual want-list) =====
   createWishlist: (payload) => authPost("/api/customer/marketplace/wishlist", payload),
