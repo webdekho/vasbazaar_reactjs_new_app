@@ -6,6 +6,7 @@ import { useToast } from "../../context/ToastContext";
 import { buildCsv, downloadCsv } from "../../utils/exportCsv";
 import AddCustomerSheet from "./components/AddCustomerSheet";
 import RenewSubscriptionSheet from "./components/RenewSubscriptionSheet";
+import CustomerPickerSheet from "./components/CustomerPickerSheet";
 
 const SORT_OPTIONS = [
   { value: "latest", label: "Latest activity" },
@@ -53,16 +54,17 @@ const OutstandingListScreen = () => {
   // jump straight into the new customer's invoice form after they're saved.
   const [invoiceAfterAdd, setInvoiceAfterAdd] = useState(false);
 
-  // A customer row tap either opens the ledger or, while creating an invoice,
-  // jumps straight into that customer's new-invoice form.
+  // A customer row tap opens that customer's ledger.
   const handleCustomerTap = (customerId) => {
     if (subscriptionLocked) return;
-    if (invoicePickMode) {
-      setInvoicePickMode(false);
-      navigate(`/customer/app/outstanding/${customerId}/invoice/new`);
-      return;
-    }
     navigate(`/customer/app/outstanding/${customerId}`);
+  };
+
+  // From the invoice picker popup: jump straight into the chosen customer's
+  // new-invoice form.
+  const handleInvoiceCustomerPick = (customerId) => {
+    setInvoicePickMode(false);
+    navigate(`/customer/app/outstanding/${customerId}/invoice/new`);
   };
 
   // Create-invoice entry point: with no customers yet, add one first (then land
@@ -296,23 +298,15 @@ const OutstandingListScreen = () => {
         </div>
       </div>
 
-      {invoicePickMode ? (
-        <div className="ol-invoice-picker-hint" role="status">
-          <FaFileInvoice />
-          <span>Select a customer to create an invoice</span>
-          <button type="button" onClick={() => setInvoicePickMode(false)}>Cancel</button>
-        </div>
-      ) : (
-        <button
-          className="ol-create-invoice-cta"
-          type="button"
-          disabled={subscriptionLocked}
-          onClick={startCreateInvoice}
-        >
-          <FaFileInvoice />
-          <span>Create Invoice</span>
-        </button>
-      )}
+      <button
+        className="ol-create-invoice-cta"
+        type="button"
+        disabled={subscriptionLocked}
+        onClick={startCreateInvoice}
+      >
+        <FaFileInvoice />
+        <span>Create Invoice</span>
+      </button>
 
       <div className="ol-controls">
         <div className="ol-search">
@@ -430,6 +424,19 @@ const OutstandingListScreen = () => {
             ))}
           </div>
         </div>
+      )}
+
+      {invoicePickMode && (
+        <CustomerPickerSheet
+          customers={customers}
+          onClose={() => setInvoicePickMode(false)}
+          onSelect={handleInvoiceCustomerPick}
+          onAddNew={() => {
+            setInvoicePickMode(false);
+            setInvoiceAfterAdd(true);
+            setShowAddSheet(true);
+          }}
+        />
       )}
 
       {showAddSheet && (

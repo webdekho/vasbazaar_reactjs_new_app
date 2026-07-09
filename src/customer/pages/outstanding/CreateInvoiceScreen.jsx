@@ -238,7 +238,7 @@ const CreateInvoiceScreen = () => {
         {/* ===== Organisation details ===== */}
         <div className="ol-inv-opt">
           <label className="ol-toggle-row">
-            <span><FaBuilding style={{ marginRight: 8, opacity: 0.7 }} />Add organisation details</span>
+            <span><FaBuilding style={{ marginRight: 8, opacity: 0.7 }} />Add your organisation details</span>
             <input type="checkbox" checked={includeOrg} onChange={(e) => setIncludeOrg(e.target.checked)} />
           </label>
           {includeOrg ? (

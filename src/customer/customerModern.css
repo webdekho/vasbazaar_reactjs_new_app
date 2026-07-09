@@ -22590,6 +22590,44 @@
   border-radius: 999px;
   cursor: pointer;
 }
+/* Create-invoice customer picker popup */
+.ol-picker-sheet { display: flex; flex-direction: column; max-height: 82vh; }
+.ol-picker-controls { padding: 0 14px 6px; }
+.ol-picker-controls .ol-search {
+  width: 100%;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 12px;
+}
+.ol-picker-addnew {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: calc(100% - 28px);
+  margin: 2px 14px 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(0, 123, 255, 0.1);
+  border: 1px dashed rgba(0, 123, 255, 0.5);
+  color: #007bff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ol-picker-addnew svg { flex-shrink: 0; }
+.ol-picker-addnew:active { transform: scale(0.99); }
+.ol-picker-list {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ol-picker-list .ol-positive { border-left: 3px solid #00C853; }
+.ol-picker-list .ol-negative { border-left: 3px solid #2196F3; }
+.ol-picker-list .ol-settled { border-left: 3px solid rgba(0,0,0,0.12); }
+
 .ol-list-page .ol-positive { border-left: 3px solid #00C853; }
 .ol-list-page .ol-negative { border-left: 3px solid #2196F3; }
 .ol-list-page .ol-settled { border-left: 3px solid rgba(0,0,0,0.12); }
