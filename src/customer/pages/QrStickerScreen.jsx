@@ -267,7 +267,7 @@ const QrStickerScreen = () => {
 
     setContactsLoading(true);
     try {
-      if ("contacts" in navigator && "select" in navigator.contacts) {
+      if (!Capacitor.isNativePlatform() && "contacts" in navigator && "select" in navigator.contacts) {
         const selected = await navigator.contacts.select(["name", "tel"], { multiple: true });
         const mapped = selected
           .flatMap((item) => contactPhones(item).map((phone) => ({

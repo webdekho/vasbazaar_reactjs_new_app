@@ -22530,6 +22530,66 @@
   padding-left: 0;
   padding-right: 0;
 }
+/* These pages are full-bleed, so let the top bar (bell + profile) hug the
+   right edge too instead of stopping at the centered content column. */
+.cm-main:has(.ol-list-page) .cm-topbar-inner,
+.cm-main:has(.ol-ledger-page) .cm-topbar-inner {
+  width: 100%;
+  max-width: 100%;
+  padding-left: 16px;
+  padding-right: 12px;
+}
+
+/* Highlighted "Create Invoice" CTA on the outstanding list page */
+.ol-create-invoice-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: calc(100% - 28px);
+  margin: 12px 14px 14px;
+  padding: 13px 16px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #40E0D0 0%, #007BFF 100%);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 123, 255, 0.35);
+  transition: transform 0.15s, box-shadow 0.15s, opacity 0.2s;
+}
+.ol-create-invoice-cta svg { font-size: 16px; }
+.ol-create-invoice-cta:active { transform: scale(0.985); box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3); }
+.ol-create-invoice-cta:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.ol-invoice-picker-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: calc(100% - 28px);
+  margin: 4px 14px 2px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(0, 123, 255, 0.12);
+  border: 1px solid rgba(0, 123, 255, 0.4);
+  color: var(--cm-ink, #fff);
+  font-size: 14px;
+  font-weight: 600;
+}
+.ol-invoice-picker-hint svg { color: #40E0D0; flex-shrink: 0; }
+.ol-invoice-picker-hint span { flex: 1; }
+.ol-invoice-picker-hint button {
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--cm-ink, #fff);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+}
 .ol-list-page .ol-positive { border-left: 3px solid #00C853; }
 .ol-list-page .ol-negative { border-left: 3px solid #2196F3; }
 .ol-list-page .ol-settled { border-left: 3px solid rgba(0,0,0,0.12); }

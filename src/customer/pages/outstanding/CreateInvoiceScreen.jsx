@@ -48,10 +48,17 @@ const CreateInvoiceScreen = () => {
     let active = true;
     (async () => {
       const res = await outstandingService.getCustomerDetail(customerId, 0, 1);
-      if (active && res.success) setCustomer(res.data?.customer || null);
+      if (!active || !res.success) return;
+      const cust = res.data?.customer || null;
+      setCustomer(cust);
+      // Carry the customer's saved GST number into new invoices automatically.
+      if (!isEdit && cust?.gstNumber) {
+        setGstNumber(cust.gstNumber);
+        setB2b(true);
+      }
     })();
     return () => { active = false; };
-  }, [customerId]);
+  }, [customerId, isEdit]);
 
   // Prefill organisation from the saved business profile (create mode only).
   useEffect(() => {

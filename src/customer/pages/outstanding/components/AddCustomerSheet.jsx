@@ -9,6 +9,8 @@ const isNativePlatform = Capacitor.isNativePlatform();
 const AddCustomerSheet = ({ onClose, onAdded }) => {
   const [mobile, setMobile] = useState("");
   const [name, setName] = useState("");
+  const [organisationName, setOrganisationName] = useState("");
+  const [gstNumber, setGstNumber] = useState("");
   const [notes, setNotes] = useState("");
   const [category, setCategory] = useState("REGULAR");
   const [creditLimit, setCreditLimit] = useState("");
@@ -65,6 +67,8 @@ const AddCustomerSheet = ({ onClose, onAdded }) => {
     const res = await outstandingService.addCustomer({
       customerMobile: mobile,
       customerName: name.trim(),
+      organisationName: organisationName.trim() || null,
+      gstNumber: gstNumber.trim().toUpperCase() || null,
       notes: notes.trim() || null,
       category,
       creditLimit: creditLimit.trim() === "" ? null : Number(creditLimit),
@@ -124,6 +128,30 @@ const AddCustomerSheet = ({ onClose, onAdded }) => {
               placeholder="Full name"
               maxLength={120}
               required
+            />
+          </label>
+
+          <label className="ol-field">
+            <span>Organisation name (optional)</span>
+            <input
+              type="text"
+              value={organisationName}
+              onChange={(e) => setOrganisationName(e.target.value)}
+              placeholder="Business / company name"
+              maxLength={150}
+            />
+          </label>
+
+          <label className="ol-field">
+            <span>GST number (optional)</span>
+            <input
+              type="text"
+              value={gstNumber}
+              onChange={(e) => setGstNumber(e.target.value.toUpperCase().replace(/\s/g, "").slice(0, 15))}
+              placeholder="e.g. 27ABCDE1234F1Z5"
+              maxLength={15}
+              autoCapitalize="characters"
+              style={{ textTransform: "uppercase" }}
             />
           </label>
 

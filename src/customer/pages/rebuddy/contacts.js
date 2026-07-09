@@ -45,7 +45,17 @@ const contactPhones = (contact) => {
 export const pickContacts = async () => {
   let mapped = [];
 
-  if (typeof navigator !== "undefined" && "contacts" in navigator && navigator.contacts?.select) {
+  // On native (Capacitor WebView) always use the plugin. The Web Contacts
+  // Picker API (`navigator.contacts.select`) is exposed by the Android
+  // Chromium WebView but only works in a top-level browsing context, so
+  // calling it inside the app throws and never opens the picker.
+  const useWebPicker =
+    !Capacitor.isNativePlatform() &&
+    typeof navigator !== "undefined" &&
+    "contacts" in navigator &&
+    !!navigator.contacts?.select;
+
+  if (useWebPicker) {
     const selected = await navigator.contacts.select(["name", "tel"], { multiple: true });
     mapped = selected.flatMap((item) =>
       contactPhones(item).map((phone) => ({
