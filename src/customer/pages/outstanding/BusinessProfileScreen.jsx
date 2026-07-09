@@ -13,6 +13,10 @@ const BusinessProfileScreen = () => {
   const [orgName, setOrgName] = useState("");
   const [address, setAddress] = useState("");
   const [gstNumber, setGstNumber] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [ifsc, setIfsc] = useState("");
+  const [upiHandle, setUpiHandle] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState("");
@@ -25,6 +29,10 @@ const BusinessProfileScreen = () => {
         setOrgName(res.data.orgName || "");
         setAddress(res.data.address || "");
         setGstNumber(res.data.gstNumber || "");
+        setAccountNumber(res.data.accountNumber || "");
+        setBankName(res.data.bankName || "");
+        setIfsc(res.data.ifsc || "");
+        setUpiHandle(res.data.upiHandle || "");
         setLogoUrl(res.data.logoUrl || "");
       }
       if (active) setLoading(false);
@@ -36,7 +44,7 @@ const BusinessProfileScreen = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      showToast("कृपया image file निवडा", "error");
+      showToast("Please select an image file", "error");
       return;
     }
     setLogoFile(file);
@@ -49,11 +57,15 @@ const BusinessProfileScreen = () => {
       orgName: orgName.trim(),
       address: address.trim(),
       gstNumber: gstNumber.trim().toUpperCase(),
+      accountNumber: accountNumber.trim(),
+      bankName: bankName.trim(),
+      ifsc: ifsc.trim().toUpperCase(),
+      upiHandle: upiHandle.trim(),
       logoFile,
     });
     setSaving(false);
     if (!res.success) {
-      showToast(res.message || "Save करता आलं नाही", "error");
+      showToast(res.message || "Could not save", "error");
       return;
     }
     if (res.data?.logoUrl) setLogoUrl(res.data.logoUrl);
@@ -105,6 +117,26 @@ const BusinessProfileScreen = () => {
           <label className="ol-field">
             <span>GST number (optional)</span>
             <input type="text" value={gstNumber} onChange={(e) => setGstNumber(e.target.value.toUpperCase())} maxLength={20} placeholder="e.g. 27ABCDE1234F1Z5" />
+          </label>
+
+          <label className="ol-field">
+            <span>Receiver bank account number (optional)</span>
+            <input type="text" inputMode="numeric" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value.replace(/[^0-9A-Za-z]/g, "").slice(0, 60))} maxLength={60} placeholder="Bank account for receiving payment" />
+          </label>
+
+          <label className="ol-field">
+            <span>Bank name (optional)</span>
+            <input type="text" value={bankName} onChange={(e) => setBankName(e.target.value.slice(0, 150))} maxLength={150} placeholder="e.g. HDFC Bank" />
+          </label>
+
+          <label className="ol-field">
+            <span>IFSC (optional)</span>
+            <input type="text" value={ifsc} onChange={(e) => setIfsc(e.target.value.toUpperCase().replace(/\s/g, "").slice(0, 20))} maxLength={20} placeholder="e.g. HDFC0001234" style={{ textTransform: "uppercase" }} />
+          </label>
+
+          <label className="ol-field">
+            <span>UPI handle (optional)</span>
+            <input type="text" value={upiHandle} onChange={(e) => setUpiHandle(e.target.value.replace(/\s/g, "").slice(0, 100))} maxLength={100} placeholder="e.g. name@bank" />
           </label>
 
           <button type="button" className="ol-inv-submit" onClick={save} disabled={saving}>

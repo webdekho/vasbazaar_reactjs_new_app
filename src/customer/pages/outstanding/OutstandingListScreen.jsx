@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaPlus, FaSearch, FaSyncAlt, FaUserCircle, FaInbox, FaBell, FaCommentDots, FaDownload, FaSpinner, FaFileInvoice } from "react-icons/fa";
+import { FaArrowLeft, FaPlus, FaSearch, FaSyncAlt, FaUserCircle, FaInbox, FaBell, FaCommentDots, FaDownload, FaSpinner, FaFileInvoice, FaUserPlus } from "react-icons/fa";
 import { outstandingService } from "../../services/outstandingService";
 import { useToast } from "../../context/ToastContext";
 import { buildCsv, downloadCsv } from "../../utils/exportCsv";
@@ -212,63 +212,78 @@ const OutstandingListScreen = () => {
           <div className="ol-ledger-name">ReBill</div>
           <div className="ol-ledger-mobile">{summary.customerCount || 0} customer{summary.customerCount === 1 ? "" : "s"}</div>
         </div>
+      </div>
+
+      {/* Action chips — own horizontally-scrollable row below the title, above the hero card */}
+      <div className="ol-hdr-actions ol-hdr-actions-row">
         <button
-          className="ol-export-btn-pill"
+          className="ol-chip ol-chip-newcust"
+          type="button"
+          aria-label="Add customer"
+          title="Add customer"
+          disabled={subscriptionLocked}
+          onClick={() => !subscriptionLocked && setShowAddSheet(true)}
+        >
+          <FaUserPlus /><span>Add Customer</span>
+        </button>
+        <button
+          className="ol-chip ol-chip-create"
+          type="button"
+          aria-label="Create invoice"
+          title="Create invoice"
+          disabled={subscriptionLocked}
+          onClick={startCreateInvoice}
+        >
+          <FaFileInvoice /><span>Create Invoice</span>
+        </button>
+        <button
+          className="ol-chip ol-chip-export"
           type="button"
           aria-label="Download all customers (CSV)"
           title="Download consolidated CSV"
           disabled={exporting || subscriptionLocked}
           onClick={exportAllCsv}
         >
-          {exporting ? <FaSpinner className="ol-spin" /> : <FaDownload />}
+          {exporting ? <FaSpinner className="ol-spin" /> : <FaDownload />}<span>Export</span>
         </button>
         <button
-          className="ol-hdr-pill ol-hdr-invoices"
+          className="ol-chip ol-chip-invoices"
           type="button"
           aria-label="All invoices"
           title="All invoices"
           disabled={subscriptionLocked}
           onClick={() => !subscriptionLocked && navigate("/customer/app/outstanding/invoices")}
         >
-          <FaFileInvoice />
+          <FaFileInvoice /><span>Invoices</span>
         </button>
         <button
-          className="ol-hdr-pill ol-hdr-sms"
+          className="ol-chip ol-chip-sms"
           type="button"
           aria-label="Auto SMS settings"
           title="Auto SMS settings"
           disabled={subscriptionLocked}
           onClick={() => !subscriptionLocked && navigate("/customer/app/outstanding/sms-settings")}
         >
-          <FaBell />
+          <FaBell /><span>Auto SMS</span>
         </button>
         <button
-          className="ol-hdr-pill ol-hdr-remind"
+          className="ol-chip ol-chip-remind"
           type="button"
           aria-label="Send reminders"
           title="Send reminders"
           disabled={subscriptionLocked}
           onClick={() => !subscriptionLocked && navigate("/customer/app/outstanding/reminders")}
         >
-          <FaCommentDots />
+          <FaCommentDots /><span>Reminders</span>
         </button>
         <button
-          className="ol-renew-btn-pill"
+          className="ol-chip ol-chip-renew"
           type="button"
           aria-label="Renew subscription"
           title="Renew subscription"
           onClick={() => setShowRenewSheet(true)}
         >
-          <FaSyncAlt />
-        </button>
-        <button
-          className="ol-add-btn-pill"
-          type="button"
-          aria-label="Add customer"
-          disabled={subscriptionLocked}
-          onClick={() => !subscriptionLocked && setShowAddSheet(true)}
-        >
-          <FaPlus />
+          <FaSyncAlt /><span>Renew</span>
         </button>
       </div>
 
@@ -297,16 +312,6 @@ const OutstandingListScreen = () => {
           </div>
         </div>
       </div>
-
-      <button
-        className="ol-create-invoice-cta"
-        type="button"
-        disabled={subscriptionLocked}
-        onClick={startCreateInvoice}
-      >
-        <FaFileInvoice />
-        <span>Create Invoice</span>
-      </button>
 
       <div className="ol-controls">
         <div className="ol-search">

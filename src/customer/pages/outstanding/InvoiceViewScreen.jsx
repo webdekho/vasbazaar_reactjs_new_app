@@ -11,6 +11,7 @@ import {
   generateInvoicePdfBlob,
   getInvoicePdfFileName,
   getInvoiceShareText,
+  amountToWords,
 } from "../../utils/invoicePdf";
 
 const formatINR = (n) => `₹${Math.round(Number(n || 0)).toLocaleString("en-IN")}`;
@@ -48,7 +49,7 @@ const InvoiceViewScreen = () => {
     const res = await outstandingService.getInvoice(invoiceId);
     setLoading(false);
     if (res.success) setInvoice(res.data);
-    else showToast(res.message || "Invoice load करता आली नाही", "error");
+    else showToast(res.message || "Failed to load invoice", "error");
   }, [invoiceId, showToast]);
 
   useEffect(() => { load(); }, [load]);
@@ -78,9 +79,9 @@ const InvoiceViewScreen = () => {
       const a = document.createElement("a");
       a.href = url; a.download = fileName; document.body.appendChild(a); a.click();
       document.body.removeChild(a); URL.revokeObjectURL(url);
-      showToast("PDF download झाला.", "info");
+      showToast("PDF downloaded.", "info");
     } catch (err) {
-      if (err?.name !== "AbortError") showToast("Invoice share करता आली नाही", "error");
+      if (err?.name !== "AbortError") showToast("Could not share invoice", "error");
     } finally {
       setSharing(false);
     }
@@ -100,7 +101,7 @@ const InvoiceViewScreen = () => {
           <button className="ol-back-btn" type="button" onClick={() => navigate(-1)} aria-label="Back"><FaArrowLeft /></button>
           <div className="ol-ledger-id"><div className="ol-ledger-name"><span className="ol-ledger-name-text">Invoice</span></div></div>
         </div>
-        <div className="ol-inv-empty"><h3>Invoice सापडली नाही</h3></div>
+        <div className="ol-inv-empty"><h3>Invoice not found</h3></div>
       </div>
     );
   }
@@ -120,13 +121,17 @@ const InvoiceViewScreen = () => {
       </div>
 
       <div className="ol-form">
-        {invoice.includeOrg && (invoice.orgName || invoice.orgLogoUrl || invoice.orgAddress) ? (
+        {invoice.includeOrg && (invoice.orgName || invoice.orgLogoUrl || invoice.orgAddress || invoice.orgGstNumber || invoice.orgAccountNumber || invoice.orgBankName || invoice.orgIfsc || invoice.orgUpiHandle) ? (
           <div className="ol-inv-opt ol-inv-view-org">
             {invoice.orgLogoUrl ? <div className="ol-org-logo-preview"><img src={invoice.orgLogoUrl} alt="Logo" /></div> : null}
             <div>
               {invoice.orgName ? <div className="ol-inv-view-org-name">{invoice.orgName}</div> : null}
               {invoice.orgAddress ? <div className="ol-inv-view-org-sub">{invoice.orgAddress}</div> : null}
               {invoice.orgGstNumber ? <div className="ol-inv-view-org-sub">GSTIN: {invoice.orgGstNumber}</div> : null}
+              {invoice.orgAccountNumber ? <div className="ol-inv-view-org-sub">A/c: {invoice.orgAccountNumber}</div> : null}
+              {invoice.orgBankName ? <div className="ol-inv-view-org-sub">Bank: {invoice.orgBankName}</div> : null}
+              {invoice.orgIfsc ? <div className="ol-inv-view-org-sub">IFSC: {invoice.orgIfsc}</div> : null}
+              {invoice.orgUpiHandle ? <div className="ol-inv-view-org-sub">UPI: {invoice.orgUpiHandle}</div> : null}
             </div>
           </div>
         ) : null}
@@ -134,6 +139,8 @@ const InvoiceViewScreen = () => {
         <div className="ol-inv-opt">
           <div className="ol-gst-title">Bill to</div>
           <div className="ol-inv-view-org-name">{invoice.customer?.customerName || "Customer"}</div>
+          {invoice.customer?.organisationName ? <div className="ol-inv-view-org-sub">{invoice.customer.organisationName}</div> : null}
+          {invoice.customer?.address ? <div className="ol-inv-view-org-sub">{invoice.customer.address}</div> : null}
           {invoice.customer?.customerMobile ? <div className="ol-inv-view-org-sub">{invoice.customer.customerMobile}</div> : null}
           <div className="ol-inv-view-org-sub">{invoice.customerType === "B2B" && invoice.gstNumber ? `GSTIN: ${invoice.gstNumber}` : "B2C (no GSTIN)"}</div>
         </div>
@@ -158,6 +165,21 @@ const InvoiceViewScreen = () => {
           {Number(invoice.igstPercent) > 0 && <div><span>IGST ({Number(invoice.igstPercent)}%)</span><b>{formatINR(Number(invoice.subtotal) * Number(invoice.igstPercent) / 100)}</b></div>}
           <div className="ol-inv-total-line"><span>Total</span><b>{formatINR(invoice.total)}</b></div>
         </div>
+
+        <div className="ol-inv-opt">
+          <div className="ol-gst-title">Amount in words</div>
+          <div className="ol-inv-view-org-name">Indian Rupees {amountToWords(invoice.total)} Only</div>
+        </div>
+
+        {(invoice.orgAccountNumber || invoice.orgBankName || invoice.orgIfsc || invoice.orgUpiHandle) ? (
+          <div className="ol-inv-opt">
+            <div className="ol-gst-title">Payment details</div>
+            {invoice.orgAccountNumber ? <div className="ol-inv-view-org-sub">Account number: {invoice.orgAccountNumber}</div> : null}
+            {invoice.orgBankName ? <div className="ol-inv-view-org-sub">Bank: {invoice.orgBankName}</div> : null}
+            {invoice.orgIfsc ? <div className="ol-inv-view-org-sub">IFSC: {invoice.orgIfsc}</div> : null}
+            {invoice.orgUpiHandle ? <div className="ol-inv-view-org-sub">UPI: {invoice.orgUpiHandle}</div> : null}
+          </div>
+        ) : null}
 
         {invoice.notes ? (
           <div className="ol-inv-opt">

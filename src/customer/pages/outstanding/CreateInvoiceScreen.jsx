@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { FaArrowLeft, FaPlus, FaTrash, FaBuilding, FaPen, FaSave } from "react-icons/fa";
+import { FaArrowLeft, FaPlus, FaTrash, FaBuilding, FaPen, FaSave, FaChevronDown } from "react-icons/fa";
 import { outstandingService } from "../../services/outstandingService";
 import { useToast } from "../../context/ToastContext";
 
@@ -16,6 +16,10 @@ const CreateInvoiceScreen = () => {
   const isEdit = Boolean(invoiceId);
   const { showToast } = useToast();
   const [customer, setCustomer] = useState(null);
+  // Editable customer organisation details (saved back to the customer record on submit).
+  const [custOrgName, setCustOrgName] = useState("");
+  const [custAddress, setCustAddress] = useState("");
+  const [custOpen, setCustOpen] = useState(true);
   const [loading, setLoading] = useState(isEdit);
   const [invoiceDate, setInvoiceDate] = useState(today());
   const [dueDate, setDueDate] = useState("");
@@ -35,6 +39,10 @@ const CreateInvoiceScreen = () => {
   const [orgAddress, setOrgAddress] = useState("");
   const [orgGstNumber, setOrgGstNumber] = useState("");
   const [orgLogoUrl, setOrgLogoUrl] = useState("");
+  const [orgAccountNumber, setOrgAccountNumber] = useState("");
+  const [orgBankName, setOrgBankName] = useState("");
+  const [orgIfsc, setOrgIfsc] = useState("");
+  const [orgUpiHandle, setOrgUpiHandle] = useState("");
 
   // Outstanding linkage choice
   const [addAsOutstanding, setAddAsOutstanding] = useState(true);
@@ -51,6 +59,8 @@ const CreateInvoiceScreen = () => {
       if (!active || !res.success) return;
       const cust = res.data?.customer || null;
       setCustomer(cust);
+      setCustOrgName(cust?.organisationName || "");
+      setCustAddress(cust?.address || "");
       // Carry the customer's saved GST number into new invoices automatically.
       if (!isEdit && cust?.gstNumber) {
         setGstNumber(cust.gstNumber);
@@ -72,6 +82,10 @@ const CreateInvoiceScreen = () => {
       setOrgAddress(p.address || "");
       setOrgGstNumber(p.gstNumber || "");
       setOrgLogoUrl(p.logoUrl || "");
+      setOrgAccountNumber(p.accountNumber || "");
+      setOrgBankName(p.bankName || "");
+      setOrgIfsc(p.ifsc || "");
+      setOrgUpiHandle(p.upiHandle || "");
       if (p.orgName || p.address || p.logoUrl) setIncludeOrg(true);
     })();
     return () => { active = false; };
@@ -85,13 +99,13 @@ const CreateInvoiceScreen = () => {
       const res = await outstandingService.getInvoice(invoiceId);
       if (!active) return;
       if (!res.success || !res.data) {
-        setError(res.message || "Invoice load करता आली नाही");
+        setError(res.message || "Failed to load invoice");
         setLoading(false);
         return;
       }
       const inv = res.data;
       if (inv.editable === false) {
-        showToast("ही invoice आता edit करता येणार नाही", "info");
+        showToast("This invoice can no longer be edited", "info");
         navigate(`/customer/app/outstanding/${customerId}/invoices`, { replace: true });
         return;
       }
@@ -113,6 +127,10 @@ const CreateInvoiceScreen = () => {
       setOrgAddress(inv.orgAddress || "");
       setOrgGstNumber(inv.orgGstNumber || "");
       setOrgLogoUrl(inv.orgLogoUrl || "");
+      setOrgAccountNumber(inv.orgAccountNumber || "");
+      setOrgBankName(inv.orgBankName || "");
+      setOrgIfsc(inv.orgIfsc || "");
+      setOrgUpiHandle(inv.orgUpiHandle || "");
       setAddAsOutstanding(Boolean(inv.addAsOutstanding));
       setLoading(false);
     })();
@@ -127,8 +145,8 @@ const CreateInvoiceScreen = () => {
 
   const [savingOrg, setSavingOrg] = useState(false);
   const saveOrg = async () => {
-    if (!orgName.trim() && !orgAddress.trim() && !orgGstNumber.trim()) {
-      showToast("Organisation details भरा", "info");
+    if (!orgName.trim() && !orgAddress.trim() && !orgGstNumber.trim() && !orgAccountNumber.trim() && !orgBankName.trim() && !orgIfsc.trim() && !orgUpiHandle.trim()) {
+      showToast("Enter organisation details", "info");
       return;
     }
     setSavingOrg(true);
@@ -136,10 +154,14 @@ const CreateInvoiceScreen = () => {
       orgName: orgName.trim(),
       address: orgAddress.trim(),
       gstNumber: orgGstNumber.trim().toUpperCase(),
+      accountNumber: orgAccountNumber.trim(),
+      bankName: orgBankName.trim(),
+      ifsc: orgIfsc.trim().toUpperCase(),
+      upiHandle: orgUpiHandle.trim(),
     });
     setSavingOrg(false);
     showToast(
-      res.success ? "Organisation details सेव्ह झाले" : (res.message || "सेव्ह करता आले नाही"),
+      res.success ? "Organisation details saved" : (res.message || "Could not save"),
       res.success ? "success" : "error"
     );
   };
@@ -169,6 +191,19 @@ const CreateInvoiceScreen = () => {
       return;
     }
     setSubmitting(true);
+
+    // Persist any edits to the customer's organisation details first, so the
+    // invoice snapshots the updated values in its "Bill to" block.
+    const newOrg = custOrgName.trim();
+    const newAddr = custAddress.trim();
+    if (newOrg !== (customer?.organisationName || "") || newAddr !== (customer?.address || "")) {
+      const upd = await outstandingService.updateCustomer(Number(customerId), {
+        organisationName: newOrg || null,
+        address: newAddr || null,
+      });
+      if (upd?.success && upd.data) setCustomer(upd.data);
+    }
+
     const payload = {
       customerId: Number(customerId),
       invoiceDate,
@@ -184,6 +219,10 @@ const CreateInvoiceScreen = () => {
       orgAddress: includeOrg ? orgAddress.trim() || null : null,
       orgGstNumber: includeOrg ? orgGstNumber.trim().toUpperCase() || null : null,
       orgLogoUrl: includeOrg ? orgLogoUrl || null : null,
+      orgAccountNumber: includeOrg ? orgAccountNumber.trim() || null : null,
+      orgBankName: includeOrg ? orgBankName.trim() || null : null,
+      orgIfsc: includeOrg ? orgIfsc.trim().toUpperCase() || null : null,
+      orgUpiHandle: includeOrg ? orgUpiHandle.trim() || null : null,
       addAsOutstanding,
       items: validItems.map((it) => ({
         description: it.description.trim(),
@@ -199,7 +238,7 @@ const CreateInvoiceScreen = () => {
       setError(res.message || `Failed to ${isEdit ? "update" : "create"} invoice`);
       return;
     }
-    showToast(isEdit ? "Invoice अपडेट झाली" : "Invoice तयार झाली", "success");
+    showToast(isEdit ? "Invoice updated" : "Invoice created", "success");
     navigate(`/customer/app/outstanding/${customerId}/invoices`, { replace: true });
   };
 
@@ -233,6 +272,76 @@ const CreateInvoiceScreen = () => {
             <span>Due date (optional)</span>
             <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </label>
+        </div>
+
+        {/* ===== Customer (bill to) details ===== */}
+        <div className="ol-inv-opt">
+          <button
+            type="button"
+            className="ol-collapse-head"
+            onClick={() => setCustOpen((v) => !v)}
+            aria-expanded={custOpen}
+          >
+            <span className="ol-gst-title" style={{ margin: 0 }}>Customer details</span>
+            <FaChevronDown className={`ol-collapse-chevron${custOpen ? " is-open" : ""}`} />
+          </button>
+          {custOpen && (
+            <>
+              <input
+                className="ol-inv-desc"
+                type="text"
+                value={customer?.customerName || ""}
+                placeholder="Customer name"
+                readOnly
+                style={{ marginTop: 8 }}
+              />
+              <input
+                className="ol-inv-desc"
+                type="text"
+                value={custOrgName}
+                onChange={(e) => setCustOrgName(e.target.value.slice(0, 150))}
+                placeholder="Customer organisation name (optional)"
+                maxLength={150}
+                style={{ marginTop: 8 }}
+              />
+              <textarea
+                className="ol-inv-desc"
+                rows={2}
+                value={custAddress}
+                onChange={(e) => setCustAddress(e.target.value.slice(0, 255))}
+                placeholder="Customer address (optional)"
+                maxLength={255}
+                style={{ marginTop: 8 }}
+              />
+              <input
+                className="ol-inv-desc"
+                type="text"
+                value={customer?.customerMobile || ""}
+                placeholder="Mobile number"
+                readOnly
+                style={{ marginTop: 8 }}
+              />
+
+              {/* Customer GST number */}
+              <label className="ol-toggle-row" style={{ marginTop: 8 }}>
+                <span>Customer has GST number (B2B)</span>
+                <input type="checkbox" checked={b2b} onChange={(e) => setB2b(e.target.checked)} />
+              </label>
+              {b2b ? (
+                <input
+                  className="ol-inv-desc"
+                  type="text"
+                  value={gstNumber}
+                  onChange={(e) => setGstNumber(e.target.value.toUpperCase())}
+                  placeholder="Customer GSTIN (e.g. 27ABCDE1234F1Z5)"
+                  maxLength={20}
+                  style={{ marginTop: 8 }}
+                />
+              ) : (
+                <div className="ol-b2c-hint">Billed as B2C (no GST number)</div>
+              )}
+            </>
+          )}
         </div>
 
         {/* ===== Organisation details ===== */}
@@ -272,6 +381,43 @@ const CreateInvoiceScreen = () => {
                 maxLength={20}
                 style={{ marginTop: 8 }}
               />
+              <input
+                className="ol-inv-desc"
+                type="text"
+                inputMode="numeric"
+                value={orgAccountNumber}
+                onChange={(e) => setOrgAccountNumber(e.target.value.replace(/[^0-9A-Za-z]/g, "").slice(0, 60))}
+                placeholder="Receiver bank account number (optional)"
+                maxLength={60}
+                style={{ marginTop: 8 }}
+              />
+              <input
+                className="ol-inv-desc"
+                type="text"
+                value={orgBankName}
+                onChange={(e) => setOrgBankName(e.target.value.slice(0, 150))}
+                placeholder="Bank name (optional)"
+                maxLength={150}
+                style={{ marginTop: 8 }}
+              />
+              <input
+                className="ol-inv-desc"
+                type="text"
+                value={orgIfsc}
+                onChange={(e) => setOrgIfsc(e.target.value.toUpperCase().replace(/\s/g, "").slice(0, 20))}
+                placeholder="IFSC (optional)"
+                maxLength={20}
+                style={{ marginTop: 8, textTransform: "uppercase" }}
+              />
+              <input
+                className="ol-inv-desc"
+                type="text"
+                value={orgUpiHandle}
+                onChange={(e) => setOrgUpiHandle(e.target.value.replace(/\s/g, "").slice(0, 100))}
+                placeholder="UPI handle (optional, e.g. name@bank)"
+                maxLength={100}
+                style={{ marginTop: 8 }}
+              />
               <div className="ol-org-actions">
                 <button
                   type="button"
@@ -292,45 +438,6 @@ const CreateInvoiceScreen = () => {
             </div>
           ) : (
             <div className="ol-b2c-hint">Invoice will be created without your organisation header.</div>
-          )}
-        </div>
-
-        {/* ===== Customer (bill to) details ===== */}
-        <div className="ol-inv-opt">
-          <div className="ol-gst-title">Customer details</div>
-          <input
-            className="ol-inv-desc"
-            type="text"
-            value={customer?.customerName || ""}
-            placeholder="Customer name"
-            readOnly
-          />
-          <input
-            className="ol-inv-desc"
-            type="text"
-            value={customer?.customerMobile || ""}
-            placeholder="Mobile number"
-            readOnly
-            style={{ marginTop: 8 }}
-          />
-
-          {/* Customer GST number */}
-          <label className="ol-toggle-row" style={{ marginTop: 8 }}>
-            <span>Customer has GST number (B2B)</span>
-            <input type="checkbox" checked={b2b} onChange={(e) => setB2b(e.target.checked)} />
-          </label>
-          {b2b ? (
-            <input
-              className="ol-inv-desc"
-              type="text"
-              value={gstNumber}
-              onChange={(e) => setGstNumber(e.target.value.toUpperCase())}
-              placeholder="Customer GSTIN (e.g. 27ABCDE1234F1Z5)"
-              maxLength={20}
-              style={{ marginTop: 8 }}
-            />
-          ) : (
-            <div className="ol-b2c-hint">Billed as B2C (no GST number)</div>
           )}
         </div>
 

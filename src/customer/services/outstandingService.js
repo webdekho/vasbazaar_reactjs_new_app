@@ -87,12 +87,16 @@ export const outstandingService = {
   // Business profile (seller's own organisation details, reused across invoices)
   getBusinessProfile: () => authGet(`${BASE}/business-profile`),
 
-  saveBusinessProfile: async ({ orgName, address, gstNumber, logoFile }) => {
+  saveBusinessProfile: async ({ orgName, address, gstNumber, accountNumber, bankName, ifsc, upiHandle, logoFile }) => {
     try {
       const formData = new FormData();
       if (orgName != null) formData.append("orgName", orgName);
       if (address != null) formData.append("address", address);
       if (gstNumber != null) formData.append("gstNumber", gstNumber);
+      if (accountNumber != null) formData.append("accountNumber", accountNumber);
+      if (bankName != null) formData.append("bankName", bankName);
+      if (ifsc != null) formData.append("ifsc", ifsc);
+      if (upiHandle != null) formData.append("upiHandle", upiHandle);
       if (logoFile) {
         formData.append("logo", logoFile, `biz_logo_${Date.now()}.${logoFile.name?.split(".").pop() || "jpg"}`);
       }

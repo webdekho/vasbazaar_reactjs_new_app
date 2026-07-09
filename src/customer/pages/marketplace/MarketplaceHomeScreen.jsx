@@ -729,7 +729,7 @@ const MarketplaceHomeScreen = () => {
           <button
             type="button"
             onClick={() => navigate("/customer/app/marketplace/my-saved")}
-            className="mkt-hero-action mkt-hero-action--icon"
+            className="mkt-hero-action mkt-hero-action--icon mkt-hero-action--save"
             aria-label="Saved Products"
             title="Saved Products"
           >
@@ -738,7 +738,7 @@ const MarketplaceHomeScreen = () => {
           <button
             type="button"
             onClick={() => navigate("/customer/app/marketplace/my-wishlist")}
-            className="mkt-hero-action mkt-hero-action--icon"
+            className="mkt-hero-action mkt-hero-action--icon mkt-hero-action--wish"
             aria-label="My Wishlist"
             title="My Wishlist"
           >
@@ -747,7 +747,7 @@ const MarketplaceHomeScreen = () => {
           <button
             type="button"
             onClick={() => navigate("/customer/app/marketplace/rewards")}
-            className="mkt-hero-action mkt-hero-action--icon"
+            className="mkt-hero-action mkt-hero-action--icon mkt-hero-action--reward"
             aria-label="Rewards"
             title="Rewards & Membership"
           >
@@ -756,7 +756,7 @@ const MarketplaceHomeScreen = () => {
           <button
             type="button"
             onClick={() => navigate("/customer/app/marketplace/my-orders")}
-            className="mkt-hero-action mkt-hero-action--icon"
+            className="mkt-hero-action mkt-hero-action--icon mkt-hero-action--orders"
             aria-label="My Orders"
             title="My Orders"
           >
@@ -784,10 +784,10 @@ const MarketplaceHomeScreen = () => {
           />
           <button
             type="button"
+            className="mkt-hero-scan"
             onClick={() => setScannerOpen(true)}
             aria-label="Scan a product barcode"
             title="Scan barcode to reorder"
-            style={{ flexShrink: 0, background: "none", border: "none", padding: "0 2px", color: "inherit", cursor: "pointer", display: "flex", alignItems: "center" }}
           >
             <FaBarcode size={18} />
           </button>

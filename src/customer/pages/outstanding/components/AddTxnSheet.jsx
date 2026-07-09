@@ -141,7 +141,7 @@ const AddTxnSheet = ({ type, customer, transaction, onClose, onAdded }) => {
               <div className="ol-voice-row">
                 <div className="ol-voice-copy">
                   <b>{listening ? "Listening…" : "Speak the entry"}</b>
-                  <small>{transcript ? `“${transcript}”` : "e.g. \"500 doodh\" / \"पाचशे उधार\""}</small>
+                  <small>{transcript ? `“${transcript}”` : "e.g. \"500 doodh\" / \"500 udhaar\""}</small>
                 </div>
                 <div className="ol-voice-langs">
                   {SUPPORTED_VOICE_LANGS.map((l) => (

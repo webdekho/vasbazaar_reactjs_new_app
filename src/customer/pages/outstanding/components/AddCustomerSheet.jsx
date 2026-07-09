@@ -10,6 +10,7 @@ const AddCustomerSheet = ({ onClose, onAdded }) => {
   const [mobile, setMobile] = useState("");
   const [name, setName] = useState("");
   const [organisationName, setOrganisationName] = useState("");
+  const [address, setAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [category, setCategory] = useState("REGULAR");
   const [creditLimit, setCreditLimit] = useState("");
@@ -67,6 +68,7 @@ const AddCustomerSheet = ({ onClose, onAdded }) => {
       customerMobile: mobile,
       customerName: name.trim(),
       organisationName: organisationName.trim() || null,
+      address: address.trim() || null,
       notes: notes.trim() || null,
       category,
       creditLimit: creditLimit.trim() === "" ? null : Number(creditLimit),
@@ -137,6 +139,17 @@ const AddCustomerSheet = ({ onClose, onAdded }) => {
               onChange={(e) => setOrganisationName(e.target.value)}
               placeholder="Business / company name"
               maxLength={150}
+            />
+          </label>
+
+          <label className="ol-field">
+            <span>Customer address (optional)</span>
+            <textarea
+              rows={2}
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Billing address"
+              maxLength={255}
             />
           </label>
 

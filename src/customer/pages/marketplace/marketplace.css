@@ -2566,25 +2566,45 @@
   100% { left: 130%; }
 }
 
-/* Icon-only header action (My Orders) — glassy circle, secondary to the Sell CTA */
+/* Icon-only header actions — soft tinted glass chips, secondary to the Sell CTA */
 .mkt-v2 .mkt-hero-action--icon {
+  --tint: 47, 139, 255;
   padding: 0;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.82);
-  color: #2f8bff;
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+  border-radius: 50%;
+  background: linear-gradient(140deg, rgba(var(--tint), 0.20), rgba(var(--tint), 0.08));
+  color: rgb(var(--tint));
+  border: 1px solid rgba(var(--tint), 0.28);
+  box-shadow:
+    0 6px 14px rgba(var(--tint), 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  transition: transform 0.16s ease, box-shadow 0.2s ease;
 }
 .mkt-v2 .mkt-hero-action--icon::after { display: none; }
+.mkt-v2 .mkt-hero-action--icon:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 11px 22px rgba(var(--tint), 0.30),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.mkt-v2 .mkt-hero-action--icon:active { transform: scale(0.94); }
+
+/* per-icon accent colours (r,g,b) */
+.mkt-v2 .mkt-hero-action--save   { --tint: 47, 139, 255; }
+.mkt-v2 .mkt-hero-action--wish   { --tint: 244, 63, 94; }
+.mkt-v2 .mkt-hero-action--reward { --tint: 139, 92, 246; }
+.mkt-v2 .mkt-hero-action--orders { --tint: 13, 148, 136; }
+
 .theme-dark .mkt-v2 .mkt-hero-action--icon {
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.18);
+  background: linear-gradient(140deg, rgba(var(--tint), 0.30), rgba(var(--tint), 0.14));
+  color: rgb(var(--tint));
+  border-color: rgba(var(--tint), 0.42);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
 }
 
 /* Search — floating elevated glass with gradient focus ring */
@@ -2614,6 +2634,40 @@
     0 12px 30px rgba(0, 123, 255, 0.22);
 }
 .mkt-v2 .mkt-hero-search-input { font-size: 13.5px; font-weight: 600; }
+
+/* barcode scan button inside the search bar */
+.mkt-v2 .mkt-hero-scan {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin: -4px -6px -4px 4px;
+  border-radius: 12px;
+  border: none;
+  background: rgba(47, 139, 255, 0.10);
+  color: #2f8bff;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.16s ease, transform 0.12s ease;
+}
+.mkt-v2 .mkt-hero-scan::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: rgba(15, 23, 42, 0.12);
+}
+.mkt-v2 .mkt-hero-scan:hover { background: rgba(47, 139, 255, 0.18); }
+.mkt-v2 .mkt-hero-scan:active { transform: scale(0.92); }
+.theme-dark .mkt-v2 .mkt-hero-scan {
+  background: rgba(255, 255, 255, 0.10);
+  color: var(--cm-accent);
+}
+.theme-dark .mkt-v2 .mkt-hero-scan::before { background: rgba(255, 255, 255, 0.14); }
 
 /* ---- Quick filter chips — tactile glass ------------------- */
 .mkt-v2 .mkt-quickbar { padding: 12px 14px 4px; gap: 9px; }

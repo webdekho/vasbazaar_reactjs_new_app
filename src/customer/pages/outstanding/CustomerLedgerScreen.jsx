@@ -340,7 +340,7 @@ const CustomerLedgerScreen = () => {
         ? await outstandingService.getOwedDetail(customerId, 0, 1000, dateRange)
         : await outstandingService.getCustomerDetail(customerId, 0, 1000, dateRange);
       if (!res.success) {
-        showToast(res.message || "Ledger PDF तयार करता आले नाही.", "error");
+        showToast(res.message || "Could not generate ledger PDF.", "error");
         return;
       }
 
@@ -396,17 +396,17 @@ const CustomerLedgerScreen = () => {
       if (navigator.share) {
         await navigator.share({
           title: `Your VasBazaar ReBill statement`,
-          text: `${shareText}\n\nPDF download झाला आहे. कृपया तो WhatsApp किंवा Email मध्ये attach करा.`,
+          text: `${shareText}\n\nThe PDF has been downloaded. Please attach it in WhatsApp or Email.`,
         });
         return;
       }
 
-      window.open(`https://wa.me/91${pdfCustomer.customerMobile}?text=${encodeURIComponent(`${shareText}\n\nPDF download झाला आहे. कृपया downloaded PDF attach करा.`)}`, "_blank");
-      showToast("PDF download झाला. WhatsApp/Email मध्ये attach करा.", "info");
+      window.open(`https://wa.me/91${pdfCustomer.customerMobile}?text=${encodeURIComponent(`${shareText}\n\nThe PDF has been downloaded. Please attach the downloaded PDF.`)}`, "_blank");
+      showToast("PDF downloaded. Attach it in WhatsApp/Email.", "info");
     } catch (error) {
       console.error("Ledger PDF share failed:", error?.message || error);
       if (!isShareCancelled(error)) {
-        showToast("Ledger PDF share करता आले नाही. पुन्हा प्रयत्न करा.", "error");
+        showToast("Could not share ledger PDF. Please try again.", "error");
       }
     } finally {
       setSharingLedger(false);

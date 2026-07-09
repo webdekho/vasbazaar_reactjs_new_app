@@ -57,7 +57,7 @@ const InvoiceListScreen = () => {
     try {
       const res = await outstandingService.getInvoice(id);
       if (!res.success) {
-        showToast(res.message || "Invoice load करता आली नाही", "error");
+        showToast(res.message || "Failed to load invoice", "error");
         return;
       }
       const invoice = res.data;
@@ -82,9 +82,9 @@ const InvoiceListScreen = () => {
       const a = document.createElement("a");
       a.href = url; a.download = fileName; document.body.appendChild(a); a.click();
       document.body.removeChild(a); URL.revokeObjectURL(url);
-      showToast("PDF download झाला. WhatsApp/Email मध्ये attach करा.", "info");
+      showToast("PDF downloaded. Attach it in WhatsApp/Email.", "info");
     } catch (err) {
-      if (err?.name !== "AbortError") showToast("Invoice share करता आली नाही", "error");
+      if (err?.name !== "AbortError") showToast("Could not share invoice", "error");
     } finally {
       setBusyId(null);
     }
@@ -99,7 +99,7 @@ const InvoiceListScreen = () => {
   };
 
   const remove = async (id) => {
-    if (!window.confirm("ही invoice delete करायची?")) return;
+    if (!window.confirm("Delete this invoice?")) return;
     setBusyId(id);
     const res = await outstandingService.deleteInvoice(id);
     setBusyId(null);
@@ -108,17 +108,17 @@ const InvoiceListScreen = () => {
   };
 
   const editInvoice = (inv, invCustomerId) => {
-    if (inv.linked && !window.confirm("ही invoice आधीच customer च्या ledger ला जोडलेली आहे. Edit केल्यावर outstanding balance नवीन रकमेनुसार पुन्हा मोजली जाईल. पुढे जायचं?")) return;
+    if (inv.linked && !window.confirm("This invoice is already linked to the customer's ledger. Editing it will recompute the outstanding balance with the new amount. Continue?")) return;
     navigate(`/customer/app/outstanding/${invCustomerId}/invoice/${inv.id}/edit`);
   };
 
   const linkOutstanding = async (id) => {
-    if (!window.confirm("ही invoice customer च्या outstanding balance मध्ये जोडायची?")) return;
+    if (!window.confirm("Add this invoice to the customer's outstanding balance?")) return;
     setBusyId(id);
     const res = await outstandingService.linkInvoiceToOutstanding(id);
     setBusyId(null);
     if (res.success) {
-      showToast("Outstanding ला link झाली", "success");
+      showToast("Linked to outstanding", "success");
       load();
     } else {
       showToast(res.message || "Link failed", "error");

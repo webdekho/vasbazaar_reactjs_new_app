@@ -29,6 +29,31 @@ const C = {
 };
 
 const money = (value) => `Rs. ${Math.round(Math.abs(Number(value || 0))).toLocaleString("en-IN")}`;
+
+// Indian-system rupees-to-words, e.g. 125080 -> "One Lakh Twenty Five Thousand Eighty".
+export const amountToWords = (value) => {
+  let num = Math.round(Math.abs(Number(value || 0)));
+  if (num === 0) return "Zero";
+  const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
+    "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+  const twoDigits = (n) => n < 20 ? ones[n] : `${tens[Math.floor(n / 10)]}${n % 10 ? " " + ones[n % 10] : ""}`;
+  const threeDigits = (n) => {
+    const h = Math.floor(n / 100);
+    const r = n % 100;
+    return `${h ? ones[h] + " Hundred" + (r ? " " : "") : ""}${r ? twoDigits(r) : ""}`;
+  };
+  const parts = [];
+  const crore = Math.floor(num / 10000000); num %= 10000000;
+  const lakh = Math.floor(num / 100000); num %= 100000;
+  const thousand = Math.floor(num / 1000); num %= 1000;
+  const hundred = num;
+  if (crore) parts.push(`${twoDigits(crore)} Crore`);
+  if (lakh) parts.push(`${twoDigits(lakh)} Lakh`);
+  if (thousand) parts.push(`${twoDigits(thousand)} Thousand`);
+  if (hundred) parts.push(threeDigits(hundred));
+  return parts.join(" ").replace(/\s+/g, " ").trim();
+};
 const qtyText = (value) => {
   const n = Number(value || 0);
   return Number.isInteger(n) ? String(n) : n.toFixed(2);
@@ -144,26 +169,42 @@ export const generateInvoicePdfBlob = async ({ invoice, ownerName, ownerMobile }
   y = headRuleY - 18;
 
   // ---------- From / Bill-to / status card ----------
-  const useOrg = !!(invoice?.includeOrg && (invoice?.orgName || invoice?.orgAddress || invoice?.orgGstNumber));
+  const useOrg = !!(invoice?.includeOrg && (invoice?.orgName || invoice?.orgAddress || invoice?.orgGstNumber || invoice?.orgAccountNumber || invoice?.orgBankName || invoice?.orgIfsc || invoice?.orgUpiHandle));
   const cardTop = y;
   const cardH = 88;
   rect(MARGIN, cardTop - cardH, CONTENT_W, cardH, C.cardBg);
   text("FROM", MARGIN + 14, 8, { y: cardTop - 16, bold: true, color: C.muted });
-  text(useOrg && invoice?.orgName ? invoice.orgName : (ownerName || "VasBazaar user"), MARGIN + 14, 11, { y: cardTop - 30, bold: true });
+  let fromY = cardTop - 30;
+  text(useOrg && invoice?.orgName ? invoice.orgName : (ownerName || "VasBazaar user"), MARGIN + 14, 11, { y: fromY, bold: true });
+  fromY -= 13;
   if (useOrg) {
-    if (invoice?.orgAddress) text(String(invoice.orgAddress).slice(0, 46), MARGIN + 14, 9, { y: cardTop - 43, color: C.slate });
-    if (invoice?.orgGstNumber) text(`GSTIN: ${invoice.orgGstNumber}`, MARGIN + 14, 9, { y: cardTop - 55, color: C.ink, bold: true });
-    else if (ownerMobile) text(`+91 ${ownerMobile}`, MARGIN + 14, 9, { y: cardTop - 55, color: C.slate });
+    if (invoice?.orgAddress) { text(String(invoice.orgAddress).slice(0, 46), MARGIN + 14, 9, { y: fromY, color: C.slate }); fromY -= 12; }
+    if (invoice?.orgGstNumber) { text(`GSTIN: ${invoice.orgGstNumber}`, MARGIN + 14, 9, { y: fromY, color: C.ink, bold: true }); fromY -= 12; }
+    else if (ownerMobile) { text(`+91 ${ownerMobile}`, MARGIN + 14, 9, { y: fromY, color: C.slate }); fromY -= 12; }
+    if (invoice?.orgAccountNumber) { text(`A/c: ${invoice.orgAccountNumber}`, MARGIN + 14, 9, { y: fromY, color: C.ink, bold: true }); fromY -= 12; }
   } else if (ownerMobile) {
-    text(`+91 ${ownerMobile}`, MARGIN + 14, 9, { y: cardTop - 43, color: C.slate });
+    text(`+91 ${ownerMobile}`, MARGIN + 14, 9, { y: fromY, color: C.slate });
   }
 
   const midX = MARGIN + CONTENT_W / 2 + 10;
   text("BILL TO", midX, 8, { y: cardTop - 16, bold: true, color: C.muted });
-  text(invoice?.customer?.customerName || "Customer", midX, 11, { y: cardTop - 30, bold: true });
-  if (invoice?.customer?.customerMobile) text(`+91 ${invoice.customer.customerMobile}`, midX, 9, { y: cardTop - 43, color: C.slate });
+  let billY = cardTop - 30;
+  text(invoice?.customer?.customerName || "Customer", midX, 11, { y: billY, bold: true });
+  billY -= 13;
+  if (invoice?.customer?.organisationName) {
+    text(String(invoice.customer.organisationName).slice(0, 46), midX, 9, { y: billY, color: C.slate });
+    billY -= 12;
+  }
+  if (invoice?.customer?.address) {
+    text(String(invoice.customer.address).slice(0, 46), midX, 9, { y: billY, color: C.slate });
+    billY -= 12;
+  }
+  if (invoice?.customer?.customerMobile) {
+    text(`+91 ${invoice.customer.customerMobile}`, midX, 9, { y: billY, color: C.slate });
+    billY -= 12;
+  }
   const gstLine = invoice?.b2b && invoice?.gstNumber ? `GSTIN: ${invoice.gstNumber}` : "B2C (no GSTIN)";
-  text(gstLine, midX, 9, { y: cardTop - 55, color: invoice?.b2b ? C.ink : C.muted, bold: !!invoice?.b2b });
+  text(gstLine, midX, 9, { y: billY, color: invoice?.b2b ? C.ink : C.muted, bold: !!invoice?.b2b });
 
   // status pill (top-right of card)
   const pillW = textWidthApprox(status, 9) + 22;
@@ -227,15 +268,36 @@ export const generateInvoicePdfBlob = async ({ invoice, ownerName, ownerMobile }
   text(money(invoice?.total), valX, 14, { y: y - 9, align: "right", bold: true, color: C.teal });
   y -= 40;
 
-  if (invoice?.notes) {
-    hr(y); y -= 16;
-    text("NOTES", MARGIN, 8.5, { y, bold: true, color: C.muted }); y -= 13;
-    wrapText(invoice.notes, CONTENT_W, 9).forEach((ln) => flow(ln, MARGIN, 9, { color: C.slate, lineHeight: 12 }));
+  // ---------- Amount in words ----------
+  if (y < BOTTOM_LIMIT + 24) newPage();
+  y -= 6;
+  hr(y); y -= 15;
+  text("AMOUNT IN WORDS", MARGIN, 8.5, { y, bold: true, color: C.muted }); y -= 13;
+  wrapText(`Indian Rupees ${amountToWords(invoice?.total)} Only`, CONTENT_W, 9.5)
+    .forEach((ln) => flow(ln, MARGIN, 9.5, { color: C.ink, bold: true, lineHeight: 13 }));
+
+  // ---------- Payment details (account number / UPI handle) ----------
+  const payLines = [];
+  if (invoice?.orgAccountNumber) payLines.push(`Account number: ${invoice.orgAccountNumber}`);
+  if (invoice?.orgBankName) payLines.push(`Bank: ${invoice.orgBankName}`);
+  if (invoice?.orgIfsc) payLines.push(`IFSC: ${invoice.orgIfsc}`);
+  if (invoice?.orgUpiHandle) payLines.push(`UPI: ${invoice.orgUpiHandle}`);
+  if (payLines.length) {
+    if (y < BOTTOM_LIMIT + 24) newPage();
+    y -= 6;
+    text("PAYMENT DETAILS", MARGIN, 8.5, { y, bold: true, color: C.muted }); y -= 13;
+    payLines.forEach((ln) => flow(ln, MARGIN, 9.5, { color: C.ink, lineHeight: 13 }));
   }
 
-  if (y < BOTTOM_LIMIT + 20) newPage();
-  y -= 8;
-  flow("Generated from VasBazaar ReBill.", MARGIN, 8, { color: C.muted, lineHeight: 11 });
+  // ---------- Signature block: caption + VasBazaar logo just below it ----------
+  if (y < BOTTOM_LIMIT + 40) newPage();
+  y -= 10;
+  flow("Generated from VasBazaar ReBill.", MARGIN, 8, { color: C.muted, lineHeight: 12 });
+  const gLogoW = 96;
+  const gLogoH = (VASBAZAAR_LOGO_HEIGHT / VASBAZAAR_LOGO_WIDTH) * gLogoW;
+  if (y - gLogoH < BOTTOM_LIMIT) newPage();
+  image(MARGIN, y - gLogoH, gLogoW, gLogoH, "Im0");
+  y -= gLogoH + 6;
 
   return assemble(ops, orgImage);
 };
@@ -299,10 +361,8 @@ const assemble = (ops, orgImage) => {
         content.push("ET");
       }
     });
-    // ---------- Footer: VasBazaar logo (moved here from the header) ----------
-    const fLogoW = 96;
-    const fLogoH = (VASBAZAAR_LOGO_HEIGHT / VASBAZAAR_LOGO_WIDTH) * fLogoW;
-    content.push(`q ${fLogoW} 0 0 ${fLogoH} ${MARGIN} 20 cm /Im0 Do Q`);
+    // ---------- Footer: page number only (VasBazaar logo now sits in the
+    // signature block just below "Generated from VasBazaar ReBill.") ----------
     content.push("BT /F1 8 Tf 0.58 0.64 0.72 rg 300 26 Td");
     content.push(`(Page ${index + 1} of ${pages.length} - VasBazaar ReBill) Tj ET`);
 

@@ -6,6 +6,7 @@ const toDateInput = (value) => (value ? String(value).slice(0, 10) : "");
 
 const EditCustomerSheet = ({ customer, onClose, onSaved }) => {
   const [name, setName] = useState(customer?.customerName || "");
+  const [address, setAddress] = useState(customer?.address || "");
   const [notes, setNotes] = useState(customer?.notes || "");
   const [category, setCategory] = useState(customer?.category || "REGULAR");
   const [creditLimit, setCreditLimit] = useState(
@@ -26,6 +27,7 @@ const EditCustomerSheet = ({ customer, onClose, onSaved }) => {
     setSubmitting(true);
     const res = await outstandingService.updateCustomer(customer.id, {
       customerName: name.trim(),
+      address: address.trim() || null,
       notes: notes.trim() || null,
       category,
       creditLimit: creditLimit.trim() === "" ? null : Number(creditLimit),
@@ -79,6 +81,17 @@ const EditCustomerSheet = ({ customer, onClose, onSaved }) => {
                 </button>
               ))}
             </div>
+          </label>
+
+          <label className="ol-field">
+            <span>Customer address (optional)</span>
+            <textarea
+              rows={2}
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Billing address"
+              maxLength={255}
+            />
           </label>
 
           <label className="ol-field">

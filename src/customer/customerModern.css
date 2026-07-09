@@ -22527,8 +22527,19 @@
 .cm-content:has(.ol-ledger-page) {
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   padding-left: 0;
   padding-right: 0;
+}
+/* .cm-content is a CSS grid, whose items default to min-width:auto and would let
+   a wide child (e.g. the scrollable action-chip row) stretch the page past the
+   viewport. Pin the page to the viewport width and clip stray horizontal overflow
+   so only the intended inner scroll rows scroll sideways. */
+.ol-list-page,
+.ol-ledger-page {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
 }
 /* These pages are full-bleed, so let the top bar (bell + profile) hug the
    right edge too instead of stopping at the centered content column. */
@@ -22590,6 +22601,25 @@
   border-radius: 999px;
   cursor: pointer;
 }
+/* Collapsible section header (Customer details open/close) */
+.ol-collapse-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+}
+.ol-collapse-chevron {
+  transition: transform 0.2s ease;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+.ol-collapse-chevron.is-open { transform: rotate(180deg); }
+
 /* Create-invoice customer picker popup */
 .ol-picker-sheet { display: flex; flex-direction: column; max-height: 82vh; }
 .ol-picker-controls { padding: 0 14px 6px; }
@@ -22660,7 +22690,99 @@
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
 .ol-back-btn:active { transform: scale(0.94); }
-.ol-ledger-id { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.ol-ledger-id { display: flex; flex-direction: column; min-width: 0; flex: 0 1 auto; }
+
+/* Horizontally scrollable header action pills (right-left scroll). */
+.ol-hdr-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 2px 2px;
+  justify-content: flex-start;
+}
+.ol-hdr-actions::-webkit-scrollbar { display: none; }
+.ol-hdr-actions > button { flex: 0 0 auto; }
+/* Inside the scroll row the container handles alignment, so drop the
+   export pill's auto-margin that would otherwise strand Create Invoice alone. */
+.ol-hdr-actions .ol-export-btn-pill { margin-left: 0; margin-right: 0; }
+/* When the pills overflow, keep them left-aligned so scrolling reveals the rest. */
+.ol-hdr-actions { scroll-snap-type: x proximity; }
+/* Standalone row variant: pills sit on their own full-width scrollable row
+   between the title bar and the hero card. */
+/* Even breathing room above and below the chip row so the coloured glow has
+   space and doesn't crowd the "ReBill" header or the hero card. */
+.ol-list-page > .ol-ledger-header { padding-bottom: 8px; }
+.ol-hdr-actions-row {
+  flex: none;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  /* Equal visible gap above and below: header pad-bottom (8) + row pad-top (12)
+     = 20 above; row pad-bottom (20) = 20 below. */
+  padding: 12px 12px 20px;
+  gap: 12px;
+}
+
+/* Chip-style action buttons: light tinted pill, coloured icon, dark bold label. */
+.ol-hdr-actions-row > .ol-chip {
+  width: auto;
+  height: 34px;
+  padding: 0 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  color: #1a1a2e !important;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.14s ease, box-shadow 0.14s ease, background 0.14s ease;
+}
+.ol-hdr-actions-row > .ol-chip:active { transform: scale(0.96); }
+.ol-hdr-actions-row > .ol-chip:disabled { opacity: 0.5; box-shadow: none !important; }
+.ol-hdr-actions-row > .ol-chip svg { font-size: 14px; flex-shrink: 0; }
+.ol-hdr-actions-row > .ol-chip span { line-height: 1; }
+
+/* Per-chip subtle tint + icon colour + matching coloured glow */
+.ol-chip-newcust { background: #eafcf7; border-color: #c3f0e2; box-shadow: 0 3px 12px rgba(20, 184, 166, 0.28) !important; }
+.ol-chip-newcust svg { color: #0d9488; }
+.ol-chip-create  { background: #eef4ff; border-color: #cfe0ff; box-shadow: 0 3px 12px rgba(37, 99, 235, 0.28) !important; }
+.ol-chip-create  svg { color: #2563eb; }
+.ol-chip-export  { background: #ecfdf3; border-color: #cdefda; box-shadow: 0 3px 12px rgba(22, 163, 74, 0.26) !important; }
+.ol-chip-export  svg { color: #16a34a; }
+.ol-chip-invoices { background: #eef6ff; border-color: #cfe4ff; box-shadow: 0 3px 12px rgba(14, 165, 233, 0.26) !important; }
+.ol-chip-invoices svg { color: #0ea5e9; }
+.ol-chip-sms     { background: #f3f0ff; border-color: #ddd6fe; box-shadow: 0 3px 12px rgba(124, 58, 237, 0.26) !important; }
+.ol-chip-sms     svg { color: #7c3aed; }
+.ol-chip-remind  { background: #fff3ec; border-color: #ffd9c2; box-shadow: 0 3px 12px rgba(234, 106, 46, 0.26) !important; }
+.ol-chip-remind  svg { color: #ea6a2e; }
+.ol-chip-renew   { background: #f1f0ff; border-color: #d6d4fb; box-shadow: 0 3px 12px rgba(109, 40, 217, 0.26) !important; }
+.ol-chip-renew   svg { color: #6d28d9; }
+.ol-chip-add     { background: #fdeeee; border-color: #fbcfcf; box-shadow: 0 3px 12px rgba(220, 38, 38, 0.26) !important; }
+.ol-chip-add     svg { color: #dc2626; }
+/* Lift + intensify the glow on hover/focus */
+.ol-hdr-actions-row > .ol-chip:hover { transform: translateY(-1px); }
+.ol-chip-create:hover  { box-shadow: 0 5px 16px rgba(37, 99, 235, 0.38) !important; }
+.ol-chip-export:hover  { box-shadow: 0 5px 16px rgba(22, 163, 74, 0.36) !important; }
+.ol-chip-invoices:hover { box-shadow: 0 5px 16px rgba(14, 165, 233, 0.36) !important; }
+.ol-chip-sms:hover     { box-shadow: 0 5px 16px rgba(124, 58, 237, 0.36) !important; }
+.ol-chip-remind:hover  { box-shadow: 0 5px 16px rgba(234, 106, 46, 0.36) !important; }
+.ol-chip-renew:hover   { box-shadow: 0 5px 16px rgba(109, 40, 217, 0.36) !important; }
+.ol-chip-newcust:hover { box-shadow: 0 5px 16px rgba(20, 184, 166, 0.38) !important; }
+.ol-hdr-create {
+  background: linear-gradient(135deg, #40E0D0 0%, #1e63ff 100%) !important;
+  color: #fff !important;
+}
+.ol-hdr-create svg { color: #fff !important; }
 .ol-ledger-name {
   font-size: 18px;
   font-weight: 700;
@@ -23903,8 +24025,9 @@
   margin-right: 0;
   flex-shrink: 0;
 }
-/* First action pill owns the auto-margin; the rest sit beside it evenly. */
-.ol-list-page .ol-ledger-header .ol-export-btn-pill { margin-left: auto; }
+/* Pills live in the scrollable .ol-hdr-actions row, so no auto-margin here —
+   they sit contiguously right after the title and scroll horizontally. */
+.ol-list-page .ol-ledger-header .ol-export-btn-pill { margin-left: 0; }
 .ol-list-page .ol-ledger-id { flex: 1 1 auto; min-width: 44px; }
 .ol-list-page .ol-ledger-mobile { white-space: nowrap; }
 @media (max-width: 360px) {
