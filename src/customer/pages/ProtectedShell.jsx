@@ -321,7 +321,7 @@ const ProtectedShell = () => {
     event?.stopPropagation();
 
     const shareUrl = getQrStickerLink(userMobile);
-    const shareText = `Join VasBazaar with my referral link and start earning rewards.\n${shareUrl}`;
+    const shareText = "Join VasBazaar with my referral link and start earning rewards.";
 
     try {
       if (Capacitor.isNativePlatform()) {
