@@ -271,7 +271,7 @@ const HIDDEN_CATEGORIES = new Set(["donation", "recurring deposit", "forex"]);
 const isNativePlatform = () => otaService.isNative();
 
 const quickAccessItems = [
-  { label: "Bill Pay", icon: FaCreditCard, isScroll: true, color: "#007BFF", webOnly: true },
+  { label: "Bill Pay", icon: FaCreditCard, isScroll: true, color: "#007BFF" },
   { label: "Resibot 360", icon: FaHeartbeat, to: "/customer/app/resibot", color: "#E11D48" },
   { label: "Retail Bazaar", icon: FaStore, to: "/customer/app/marketplace", color: "#10B981" },
   { label: "Service Bazaar", icon: FaTools, to: "/customer/app/service-bazaar", color: "#0EA5E9" },
