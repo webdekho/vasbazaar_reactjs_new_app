@@ -81,18 +81,13 @@ public class MainActivity extends BridgeActivity {
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 }
 
-                // Check if any UPI app can handle the intent BEFORE trying to start
-                if (intent.resolveActivity(getPackageManager()) == null) {
-                    android.util.Log.e("UpiIntent", "No UPI app found to handle intent");
-                    runOnUiThread(() -> {
-                        Toast.makeText(MainActivity.this,
-                            "No UPI app found. Please install GPay, PhonePe, or Paytm.",
-                            Toast.LENGTH_LONG).show();
-                    });
-                    return false;
-                }
-
-                // Run on UI thread to ensure proper activity context
+                // Do NOT gate on resolveActivity(): on Android 11+ package-visibility
+                // rules can make it return null (a false negative) even when a capable UPI
+                // app is installed, unless every app is listed in the manifest <queries>.
+                // startActivity() itself is authoritative — it launches the on-device UPI
+                // chooser when handlers exist and throws ActivityNotFoundException only when
+                // genuinely none can handle the intent. Attempt the launch and report a
+                // failure ONLY if it actually throws.
                 runOnUiThread(() -> {
                     try {
                         startActivity(intent);
@@ -100,7 +95,7 @@ public class MainActivity extends BridgeActivity {
                     } catch (android.content.ActivityNotFoundException e) {
                         android.util.Log.e("UpiIntent", "No activity found: " + e.getMessage());
                         Toast.makeText(MainActivity.this,
-                            "No UPI app ready. Please login to your UPI app first.",
+                            "No UPI app found. Please install GPay, PhonePe, or Paytm.",
                             Toast.LENGTH_LONG).show();
                     } catch (Exception e) {
                         android.util.Log.e("UpiIntent", "Error: " + e.getMessage());

@@ -10,10 +10,49 @@ import { userService } from "../services/userService";
 import { rechargeService } from "../services/rechargeService";
 import juspayService, { isPwaStandalone } from "../services/juspayService";
 import { createPaymentWebSocket } from "../services/websocketService";
-import { openUpiUrlIOS } from "../services/upiIntentPlugin";
+import { openUpiUrlIOS, getUpiAppsIOS } from "../services/upiIntentPlugin";
 
 const FALLBACK_LOGO = "/assets/images/Brand_favicon.png";
 const handleLogoError = (e) => { e.target.onerror = null; e.target.src = FALLBACK_LOGO; };
+
+// Branding for the custom iOS UPI-app chooser. `id` matches the native catalog.
+// `logo` points to an official app icon dropped into public/assets/upi/; when it
+// is missing or fails to load the tile falls back to `mark` — a monogram inside a
+// brand-gradient badge — so the sheet always renders cleanly.
+const UPI_APP_META = {
+  gpay:    { name: "Google Pay", mark: "G",  gradient: "linear-gradient(135deg,#4285F4,#34A853)", logo: "/assets/upi/gpay.png" },
+  phonepe: { name: "PhonePe",    mark: "Pe", gradient: "linear-gradient(135deg,#6739B7,#8E2DE2)", logo: "/assets/upi/phonepe.png" },
+  paytm:   { name: "Paytm",      mark: "P",  gradient: "linear-gradient(135deg,#00BAF2,#003E7E)", logo: "/assets/upi/paytm.png" },
+  cred:    { name: "CRED",       mark: "C",  gradient: "linear-gradient(135deg,#111111,#3A3A3A)", logo: "/assets/upi/cred.png" },
+  bhim:    { name: "BHIM",       mark: "B",  gradient: "linear-gradient(135deg,#0F9D8C,#00584C)", logo: "/assets/upi/bhim.png" },
+  amazonpay:  { name: "Amazon Pay",  mark: "A",  gradient: "linear-gradient(135deg,#232F3E,#00A8E1)", logo: "/assets/upi/amazon_pay.png" },
+  supermoney: { name: "super.money", mark: "S",  gradient: "linear-gradient(135deg,#0B3D2E,#12b76a)", logo: "/assets/upi/super.money.png" },
+  mobikwik:   { name: "MobiKwik",    mark: "M",  gradient: "linear-gradient(135deg,#1B3AAD,#E4002B)", logo: "/assets/upi/mobikwik.png" },
+  freecharge: { name: "Freecharge",  mark: "F",  gradient: "linear-gradient(135deg,#F7A800,#E4002B)", logo: "/assets/upi/freecharge.png" },
+  navi:       { name: "Navi",        mark: "N",  gradient: "linear-gradient(135deg,#2A6FF0,#0B3D91)", logo: "/assets/upi/navi.png" },
+  groww:      { name: "Groww",       mark: "Gr", gradient: "linear-gradient(135deg,#00D09C,#0575E6)", logo: "/assets/upi/groww.png" },
+};
+
+// Renders an official UPI app logo, gracefully falling back to the gradient
+// monogram badge if the image is absent or fails to load.
+const UpiAppIcon = ({ meta }) => {
+  const [failed, setFailed] = useState(!meta.logo);
+  if (failed) {
+    return (
+      <span className="upi-chooser-badge" style={{ background: meta.gradient }}>
+        {meta.mark}
+      </span>
+    );
+  }
+  return (
+    <img
+      src={meta.logo}
+      alt={meta.name}
+      className="upi-chooser-logo"
+      onError={() => setFailed(true)}
+    />
+  );
+};
 
 // Module-level flags to prevent duplicate calls (persists across component remounts)
 let _statusCheckCalled = false; // Track if status check API was called
@@ -96,6 +135,10 @@ const PaymentScreen = () => {
   const [showQrCode, setShowQrCode] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState("");
   const [qrTxnId, setQrTxnId] = useState("");
+  // Custom iOS UPI-app chooser (replaces the native action sheet with an in-app
+  // bottom sheet styled to the app theme). Holds the detected installed apps and
+  // the deep link to hand off when one is tapped.
+  const [upiChooser, setUpiChooser] = useState({ visible: false, apps: [], url: "", txnId: "" });
   const amount = Math.round(Number(paymentState.amount) * 100) / 100;
   const discount = Math.round(Number(paymentState.discountValue || 0) * 100) / 100;
   const finalAmount = Math.round(Math.max(0, amount - discount) * 100) / 100;
@@ -340,7 +383,11 @@ const PaymentScreen = () => {
         return result?.success ?? true;
       } catch (e) {
         console.error("iOS native UPI failed:", e);
-        setStatus("No UPI app found. Please install a UPI app.");
+        // Surface the native reason ("Payment cancelled", "Could not open X",
+        // "No UPI app found…", or a plugin-not-registered error) instead of a
+        // fixed generic string, so the real failure is visible to the user + logs.
+        const nativeMsg = e?.message || e?.errorMessage;
+        setStatus(nativeMsg && nativeMsg.trim() ? nativeMsg : "No UPI app found. Please install a UPI app.");
         return false;
       }
     }
@@ -354,6 +401,29 @@ const PaymentScreen = () => {
       console.error("UPI intent failed:", e);
       setStatus("Could not open UPI app. Please try again.");
       return false;
+    }
+  };
+
+  // User tapped a UPI app in the custom iOS chooser — hand the deep link to it.
+  const handleUpiAppSelect = async (appId) => {
+    const { url } = upiChooser;
+    try {
+      await openUpiUrlIOS(url, appId);
+      setUpiChooser((s) => ({ ...s, visible: false }));
+      setUpiFlowActive(true); // show the "waiting for payment" overlay on return
+    } catch (e) {
+      console.error("iOS UPI open failed:", e);
+      setStatus(e?.message || "Could not open the selected UPI app.");
+    }
+  };
+
+  // User dismissed the chooser without paying — cancel the pending session.
+  const closeUpiChooser = () => {
+    setUpiChooser({ visible: false, apps: [], url: "", txnId: "" });
+    localStorage.removeItem("upiPaymentPending");
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
     }
   };
 
@@ -740,7 +810,34 @@ const PaymentScreen = () => {
           localStorage.setItem("upiPaymentPending", JSON.stringify(upiPaymentState));
           console.log("[UPI] Saved payment state to localStorage:", txnId);
 
-          // Native app: Open UPI deep link via Capacitor
+          // iOS: show the custom in-app chooser listing ONLY installed UPI apps,
+          // then hand the deep link off to the tapped app. (Android keeps its own
+          // native OS app chooser via startActivity, which is the expected UX there.)
+          if (Capacitor.getPlatform() === "ios") {
+            let apps = [];
+            try {
+              const res = await getUpiAppsIOS(hash);
+              apps = res?.apps || [];
+            } catch (e) {
+              console.error("getUpiAppsIOS failed:", e);
+            }
+
+            if (apps.length > 0) {
+              setUpiChooser({ visible: true, apps, url: hash, txnId });
+              connectPaymentWebSocket(txnId);
+            } else {
+              // No detectable app — fall back to a generic open attempt.
+              const opened = await openUpiIntent(hash);
+              if (opened) {
+                connectPaymentWebSocket(txnId);
+              } else {
+                localStorage.removeItem("upiPaymentPending");
+              }
+            }
+            return;
+          }
+
+          // Android: Open UPI deep link via native intent (OS chooser)
           const opened = await openUpiIntent(hash);
           if (opened) {
             connectPaymentWebSocket(txnId);
@@ -1130,6 +1227,43 @@ const PaymentScreen = () => {
       )}
 
       {/* QR Code Overlay for Web UPI */}
+      {/* Custom iOS UPI-app chooser — cutting-edge bottom sheet */}
+      {upiChooser.visible && (
+        <div className="upi-chooser-overlay" onClick={closeUpiChooser}>
+          <div className="upi-chooser-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="upi-chooser-grip" />
+            <div className="upi-chooser-head">
+              <div>
+                <h3 className="upi-chooser-title">Choose UPI app</h3>
+                <p className="upi-chooser-sub">Pay ₹{paymentState.amount || finalAmount} securely</p>
+              </div>
+              <button type="button" className="upi-chooser-close" onClick={closeUpiChooser} aria-label="Close">
+                <FaTimes />
+              </button>
+            </div>
+
+            <div className="upi-chooser-grid">
+              {upiChooser.apps.map((app) => {
+                const meta = UPI_APP_META[app.id] || { name: app.name, mark: (app.name || "?")[0], gradient: "linear-gradient(135deg,#3a3a3a,#111)" };
+                return (
+                  <button
+                    key={app.id}
+                    type="button"
+                    className="upi-chooser-tile"
+                    onClick={() => handleUpiAppSelect(app.id)}
+                  >
+                    <UpiAppIcon meta={meta} />
+                    <span className="upi-chooser-name">{meta.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <p className="upi-chooser-foot">🔒 Secured &amp; encrypted by VasBazaar</p>
+          </div>
+        </div>
+      )}
+
       {showQrCode && qrCodeUrl && (
         <div className="upi-qr-overlay">
           <div className="upi-qr-modal">

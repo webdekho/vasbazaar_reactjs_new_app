@@ -97,6 +97,10 @@ let _setNativeProgress = null;
 const OtaUpdateGate = () => {
   const [pwaUpdate, setPwaUpdate] = useState(false);
   const [nativeProgress, setNativeProgress] = useState({ visible: false, stage: "", progress: 0, version: "" });
+  // Hard force-update: a full-screen, non-dismissible gate the user cannot get
+  // past until they update from the store. Triggered when the backend OTA check
+  // returns forceUpdate=true.
+  const [forceGate, setForceGate] = useState({ visible: false, version: "", storeUrl: "", releaseNotes: "" });
 
   // Store setter in module-level variable so background update can use it
   _setNativeProgress = setNativeProgress;
@@ -165,6 +169,25 @@ const OtaUpdateGate = () => {
         }
 
         console.debug("[OTA] Update available:", info.latestVersion);
+
+        // HARD FORCE UPDATE: show a full-screen, non-dismissible gate. The user
+        // must tap "Update Now" and update from the store — they cannot use the
+        // old app. On next launch the (now-newer) installed version passes the
+        // check and the gate never shows again.
+        if (info.forceUpdate) {
+          const platform = otaService.getPlatform();
+          const storeUrl = platform === "ios"
+            ? (info.ios || "https://apps.apple.com/in/app/vasbazaar/id6776498373")
+            : (info.android || "https://play.google.com/store/apps/details?id=com.vasbazaar.app");
+          hideProgress();
+          setForceGate({
+            visible: true,
+            version: info.latestVersion || "",
+            storeUrl,
+            releaseNotes: info.releaseNotes || "",
+          });
+          return;
+        }
 
         // If isRedirect is true, redirect to app store instead of downloading APK
         if (info.isRedirect) {
@@ -357,6 +380,81 @@ const OtaUpdateGate = () => {
     }
     setPwaUpdate(false);
   }, [pwaUpdate]);
+
+  // ── Render: Hard force-update gate (blocks the whole app) ──
+  if (forceGate.visible) {
+    return (
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 100000,
+          background: "linear-gradient(160deg, #0f1117 0%, #1a1d29 100%)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "24px",
+          paddingTop: "max(24px, env(safe-area-inset-top))",
+          paddingBottom: "max(24px, env(safe-area-inset-bottom))",
+        }}
+      >
+        <div style={{ maxWidth: 360, width: "100%", textAlign: "center" }}>
+          <div
+            style={{
+              width: 84,
+              height: 84,
+              borderRadius: 24,
+              margin: "0 auto 22px",
+              background: "linear-gradient(135deg, #6366f1, #a855f7)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 40,
+              boxShadow: "0 12px 34px rgba(99,102,241,0.45)",
+            }}
+          >
+            ⬆️
+          </div>
+          <h2 style={{ margin: "0 0 10px", color: "#fff", fontSize: 22, fontWeight: 800 }}>
+            Update Required
+          </h2>
+          <p style={{ margin: "0 0 6px", color: "rgba(255,255,255,0.7)", fontSize: 14, lineHeight: 1.5 }}>
+            A newer version of VasBazaar is available{forceGate.version ? ` (v${forceGate.version})` : ""}.
+            Please update to continue.
+          </p>
+          {forceGate.releaseNotes && (
+            <p style={{ margin: "0 0 6px", color: "rgba(255,255,255,0.45)", fontSize: 12.5, lineHeight: 1.5 }}>
+              {forceGate.releaseNotes}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => window.open(forceGate.storeUrl, "_system")}
+            style={{
+              marginTop: 22,
+              width: "100%",
+              padding: "15px 18px",
+              borderRadius: 14,
+              border: "none",
+              background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%)",
+              color: "#fff",
+              fontSize: 16,
+              fontWeight: 700,
+              cursor: "pointer",
+              boxShadow: "0 10px 28px rgba(139,92,246,0.4)",
+            }}
+          >
+            Update Now
+          </button>
+          <p style={{ margin: "16px 0 0", color: "rgba(255,255,255,0.35)", fontSize: 11.5 }}>
+            🔒 Secured &amp; encrypted by VasBazaar
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // ── Render: Native progress bar (Android/iOS) ──
   if (nativeProgress.visible) {

@@ -61,6 +61,10 @@
 	<string>VasBazaar needs the microphone to capture your voice when adding ReBill entries.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>VasBazaar needs your location to show nearby services and delivery options.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>VasBazaar needs your location to show nearby services and delivery options.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>VasBazaar needs your location to show nearby services and delivery options.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -87,6 +91,10 @@
 		<string>credpay</string>
 		<string>mobikwik</string>
 		<string>amazonpay</string>
+		<string>supermoney</string>
+		<string>freecharge</string>
+		<string>navi</string>
+		<string>groww</string>
 		<string>whatsapp</string>
 	</array>
 </dict>

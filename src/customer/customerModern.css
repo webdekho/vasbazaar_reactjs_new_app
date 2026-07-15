@@ -27027,3 +27027,159 @@ body.mkt-cartbar-visible .cm-toast { bottom: 164px; }
   }
 }
 
+/* =====================================================================
+   Custom iOS UPI-app chooser — cutting-edge bottom sheet
+   ===================================================================== */
+.upi-chooser-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 10002;
+  animation: cm-fadeIn 0.2s ease;
+}
+
+.upi-chooser-sheet {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  background: linear-gradient(180deg, #1c1f26 0%, #121419 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px 28px 0 0;
+  box-shadow: 0 -18px 60px rgba(0, 0, 0, 0.55);
+  padding: 10px 22px calc(26px + env(safe-area-inset-bottom, 0px));
+  animation: upi-sheet-rise 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.upi-chooser-grip {
+  width: 42px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  margin: 4px auto 16px;
+}
+
+.upi-chooser-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.upi-chooser-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.2px;
+}
+
+.upi-chooser-sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.upi-chooser-close {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+}
+.upi-chooser-close:active { transform: scale(0.9); background: rgba(255, 255, 255, 0.16); }
+
+.upi-chooser-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px 8px;
+}
+@media (max-width: 360px) {
+  .upi-chooser-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+.upi-chooser-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 4px;
+  border: none;
+  background: transparent;
+  border-radius: 18px;
+  cursor: pointer;
+  transition: background 0.18s, transform 0.15s;
+}
+.upi-chooser-tile:active {
+  transform: scale(0.94);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.upi-chooser-badge {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.3px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.upi-chooser-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  object-fit: cover;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.upi-chooser-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.upi-chooser-foot {
+  margin: 22px 0 0;
+  text-align: center;
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+@keyframes upi-sheet-rise {
+  from { transform: translateY(100%); opacity: 0.4; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* Light theme */
+.theme-light .upi-chooser-sheet {
+  background: linear-gradient(180deg, #ffffff 0%, #f4f6fa 100%);
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+.theme-light .upi-chooser-title { color: #12131a; }
+.theme-light .upi-chooser-sub { color: rgba(0, 0, 0, 0.5); }
+.theme-light .upi-chooser-grip { background: rgba(0, 0, 0, 0.15); }
+.theme-light .upi-chooser-close { background: rgba(0, 0, 0, 0.06); color: rgba(0, 0, 0, 0.55); }
+.theme-light .upi-chooser-name { color: rgba(0, 0, 0, 0.78); }
+.theme-light .upi-chooser-tile:active { background: rgba(0, 0, 0, 0.05); }
+.theme-light .upi-chooser-foot { color: rgba(0, 0, 0, 0.4); }
+

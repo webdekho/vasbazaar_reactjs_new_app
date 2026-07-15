@@ -15,6 +15,7 @@
  *   native installer plugin (Android) or pass it to a store fallback (iOS).
  */
 
+import { App as CapacitorApp } from "@capacitor/app";
 import { apiClient, parseApiResponse, getErrorMessage } from "./apiClient";
 import { APP_VERSION } from "../../utils/appVersion";
 
@@ -64,6 +65,27 @@ const isNative = () => {
   return p === "android" || p === "ios";
 };
 
+/**
+ * Resolve the REAL installed app version at runtime.
+ *
+ * On native this reads the actual store-installed version via @capacitor/app
+ * (Android versionName / iOS CFBundleShortVersionString), so the OTA check can
+ * never go stale — unlike the hardcoded APP_VERSION constant, which nobody
+ * remembers to bump and made the backend compare against the wrong number.
+ * Falls back to APP_VERSION on web or if the plugin call fails.
+ */
+const getInstalledVersion = async () => {
+  try {
+    if (isNative()) {
+      const info = await CapacitorApp.getInfo();
+      if (info && info.version) return String(info.version);
+    }
+  } catch (e) {
+    console.debug("[OTA Service] getInfo() failed, using APP_VERSION fallback:", e?.message);
+  }
+  return APP_VERSION;
+};
+
 const authHeaders = () => {
   const token = getSessionToken();
   if (!token) return null;
@@ -83,7 +105,7 @@ const checkUpdate = async () => {
     }
     const payload = {
       deviceId: getOrCreateDeviceId(),
-      currentVersion: APP_VERSION,
+      currentVersion: await getInstalledVersion(),
       platform: getPlatform(),
     };
     console.debug("[OTA Service] Calling /api/customer/ota/check with:", payload);
@@ -337,6 +359,7 @@ const reportDeployTime = async (buildTime) => {
 
 export const otaService = {
   checkUpdate,
+  getInstalledVersion,
   reportDeployTime,
   getDownloadToken,
   downloadBinary,
