@@ -18374,9 +18374,20 @@
 }
 .cm-crash-btn:active { opacity: 0.85; }
 
+.cm-crash-care {
+  display: inline-block;
+  margin-top: 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #00C853;
+  text-decoration: none;
+}
+.cm-crash-care:active { opacity: 0.85; }
+
 /* Light theme crash screen */
 .theme-light .cm-crash-screen { background: #FFFFFF; }
 .theme-light .cm-crash-title { color: #1A1A2E; }
+.theme-light .cm-crash-care { color: #00875A; }
 .theme-light .cm-crash-msg { color: #6B7280; }
 
 
@@ -21427,6 +21438,59 @@
 }
 .theme-light .sx2-redirect-hint {
   color: #8A90A2;
+}
+
+/* Customer care call strip — shown on both the failed and pending states of this
+   screen, since a customer stuck on "Pending" is exactly who reaches for the phone. */
+.sx2-care {
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  text-decoration: none;
+  background: rgba(0,200,83,0.10);
+  border: 1px solid rgba(0,200,83,0.28);
+  animation: sx2-rise 0.5s 0.45s both cubic-bezier(0.2,0.8,0.2,1);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.sx2-care:active {
+  transform: scale(0.985);
+}
+.sx2-care-ic {
+  display: flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #00C853;
+  color: #fff;
+  font-size: 14px;
+}
+.sx2-care-text {
+  display: flex; flex-direction: column; gap: 2px;
+  min-width: 0;
+}
+.sx2-care-label {
+  font-size: 12px; font-weight: 500;
+  color: rgba(255,255,255,0.62);
+}
+.sx2-care-num {
+  font-size: 15px; font-weight: 700;
+  letter-spacing: 0.2px;
+  color: #00C853;
+}
+.theme-light .sx2-care {
+  background: rgba(0,135,90,0.08);
+  border-color: rgba(0,135,90,0.22);
+}
+.theme-light .sx2-care-ic {
+  background: #00875A;
+}
+.theme-light .sx2-care-label {
+  color: #6B7280;
+}
+.theme-light .sx2-care-num {
+  color: #00875A;
 }
 
 .sx2-home-btn {

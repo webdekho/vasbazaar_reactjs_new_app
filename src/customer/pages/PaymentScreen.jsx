@@ -130,6 +130,7 @@ const PaymentScreen = () => {
   const [wsConnected, setWsConnected] = useState(false); // WebSocket connection indicator
   const wsRef = useRef(null);
   const currentTxnIdRef = useRef(null); // Track current UPI txnId for status check
+  const fastPollRef = useRef(null); // Rapid status-poll timer used on app resume
 
   // QR Code state for web UPI flow
   const [showQrCode, setShowQrCode] = useState(false);
@@ -224,6 +225,31 @@ const PaymentScreen = () => {
       console.error("[UPI] Status-only check failed:", e);
     }
   }, [navigate, buildSuccessState, paymentState]);
+
+  // Rapid status polling — used the moment the user returns from the UPI app.
+  // The WebSocket is the primary channel, but its push depends on when the PG
+  // callback lands; actively polling on return catches a completed payment within
+  // a second or two instead of waiting passively, making the result feel instant.
+  // Stops on any terminal status (navigation) or after `attempts`.
+  const startFastStatusPolling = useCallback((txnId, { attempts = 8, intervalMs = 2000 } = {}) => {
+    if (!txnId || _navigationDone) return;
+    if (fastPollRef.current) {
+      clearInterval(fastPollRef.current);
+      fastPollRef.current = null;
+    }
+    // Immediate first check (no wait).
+    checkStatusOnlyAndNavigate(txnId);
+    let count = 0;
+    fastPollRef.current = setInterval(() => {
+      count += 1;
+      if (_navigationDone || count >= attempts) {
+        clearInterval(fastPollRef.current);
+        fastPollRef.current = null;
+        return;
+      }
+      checkStatusOnlyAndNavigate(txnId);
+    }, intervalMs);
+  }, [checkStatusOnlyAndNavigate]);
 
   // Connect WebSocket for UPI Collect/Intent status updates
   const connectPaymentWebSocket = useCallback((txnId) => {
@@ -488,19 +514,17 @@ const PaymentScreen = () => {
     // poll keeps waiting; only an explicit user verify resolves it below.
     if (auto) return false;
 
-    if (payStatus === "PENDING" || payStatus === "PENDING_VBG" || payStatus === "STARTED" || payStatus === "AUTHORIZING") {
-      go("/customer/app/failure", {
-        ...failBase,
-        status: "pending",
-        message: "Your payment is being processed. Please check your transaction history for the latest status.",
-      });
-      return true;
-    }
-
+    // Everything that is not an explicit terminal failure resolves to "pending".
+    // A txn sitting in PAYMENT_INITIATE/INITIATE/NEW means the PG callback simply
+    // has not landed yet — the money may well be collected (HDFC has been seen to
+    // skip the callback entirely; the enquiry scheduler then settles it minutes
+    // later). Calling that "Failed" tells the customer their money is gone when it
+    // is not, and drives duplicate payment attempts. Only FAILED/FAILURE/REFUNDED,
+    // handled above, may show Failed.
     go("/customer/app/failure", {
       ...failBase,
-      status: "failed",
-      message: "Payment could not be completed. If money was deducted, it will be refunded within 24-48 hours.",
+      status: "pending",
+      message: "Your payment is being processed. Please check your transaction history for the latest status.",
     });
     return true;
   }, [buildSuccessState, navigate]);
@@ -563,11 +587,13 @@ const PaymentScreen = () => {
         return;
       }
       _navigationDone = true;
-      // Navigate to failure page on error
+      // The status check itself failed (network/timeout) — we know NOTHING about the
+      // payment, so it must not be called Failed. "pending" also keeps FailureScreen's
+      // auto re-check running, which resolves the real status on its own.
       navigate("/customer/app/failure", {
         state: {
-          status: "failed",
-          message: "Unable to verify payment status. Please check your transaction history.",
+          status: "pending",
+          message: "Unable to verify payment status right now. We are still checking — see your transaction history for the latest status.",
           orderId: context?.orderId,
           amount: context?.amount,
           type: context?.type,
@@ -671,7 +697,29 @@ const PaymentScreen = () => {
 
     // Listen for deep link callback on native platforms
     let appUrlListener = null;
+    let appStateListener = null;
     if (Capacitor.isNativePlatform()) {
+      // When the app returns to the foreground (user came back from the UPI app),
+      // immediately fast-poll the pending payment's status so the result appears
+      // right away instead of waiting on the WebSocket push. This is the closest
+      // we can get to an "auto-return" experience — iOS cannot foreground the app
+      // itself, but the moment the user taps "← VasBazaar" we resolve instantly.
+      appStateListener = App.addListener("appStateChange", ({ isActive }) => {
+        if (!isActive || _navigationDone) return;
+        try {
+          const pending = localStorage.getItem("upiPaymentPending");
+          if (!pending) return;
+          const parsed = JSON.parse(pending);
+          const txnId = parsed?.txnId || currentTxnIdRef.current;
+          if (txnId && Date.now() - (parsed?.startTime || 0) < 10 * 60 * 1000) {
+            console.log("[UPI] App resumed — fast-polling status for", txnId);
+            startFastStatusPolling(txnId);
+          }
+        } catch (e) {
+          console.error("[UPI] Resume status check failed:", e);
+        }
+      });
+
       appUrlListener = App.addListener("appUrlOpen", (event) => {
         console.log("App URL opened:", event.url);
         if (event.url && event.url.startsWith("vasbazaar://payment-callback")) {
@@ -684,13 +732,20 @@ const PaymentScreen = () => {
       if (appUrlListener) {
         appUrlListener.remove();
       }
+      if (appStateListener) {
+        appStateListener.remove();
+      }
+      if (fastPollRef.current) {
+        clearInterval(fastPollRef.current);
+        fastPollRef.current = null;
+      }
       // Cleanup WebSocket on unmount
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
       }
     };
-  }, [handlePaymentCallback, connectPaymentWebSocket]);
+  }, [handlePaymentCallback, connectPaymentWebSocket, startFastStatusPolling]);
 
   // While the "Payment In Progress" overlay is shown, poll the backend so the screen
   // resolves itself (success / refunded / failed) even if the user never taps verify —
@@ -1360,6 +1415,11 @@ const PaymentScreen = () => {
             </div>
             <h3>Waiting for payment...</h3>
             <p>Complete payment in your UPI app</p>
+            {Capacitor.getPlatform() === "ios" && (
+              <p style={{ fontSize: 12.5, color: "#8b5cf6", marginTop: 6 }}>
+                After paying, tap <strong>← VasBazaar</strong> (top-left) to return.
+              </p>
+            )}
             {status && <div className="xpay-native-pending-status">{status}</div>}
           </div>
         </div>

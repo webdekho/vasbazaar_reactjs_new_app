@@ -1,5 +1,16 @@
 export const loader = "LOADER";
 
+// THE single customer care number for the whole app — matches the public website
+// (Footer/Contact/SEO). Every call/WhatsApp touchpoint must import from here; the app
+// previously carried three different numbers, so a customer reached a different desk
+// depending on which screen they started from.
+//   CARE_NUMBER_TEL     — dial string, E.164
+//   CARE_NUMBER_DISPLAY — what the user reads
+//   CARE_NUMBER_WA      — wa.me / api.whatsapp.com form (country code, no + or spaces)
+export const CARE_NUMBER_TEL = "+919669221234";
+export const CARE_NUMBER_DISPLAY = "+91-9669221234";
+export const CARE_NUMBER_WA = "919669221234";
+
 export const DEFAULT_API_URL = "https://api.vasbazaar.com";
 
 // Canonical public web origin for shareable links (invites, deep links).

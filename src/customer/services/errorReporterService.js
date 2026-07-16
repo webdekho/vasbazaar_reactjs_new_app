@@ -1,4 +1,5 @@
 import { Capacitor } from "@capacitor/core";
+import { APP_VERSION } from "../../utils/appVersion";
 
 // ── Configuration ──
 const CUSTOMER_STORAGE_KEYS = { sessionToken: "customerSessionToken" };
@@ -149,8 +150,13 @@ const getDeviceInfo = () => {
   else if (/Windows NT ([\d.]+)/.test(ua)) { osName = "Windows"; osVersion = RegExp.$1; }
   else if (/Mac OS X ([\d_.]+)/.test(ua)) { osName = "macOS"; osVersion = RegExp.$1.replace(/_/g, "."); }
 
-  return { device: ua.substring(0, 250), osName, osVersion, appVersion: process.env.REACT_APP_VERSION || "1.0.0", platform, isNative: Capacitor.isNativePlatform() };
+  return { device: ua.substring(0, 250), osName, osVersion, appVersion: APP_VERSION, platform, isNative: Capacitor.isNativePlatform() };
 };
+
+// `severity` is shared with server-side rows written by AppErrorLogger, and the
+// admin Error Logs grid filters on that vocabulary — emit it, not our own names.
+const SEVERITY_MAP = { CRITICAL: "HIGH", ERROR: "MEDIUM", WARN: "LOW", WARNING: "LOW" };
+const toDbSeverity = (s) => SEVERITY_MAP[String(s || "").toUpperCase()] || "MEDIUM";
 
 let cachedDeviceInfo = null;
 const deviceInfo = () => { if (!cachedDeviceInfo) cachedDeviceInfo = getDeviceInfo(); return cachedDeviceInfo; };
@@ -199,7 +205,7 @@ async function buildPayload(errorData) {
   return {
     errorMessage: message,
     errorType: String(errorData.type || "UnknownError").substring(0, 200),
-    severity: errorData.severity || "ERROR",
+    severity: toDbSeverity(errorData.severity),
     screenPage: errorData.screen || getCurrentScreen(),
     device: info.device,
     appVersion: info.appVersion,

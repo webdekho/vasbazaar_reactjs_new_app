@@ -7,6 +7,7 @@ import { rechargeService } from "../services/rechargeService";
 import MessageBubble from "./chatbot/MessageBubble";
 import { sanitizeBackendMessage } from "../utils/userMessages";
 import { openTawkChat } from "../utils/tawk";
+import { CARE_NUMBER_TEL, CARE_NUMBER_WA } from "../../utils/constants";
 
 const ChatbotPanel = () => {
   const navigate = useNavigate();
@@ -75,8 +76,8 @@ const ChatbotPanel = () => {
 
   const handleSpecialAction = (action) => {
     if (action === "__LIVE_CHAT__") openTawkChat();
-    else if (action === "__CALL__") window.open("tel:+918655681213");
-    else if (action === "__WHATSAPP__") window.open("https://wa.me/918655681213", "_blank");
+    else if (action === "__CALL__") window.open(`tel:${CARE_NUMBER_TEL}`);
+    else if (action === "__WHATSAPP__") window.open(`https://wa.me/${CARE_NUMBER_WA}`, "_blank");
   };
 
   const handleConfirm = async (data) => {
@@ -155,8 +156,8 @@ const ChatbotPanel = () => {
               onConfirm={handleConfirm}
               onCancel={handleCancel}
               onLiveChat={openTawkChat}
-              onCall={() => window.open("tel:+918655681213")}
-              onWhatsApp={() => window.open("https://wa.me/918655681213", "_blank")}
+              onCall={() => window.open(`tel:${CARE_NUMBER_TEL}`)}
+              onWhatsApp={() => window.open(`https://wa.me/${CARE_NUMBER_WA}`, "_blank")}
             />
           ))}
           {isTyping && (

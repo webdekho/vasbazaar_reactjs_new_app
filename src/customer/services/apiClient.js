@@ -1,6 +1,14 @@
 import axios from "axios";
 import { server_api } from "../../utils/constants";
 import { getUserFriendlyMessage } from "../utils/userMessages";
+import { reportApiError } from "./errorReporterService";
+
+// Axios keeps the request body as a JSON string; the reporter masks by key, so it
+// needs an object. A non-JSON body (FormData, etc.) is dropped rather than guessed at.
+const safeParse = (data) => {
+  if (!data || typeof data !== "string") return null;
+  try { return JSON.parse(data); } catch { return null; }
+};
 
 const CUSTOMER_STORAGE_KEYS = {
   sessionToken: "customerSessionToken",
@@ -220,6 +228,23 @@ apiClient.interceptors.response.use(
       if (_onSessionExpired) _onSessionExpired();
 
       setTimeout(() => { _handling401 = false; }, 2000);
+    }
+
+    // Report API failures centrally. 401 is excluded — it is an expected part of the
+    // lock/PIN flow above, not a defect. The reporter posts via raw fetch, so this
+    // cannot recurse back through this interceptor.
+    const status = error?.response?.status;
+    if (status !== 401) {
+      try {
+        reportApiError({
+          endpoint: error?.config?.url || "unknown",
+          method: (error?.config?.method || "get").toUpperCase(),
+          status: status || 0, // 0 = no response: network failure, timeout or CORS
+          requestBody: safeParse(error?.config?.data),
+          responseBody: error?.response?.data,
+          errorMessage: error?.message || "Request failed",
+        });
+      } catch { /* reporting must never break the request path */ }
     }
     return Promise.reject(error);
   }

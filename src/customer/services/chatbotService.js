@@ -2,6 +2,7 @@ import { userService } from "./userService";
 import { walletService } from "./walletService";
 import { rechargeService } from "./rechargeService";
 import { offerService } from "./offerService";
+import { CARE_NUMBER_DISPLAY } from "../../utils/constants";
 
 const AI_PROXY_URL = window.location.hostname === "localhost"
   ? "http://localhost:3847/api/chatbot/ai"
@@ -195,7 +196,7 @@ export const executeIntent = async (intent, params) => {
 
     case "TALK_TO_AGENT": {
       return {
-        reply: "I'll connect you with a human agent. You can also reach us at:\n📞 +91 8655681213\n📧 support@vasbazaar.com",
+        reply: `I'll connect you with a human agent. You can also reach us at:\n📞 ${CARE_NUMBER_DISPLAY}\n📧 support@vasbazaar.com`,
         cardType: "escalate",
         actions: ["Open Live Chat", "Call Support", "WhatsApp"],
       };

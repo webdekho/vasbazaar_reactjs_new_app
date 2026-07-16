@@ -1,5 +1,6 @@
 import { Component } from "react";
 import { reportComponentCrash } from "../services/errorReporterService";
+import { CARE_NUMBER_TEL, CARE_NUMBER_DISPLAY } from "../../utils/constants";
 
 /**
  * Catches React render/lifecycle errors, reports them to the backend,
@@ -36,6 +37,9 @@ class ErrorBoundary extends Component {
           <button className="cm-crash-btn" type="button" onClick={this.handleRetry}>
             Try Again
           </button>
+          <a className="cm-crash-care" href={`tel:${CARE_NUMBER_TEL}`}>
+            Need help? Call {CARE_NUMBER_DISPLAY}
+          </a>
         </div>
       );
     }

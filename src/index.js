@@ -4,10 +4,16 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { bootstrapImpersonation } from './customer/utils/impersonation';
+import { initGlobalErrorHandlers } from './customer/services/errorReporterService';
+import { CARE_NUMBER_TEL, CARE_NUMBER_DISPLAY } from './utils/constants';
 
 // Consume an admin "Login As" token from the URL before React mounts, so the
 // impersonated session is in storage when the auth context initialises.
 bootstrapImpersonation();
+
+// Register the uncaught-error / unhandled-rejection reporters BEFORE the crash-screen
+// listener below, so a report is enqueued even when that one paints over #root.
+initGlobalErrorHandlers();
 
 // Remove the initial loader once React is ready
 const removeLoader = () => {
@@ -27,6 +33,7 @@ window.addEventListener('error', (event) => {
         <div style="font-size:18px;font-weight:600;margin-bottom:8px">Something went wrong</div>
         <div style="font-size:14px;color:#888;margin-bottom:24px">Please try refreshing the page</div>
         <button onclick="location.reload()" style="padding:12px 24px;border:none;border-radius:10px;background:#40E0D0;color:#000;font-weight:600;cursor:pointer">Refresh</button>
+        <a href="tel:${CARE_NUMBER_TEL}" style="margin-top:18px;font-size:13px;font-weight:600;color:#00C853;text-decoration:none">Need help? Call ${CARE_NUMBER_DISPLAY}</a>
       </div>
     `;
   }

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { FaTimesCircle, FaClock, FaWallet, FaSyncAlt, FaCopy, FaUniversity } from "react-icons/fa";
+import { FaTimesCircle, FaClock, FaWallet, FaSyncAlt, FaCopy, FaUniversity, FaPhoneAlt } from "react-icons/fa";
 import { rechargeService } from "../services/rechargeService";
+import { CARE_NUMBER_TEL, CARE_NUMBER_DISPLAY } from "../../utils/constants";
 
 const MAX_POLL_ATTEMPTS = 5;
 const POLL_INTERVAL_MS = 60000;
@@ -308,6 +309,20 @@ const FailureScreen = () => {
           <span>The amount will be refunded to your original payment source within 3 working days.</span>
         </section>
       )}
+
+      {/* Customer care — an <a href="tel:"> rather than window.open("tel:"), which is
+          unreliable inside iOS WKWebView. Tapping hands off to the device dialler. */}
+      <a
+        className="sx2-care"
+        href={`tel:${CARE_NUMBER_TEL}`}
+        onClick={() => setAutoRedirect(false)}
+      >
+        <span className="sx2-care-ic" aria-hidden><FaPhoneAlt /></span>
+        <span className="sx2-care-text">
+          <span className="sx2-care-label">Need help? Call customer care</span>
+          <span className="sx2-care-num">{CARE_NUMBER_DISPLAY}</span>
+        </span>
+      </a>
 
       {!isPending && (
         <>

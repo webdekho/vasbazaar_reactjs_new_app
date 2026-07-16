@@ -7,6 +7,7 @@ import {
 import { useTheme } from "../context/ThemeContext";
 import { useChatbot } from "../context/ChatbotContext";
 import { openTawkChat } from "../utils/tawk";
+import { CARE_NUMBER_TEL, CARE_NUMBER_DISPLAY, CARE_NUMBER_WA } from "../../utils/constants";
 
 const faqs = [
   { q: "How to book gas?", a: "Go to Services > Gas Booking and select your provider to book a gas cylinder." },
@@ -26,8 +27,8 @@ const HelpScreen = () => {
   const [expanded, setExpanded] = useState(null);
 
   const contactCards = [
-    { icon: <FaPhone />, label: "Call Support", sub: "+91 9522221213", action: () => window.open("tel:+919522221213"), color: "#00C853" },
-    { icon: <FaWhatsapp />, label: "WhatsApp Chat", sub: "Quick assistance", action: () => window.open("https://api.whatsapp.com/send/?phone=919522221213&text&type=phone_number&app_absent=0", "_blank"), color: "#25D366" },
+    { icon: <FaPhone />, label: "Call Support", sub: CARE_NUMBER_DISPLAY, action: () => window.open(`tel:${CARE_NUMBER_TEL}`), color: "#00C853" },
+    { icon: <FaWhatsapp />, label: "WhatsApp Chat", sub: "Quick assistance", action: () => window.open(`https://api.whatsapp.com/send/?phone=${CARE_NUMBER_WA}&text&type=phone_number&app_absent=0`, "_blank"), color: "#25D366" },
     { icon: <FaEnvelope />, label: "Email Support", sub: "support@vasbazaar.com", action: () => window.open("mailto:support@vasbazaar.com"), color: "#FF9800" },
     { icon: <FaComments />, label: "Live Chat", sub: "Chat with our agents", action: openTawkChat, color: "#007BFF" },
     { icon: <FaRobot />, label: "AI Chat", sub: "Ask our VasBazaar assistant", action: openChatbotPanel, color: "#9333EA" },
