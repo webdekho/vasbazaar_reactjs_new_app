@@ -2,16 +2,185 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { FaArrowLeft, FaMapMarkerAlt, FaCamera, FaImage, FaFileAlt } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
+import { setActiveStoreId } from "../../services/apiClient";
 import { useGeolocation } from "../../hooks/useGeolocation";
+import SignaturePad from "../../components/SignaturePad";
 import "./marketplace.css";
 
+// The Agreement step is registration-only: an edit is not a re-signing, and
+// forcing an OTP on every profile tweak would be gratuitous.
 const STEPS = [
   "Business basics",
   "Location",
   "Delivery setup",
   "Branding",
+  "Agreement",
   "Review",
 ];
+const EDIT_STEPS = STEPS.filter((s) => s !== "Agreement");
+
+/**
+ * Mirrors the server's ladder rules so the seller hears about a bad ladder on
+ * the step that owns it, not as a toast after they hit Submit two steps later.
+ * The server still re-checks -- this is only about where the message lands.
+ */
+const validateSlabs = (form, sellerDelivers) => {
+  if (!sellerDelivers) return null;
+
+  const check = (rows, label, unit, minKey, maxKey) => {
+    if (!rows.length) return null;
+    const parsed = rows.map((r) => ({
+      min: Number(r[minKey]),
+      max: r[maxKey] === "" || r[maxKey] == null ? null : Number(r[maxKey]),
+      charge: Number(r.charge),
+    }));
+    for (const r of parsed) {
+      if (Number.isNaN(r.min) || r.min < 0) return `${label}: 'from' ${unit} is not valid`;
+      if (r.max != null && (Number.isNaN(r.max) || r.max < r.min)) {
+        return `${label}: 'to' must be greater than 'from'`;
+      }
+      if (Number.isNaN(r.charge) || r.charge < 0) return `${label}: charge cannot be negative`;
+    }
+    const sorted = [...parsed].sort((a, b) => a.min - b.min);
+    for (let i = 0; i < sorted.length; i++) {
+      if (sorted[i].max == null && i !== sorted.length - 1) {
+        return `${label}: only the last row can be left open-ended`;
+      }
+      if (i > 0 && sorted[i - 1].max != null && sorted[i].min <= sorted[i - 1].max) {
+        return `${label}: rows must not overlap`;
+      }
+    }
+    return null;
+  };
+
+  const amountError = check(form.amountSlabs, "Order value slabs", "amount", "minAmount", "maxAmount");
+  if (amountError) return amountError;
+  const distanceError = check(form.distanceSlabs, "Distance slabs", "km", "minKm", "maxKm");
+  if (distanceError) return distanceError;
+
+  // Past selfDeliveryMaxKm a HYBRID store's legs are VasBazaar's and priced from
+  // admin's slabs, so a seller row out there would never be read.
+  if (form.deliveryMode === "HYBRID" && form.selfDeliveryMaxKm) {
+    const cap = Number(form.selfDeliveryMaxKm);
+    if (form.distanceSlabs.some((r) => Number(r.minKm) >= cap)) {
+      return `Distance slabs cannot start beyond ${cap} km — VasBazaar's charges apply past that`;
+    }
+  }
+  return null;
+};
+
+/**
+ * Drops rows the seller started but left blank, and coerces the rest to numbers.
+ * An empty "to" stays null on purpose -- that is the open-ended top rung.
+ */
+const cleanSlabs = (rows, fromKey, toKey) =>
+  rows
+    .filter((r) => String(r[fromKey]).trim() !== "" || String(r.charge).trim() !== "")
+    .map((r) => ({
+      [fromKey]: Number(r[fromKey]) || 0,
+      [toKey]: String(r[toKey]).trim() === "" ? null : Number(r[toKey]),
+      charge: Number(r.charge) || 0,
+    }));
+
+/** One ladder of slabs. Both ladders edit identically, only the unit differs. */
+const SlabEditor = ({ title, rows, unit, fromKey, toKey, onAdd, onRemove, onChange }) => (
+  <div className="mkt-slab-group">
+    <div className="mkt-slab-head">
+      <span className="mkt-slab-title">{title}</span>
+      <button type="button" className="mkt-slab-add" onClick={onAdd}>
+        + Add slab
+      </button>
+    </div>
+
+    {rows.length === 0 ? (
+      <div className="mkt-slab-empty">No {title.toLowerCase()} charge — free.</div>
+    ) : (
+      <div className="mkt-slab-rows">
+        {rows.map((row, i) => (
+          <div className="mkt-slab-row" key={i}>
+            <input
+              className="mkt-input mkt-slab-input"
+              inputMode="decimal"
+              placeholder={`From ${unit}`}
+              value={row[fromKey]}
+              onChange={(e) => onChange(i, fromKey, e.target.value)}
+            />
+            <span className="mkt-slab-dash">–</span>
+            <input
+              className="mkt-input mkt-slab-input"
+              inputMode="decimal"
+              placeholder="Any"
+              value={row[toKey]}
+              onChange={(e) => onChange(i, toKey, e.target.value)}
+            />
+            <span className="mkt-slab-eq">=</span>
+            <input
+              className="mkt-input mkt-slab-input"
+              inputMode="decimal"
+              placeholder="₹"
+              value={row.charge}
+              onChange={(e) => onChange(i, "charge", e.target.value)}
+            />
+            <button
+              type="button"
+              className="mkt-slab-del"
+              onClick={() => onRemove(i)}
+              aria-label={`Remove slab ${i + 1}`}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        <div className="mkt-slab-hint">
+          Leave the last "to" empty to cover everything above it.
+        </div>
+      </div>
+    )}
+  </div>
+);
+
+/** Prices a concrete basket against the ladders as they stand right now. */
+const SlabExample = ({ form }) => {
+  const pick = (rows, value, fromKey, toKey) => {
+    if (!rows.length) return 0;
+    const parsed = rows
+      .map((r) => ({
+        min: Number(r[fromKey]) || 0,
+        max: r[toKey] === "" || r[toKey] == null ? null : Number(r[toKey]),
+        charge: Number(r.charge) || 0,
+      }))
+      .sort((a, b) => a.min - b.min);
+    let below = null;
+    for (const r of parsed) {
+      if (r.min <= value && (r.max == null || r.max >= value)) return r.charge;
+      if (r.min <= value) below = r;
+    }
+    return below ? below.charge : parsed[0].charge;
+  };
+
+  const SAMPLE_VALUE = 700;
+  const SAMPLE_KM = 12;
+  const beyondSelf =
+    form.deliveryMode === "HYBRID" && Number(form.selfDeliveryMaxKm) < SAMPLE_KM;
+
+  if (!form.amountSlabs.length && !form.distanceSlabs.length) return null;
+
+  const amount = pick(form.amountSlabs, SAMPLE_VALUE, "minAmount", "maxAmount");
+  const distance = pick(form.distanceSlabs, SAMPLE_KM, "minKm", "maxKm");
+
+  return (
+    <div className="mkt-slab-example">
+      <strong>Example:</strong> a ₹{SAMPLE_VALUE} order {SAMPLE_KM} km away
+      {beyondSelf ? (
+        <> is past your {Number(form.selfDeliveryMaxKm)} km limit, so VasBazaar's charges apply.</>
+      ) : (
+        <>
+          {" "}pays ₹{amount} + ₹{distance} = <strong>₹{amount + distance}</strong> delivery.
+        </>
+      )}
+    </div>
+  );
+};
 
 const initialForm = {
   businessName: "",
@@ -29,10 +198,14 @@ const initialForm = {
   longitude: null,
   servingRadiusKm: 5,
   deliveryTimeMinutes: 30,
-  deliveryCharges: 0,
   minOrderValue: 0,
   deliveryMode: "SELF", // SELF | VASBAZAAR | HYBRID
   selfDeliveryMaxKm: 3,
+  // Delivery pricing for legs the seller carries. Fee = amount slab + distance
+  // slab. Empty ladders mean free delivery. Legs VasBazaar carries are priced
+  // from admin's logistics slabs instead, and are not editable here.
+  amountSlabs: [], // [{ minAmount, maxAmount, charge }]
+  distanceSlabs: [], // [{ minKm, maxKm, charge }]
   deliveryOtpRequired: true, // require a doorstep OTP on self-delivered orders
   autoSchedule: false,
   openTime: "",
@@ -43,6 +216,10 @@ const initialForm = {
   gstCertificateUrl: "",
   udyamCertificateUrl: "",
   fssaiCertificateUrl: "",
+  // Uploads answering this category's admin-defined document rules:
+  // { [docKey]: fileUrl }. The legacy gst/udyam/fssai fields above stay for
+  // stores that predate the rules.
+  categoryDocs: {},
 };
 
 const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
@@ -74,6 +251,107 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
 
   const selectedCategory = categories.find((c) => Number(c.id) === Number(form.categoryId));
   const isRestaurant = /restaurant|food|hotel|cafe|eatery|dhaba/i.test(selectedCategory?.name || "");
+
+  // Only a seller who carries some leg themselves has anything to price. On
+  // VASBAZAAR every leg is the courier's, billed from admin's logistics slabs.
+  const sellerDelivers = form.deliveryMode === "SELF" || form.deliveryMode === "HYBRID";
+
+  const addSlab = (key) =>
+    setForm((f) => ({
+      ...f,
+      [key]: [
+        ...f[key],
+        key === "amountSlabs"
+          ? { minAmount: "", maxAmount: "", charge: "" }
+          : { minKm: "", maxKm: "", charge: "" },
+      ],
+    }));
+
+  const removeSlab = (key, index) =>
+    setForm((f) => ({ ...f, [key]: f[key].filter((_, i) => i !== index) }));
+
+  const setSlabField = (key, index, field, value) =>
+    setForm((f) => ({
+      ...f,
+      [key]: f[key].map((row, i) => (i === index ? { ...row, [field]: value } : row)),
+    }));
+
+  // ----- Category-wise documents -----
+  const [categoryDocDefs, setCategoryDocDefs] = useState([]);
+  const [uploadingDocKey, setUploadingDocKey] = useState(null);
+
+  useEffect(() => {
+    if (!form.categoryId) { setCategoryDocDefs([]); return; }
+    let cancelled = false;
+    marketplaceService.getCategoryDocuments(form.categoryId).then((res) => {
+      if (cancelled) return;
+      setCategoryDocDefs(res.success && Array.isArray(res.data) ? res.data : []);
+    });
+    return () => { cancelled = true; };
+  }, [form.categoryId]);
+
+  // ----- Partner agreement (registration only) -----
+  const [agreement, setAgreement] = useState(null); // { version, text }
+  const [agreementRead, setAgreementRead] = useState(false);
+  const [signatureBlob, setSignatureBlob] = useState(null);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpInput, setOtpInput] = useState("");
+  const [otpBusy, setOtpBusy] = useState(false);
+  const [mobileHint, setMobileHint] = useState("");
+  // Set once the OTP is verified. Single-use and short-lived; onboard needs it.
+  const [signToken, setSignToken] = useState(null);
+
+  useEffect(() => {
+    if (editMode) return;
+    marketplaceService.getAgreementText().then((res) => {
+      if (res.success && res.data) setAgreement(res.data);
+    });
+  }, [editMode]);
+
+  const sendAgreementOtp = async () => {
+    setOtpBusy(true);
+    setError(null);
+    const res = await marketplaceService.sendAgreementOtp();
+    setOtpBusy(false);
+    if (!res.success) { setError(res.message || "Could not send OTP"); return; }
+    setOtpSent(true);
+    setMobileHint(res.data?.mobileHint || "");
+  };
+
+  const verifyAgreementOtp = async () => {
+    if (otpInput.trim().length !== 6) { setError("Enter the 6-digit OTP"); return; }
+    setOtpBusy(true);
+    setError(null);
+    const res = await marketplaceService.verifyAgreementOtp(otpInput.trim());
+    setOtpBusy(false);
+    if (!res.success || !res.data?.agreementSignToken) {
+      setError(res.message || "OTP verification failed");
+      return;
+    }
+    setSignToken(res.data.agreementSignToken);
+  };
+
+  // Slabs live in their own tables, so an edit has to load them separately --
+  // the store object the caller handed us in navigation state has no ladders.
+  useEffect(() => {
+    if (!editMode) return;
+    marketplaceService.getMyDeliverySlabs().then((res) => {
+      if (!res.success || !res.data) return;
+      setForm((f) => ({
+        ...f,
+        amountSlabs: (res.data.amountSlabs || []).map((s) => ({
+          minAmount: s.minAmount ?? "",
+          maxAmount: s.maxAmount ?? "",
+          charge: s.charge ?? "",
+        })),
+        distanceSlabs: (res.data.distanceSlabs || []).map((s) => ({
+          minKm: s.minKm ?? "",
+          maxKm: s.maxKm ?? "",
+          charge: s.charge ?? "",
+        })),
+      }));
+    });
+  }, [editMode]);
 
   // Use Capacitor geolocation hook for proper Android/iOS permission handling
   const {
@@ -142,7 +420,6 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
       longitude: s.longitude ?? null,
       servingRadiusKm: Number(s.servingRadiusKm || 5),
       deliveryTimeMinutes: Number(s.deliveryTimeMinutes || 30),
-      deliveryCharges: Number(s.deliveryCharges || 0),
       minOrderValue: Number(s.minOrderValue || 0),
       deliveryMode: s.deliveryMode || "SELF",
       selfDeliveryMaxKm: Number(s.selfDeliveryMaxKm || 3),
@@ -208,6 +485,26 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
     }
   };
 
+  /** Upload against an admin-defined category document rule. */
+  const handleCategoryDocPick = async (e, docKey) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { setError("File must be under 5 MB"); return; }
+    const allowed = ["image/jpeg", "image/jpg", "image/png", "application/pdf"];
+    if (!allowed.includes(file.type)) { setError("Only JPG, PNG or PDF allowed"); return; }
+    setError(null);
+    setUploadingDocKey(docKey);
+    // The generic "document" purpose: the doc key is admin-defined, so the upload
+    // controller's whitelist cannot enumerate it.
+    const res = await marketplaceService.uploadImage(file, "document");
+    setUploadingDocKey(null);
+    if (res.success && res.data?.url) {
+      setForm((f) => ({ ...f, categoryDocs: { ...f.categoryDocs, [docKey]: res.data.url } }));
+    } else {
+      setError(res.message || "Upload failed");
+    }
+  };
+
   const isPdf = (url) => /\.pdf($|\?)/i.test(url || "");
   const fileLabel = (url) => {
     if (!url) return "";
@@ -232,7 +529,6 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
     if (step === 2) {
       if (!form.servingRadiusKm || form.servingRadiusKm <= 0) return "Serving radius required";
       if (!form.deliveryTimeMinutes || form.deliveryTimeMinutes <= 0) return "Delivery time required";
-      if (form.deliveryCharges < 0) return "Delivery charges cannot be negative";
       if (form.minOrderValue < 0) return "Min order value cannot be negative";
       if (form.deliveryMode === "HYBRID") {
         if (!form.selfDeliveryMaxKm || Number(form.selfDeliveryMaxKm) <= 0) {
@@ -242,6 +538,8 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
           return "Self-delivery distance cannot exceed your serving radius";
         }
       }
+      const slabError = validateSlabs(form, sellerDelivers);
+      if (slabError) return slabError;
       if (form.autoSchedule) {
         if (!form.openTime || !form.closeTime) {
           return "Set both open and close time, or turn off auto schedule";
@@ -251,16 +549,49 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
         }
       }
     }
+    if (step === 3) {
+      // Every ACTIVE required document for this category must be uploaded. The
+      // server re-checks; catching it here keeps the seller on the step that
+      // owns the fix rather than bouncing them back from Submit.
+      const missing = categoryDocDefs
+        .filter((d) => d.required && !form.categoryDocs[d.docKey])
+        .map((d) => d.label);
+      if (missing.length) return `${missing[0]} is required for this store category`;
+    }
+    if (step === 4 && !editMode) {
+      if (!agreementRead) return "Please read and accept the partner agreement";
+      if (!signatureBlob) return "Please draw your signature";
+      if (!signToken) return "Verify the OTP to sign the agreement";
+    }
     return null;
   };
+
+  // Step 4 is the Agreement, which an edit skips in both directions: the seller
+  // signed once at registration and editing a profile is not a re-signing.
+  const AGREEMENT_STEP = 4;
 
   const next = () => {
     const err = validateStep();
     if (err) { setError(err); return; }
-    setStep((s) => Math.min(STEPS.length - 1, s + 1));
+    setError(null);
+    setStep((s) => {
+      const target = s + 1;
+      if (editMode && target === AGREEMENT_STEP) return target + 1;
+      return Math.min(STEPS.length - 1, target);
+    });
   };
 
-  const back = () => setStep((s) => Math.max(0, s - 1));
+  const back = () =>
+    setStep((s) => {
+      const target = s - 1;
+      if (editMode && target === AGREEMENT_STEP) return Math.max(0, target - 1);
+      return Math.max(0, target);
+    });
+
+  // The progress bar counts only the steps this mode actually walks through, so
+  // an edit doesn't read "Step 6 of 6" having visited five.
+  const visibleSteps = editMode ? EDIT_STEPS : STEPS;
+  const visibleIndex = visibleSteps.indexOf(STEPS[step]);
 
   const submit = async () => {
     if (submitting) return;
@@ -290,6 +621,16 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
     }
     // Strip the UI-only helper field so backend reflection doesn't trip on it.
     delete payload.weeklyOffDays;
+    // Slabs live in their own tables behind their own endpoint; StoreEntity has
+    // no such fields, so leaving them on the payload would trip its reflection.
+    const slabPayload = {
+      amountSlabs: sellerDelivers ? cleanSlabs(form.amountSlabs, "minAmount", "maxAmount") : [],
+      distanceSlabs: sellerDelivers ? cleanSlabs(form.distanceSlabs, "minKm", "maxKm") : [],
+    };
+    delete payload.amountSlabs;
+    delete payload.distanceSlabs;
+    // categoryDocs is a UI-shaped map; the server wants a list.
+    delete payload.categoryDocs;
     // Seller publishing a profile expects the store to be available.
     // The "currently open" kill-switch is a separate manual toggle (My Store screen);
     // clear any stale false value here so auto-schedule actually takes effect.
@@ -315,9 +656,15 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
           ? buildWeeklyScheduleJson(form.weeklyOffDays, form.openTime, form.closeTime)
           : null,
       });
-      setSubmitting(false);
       if (!timingsRes.success) {
+        setSubmitting(false);
         setError(timingsRes.message || "Profile saved but timings update failed");
+        return;
+      }
+      const slabRes = await marketplaceService.saveMyDeliverySlabs(slabPayload);
+      setSubmitting(false);
+      if (!slabRes.success) {
+        setError(slabRes.message || "Profile saved but delivery charges update failed");
         return;
       }
       navigate("/customer/app/marketplace/my-store", { replace: true });
@@ -325,6 +672,23 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
     }
 
     payload.onboardingCouponCode = appliedCoupon || null;
+
+    // Documents the category asked for.
+    payload.documents = Object.entries(form.categoryDocs)
+      .filter(([, url]) => !!url)
+      .map(([docKey, fileUrl]) => ({ docKey, fileUrl }));
+
+    // The signature is uploaded now rather than at draw time, so a seller who
+    // redraws doesn't leave a trail of abandoned images on disk.
+    const signatureFile = new File([signatureBlob], "signature.png", { type: "image/png" });
+    const sigRes = await marketplaceService.uploadImage(signatureFile, "signature");
+    if (!sigRes.success || !sigRes.data?.url) {
+      setSubmitting(false);
+      setError(sigRes.message || "Could not upload your signature");
+      return;
+    }
+    payload.agreementSignatureUrl = sigRes.data.url;
+    payload.agreementSignToken = signToken;
 
     const payable = Number(chargesData?.payable || 0);
     let paymentRef = null;
@@ -344,12 +708,39 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
     }
 
     const res = await marketplaceService.onboardStore(payload, paymentRef);
-    setSubmitting(false);
-    if (res.success) {
-      navigate("/customer/app/marketplace/my-store", { replace: true });
-    } else {
+    if (!res.success) {
+      setSubmitting(false);
       setError(res.message || "Submission failed");
+      return;
     }
+
+    // Point the active-store header at the store we just made. A seller opening
+    // their SECOND store still has the first one active, and the slab endpoint
+    // resolves through that header — without this, the new store's delivery
+    // charges would be written onto the old store. Newest = highest id.
+    const listRes = await marketplaceService.getMyStores().catch(() => null);
+    const newest = (listRes?.data || []).reduce(
+      (max, st) => (max == null || Number(st.id) > Number(max.id) ? st : max),
+      null
+    );
+    if (newest) setActiveStoreId(newest.id);
+
+    // The slab endpoint resolves the store from the token, so it can only run
+    // once the store exists. A failure here is not worth failing registration
+    // over -- the store is created and paid for, and the seller can set charges
+    // from My Store. Falling back to free delivery until then.
+    if (slabPayload.amountSlabs.length || slabPayload.distanceSlabs.length) {
+      const slabRes = await marketplaceService.saveMyDeliverySlabs(slabPayload);
+      if (!slabRes.success) {
+        setSubmitting(false);
+        setError(
+          "Store registered, but your delivery charges did not save. Set them from My Store — delivery is free until you do."
+        );
+        return;
+      }
+    }
+    setSubmitting(false);
+    navigate("/customer/app/marketplace/my-store", { replace: true });
   };
 
   return (
@@ -360,13 +751,18 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
       </div>
 
       <div className="mkt-wizard-progress">
-        {STEPS.map((_, i) => (
-          <div key={i} className={`mkt-wizard-step${i < step ? " is-done" : i === step ? " is-active" : ""}`} />
+        {visibleSteps.map((_, i) => (
+          <div
+            key={i}
+            className={`mkt-wizard-step${i < visibleIndex ? " is-done" : i === visibleIndex ? " is-active" : ""}`}
+          />
         ))}
       </div>
 
       <div className="mkt-form">
-        <div className="mkt-form-section-title">Step {step + 1} of {STEPS.length} · {STEPS[step]}</div>
+        <div className="mkt-form-section-title">
+          Step {visibleIndex + 1} of {visibleSteps.length} · {STEPS[step]}
+        </div>
 
         {step === 0 && (
           <>
@@ -445,17 +841,25 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
               <input
                 type="range"
                 className="mkt-slider"
-                min="1" max="25" step="0.5"
-                value={form.servingRadiusKm}
+                min={RADIUS_MIN_KM} max={RADIUS_MAX_KM} step="0.5"
+                value={Math.min(Number(form.servingRadiusKm) || RADIUS_MIN_KM, RADIUS_MAX_KM)}
                 onChange={(e) => setField("servingRadiusKm", Number(e.target.value))}
                 style={{
-                  background: `linear-gradient(to right, #40E0D0 0%, #007BFF ${((Number(form.servingRadiusKm) - 1) / 24) * 100}%, var(--cm-line) ${((Number(form.servingRadiusKm) - 1) / 24) * 100}%, var(--cm-line) 100%)`,
+                  background: `linear-gradient(to right, #40E0D0 0%, #007BFF ${radiusSliderPct(form.servingRadiusKm)}%, var(--cm-line) ${radiusSliderPct(form.servingRadiusKm)}%, var(--cm-line) 100%)`,
                 }}
               />
               <div className="mkt-slider-scale">
-                <span>1 km</span>
-                <span>25 km</span>
+                <span>{RADIUS_MIN_KM} km</span>
+                <span>{RADIUS_MAX_KM} km</span>
               </div>
+              <button
+                type="button"
+                className="mkt-radius-allindia"
+                aria-pressed={Number(form.servingRadiusKm) === ALL_INDIA_KM}
+                onClick={() => setField("servingRadiusKm", ALL_INDIA_KM)}
+              >
+                All India ({ALL_INDIA_KM} km)
+              </button>
               <div className="mkt-radius-manual">
                 <label className="mkt-field-label" htmlFor="servingRadiusManual">Or set radius manually (km)</label>
                 <input
@@ -463,13 +867,13 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
                   className="mkt-input"
                   type="number"
                   inputMode="decimal"
-                  min="1" max="25" step="0.5"
+                  min={RADIUS_MIN_KM} max={ALL_INDIA_KM} step="0.5"
                   value={form.servingRadiusKm}
                   onChange={(e) => setField("servingRadiusKm", e.target.value)}
                   onBlur={(e) => {
                     let v = Number(e.target.value);
-                    if (!Number.isFinite(v) || v < 1) v = 1;
-                    if (v > 25) v = 25;
+                    if (!Number.isFinite(v) || v < RADIUS_MIN_KM) v = RADIUS_MIN_KM;
+                    if (v > ALL_INDIA_KM) v = ALL_INDIA_KM;
                     setField("servingRadiusKm", v);
                   }}
                 />
@@ -481,10 +885,6 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
             <div className="mkt-field">
               <label className="mkt-field-label">Delivery time (minutes) <span className="mkt-req">*</span></label>
               <input className="mkt-input" inputMode="numeric" value={form.deliveryTimeMinutes} onChange={(e) => setField("deliveryTimeMinutes", e.target.value.replace(/\D/g, ""))} />
-            </div>
-            <div className="mkt-field">
-              <label className="mkt-field-label">Delivery charges (₹)</label>
-              <input className="mkt-input" inputMode="decimal" value={form.deliveryCharges} onChange={(e) => setField("deliveryCharges", e.target.value === "" ? 0 : Number(e.target.value))} />
             </div>
             <div className="mkt-field">
               <label className="mkt-field-label">Min order value (₹)</label>
@@ -511,7 +911,7 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
                         cursor: "pointer",
                       }}
                     >
-                      <div style={{ fontSize: 14, fontWeight: 600, color: "var(--cm-text)" }}>{opt.title}</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "var(--cm-ink)" }}>{opt.title}</div>
                       <div style={{ fontSize: 12, color: "var(--cm-muted)", marginTop: 2 }}>{opt.subtitle}</div>
                     </button>
                   );
@@ -540,6 +940,61 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
                 <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: 4 }}>
                   Orders within this distance you deliver yourself. Farther orders (up to your {Number(form.servingRadiusKm)} km serving radius) are delivered by VasBazaar.
                 </div>
+              </div>
+            )}
+
+            {sellerDelivers && (
+              <div className="mkt-field">
+                <label className="mkt-field-label" style={{ marginBottom: 6 }}>
+                  Your delivery charges
+                </label>
+                <div style={{ fontSize: 11, color: "var(--cm-muted)", marginBottom: 10 }}>
+                  A customer pays the order-value charge <strong>plus</strong> the distance charge.
+                  Leave both empty to deliver free.
+                  {form.deliveryMode === "HYBRID" &&
+                    ` These apply only within ${Number(form.selfDeliveryMaxKm) || 0} km — past that VasBazaar's charges apply.`}
+                </div>
+
+                <SlabEditor
+                  title="By order value"
+                  rows={form.amountSlabs}
+                  unit="₹"
+                  fromKey="minAmount"
+                  toKey="maxAmount"
+                  onAdd={() => addSlab("amountSlabs")}
+                  onRemove={(i) => removeSlab("amountSlabs", i)}
+                  onChange={(i, field, value) => setSlabField("amountSlabs", i, field, value)}
+                />
+
+                <SlabEditor
+                  title="By distance"
+                  rows={form.distanceSlabs}
+                  unit="km"
+                  fromKey="minKm"
+                  toKey="maxKm"
+                  onAdd={() => addSlab("distanceSlabs")}
+                  onRemove={(i) => removeSlab("distanceSlabs", i)}
+                  onChange={(i, field, value) => setSlabField("distanceSlabs", i, field, value)}
+                />
+
+                <SlabExample form={form} />
+              </div>
+            )}
+
+            {form.deliveryMode === "VASBAZAAR" && (
+              <div
+                className="mkt-field"
+                style={{
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: "1px solid var(--cm-line)",
+                  background: "var(--cm-card)",
+                  fontSize: 12,
+                  color: "var(--cm-muted)",
+                }}
+              >
+                VasBazaar's logistics partner carries every order, so delivery charges are set by
+                VasBazaar and shown to the customer at checkout. You have nothing to configure here.
               </div>
             )}
 
@@ -674,7 +1129,51 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
               </div>
             </div>
 
-            <div className="mkt-form-section-title" style={{ marginTop: 16 }}>Documents (optional)</div>
+            {categoryDocDefs.length > 0 && (
+              <>
+                <div className="mkt-form-section-title" style={{ marginTop: 16 }}>
+                  Documents for {selectedCategory?.name || "this category"}
+                </div>
+                {categoryDocDefs.map((def) => {
+                  const url = form.categoryDocs[def.docKey];
+                  const busy = uploadingDocKey === def.docKey;
+                  return (
+                    <div className="mkt-field" key={def.docKey}>
+                      <label className="mkt-field-label">
+                        {def.label}
+                        {def.required && <span className="mkt-req"> *</span>}
+                      </label>
+                      <label className="mkt-image-upload" style={{ cursor: busy ? "wait" : "pointer" }}>
+                        <div className="mkt-image-upload-preview">
+                          {url && !isPdf(url) ? <img src={url} alt="" /> : <FaFileAlt size={20} />}
+                        </div>
+                        <div className="mkt-image-upload-text">
+                          {busy
+                            ? "Uploading…"
+                            : url
+                              ? `${fileLabel(url)} · Tap to change`
+                              : `Tap to upload (JPG/PNG/PDF)`}
+                        </div>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,application/pdf"
+                          hidden
+                          disabled={busy}
+                          onChange={(e) => handleCategoryDocPick(e, def.docKey)}
+                        />
+                      </label>
+                      {def.helpText && (
+                        <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: 4 }}>
+                          {def.helpText}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            )}
+
+            <div className="mkt-form-section-title" style={{ marginTop: 16 }}>Other documents (optional)</div>
 
             <div className="mkt-field">
               <label className="mkt-field-label">GST certificate (optional)</label>
@@ -725,7 +1224,98 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
           </>
         )}
 
-        {step === 4 && (
+        {step === 4 && !editMode && (
+          <>
+            <div className="mkt-form-section-title" style={{ marginTop: 0 }}>
+              VasBazaar Partner Agreement
+            </div>
+
+            <div className="mkt-agreement-box">
+              {agreement ? (
+                <pre className="mkt-agreement-text">{agreement.text}</pre>
+              ) : (
+                <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>Loading agreement…</div>
+              )}
+            </div>
+            {agreement?.version && (
+              <div style={{ fontSize: 11, color: "var(--cm-muted)", marginBottom: 12 }}>
+                Version {agreement.version}
+              </div>
+            )}
+
+            <label className="mkt-agreement-accept">
+              <input
+                type="checkbox"
+                checked={agreementRead}
+                onChange={(e) => setAgreementRead(e.target.checked)}
+                disabled={!agreement}
+              />
+              <span>I have read and accept the VasBazaar Partner Agreement.</span>
+            </label>
+
+            <div className="mkt-field" style={{ marginTop: 14 }}>
+              <label className="mkt-field-label">Your signature <span className="mkt-req">*</span></label>
+              <SignaturePad
+                onChange={setSignatureBlob}
+                disabled={!agreementRead || !!signToken}
+              />
+            </div>
+
+            {/* OTP proves the signer holds the registered SIM — that is what makes
+                the drawn signature stand up as an electronic contract. */}
+            <div className="mkt-field">
+              <label className="mkt-field-label">Verify it's you <span className="mkt-req">*</span></label>
+              {signToken ? (
+                <div className="mkt-agreement-verified">
+                  ✓ Verified. You can submit your store on the next step.
+                </div>
+              ) : !otpSent ? (
+                <button
+                  type="button"
+                  className="mkt-btn mkt-btn--secondary"
+                  disabled={!agreementRead || !signatureBlob || otpBusy}
+                  onClick={sendAgreementOtp}
+                >
+                  {otpBusy ? "Sending…" : "Send OTP to my registered mobile"}
+                </button>
+              ) : (
+                <>
+                  <div style={{ fontSize: 11, color: "var(--cm-muted)", marginBottom: 6 }}>
+                    OTP sent to {mobileHint || "your registered mobile"}.
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input
+                      className="mkt-input"
+                      inputMode="numeric"
+                      maxLength={6}
+                      placeholder="6-digit OTP"
+                      value={otpInput}
+                      onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ""))}
+                    />
+                    <button
+                      type="button"
+                      className="mkt-btn mkt-btn--secondary"
+                      disabled={otpBusy || otpInput.length !== 6}
+                      onClick={verifyAgreementOtp}
+                    >
+                      {otpBusy ? "…" : "Verify"}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    className="mkt-agreement-resend"
+                    disabled={otpBusy}
+                    onClick={sendAgreementOtp}
+                  >
+                    Resend OTP
+                  </button>
+                </>
+              )}
+            </div>
+          </>
+        )}
+
+        {step === 5 && (
           <div style={{ background: "var(--cm-card)", borderRadius: 14, padding: 14 }}>
             <div className="mkt-form-section-title" style={{ marginTop: 0 }}>Review &amp; submit</div>
             <ReviewRow label="Business" value={form.businessName} />
@@ -735,8 +1325,17 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
             <ReviewRow label="Address" value={`${form.addressLine1}${form.addressLine2 ? ", " + form.addressLine2 : ""}, ${form.city}, ${form.state} - ${form.pincode}`} />
             <ReviewRow label="Serving radius" value={`${form.servingRadiusKm} km`} />
             <ReviewRow label="Delivery time" value={`${form.deliveryTimeMinutes} min`} />
-            <ReviewRow label="Delivery charges" value={`₹${Number(form.deliveryCharges).toFixed(0)}`} />
             <ReviewRow label="Delivery by" value={deliveryModeLabel(form.deliveryMode, form.selfDeliveryMaxKm)} />
+            {sellerDelivers && (
+              <ReviewRow
+                label="Delivery charges"
+                value={
+                  form.amountSlabs.length || form.distanceSlabs.length
+                    ? `${form.amountSlabs.length} value + ${form.distanceSlabs.length} distance slab(s)`
+                    : "Free"
+                }
+              />
+            )}
             {form.deliveryMode !== "VASBAZAAR" && (
               <ReviewRow label="Delivery OTP" value={form.deliveryOtpRequired ? "Required (self delivery)" : "Not required"} />
             )}
@@ -833,6 +1432,17 @@ const StoreOnboardingScreen = ({ editMode: forceEditMode = false }) => {
       </div>
     </div>
   );
+};
+
+const RADIUS_MIN_KM = 1;
+const RADIUS_MAX_KM = 500;
+// Longest road distance across India; the "All India" preset sits above the
+// slider range on purpose, so the slider pins to its max while it is selected.
+const ALL_INDIA_KM = 3214;
+
+const radiusSliderPct = (km) => {
+  const v = Math.min(Math.max(Number(km) || RADIUS_MIN_KM, RADIUS_MIN_KM), RADIUS_MAX_KM);
+  return ((v - RADIUS_MIN_KM) / (RADIUS_MAX_KM - RADIUS_MIN_KM)) * 100;
 };
 
 const DELIVERY_MODE_OPTIONS = [

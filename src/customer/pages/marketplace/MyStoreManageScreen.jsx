@@ -2,11 +2,16 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaPlus, FaPencilAlt, FaTrash, FaStore, FaCamera, FaCheckCircle, FaTimesCircle, FaClock, FaBan, FaEdit, FaRegClock, FaChevronRight, FaPowerOff, FaChevronDown, FaChevronUp, FaToggleOn, FaToggleOff, FaTags, FaChartLine, FaStar, FaTruck, FaShoppingBag, FaFileCsv, FaBook, FaUsers, FaCalendarTimes, FaClipboardCheck, FaUndoAlt, FaBolt, FaMotorcycle, FaBoxOpen, FaChartPie } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
+import { getActiveStoreId, setActiveStoreId } from "../../services/apiClient";
 import { marketplaceLogisticsAiService } from "../../services/marketplaceLogisticsAiService";
 import { useToast } from "../../context/ToastContext";
 import { parseVariants, variantDimensions } from "./variantUtils";
 import BarcodeScannerModal from "../../components/BarcodeScannerModal";
 import "./marketplace.css";
+
+// Mirrors CustStoreService.MAX_STORES_PER_USER. The server is the authority;
+// this only decides whether to offer the button.
+const MAX_STORES_PER_USER = 5;
 
 const STATUS_META = {
   PENDING: { cls: "mkt-status--pending", icon: FaClock, label: "Pending Approval", text: "Your store is awaiting admin review. You'll be notified once approved." },
@@ -26,6 +31,8 @@ const MyStoreManageScreen = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [store, setStore] = useState(null);
+  // Every store this seller owns. Length > 1 is what turns on the switcher.
+  const [myStores, setMyStores] = useState([]);
   const [items, setItems] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -140,11 +147,25 @@ const MyStoreManageScreen = () => {
     setLoading(true);
     // Items + recent orders fetch in parallel; orders endpoint only succeeds
     // for approved stores so a 404/403 is fine — we just fall back to [].
-    const [s, i, o] = await Promise.all([
+    const [s, i, o, list] = await Promise.all([
       marketplaceService.getMyStore(),
       marketplaceService.getMyItems().catch(() => ({ success: false, data: [] })),
       marketplaceService.getMyStoreOrders({ pageSize: 100 }).catch(() => ({ success: false, data: { records: [] } })),
+      marketplaceService.getMyStores().catch(() => ({ success: false, data: [] })),
     ]);
+    const owned = list.success && Array.isArray(list.data) ? list.data : [];
+    setMyStores(owned);
+
+    // A stale active store — deleted, or left over from another account — makes
+    // every /store/my/* call fail its ownership check. Drop it and re-read
+    // rather than bounce a seller who does have stores off to onboarding.
+    const activeId = getActiveStoreId();
+    if (activeId && owned.length && !owned.some((st) => String(st.id) === String(activeId))) {
+      setActiveStoreId(null);
+      load();
+      return;
+    }
+
     setLoading(false);
     if (s.success && s.data && s.data.id) {
       setStore(s.data);
@@ -283,11 +304,32 @@ const MyStoreManageScreen = () => {
   const canManageItems = statusKey === "APPROVED";
   const canEditProfile = statusKey !== "FINAL_REJECTED";
 
+  // Switching reloads everything: items, orders and every panel below belong to
+  // the store, not the seller, so none of the current state survives the change.
+  const switchStore = (storeId) => {
+    if (String(storeId) === String(store?.id)) return;
+    setActiveStoreId(storeId);
+    load();
+  };
+
   return (
     <div className="mkt">
       <div className="mkt-header">
         <button className="mkt-header-back" onClick={() => navigate("/customer/app/marketplace")}><FaArrowLeft /></button>
-        <h1 className="mkt-header-title">My Store</h1>
+        {myStores.length > 1 ? (
+          <select
+            className="mkt-store-switcher"
+            value={store?.id ?? ""}
+            onChange={(e) => switchStore(Number(e.target.value))}
+            aria-label="Switch store"
+          >
+            {myStores.map((st) => (
+              <option key={st.id} value={st.id}>{st.businessName}</option>
+            ))}
+          </select>
+        ) : (
+          <h1 className="mkt-header-title">My Store</h1>
+        )}
         {canEditProfile && (
           <button
             className="mkt-header-action"
@@ -422,6 +464,20 @@ const MyStoreManageScreen = () => {
 
         {canManageItems && activeTab === "orders" && (
           <>
+            {/* Opening another store is a full, separately-charged registration —
+                onboarding handles it, and the cap is enforced server-side too. */}
+            {myStores.length < MAX_STORES_PER_USER && (
+              <button
+                className="mkt-add-store-btn"
+                onClick={() => navigate("/customer/app/marketplace/onboard")}
+              >
+                <FaPlus size={12} /> Open another store
+                <span className="mkt-add-store-count">
+                  {myStores.length} of {MAX_STORES_PER_USER}
+                </span>
+              </button>
+            )}
+
             {/* === Store management shortcuts === */}
             <div className="mkt-form-section-title" style={{ margin: "20px 0 8px" }}>Manage store</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

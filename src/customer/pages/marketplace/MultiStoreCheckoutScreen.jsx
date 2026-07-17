@@ -51,7 +51,62 @@ const MultiStoreCheckoutScreen = () => {
   const [giftMessage, setGiftMessage] = useState("");
 
   const isPickup = fulfillmentType === "PICKUP";
-  const effectiveDelivery = isPickup ? 0 : totals.deliveryCharges;
+
+  // One quote per bucket: each store is a different distance from the buyer and
+  // carries its own slabs, so a combined fee cannot be derived from the cart's
+  // add-time snapshots. Null until quoted; the snapshot stands in meanwhile.
+  const [quotes, setQuotes] = useState({}); // { [storeId]: quote }
+  const [quoting, setQuoting] = useState(false);
+
+  const bucketSubtotals = useMemo(
+    () =>
+      Object.fromEntries(
+        (storeList || []).map((b) => [
+          b.storeId,
+          Object.values(b.items || {}).reduce((s, i) => s + Number(i.price) * Number(i.qty || 0), 0),
+        ])
+      ),
+    [storeList]
+  );
+
+  useEffect(() => {
+    if (!storeList || storeList.length === 0) return;
+    if (isPickup) { setQuotes({}); return; }
+    let cancelled = false;
+    setQuoting(true);
+    Promise.all(
+      storeList.map((b) =>
+        marketplaceService
+          .getDeliveryQuote(b.storeId, {
+            subtotal: bucketSubtotals[b.storeId] || 0,
+            lat: coords?.lat ?? null,
+            lng: coords?.lng ?? null,
+            fulfillmentType: "DELIVERY",
+          })
+          .then((res) => [b.storeId, res.success ? res.data : null])
+          .catch(() => [b.storeId, null])
+      )
+    )
+      .then((pairs) => {
+        if (cancelled) return;
+        setQuotes(Object.fromEntries(pairs.filter(([, q]) => q)));
+      })
+      .finally(() => { if (!cancelled) setQuoting(false); });
+    return () => { cancelled = true; };
+  }, [storeList, bucketSubtotals, coords?.lat, coords?.lng, isPickup]);
+
+  // Sum the quotes, falling back per store to its snapshot until its quote lands.
+  const quotedDelivery = useMemo(
+    () =>
+      (storeList || []).reduce((sum, b) => {
+        if ((bucketSubtotals[b.storeId] || 0) <= 0) return sum;
+        const q = quotes[b.storeId];
+        return sum + (q ? Number(q.fee || 0) : Number(b.deliveryCharges || 0));
+      }, 0),
+    [storeList, quotes, bucketSubtotals]
+  );
+
+  const effectiveDelivery = isPickup ? 0 : quotedDelivery;
   const payTotal = Math.max(0, totals.subtotal + effectiveDelivery);
 
   // Prefill the last-used address.
@@ -363,7 +418,18 @@ const MultiStoreCheckoutScreen = () => {
       {/* Bill summary */}
       <div style={{ padding: "16px 14px 0" }}>
         <div className="mkt-summary-row"><span>Subtotal</span><span>₹{totals.subtotal.toFixed(0)}</span></div>
-        <div className="mkt-summary-row"><span>Delivery</span><span>{effectiveDelivery > 0 ? `₹${effectiveDelivery.toFixed(0)}` : "Free"}</span></div>
+        <div className="mkt-summary-row">
+          <span>Delivery{!isPickup && storeList.length > 1 ? ` (${storeList.length} stores)` : ""}</span>
+          <span>
+            {isPickup
+              ? "Free (pickup)"
+              : quoting && Object.keys(quotes).length === 0
+                ? "…"
+                : effectiveDelivery > 0
+                  ? `₹${effectiveDelivery.toFixed(0)}`
+                  : "Free"}
+          </span>
+        </div>
         <div className="mkt-summary-row mkt-summary-row--total"><span>Total</span><span>₹{payTotal.toFixed(0)}</span></div>
         <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: 4 }}>
           Any platform charge is added at payment. The amount is split to each seller automatically.

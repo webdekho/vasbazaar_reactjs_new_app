@@ -170,6 +170,36 @@ const CartScreen = () => {
 
   const isPickup = fulfillmentType === "PICKUP";
 
+  // Server-quoted delivery fee. The cart's own `deliveryCharges` is a snapshot
+  // taken at add-to-cart time, from before the buyer's address was known -- but
+  // the fee now depends on order value AND distance, so only the server can say.
+  // Quoting here keeps what the buyer is shown identical to what they are
+  // charged. Null = not quoted yet; fall back to the snapshot meanwhile.
+  const [deliveryQuote, setDeliveryQuote] = useState(null);
+  const [quoting, setQuoting] = useState(false);
+
+  const quoteStoreId = cart?.storeId ?? null;
+
+  useEffect(() => {
+    if (!quoteStoreId) return;
+    if (isPickup) { setDeliveryQuote({ fee: 0, basis: "PICKUP" }); return; }
+    let cancelled = false;
+    setQuoting(true);
+    marketplaceService
+      .getDeliveryQuote(quoteStoreId, {
+        subtotal: totals.subtotal,
+        lat: coords?.lat ?? null,
+        lng: coords?.lng ?? null,
+        fulfillmentType: "DELIVERY",
+      })
+      .then((res) => {
+        if (cancelled) return;
+        if (res.success && res.data) setDeliveryQuote(res.data);
+      })
+      .finally(() => { if (!cancelled) setQuoting(false); });
+    return () => { cancelled = true; };
+  }, [quoteStoreId, totals.subtotal, coords?.lat, coords?.lng, isPickup]);
+
   // Fetch store coords if we don't have them in the cart (older carts may
   // have been started before lat/lng were captured).
   useEffect(() => {
@@ -436,7 +466,13 @@ const CartScreen = () => {
   // Pickup has no delivery charge. Any extra order charge (packing, taxes…) is
   // whatever the cart's total adds on top of subtotal + delivery.
   const orderCharge = Math.max(0, totals.total - totals.subtotal - totals.deliveryCharges);
-  const effectiveDelivery = isPickup ? 0 : totals.deliveryCharges;
+  // Prefer the server's quote; the cart snapshot is only a stand-in until it lands.
+  const quotedDelivery = deliveryQuote ? Number(deliveryQuote.fee || 0) : totals.deliveryCharges;
+  const effectiveDelivery = isPickup ? 0 : quotedDelivery;
+  // Without the buyer's coordinates the distance component is unknowable, so the
+  // quote is only part of the story — say so rather than show a number that grows
+  // at checkout.
+  const deliveryPending = !isPickup && !coords && !!deliveryQuote && deliveryQuote.distanceKm == null;
   const discount = appliedOffer ? Number(appliedOffer.discount || 0) : 0;
   const payTotal = Math.max(0, totals.subtotal + effectiveDelivery + orderCharge - discount);
 
@@ -778,7 +814,18 @@ const CartScreen = () => {
 
           <div className="mkt-summary">
             <div className="mkt-summary-row"><span>Subtotal</span><span>₹{totals.subtotal.toFixed(0)}</span></div>
-            <div className="mkt-summary-row"><span>Delivery</span><span>{totals.deliveryCharges > 0 ? `₹${totals.deliveryCharges.toFixed(0)}` : "Free"}</span></div>
+            <div className="mkt-summary-row">
+              <span>Delivery</span>
+              <span>
+                {quoting && !deliveryQuote
+                  ? "…"
+                  : deliveryPending
+                    ? "At checkout"
+                    : quotedDelivery > 0
+                      ? `₹${quotedDelivery.toFixed(0)}`
+                      : "Free"}
+              </span>
+            </div>
             <div className="mkt-summary-row mkt-summary-row--total"><span>Total</span><span>₹{totals.total.toFixed(0)}</span></div>
             {belowMin && (
               <div className="mkt-error-text" style={{ marginTop: 6 }}>
@@ -1360,7 +1407,25 @@ const CartScreen = () => {
 
             <div className="mkt-summary" style={{ margin: 0 }}>
               <div className="mkt-summary-row"><span>Subtotal</span><span>₹{totals.subtotal.toFixed(0)}</span></div>
-              <div className="mkt-summary-row"><span>Delivery</span><span>{isPickup ? "Free (pickup)" : (effectiveDelivery > 0 ? `₹${effectiveDelivery.toFixed(0)}` : "Free")}</span></div>
+              <div className="mkt-summary-row">
+                <span>
+                  Delivery
+                  {!isPickup && deliveryQuote?.distanceKm != null && (
+                    <span style={{ color: "var(--cm-muted)", fontWeight: 600 }}>
+                      {" "}({Number(deliveryQuote.distanceKm).toFixed(1)} km)
+                    </span>
+                  )}
+                </span>
+                <span>
+                  {isPickup
+                    ? "Free (pickup)"
+                    : quoting && !deliveryQuote
+                      ? "…"
+                      : effectiveDelivery > 0
+                        ? `₹${effectiveDelivery.toFixed(0)}`
+                        : "Free"}
+                </span>
+              </div>
               {orderCharge > 0 && (
                 <div className="mkt-summary-row"><span>Other charges</span><span>₹{orderCharge.toFixed(0)}</span></div>
               )}

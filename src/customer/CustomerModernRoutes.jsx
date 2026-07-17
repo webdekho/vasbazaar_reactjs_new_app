@@ -187,7 +187,14 @@ const RouteFallback = () => (
 
 const ThemedApp = ({ children }) => {
   const { theme } = useTheme();
-  return <div className={`customer-modern-app${theme === "light" ? " theme-light" : ""}`}>{children}</div>;
+  // Both classes are emitted, not just theme-light: marketplace.css and rybbo.css
+  // style their dark variants off .theme-dark, and those rules never matched
+  // while dark was expressed only as the absence of .theme-light.
+  return (
+    <div className={`customer-modern-app ${theme === "light" ? "theme-light" : "theme-dark"}`}>
+      {children}
+    </div>
+  );
 };
 
 const SmartRedirect = () => {

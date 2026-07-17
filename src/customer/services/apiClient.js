@@ -19,6 +19,10 @@ const CUSTOMER_STORAGE_KEYS = {
   firstLoginComplete: "customerFirstLoginComplete",
   dismissedDues: "customerDismissedDues",
   isExist: "customerIsExist",
+  // Which of the seller's stores is active. Listed here so logout clears it —
+  // a leftover id would belong to the previous user, and every /store/my/* call
+  // would then fail its ownership check.
+  activeStoreId: "customerActiveStoreId",
 };
 
 // Keys that must survive logout (persist across user sessions on the device).
@@ -30,6 +34,26 @@ const CUSTOMER_STORAGE_PERSISTENT_KEYS = new Set([
 const apiClient = axios.create({
   baseURL: server_api(),
   headers: { "Content-Type": "application/json" },
+});
+
+// ===== Active store (multi-store sellers) =====
+// A seller can own several stores, so every /store/my/* call has to say WHICH.
+// It rides as a header rather than a param on ~40 endpoints, set in one place
+// here. No header means the seller's first store, so single-store sellers and
+// older app builds behave exactly as before.
+const ACTIVE_STORE_KEY = CUSTOMER_STORAGE_KEYS.activeStoreId;
+
+export const getActiveStoreId = () => localStorage.getItem(ACTIVE_STORE_KEY) || null;
+
+export const setActiveStoreId = (storeId) => {
+  if (storeId == null) localStorage.removeItem(ACTIVE_STORE_KEY);
+  else localStorage.setItem(ACTIVE_STORE_KEY, String(storeId));
+};
+
+apiClient.interceptors.request.use((config) => {
+  const storeId = getActiveStoreId();
+  if (storeId) config.headers["X-Store-Id"] = storeId;
+  return config;
 });
 
 const parseApiResponse = (response) => {

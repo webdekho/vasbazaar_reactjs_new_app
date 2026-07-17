@@ -70,7 +70,47 @@ export const marketplaceService = {
       categoryId: categoryId || null,
     }),
 
+  // Every store this seller owns. The active one rides as an X-Store-Id header
+  // (see apiClient); no header means the first store.
+  getMyStores: () => authGet("/api/customer/marketplace/store/my/list"),
+
   updateMyStore: (payload) => authPut("/api/customer/marketplace/store/my", payload),
+
+  // Which documents this store category requires (admin-defined per category).
+  getCategoryDocuments: (categoryId) =>
+    authGet(`/api/customer/marketplace/categories/${categoryId}/documents`),
+
+  // Partner agreement: text is server-authoritative, and signing needs an OTP to
+  // the registered mobile. verify returns a single-use agreementSignToken that
+  // POST /store/onboard demands alongside the drawn signature.
+  getAgreementText: () => authGet("/api/customer/marketplace/store/agreement/text"),
+
+  sendAgreementOtp: () => authPost("/api/customer/marketplace/store/agreement/send-otp", {}),
+
+  verifyAgreementOtp: (otp) =>
+    authPost("/api/customer/marketplace/store/agreement/verify-otp", { otp }),
+
+  // Delivery charge slabs: seller-set ladders for the legs they carry themselves.
+  getMyDeliverySlabs: () => authGet("/api/customer/marketplace/store/my/delivery-slabs"),
+
+  saveMyDeliverySlabs: ({ amountSlabs, distanceSlabs }) =>
+    authPut("/api/customer/marketplace/store/my/delivery-slabs", {
+      amountSlabs: amountSlabs || [],
+      distanceSlabs: distanceSlabs || [],
+    }),
+
+  /**
+   * What a store charges to deliver a basket to a point. The fee depends on the
+   * buyer's distance and on slab tables the client never sees, so the cart has
+   * to ask rather than compute.
+   */
+  getDeliveryQuote: (storeId, { subtotal, lat, lng, fulfillmentType }) =>
+    authPost(`/api/customer/marketplace/store/${storeId}/delivery-quote`, {
+      subtotal: subtotal ?? 0,
+      lat: lat ?? null,
+      lng: lng ?? null,
+      fulfillmentType: fulfillmentType || "DELIVERY",
+    }),
 
   toggleMyStoreOpen: (isOpen) =>
     authPut(`/api/customer/marketplace/store/my/toggle-open?isOpen=${isOpen}`, {}),
