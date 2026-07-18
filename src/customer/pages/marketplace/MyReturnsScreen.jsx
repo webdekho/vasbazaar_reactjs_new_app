@@ -133,7 +133,22 @@ const MyReturnsScreen = () => {
                   </div>
                 )}
 
-                {Number(r.refundAmount) > 0 && (
+                {/* SELLER_CASH_DUE is called out separately, and in amber rather than
+                    green: on a Cash on Delivery order the money never reached
+                    VasBazaar, so no electronic refund is coming and the buyer must
+                    know to collect cash from the store. Falling through to the
+                    generic line below would say "processing" and leave them waiting
+                    for a transfer that will never arrive. */}
+                {Number(r.refundAmount) > 0 && r.refundStatus === "SELLER_CASH_DUE" && (
+                  <div style={{ fontSize: 12, color: "#f59e0b", fontWeight: 700, marginTop: 10 }}>
+                    {inr(r.refundAmount)} to be returned to you in cash by the store
+                    <div style={{ fontSize: 11, color: "#9ca3af", fontWeight: 500, marginTop: 2 }}>
+                      This was a Cash on Delivery order, so the store refunds it directly.
+                    </div>
+                  </div>
+                )}
+
+                {Number(r.refundAmount) > 0 && r.refundStatus !== "SELLER_CASH_DUE" && (
                   <div style={{ fontSize: 12, color: "#34d399", fontWeight: 700, marginTop: 10 }}>
                     {inr(r.refundAmount)} refund {r.refundStatus === "WALLET_REFUNDED" ? "credited to wallet" : (r.refundStatus === "SOURCE_INITIATED" || r.refundStatus === "SOURCE_REFUNDED") ? "to original payment (3–7 days)" : "processing"}
                   </div>

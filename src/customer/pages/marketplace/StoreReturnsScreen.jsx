@@ -178,7 +178,20 @@ const StoreReturnsScreen = () => {
                   </div>
                 )}
 
-                {Number(r.refundAmount) > 0 && (
+                {/* On COD the seller holds the customer's cash, so this is an
+                    instruction to pay — not a receipt. The generic line below says
+                    "refunded", which would read as "already handled" and is exactly
+                    how a customer ends up out of pocket. */}
+                {Number(r.refundAmount) > 0 && r.refundStatus === "SELLER_CASH_DUE" && (
+                  <div style={{ fontSize: 12, color: "#f59e0b", fontWeight: 700, marginTop: 8 }}>
+                    Return {inr(r.refundAmount)} in cash to the customer
+                    <div style={{ fontSize: 11, color: "#9ca3af", fontWeight: 500, marginTop: 2 }}>
+                      Cash on Delivery order — VasBazaar never held this money, so it is not refunded automatically.
+                    </div>
+                  </div>
+                )}
+
+                {Number(r.refundAmount) > 0 && r.refundStatus !== "SELLER_CASH_DUE" && (
                   <div style={{ fontSize: 12, color: "#34d399", fontWeight: 700, marginTop: 8 }}>
                     {inr(r.refundAmount)} refunded{r.refundStatus ? ` · ${r.refundStatus.replace(/_/g, " ")}` : ""}
                   </div>
