@@ -355,15 +355,15 @@ const PaymentScreen = () => {
         console.log("[WS] Reconnected - checking status");
         checkStatusOnlyAndNavigate(txnId);
       },
-      // onStatusPoll - called every 5s for continuous status polling (up to 60s)
+      // onStatusPoll - called every 5s for continuous status polling (up to 3 minutes)
       // NOTE: Do NOT call setUpiFlowActive(false) before navigate - keep overlay visible
       async (isFinal) => {
         console.log(`[WS] Status poll (final: ${isFinal}) - checking status`);
         await checkStatusOnlyAndNavigate(txnId);
 
-        // If final poll (60s timeout) and still no navigation, show pending page
+        // If final poll (3 min timeout) and still no navigation, show pending page
         if (isFinal && !_navigationDone) {
-          console.log("[WS] 60s timeout reached - navigating to pending page");
+          console.log("[WS] 3 min timeout reached - navigating to pending page");
           localStorage.removeItem("upiPaymentPending");
           _navigationDone = true;
           if (wsRef.current) {

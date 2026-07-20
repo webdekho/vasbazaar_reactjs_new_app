@@ -6,7 +6,12 @@ import { authService } from "../services/authService";
 import { useTheme } from "../context/ThemeContext";
 import { sanitizeBackendMessage } from "../utils/userMessages";
 
-const DEFAULT_CNF_REFERRAL = "2222222222";
+// NOTE: there is deliberately no hard-coded default referral here.
+// An empty code is meaningful to the backend: `LoginService.configureReferral`
+// treats blank as "unattributed" and first tries `findPendingReferrer(mobile)`
+// (a lead captured earlier) before falling back to the single default account.
+// Sending a hard-coded mobile here used to bypass that lookup entirely, so a
+// user who had been referred but skipped this screen silently lost their referrer.
 
 const ReferralScreen = () => {
   const navigate = useNavigate();
@@ -26,7 +31,7 @@ const ReferralScreen = () => {
   }, [navigate]);
 
   const proceedWithReferral = async (code) => {
-    const finalCode = code || DEFAULT_CNF_REFERRAL;
+    const finalCode = code || "";
     customerStorage.setReferralCode(finalCode);
 
     // Call referalConfig API to create the user account

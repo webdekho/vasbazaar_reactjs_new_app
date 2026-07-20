@@ -78,32 +78,63 @@ public class UpiIntentPlugin: CAPPlugin, CAPBridgedPlugin {
         let q = query(from: upiUrl)
         let appId = call.getString("app")
 
-        let target: URL?
+        // Build an ordered list of candidates instead of a single URL. Before 2026-07-20 this
+        // was one app-specific URL with NO fallback: if `tez://upi/pay?…` failed to open, the
+        // plugin rejected immediately with "Could not open Google Pay". Customers then paid
+        // from a different UPI app while our screen sat on "Waiting for payment…", and some
+        // paid twice. Every UPI app also handles the generic `upi://` link, so falling back to
+        // it lets iOS present its own chooser rather than dead-ending the payment.
+        var candidates: [URL] = []
         let appName: String
         if let appId = appId, let app = catalog.first(where: { $0.id == appId }) {
-            target = URL(string: app.prefix + q)
             appName = app.name
+            if let u = makeURL(app.prefix + q) { candidates.append(u) }
+            // Google Pay has shipped both `tez` (legacy) and `gpay` scheme registrations;
+            // whichever one canOpenURL matched may not be the one that handles /upi/pay.
+            if app.id == "gpay", let u = makeURL("gpay://upi/pay?" + q) { candidates.append(u) }
         } else {
-            target = URL(string: upiUrl)
             appName = "UPI app"
         }
+        // Generic NPCI link, always last — the universal fallback.
+        if let u = makeURL(upiUrl) { candidates.append(u) }
 
-        guard let url = target else {
+        if candidates.isEmpty {
             call.reject("Invalid UPI URL")
             return
         }
 
-        NSLog("[UpiIntent] Opening %@ via %@", appName, url.absoluteString)
-
         DispatchQueue.main.async {
-            UIApplication.shared.open(url, options: [:]) { success in
-                if success {
-                    NSLog("[UpiIntent] %@ opened successfully", appName)
-                    call.resolve(["success": true])
-                } else {
-                    NSLog("[UpiIntent] Failed to open %@", appName)
-                    call.reject("Could not open \(appName). Please try another UPI app.")
-                }
+            self.openFirstAvailable(candidates, appName: appName, call: call)
+        }
+    }
+
+    /// Percent-encode before constructing the URL. The NPCI query carries a merchant name
+    /// (`pn=VAS PAYMENT SOLUTIONS…`) whose spaces make `URL(string:)` return nil on older
+    /// iOS, which surfaced as a bare "Invalid UPI URL".
+    private func makeURL(_ raw: String) -> URL? {
+        if let url = URL(string: raw) { return url }
+        guard let encoded = raw.addingPercentEncoding(
+            withAllowedCharacters: .urlQueryAllowed.union(CharacterSet(charactersIn: "#"))
+        ) else { return nil }
+        return URL(string: encoded)
+    }
+
+    /// Try each candidate in order; resolve on the first that opens, reject only if all fail.
+    private func openFirstAvailable(_ urls: [URL], appName: String, call: CAPPluginCall) {
+        guard let url = urls.first else {
+            NSLog("[UpiIntent] All candidates failed for %@", appName)
+            call.reject("Could not open \(appName). Please try another UPI app.")
+            return
+        }
+        let rest = Array(urls.dropFirst())
+        NSLog("[UpiIntent] Opening %@ via %@", appName, url.absoluteString)
+        UIApplication.shared.open(url, options: [:]) { success in
+            if success {
+                NSLog("[UpiIntent] %@ opened successfully", appName)
+                call.resolve(["success": true])
+            } else {
+                NSLog("[UpiIntent] Failed to open %@ — trying %d fallback(s)", url.absoluteString, rest.count)
+                self.openFirstAvailable(rest, appName: appName, call: call)
             }
         }
     }

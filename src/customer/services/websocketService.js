@@ -41,7 +41,13 @@ export const createPaymentWebSocket = (txnId, token, onMessage, onError, onClose
   let pollIntervalId = null;
   let pollCount = 0;
   const POLL_INTERVAL = 5000; // 5 seconds
-  const MAX_POLL_COUNT = 12; // 12 polls = 60 seconds max
+  // 36 polls = 3 minutes. Raised from 12 (60s) on 2026-07-20: a UPI Intent payment routinely
+  // takes longer than a minute — the customer leaves our app, picks a UPI app, waits for it to
+  // load, enters their PIN, then returns. If the first app fails to open they start over in a
+  // second one. At 60s we gave up mid-payment and routed to the failure screen, so customers
+  // who had in fact paid retried and were debited twice. 3 minutes comfortably covers the
+  // slow-but-legitimate path while still bounding the wait.
+  const MAX_POLL_COUNT = 36;
 
   // Clear polling interval
   const clearPolling = () => {
