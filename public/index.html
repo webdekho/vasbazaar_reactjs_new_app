@@ -9,7 +9,9 @@
          parsing, so the first data request starts ~100-300ms sooner. -->
     <link rel="preconnect" href="https://api.vasbazaar.com" crossorigin />
     <link rel="dns-prefetch" href="https://api.vasbazaar.com" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- maximum-scale/user-scalable: WKWebView honours these, which stops iOS from
+         auto-zooming (and getting stuck zoomed) when an input takes focus. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" id="vb-theme-color" content="#0B0B0B" />
     <script>
       // Read user's saved theme synchronously so the boot loader respects light mode.

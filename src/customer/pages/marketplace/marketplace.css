@@ -3585,3 +3585,22 @@
   justify-content: center;
   flex: 0 0 auto;
 }
+
+/* ---- iOS: never auto-zoom when the search bar takes focus ---
+   Safari zooms into any focused field whose font-size is under 16px, and the
+   page then stays stuck at that zoom level. 16px is the threshold, so the hero
+   search input opts out of the earlier 13.5px sizing. `text-size-adjust` keeps
+   WebKit from re-scaling it afterwards. */
+.mkt-v2 .mkt-hero-search-input {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+/* the other marketplace text fields hit the same threshold */
+.mkt-search-input,
+.loc-sheet-search input,
+.mkt-input {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
