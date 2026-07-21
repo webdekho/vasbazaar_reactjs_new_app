@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams, Navigate } from "react-router-dom"
 import { FaArrowLeft, FaTag, FaCheckCircle, FaWallet, FaMobileAlt } from "react-icons/fa";
 import { rybboService } from "../../services/rybboService";
 import { server_api } from "../../../utils/constants";
+import { formatDisplayDate, formatDisplayTime } from "../../../utils/dateFormat";
 
 const DEFAULT_CONVENIENCE_PCT = 2; // fallback when event API does not carry a per-event %
 
@@ -100,7 +101,7 @@ const BookingSummaryScreen = () => {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{event.title}</div>
             <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>{event.venue}, {event.city}</div>
-            <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>{showtime?.date} · {showtime?.time}</div>
+            <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>{formatDisplayDate(showtime?.date, "")} · {formatDisplayTime(showtime?.time, "")}</div>
           </div>
         </div>
 

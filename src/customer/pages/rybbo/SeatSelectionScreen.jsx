@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams, Navigate } from "react-router-dom"
 import { FaArrowLeft, FaMinus, FaPlus } from "react-icons/fa";
 import { rybboService } from "../../services/rybboService";
 import DataState from "../../components/DataState";
+import { formatDisplayDate, formatDisplayTime } from "../../../utils/dateFormat";
 
 const MAX_PER_CATEGORY = 8;
 
@@ -69,7 +70,7 @@ const SeatSelectionScreen = () => {
           </button>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700 }}>{event.title}</div>
-            <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>{showtime?.date} · {showtime?.time} · {event.venue}</div>
+            <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>{formatDisplayDate(showtime?.date, "")} · {formatDisplayTime(showtime?.time, "")} · {event.venue}</div>
           </div>
         </div>
 

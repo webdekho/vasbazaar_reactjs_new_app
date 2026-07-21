@@ -5,8 +5,9 @@ import {
   resibotService, RESIBOT_ORDER_VENDORS, RESIBOT_ORDER_STATUSES, RESIBOT_ORDER_TRACKING,
 } from "../../services/resibotService";
 import {
-  RB, ResibotHeader, Spinner, Card, Field, TextInput, Select, PrimaryButton, EmptyState, fmtDate, dueLabel,
+  RB, ResibotHeader, Spinner, Card, Field, TextInput, Select, PrimaryButton, EmptyState, dueLabel,
 } from "./resibotUi";
+import { formatDisplayDate } from "../../../utils/dateFormat";
 
 const STATUS_COLOR = {
   ORDERED: "#6B7280", PACKED: "#7C3AED", SHIPPED: "#2563EB",
@@ -128,7 +129,7 @@ const ResibotOrdersScreen = () => {
                     {[o.vendor, o.orderValue ? `₹${o.orderValue}` : null].filter(Boolean).join(" · ")}
                   </div>
                   {o.expectedDeliveryDate && (
-                    <div style={{ fontSize: 12, color: RB.muted, marginTop: 2 }}>{fmtDate(o.expectedDeliveryDate)} · {dueLabel(o.expectedDeliveryDate)}</div>
+                    <div style={{ fontSize: 12, color: RB.muted, marginTop: 2 }}>{formatDisplayDate(o.expectedDeliveryDate, "—")} · {dueLabel(o.expectedDeliveryDate)}</div>
                   )}
                 </div>
                 <span style={{ padding: "3px 10px", borderRadius: 999, background: "#F1F5F9", color: STATUS_COLOR[o.status] || "#6B7280", fontSize: 11, fontWeight: 700 }}>

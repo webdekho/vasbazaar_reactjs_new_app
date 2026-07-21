@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { FaPlus, FaTrash, FaArrowUp, FaArrowDown, FaMagic, FaBolt } from "react-icons/fa";
 import { resibotService, RESIBOT_EXPENSE_CATEGORIES, RESIBOT_EXPENSE_SOURCES } from "../../services/resibotService";
 import {
-  RB, ResibotHeader, Spinner, Card, Field, TextInput, TextArea, Select, PrimaryButton, EmptyState, fmtDate,
-} from "./resibotUi";
+  RB, ResibotHeader, Spinner, Card, Field, TextInput, TextArea, Select, PrimaryButton, EmptyState, } from "./resibotUi";
+import { formatDisplayDate } from "../../../utils/dateFormat";
 
 const money = (v) => `₹${Number(v || 0).toLocaleString("en-IN")}`;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -203,7 +203,7 @@ const ResibotExpenseScreen = () => {
                     )}
                   </div>
                   <div style={{ fontSize: 12, color: RB.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {fmtDate(e.spentOn)}
+                    {formatDisplayDate(e.spentOn, "—")}
                     {e.merchant ? ` · ${e.merchant}` : (sourceLabel ? ` · ${sourceLabel}` : "")}
                     {e.note && !e.merchant ? ` · ${e.note}` : ""}
                   </div>

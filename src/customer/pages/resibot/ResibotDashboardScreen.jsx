@@ -6,7 +6,8 @@ import { resibotService, getResibotModule } from "../../services/resibotService"
 import { useCustomerModern } from "../../context/CustomerModernContext";
 import { useToast } from "../../context/ToastContext";
 import { computeDueAlerts, syncResibotNotifications, registerResibotTapHandler, checkDueResibotRemindersNow } from "../../services/resibotNotifier";
-import { RB, Spinner, Card, EmptyState, StatusChip, dueLabel, fmtDate } from "./resibotUi";
+import { RB, Spinner, Card, EmptyState, StatusChip, dueLabel } from "./resibotUi";
+import { formatDisplayDate } from "../../../utils/dateFormat";
 
 const ResibotDashboardScreen = () => {
   const navigate = useNavigate();
@@ -216,7 +217,7 @@ const ResibotDashboardScreen = () => {
                       {r.title || r.category || m?.label}
                     </div>
                     <div style={{ fontSize: 12, color: RB.muted }}>
-                      {fmtDate(r.dueDate)} · {dueLabel(r.dueDate)}
+                      {formatDisplayDate(r.dueDate, "—")} · {dueLabel(r.dueDate)}
                     </div>
                   </div>
                   <StatusChip status={r.status} />

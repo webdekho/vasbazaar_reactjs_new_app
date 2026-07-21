@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FaCheckCircle } from "react-icons/fa";
 import { QRCodeSVG } from "qrcode.react";
 import { playSuccessSound } from "../../services/audioService";
+import { formatDisplayDate, formatDisplayTime } from "../../../utils/dateFormat";
 
 const BookingSuccessScreen = () => {
   const navigate = useNavigate();
@@ -28,7 +29,7 @@ const BookingSuccessScreen = () => {
         <div style={{ padding: 18, border: "1px solid var(--cm-line, #E5E7EB)", borderRadius: 14, textAlign: "left", marginBottom: 18 }}>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{booking.eventTitle}</div>
           <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)", marginBottom: 12 }}>
-            {booking.venue}, {booking.city} · {booking.showtime?.date} · {booking.showtime?.time}
+            {booking.venue}, {booking.city} · {formatDisplayDate(booking.showtime?.date, "")} · {formatDisplayTime(booking.showtime?.time, "")}
           </div>
           <div style={{ display: "flex", justifyContent: "center", padding: 18, background: "#fff", borderRadius: 10, marginBottom: 12 }}>
             <QRCodeSVG value={booking.qrPayload || booking.bookingCode || ""} size={160} level="M" includeMargin={false} />

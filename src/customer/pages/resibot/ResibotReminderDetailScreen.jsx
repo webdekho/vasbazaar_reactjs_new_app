@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FaBolt, FaCheck, FaClock, FaEdit, FaTrash } from "react-icons/fa";
 import { resibotService, getResibotModule } from "../../services/resibotService";
-import { RB, ResibotHeader, Spinner, Card, StatusChip, fmtDate, dueLabel, EmptyState } from "./resibotUi";
+import { RB, ResibotHeader, Spinner, Card, StatusChip, dueLabel, EmptyState } from "./resibotUi";
+import { formatDisplayDate } from "../../../utils/dateFormat";
 
 const Row = ({ label, value }) => (
   value === null || value === undefined || value === "" ? null : (
@@ -71,7 +72,7 @@ const ResibotReminderDetailScreen = () => {
 
       <Card style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 13.5, color: RB.muted, marginBottom: 8 }}>
-          {fmtDate(r.dueDate)} · {dueLabel(r.dueDate)}
+          {formatDisplayDate(r.dueDate, "—")} · {dueLabel(r.dueDate)}
         </div>
         <Row label="Category" value={r.category} />
         <Row label="Provider" value={r.providerName} />
@@ -79,7 +80,7 @@ const ResibotReminderDetailScreen = () => {
         <Row label="Amount" value={r.amount ? `₹${r.amount}` : null} />
         <Row label="Repeat" value={r.repeatFrequency && r.repeatFrequency !== "NONE" ? r.repeatFrequency.replace("_", " ") : null} />
         <Row label="Alerts (days before)" value={r.alertOffsetsDays} />
-        <Row label="Last action date" value={r.lastActionDate ? fmtDate(r.lastActionDate) : null} />
+        <Row label="Last action date" value={r.lastActionDate ? formatDisplayDate(r.lastActionDate, "—") : null} />
         <Row label="Payment method" value={r.paymentMethod} />
         <Row label="For member" value={r.memberId?.name} />
         <Row label="Notes" value={r.notes} />

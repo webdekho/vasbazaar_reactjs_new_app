@@ -34,6 +34,7 @@ import EditCustomerSheet from "./components/EditCustomerSheet";
 import SettlePaymentSheet from "./components/SettlePaymentSheet";
 import { useCustomerModern } from "../../context/CustomerModernContext";
 import { server_api } from "../../../utils/constants";
+import { formatDisplayDate, formatDisplayDateTime, formatDisplayTime } from "../../../utils/dateFormat";
 
 const CATEGORY_META = {
   REGULAR: { label: "Regular", cls: "ol-cat-regular" },
@@ -68,36 +69,11 @@ const formatINR = (n) => {
   return `₹${Math.round(v).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 };
 
-const formatDate = (iso) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-};
-
 const formatTxnDateTime = (txnDate, createdAt) => {
-  if (!txnDate) return formatDateTime(createdAt);
-  const datePart = formatDate(txnDate);
+  if (!txnDate) return formatDisplayDateTime(createdAt, "");
+  const datePart = formatDisplayDate(txnDate, "");
   if (!createdAt) return datePart;
-  const created = new Date(createdAt);
-  if (Number.isNaN(created.getTime())) return datePart;
-  const timePart = created.toLocaleTimeString("en-IN", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  return `${datePart}, ${timePart}`;
-};
-
-const formatDateTime = (iso) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return formatDate(iso);
-  return d.toLocaleString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return `${datePart} ${formatDisplayTime(createdAt, "")}`.trim();
 };
 
 const formatBalanceAfter = (value) => {
@@ -547,12 +523,12 @@ const CustomerLedgerScreen = () => {
                 )}
                 {dueDate && (
                   <span className="ol-due-pill">
-                    <FaCalendarAlt /> Due {formatDate(dueDate)}
+                    <FaCalendarAlt /> Due {formatDisplayDate(dueDate)}
                   </span>
                 )}
                 {promiseDate && (
                   <span className={`ol-promise-pill${isPromiseOverdue ? " is-overdue" : ""}`}>
-                    <FaHandshake /> Promise {formatDate(promiseDate)}
+                    <FaHandshake /> Promise {formatDisplayDate(promiseDate)}
                   </span>
                 )}
               </div>
@@ -568,7 +544,7 @@ const CustomerLedgerScreen = () => {
             <div className="ol-insight-tile">
               <span className="ol-insight-icon"><FaCalendarAlt /></span>
               <span className="ol-insight-label">Last update</span>
-              <strong>{lastTxn ? formatDate(lastTxn.txnDate) : "No entries"}</strong>
+              <strong>{lastTxn ? formatDisplayDate(lastTxn.txnDate, "") : "No entries"}</strong>
             </div>
             <div className="ol-insight-tile">
               <span className="ol-insight-icon"><FaCheckCircle /></span>

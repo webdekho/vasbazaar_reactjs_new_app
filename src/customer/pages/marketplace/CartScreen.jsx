@@ -9,6 +9,7 @@ import { useCustomerModern } from "../../context/CustomerModernContext";
 import { savePaymentContext, extractPaymentUrl } from "../../services/juspayService";
 import { customerStorage } from "../../services/storageService";
 import { Capacitor } from "@capacitor/core";
+import { formatDisplayTime } from "../../../utils/dateFormat";
 import "./marketplace.css";
 
 const buildMarketplaceReturnUrl = () => {
@@ -1072,7 +1073,7 @@ const CartScreen = () => {
                       <option value="">-- Select a slot --</option>
                       {slotsForDate(scheduleDate).map((s) => (
                         <option key={s.id} value={s.id}>
-                          {s.label} ({slotTime(s)}–{String(s.endTime).slice(0, 5)})
+                          {s.label} ({formatDisplayTime(s.startTime, "")}–{formatDisplayTime(s.endTime, "")})
                         </option>
                       ))}
                     </select>
@@ -1184,7 +1185,7 @@ const CartScreen = () => {
                       <option value="">-- Select a slot --</option>
                       {deliverySlots.map((s) => (
                         <option key={s.id} value={s.id}>
-                          {s.label} ({slotTime(s)}–{String(s.endTime).slice(0, 5)})
+                          {s.label} ({formatDisplayTime(s.startTime, "")}–{formatDisplayTime(s.endTime, "")})
                         </option>
                       ))}
                     </select>

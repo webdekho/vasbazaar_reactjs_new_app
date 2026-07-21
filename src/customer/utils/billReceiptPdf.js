@@ -7,6 +7,8 @@
 // Logos are loaded at runtime from /public/images via canvas so no base64 blob
 // needs to live in the bundle. Missing logos degrade gracefully (PDF still renders).
 
+import { formatDisplayDateTime } from "../../utils/dateFormat";
+
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
 const MARGIN = 42;
@@ -134,7 +136,7 @@ export const generateBillReceiptPdfBlob = async (receipt = {}) => {
     ["Biller Name", receipt.billerName || "-"],
     ["Category", receipt.category || "-"],
     ["Consumer No", receipt.consumerNo || "-"],
-    ["Date & Time", receipt.dateTime || "-"],
+    ["Date & Time", formatDisplayDateTime(receipt.dateTime)],
     ["Payment Mode", receipt.paymentMode || "-"],
   ];
   const cardH = rows.length * 24 + 20;

@@ -3,16 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaGift, FaCoins, FaCrown, FaCheckCircle, FaWallet, FaBell, FaCalendarCheck } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
 import { useToast } from "../../context/ToastContext";
+import { formatDisplayDate } from "../../../utils/dateFormat";
 import "./marketplace.css";
 
 const rupee = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-const fmtDate = (v) => {
-  if (!v) return "";
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-};
 
 const CB_TONE = {
   CREDITED: { bg: "rgba(16, 185, 129, 0.12)", color: "#059669" },
@@ -163,7 +157,7 @@ const MarketplaceRewardsScreen = () => {
                 </div>
                 {activeMembership.expiryAt && (
                   <div style={{ fontSize: 12, color: "var(--cm-muted)", marginTop: 6 }}>
-                    Valid till {fmtDate(activeMembership.expiryAt)}
+                    Valid till {formatDisplayDate(activeMembership.expiryAt, "")}
                   </div>
                 )}
               </div>
@@ -240,7 +234,7 @@ const MarketplaceRewardsScreen = () => {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--cm-ink)" }}>Order #{c.orderId}</div>
                         <div style={{ fontSize: 11.5, color: "var(--cm-muted)" }}>
-                          {fmtDate(c.creditedAt || c.createdAt)}
+                          {formatDisplayDate(c.creditedAt || c.createdAt, "")}
                           {Number(c.percentApplied) > 0 ? ` · ${Number(c.percentApplied)}%` : ""}
                         </div>
                       </div>

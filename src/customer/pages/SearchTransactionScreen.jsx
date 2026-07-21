@@ -5,6 +5,7 @@ import { FiInbox } from "react-icons/fi";
 import { walletService } from "../services/walletService";
 import { transactionSearchService } from "../services/transactionSearchService";
 import { formatCurrency, matchesTransactionSearch, normalizeTransaction } from "../utils/transactionHistory";
+import { formatDisplayDateAndTime, toInputDate } from "../../utils/dateFormat";
 
 const statusCfg = (s) => {
   const v = (s || "").toLowerCase();
@@ -21,13 +22,6 @@ const TransactionMetaItem = ({ label, value, valueClassName = "" }) => (
   </div>
 );
 
-const toInputDate = (d) => {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-};
-
 const getDefaultDateRange = () => {
   const today = new Date();
   const sevenDaysAgo = new Date();
@@ -42,7 +36,7 @@ const toBharatConnectFields = (t) => {
     agentId: t.agentId || t.operatorId?.operatorCode || t.operatorId?.operatorId || "—",
     amount: formatCurrency(txn.amount ?? t.txnAmt ?? t.amount ?? 0),
     billerName: txn.operator,
-    txnDate: `${t.date || ""} ${t.time || ""}`.trim() || "—",
+    txnDate: formatDisplayDateAndTime(t.date, t.time, "—"),
     // B-Connect TXN ID = NPCI txnReferenceId, stored in vendorRefId (apirefid).
     txnReferenceId: t.vendorRefId || t.apirefid || t.txnReferenceId || t.refId || t.txnId || "—",
     txnStatus: t.status || "—",

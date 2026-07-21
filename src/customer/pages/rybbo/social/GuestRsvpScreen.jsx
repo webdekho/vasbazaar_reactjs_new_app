@@ -4,6 +4,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { FaCheckCircle, FaQuestionCircle, FaTimesCircle, FaMapMarkerAlt, FaCalendarPlus, FaWallet, FaMobileAlt, FaQrcode, FaVolumeUp, FaVolumeMute } from "react-icons/fa";
 import { rybboSocialService, buildContributionReturnUrl } from "../../../services/rybboSocialService";
 import DataState from "../../../components/DataState";
+import { formatDisplayDate, formatDisplayTime, formatDisplayDateTime } from "../../../../utils/dateFormat";
 
 const ACCENT = "#7C3AED";
 const PAY_KEY = "rybbo_social_pay";
@@ -23,13 +24,6 @@ const RESPONSES = [
   { key: "MAYBE", label: "Maybe", icon: FaQuestionCircle, color: "#f59e0b" },
   { key: "DECLINE", label: "Can't make it", icon: FaTimesCircle, color: "#ef4444" },
 ];
-
-// Short human date for the extra dates of a multi-day event.
-const fmtDate = (iso) => {
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "";
-  return d.toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
-};
 
 /** Public, login-free invite + RSVP page. Rendered OUTSIDE the AuthGuard. */
 const GuestRsvpScreen = () => {
@@ -196,10 +190,10 @@ const GuestRsvpScreen = () => {
 
                 {/* Details */}
                 <div style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: 14, display: "grid", gap: 8, fontSize: 14 }}>
-                  <div>🗓️ <strong>{e.date}</strong>{e.time ? ` · ${e.time}` : ""}</div>
+                  <div>🗓️ <strong>{formatDisplayDate(e.date, "")}</strong>{e.time ? ` · ${formatDisplayTime(e.time, "")}` : ""}</div>
                   {Array.isArray(e.eventDates) && e.eventDates.length > 1 && (
                     <div style={{ fontSize: 12, color: "#6B7280" }}>
-                      Also on: {e.eventDates.slice(1).map((d) => fmtDate(d)).filter(Boolean).join(" · ")}
+                      Also on: {e.eventDates.slice(1).map((d) => formatDisplayDateTime(d, "")).filter(Boolean).join(" · ")}
                     </div>
                   )}
                   {e.venue && <div>📍 {e.venue}</div>}

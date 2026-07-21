@@ -4,6 +4,7 @@ import { FaArrowLeft, FaBell, FaToggleOn, FaToggleOff, FaCheckCircle } from "rea
 import { outstandingService } from "../../services/outstandingService";
 import { Capacitor } from "@capacitor/core";
 import { cancelReminder, scheduleReminder, ensureSmsPermission } from "../../services/smsService";
+import { formatDisplayTime } from "../../../utils/dateFormat";
 
 const formatINR = (n) => {
   const v = Number(n || 0);
@@ -223,7 +224,7 @@ const SmsReminderListScreen = () => {
                     </div>
                     {isEnabled && config.reminderTime && (
                       <div className="ol-sms-card-schedule">
-                        <FaBell size={10} /> Daily at {config.reminderTime}
+                        <FaBell size={10} /> Daily at {formatDisplayTime(config.reminderTime)}
                       </div>
                     )}
                   </div>

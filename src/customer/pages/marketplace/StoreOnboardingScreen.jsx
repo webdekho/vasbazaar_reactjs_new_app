@@ -5,6 +5,7 @@ import { marketplaceService } from "../../services/marketplaceService";
 import { setActiveStoreId } from "../../services/apiClient";
 import { useGeolocation } from "../../hooks/useGeolocation";
 import SignaturePad from "../../components/SignaturePad";
+import { formatDisplayTime } from "../../../utils/dateFormat";
 import "./marketplace.css";
 
 // The Agreement step is registration-only: an edit is not a re-signing, and
@@ -1501,7 +1502,7 @@ const TimingHint = ({ openTime, closeTime }) => {
     const mins = (closeMin - openMin) % 60;
     return (
       <div style={{ fontSize: 12, color: "#10b981", marginTop: -6, marginBottom: 8 }}>
-        ✓ Open daily for {hrs}h {mins ? `${mins}m` : ""} ({fmt12(openTime)} – {fmt12(closeTime)})
+        ✓ Open daily for {hrs}h {mins ? `${mins}m` : ""} ({formatDisplayTime(openTime, "")} – {formatDisplayTime(closeTime, "")})
       </div>
     );
   }
@@ -1519,18 +1520,10 @@ const TimingHint = ({ openTime, closeTime }) => {
   return (
     <div style={{ fontSize: 12, color: "#f59e0b", marginTop: -6, marginBottom: 8, lineHeight: 1.5 }}>
       ⚠ Close time is earlier than open time. This is treated as an <strong>overnight window</strong>:
-      open from {fmt12(openTime)} today through {fmt12(closeTime)} the next day
+      open from {formatDisplayTime(openTime, "")} today through {formatDisplayTime(closeTime, "")} the next day
       ({hrs}h {mins ? `${mins}m` : ""}). If you meant same-day hours, set close time after open time.
     </div>
   );
-};
-
-const fmt12 = (t) => {
-  if (!t) return "";
-  const [h, m] = t.split(":").map(Number);
-  const period = h >= 12 ? "PM" : "AM";
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${h12}:${String(m).padStart(2, "0")} ${period}`;
 };
 
 const ReviewRow = ({ label, value }) => (

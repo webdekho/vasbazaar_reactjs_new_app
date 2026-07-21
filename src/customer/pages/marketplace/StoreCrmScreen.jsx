@@ -2,18 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaUsers, FaSortAmountDown, FaClipboardCheck, FaChevronRight } from "react-icons/fa";
 import { marketplaceVendorService } from "../../services/marketplaceVendorService";
+import { formatDisplayDate } from "../../../utils/dateFormat";
 import "./marketplace.css";
 
 const inr = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
-const fmtDate = (d) => {
-  if (!d) return "—";
-  try {
-    return new Date(`${d}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "2-digit" });
-  } catch {
-    return d;
-  }
-};
-
 const SORTS = [
   { key: "totalSpend", label: "Top spenders" },
   { key: "orderCount", label: "Most orders" },
@@ -146,7 +138,7 @@ const StoreCrmScreen = () => {
                       <span><b style={{ color: "var(--cm-ink)" }}>{c.orderCount}</b> orders</span>
                       <span><b style={{ color: "var(--cm-ink)" }}>{inr(c.totalSpend)}</b> spent</span>
                       <span><b style={{ color: "var(--cm-ink)" }}>{inr(c.avgBasket)}</b> avg basket</span>
-                      <span>last: <b style={{ color: "var(--cm-ink)" }}>{fmtDate(c.lastOrderDate)}</b></span>
+                      <span>last: <b style={{ color: "var(--cm-ink)" }}>{formatDisplayDate(c.lastOrderDate, "—")}</b></span>
                     </div>
                   </div>
                 ))}

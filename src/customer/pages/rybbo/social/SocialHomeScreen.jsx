@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaPlusCircle, FaUsers, FaCalendarAlt, FaGlassCheers } from "react-icons/fa";
 import { rybboSocialService } from "../../../services/rybboSocialService";
 import DataState from "../../../components/DataState";
+import { formatDisplayDate, formatDisplayTime } from "../../../../utils/dateFormat";
 
 const ACCENT = "#7C3AED";
 
@@ -81,7 +82,7 @@ const SocialHomeScreen = () => {
                       </span>
                     </div>
                     <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)", marginTop: 4 }}>
-                      {e.date}{e.time ? ` · ${e.time}` : ""}{e.venue ? ` · ${e.venue}` : ""}
+                      {formatDisplayDate(e.date, "")}{e.time ? ` · ${formatDisplayTime(e.time, "")}` : ""}{e.venue ? ` · ${e.venue}` : ""}
                     </div>
                     <div style={{ display: "flex", gap: 14, marginTop: 10, fontSize: 12 }}>
                       <span style={{ color: "#16a34a", fontWeight: 700 }}>{s.accepted ?? 0} accepted</span>
@@ -111,7 +112,7 @@ const SocialHomeScreen = () => {
                         </span>
                       </div>
                       <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)", marginTop: 4 }}>
-                        {iv.date}{iv.time ? ` · ${iv.time}` : ""}{iv.venue ? ` · ${iv.venue}` : ""}
+                        {formatDisplayDate(iv.date, "")}{iv.time ? ` · ${formatDisplayTime(iv.time, "")}` : ""}{iv.venue ? ` · ${iv.venue}` : ""}
                       </div>
                       {iv.hostName && <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)", marginTop: 2 }}>Hosted by {iv.hostName}</div>}
                       <div style={{ fontSize: 12, color: ACCENT, fontWeight: 700, marginTop: 8 }}>Tap to view / edit your RSVP →</div>

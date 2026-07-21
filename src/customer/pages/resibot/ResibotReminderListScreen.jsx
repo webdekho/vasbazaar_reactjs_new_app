@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FaPlus, FaCheck, FaClock, FaEdit, FaTrash, FaBolt } from "react-icons/fa";
 import { resibotService, getResibotModule } from "../../services/resibotService";
-import { RB, ResibotHeader, Spinner, Card, EmptyState, StatusChip, fmtDate, dueLabel } from "./resibotUi";
+import { RB, ResibotHeader, Spinner, Card, EmptyState, StatusChip, dueLabel } from "./resibotUi";
+import { formatDisplayDate } from "../../../utils/dateFormat";
 
 const actionBtn = (color) => ({
   display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 11px", borderRadius: 9,
@@ -89,7 +90,7 @@ const ResibotReminderListScreen = () => {
                       {r.providerName ? `${r.providerName} · ` : ""}{r.accountIdentifier || ""}
                     </div>
                     <div style={{ fontSize: 12.5, color: RB.muted, marginTop: 3 }}>
-                      {fmtDate(r.dueDate)} · {dueLabel(r.dueDate)}{r.amount ? ` · ₹${r.amount}` : ""}
+                      {formatDisplayDate(r.dueDate, "—")} · {dueLabel(r.dueDate)}{r.amount ? ` · ₹${r.amount}` : ""}
                     </div>
                   </div>
                   <StatusChip status={r.status} />

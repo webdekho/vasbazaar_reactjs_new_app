@@ -3,14 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaHeart, FaTrash, FaRupeeSign } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
 import { useToast } from "../../context/ToastContext";
+import { formatDisplayDateTime } from "../../../utils/dateFormat";
 import "./marketplace.css";
-
-const formatDate = (s) => {
-  if (!s) return "";
-  try {
-    return new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-  } catch { return ""; }
-};
 
 const EMPTY = { itemName: "", quantity: "", budget: "", note: "" };
 
@@ -187,7 +181,7 @@ const MyWishlistScreen = () => {
                 {it.note && (
                   <div style={{ fontSize: 12, color: "var(--cm-muted)", marginTop: 6 }}>{it.note}</div>
                 )}
-                <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: 6 }}>{formatDate(it.createdAt)}</div>
+                <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: 6 }}>{formatDisplayDateTime(it.createdAt, "")}</div>
               </div>
               <button
                 onClick={() => remove(it.id)}

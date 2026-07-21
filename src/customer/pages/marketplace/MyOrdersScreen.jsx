@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaStore, FaChevronRight, FaBook, FaSyncAlt, FaUndoAlt } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
+import { formatDisplayDateTime } from "../../../utils/dateFormat";
 import "./marketplace.css";
 
 const STATUS_COLOR = {
@@ -12,13 +13,6 @@ const STATUS_COLOR = {
   DELIVERED: "#34d399",
   CANCELLED: "#f87171",
   REJECTED: "#f87171",
-};
-
-const formatDate = (s) => {
-  if (!s) return "";
-  try {
-    return new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-  } catch { return ""; }
 };
 
 const MyOrdersScreen = () => {
@@ -109,7 +103,7 @@ const MyOrdersScreen = () => {
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 14 }}>{o.storeId?.businessName || "Order"}</div>
                   <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: 2 }}>
-                    {o.orderNo} · {formatDate(o.placedAt || o.date)}
+                    {o.orderNo} · {formatDisplayDateTime(o.placedAt || o.date, "")}
                   </div>
                 </div>
                 <FaChevronRight size={12} style={{ color: "var(--cm-muted)" }} />

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaBell, FaUser, FaInfoCircle, FaTimes, FaTrashAlt } from "react-icons/fa";
 import { FiBell } from "react-icons/fi";
 import { notificationService } from "../services/notificationService";
+import { formatDisplayDate } from "../../utils/dateFormat";
 
 const iconMap = { push_notification: <FaBell />, customer: <FaUser />, general: <FaInfoCircle /> };
 
@@ -45,7 +46,7 @@ const timeAgo = (raw) => {
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   if (diff < 172800) return "Yesterday";
   if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-  return new Date(ms).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  return formatDisplayDate(ms, "");
 };
 
 const SkeletonCard = ({ delay = 0 }) => (

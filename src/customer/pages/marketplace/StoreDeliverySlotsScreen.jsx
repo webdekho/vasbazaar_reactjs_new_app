@@ -3,10 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaPlus, FaTrash, FaClock, FaToggleOn, FaToggleOff } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
 import { useToast } from "../../context/ToastContext";
+import { formatDisplayTime } from "../../../utils/dateFormat";
 import "./marketplace.css";
 
 const DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
-const fmt = (t) => (t ? String(t).slice(0, 5) : "--:--");
+const fmt = (t) => formatDisplayTime(t, "--:--");
 const daysText = (csv) =>
   !csv ? "Every day" : csv.split(",").filter(Boolean).map((d) => d[0] + d.slice(1).toLowerCase()).join(", ");
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaUndoAlt, FaExchangeAlt, FaBoxOpen } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
+import { formatDisplayDateTime } from "../../../utils/dateFormat";
 import "./marketplace.css";
 
 const STATUS_LABEL = {
@@ -17,13 +18,6 @@ const FLOW = ["REQUESTED", "APPROVED", "PICKED_UP", "REFUNDED"];
 const FLOW_REPLACE = ["REQUESTED", "APPROVED", "PICKED_UP", "REPLACED"];
 
 const inr = (n) => `₹${Number(n || 0).toFixed(2)}`;
-
-const formatDate = (s) => {
-  if (!s) return "";
-  try {
-    return new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-  } catch { return ""; }
-};
 
 const StatusBadge = ({ status }) => {
   const rejected = status === "REJECTED";
@@ -106,7 +100,7 @@ const MyReturnsScreen = () => {
                       {r.type === "REPLACEMENT" ? "Replacement" : "Return"}
                     </div>
                     <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: 2 }}>
-                      {store.businessName || "Store"}{order.orderNo ? ` · ${order.orderNo}` : ""} · {formatDate(r.createdAt)}
+                      {store.businessName || "Store"}{order.orderNo ? ` · ${order.orderNo}` : ""} · {formatDisplayDateTime(r.createdAt, "")}
                     </div>
                   </div>
                   <StatusBadge status={r.status} />

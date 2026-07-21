@@ -5,6 +5,7 @@ import {
   VASBAZAAR_LOGO_WIDTH,
   VASBAZAAR_LOGO_HEIGHT,
 } from "./vasbazaarLogo";
+import { formatDisplayDate, formatDisplayTime } from "../../utils/dateFormat";
 
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
@@ -33,19 +34,10 @@ const C = {
 
 const money = (value) => `Rs. ${Math.round(Math.abs(Number(value || 0))).toLocaleString("en-IN")}`;
 
-const formatDate = (iso) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return String(iso);
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-};
-
 const formatDateTime = (txnDate, createdAt) => {
-  const date = formatDate(txnDate || createdAt);
+  const date = formatDisplayDate(txnDate || createdAt, "");
   if (!createdAt) return date;
-  const d = new Date(createdAt);
-  if (Number.isNaN(d.getTime())) return date;
-  return `${date}, ${d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}`;
+  return `${date} ${formatDisplayTime(createdAt, "")}`.trim();
 };
 
 const formatPaymentMode = (mode) => {
@@ -175,7 +167,7 @@ export const generateLedgerPdfBlob = ({ data, customer, transactions, balance, r
   rect(MARGIN, cardTop - cardH, CONTENT_W, cardH, C.cardBg);
   text(customer?.customerName || "Customer", MARGIN + 14, 14, { y: cardTop - 22, bold: true });
   text(`+91 ${customer?.customerMobile || ""}`, MARGIN + 14, 9.5, { y: cardTop - 37, color: C.slate });
-  text(`Period: ${formatDate(dateRange?.dateFrom)} to ${formatDate(dateRange?.dateTo)}`,
+  text(`Period: ${formatDisplayDate(dateRange?.dateFrom, "")} to ${formatDisplayDate(dateRange?.dateTo, "")}`,
     MARGIN + 14, 9, { y: cardTop - 49, color: C.muted });
   // status pill
   const pillW = textWidthApprox(statusLabel, 9) + 22;

@@ -2,15 +2,9 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaTimes, FaCheckCircle, FaExclamationTriangle, FaSyncAlt, FaWallet, FaBolt } from "react-icons/fa";
 import { outstandingService } from "../../../services/outstandingService";
+import { formatDisplayDate } from "../../../../utils/dateFormat";
 
 const formatINR = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
-
-const formatDate = (iso) => {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-};
 
 const RenewSubscriptionSheet = ({ onClose, onRenewed, requireRenewal = false }) => {
   const navigate = useNavigate();
@@ -38,7 +32,7 @@ const RenewSubscriptionSheet = ({ onClose, onRenewed, requireRenewal = false }) 
       setResult({
         type: "success",
         title: "Subscription renewed!",
-        message: `₹${Number(res.data?.amountCharged || 0).toFixed(2)} deducted from wallet. Valid till ${formatDate(res.data?.validTill)}.`,
+        message: `₹${Number(res.data?.amountCharged || 0).toFixed(2)} deducted from wallet. Valid till ${formatDisplayDate(res.data?.validTill, "—")}.`,
       });
       setInfo(res.data);
     } else {
@@ -142,8 +136,8 @@ const RenewSubscriptionSheet = ({ onClose, onRenewed, requireRenewal = false }) 
               <div style={{ fontSize: 13, color: "#4b5563" }}>
                 {info?.isActive
                   ? isTrialActive
-                    ? `No charges till ${formatDate(info?.trialEndsAt || info?.validTill)}. Billing starts after the first year.`
-                    : `Valid till ${formatDate(info?.validTill)}`
+                    ? `No charges till ${formatDisplayDate(info?.trialEndsAt || info?.validTill, "—")}. Billing starts after the first year.`
+                    : `Valid till ${formatDisplayDate(info?.validTill, "—")}`
                   : "Your ReBill subscription has expired or never started."}
               </div>
             </div>
@@ -175,7 +169,7 @@ const RenewSubscriptionSheet = ({ onClose, onRenewed, requireRenewal = false }) 
                   <strong>Auto renew</strong>
                   <span>
                     {isTrialActive
-                      ? `Starts paid renewal after ${formatDate(info?.trialEndsAt)}.`
+                      ? `Starts paid renewal after ${formatDisplayDate(info?.trialEndsAt, "—")}.`
                       : `Renew every ${billingCycleText} without tapping refresh.`}
                   </span>
                 </div>

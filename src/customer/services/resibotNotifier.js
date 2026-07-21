@@ -1,6 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { resibotService } from "./resibotService";
+import { formatDisplayDate } from "../../utils/dateFormat";
 
 /**
  * Resibot 360 — fully in-app reminder notification engine.
@@ -43,7 +44,7 @@ const label = (r) => r.title || r.category || r.module || "Reminder";
 const bodyFor = (r) => {
   const n = daysLeft(r.dueDate);
   const name = label(r);
-  if (n < 0) return `${name} is overdue (was due ${ymd(r.dueDate)}).`;
+  if (n < 0) return `${name} is overdue (was due ${formatDisplayDate(r.dueDate, "")}).`;
   if (n === 0) return `${name} is due today.`;
   if (n === 1) return `${name} is due tomorrow.`;
   return `${name} is due in ${n} day(s).`;

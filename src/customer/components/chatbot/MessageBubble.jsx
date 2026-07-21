@@ -1,6 +1,7 @@
 import { memo } from "react";
 import QuickActions from "./QuickActions";
 import { BalanceCard, TransactionsCard, OffersCard, ConfirmationCard, EscalateCard } from "./RichCards";
+import { formatDisplayTime } from "../../../utils/dateFormat";
 
 /**
  * PERF FIX: Wrapped with React.memo to prevent unnecessary re-renders.
@@ -44,7 +45,7 @@ const MessageBubble = memo(({ message, onAction, onConfirm, onCancel, onLiveChat
 
         {/* Timestamp */}
         <div className="cb-msg-time">
-          {new Date(message.timestamp).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+          {formatDisplayTime(message.timestamp, "")}
         </div>
       </div>
     </div>

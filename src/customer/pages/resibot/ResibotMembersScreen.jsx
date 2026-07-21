@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaPlus, FaEdit, FaTrash, FaUser } from "react-icons/fa";
 import { resibotService } from "../../services/resibotService";
-import { RB, ResibotHeader, Spinner, Card, Field, TextInput, Select, PrimaryButton, EmptyState, fmtDate } from "./resibotUi";
+import { RB, ResibotHeader, Spinner, Card, Field, TextInput, Select, PrimaryButton, EmptyState } from "./resibotUi";
+import { formatDisplayDate } from "../../../utils/dateFormat";
 
 const empty = { id: null, name: "", relation: "", mobileNumber: "", dob: "", gender: "" };
 
@@ -117,7 +118,7 @@ const ResibotMembersScreen = () => {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14.5, fontWeight: 700 }}>{m.name}</div>
                 <div style={{ fontSize: 12.5, color: RB.muted }}>
-                  {[m.relation, m.mobileNumber, m.dob ? fmtDate(m.dob) : null].filter(Boolean).join(" · ") || "—"}
+                  {[m.relation, m.mobileNumber, m.dob ? formatDisplayDate(m.dob, "—") : null].filter(Boolean).join(" · ") || "—"}
                 </div>
               </div>
               <button type="button" onClick={() => openEdit(m)} aria-label="Edit"

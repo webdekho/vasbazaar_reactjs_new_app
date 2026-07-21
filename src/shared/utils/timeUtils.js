@@ -1,3 +1,5 @@
+import { formatDisplayDate, formatDisplayDateTime, formatDisplayTime, toInputDate } from '../../utils/dateFormat';
+
 export const formatTimeAgo = (dateString) => {
   if (!dateString) return '';
   const date = new Date(dateString);
@@ -18,32 +20,10 @@ export const formatTimeAgo = (dateString) => {
   return formatShortDate(dateString);
 };
 
-export const formatShortDate = (dateString) => {
-  if (!dateString) return '';
-  const d = new Date(dateString);
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-};
+export const formatShortDate = (dateString) => formatDisplayDate(dateString, '');
 
-export const formatTime = (dateString) => {
-  if (!dateString) return '';
-  const d = new Date(dateString);
-  let hours = d.getHours();
-  const mins = d.getMinutes().toString().padStart(2, '0');
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  hours = hours % 12 || 12;
-  return `${hours}:${mins} ${ampm}`;
-};
+export const formatTime = (dateString) => formatDisplayTime(dateString, '');
 
-export const formatDateTime = (dateString) => {
-  if (!dateString) return '';
-  return `${formatShortDate(dateString)} ${formatTime(dateString)}`;
-};
+export const formatDateTime = (dateString) => formatDisplayDateTime(dateString, '');
 
-export const formatDateForAPI = (date) => {
-  const d = date instanceof Date ? date : new Date(date);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-};
+export const formatDateForAPI = (date) => toInputDate(date);

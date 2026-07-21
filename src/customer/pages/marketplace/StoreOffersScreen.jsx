@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaPlus, FaPencilAlt, FaTrash, FaToggleOn, FaToggleOff, FaChevronRight, FaTag, FaBolt } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
+import { formatDisplayDateTime } from "../../../utils/dateFormat";
 import "./marketplace.css";
 
 const OFFER_TYPES = [
@@ -11,11 +12,7 @@ const OFFER_TYPES = [
 ];
 
 const formatRange = (startAt, endAt) => {
-  const fmt = (s) => {
-    if (!s) return null;
-    try { return new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); }
-    catch { return null; }
-  };
+  const fmt = (s) => formatDisplayDateTime(s, "") || null;
   const f = fmt(startAt);
   const t = fmt(endAt);
   if (!f && !t) return null;

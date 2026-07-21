@@ -10,6 +10,7 @@ import { advertisementService } from "../services/advertisementService";
 import { userService } from "../services/userService";
 import { walletService } from "../services/walletService";
 import { rechargeService } from "../services/rechargeService";
+import { formatDisplayDate } from "../../utils/dateFormat";
 import { customerStorage } from "../services/storageService";
 import { peekCache } from "../services/apiCache";
 import { useCustomerModern } from "../context/CustomerModernContext";
@@ -225,7 +226,7 @@ const UpcomingDuesSection = ({ dues }) => {
           const logo = item.operatorId?.logo || item.operator?.logo;
           const number = item.mobile || item.param || "";
           const amount = item.amount || item.txnAmt;
-          const dueDate = item.fromDate ? new Date(item.fromDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : null;
+          const dueDate = item.fromDate ? formatDisplayDate(item.fromDate, "") : null;
           const isProcessing = processingId === item.id;
 
           return (

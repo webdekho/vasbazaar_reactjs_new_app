@@ -13,13 +13,9 @@ import {
   getInvoiceShareText,
   amountToWords,
 } from "../../utils/invoicePdf";
+import { formatDisplayDate } from "../../../utils/dateFormat";
 
 const formatINR = (n) => `₹${Math.round(Number(n || 0)).toLocaleString("en-IN")}`;
-const formatDate = (iso) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-};
 
 const STATUS_META = {
   DRAFT: "Draft",
@@ -116,7 +112,7 @@ const InvoiceViewScreen = () => {
         </button>
         <div className="ol-ledger-id">
           <div className="ol-ledger-name"><span className="ol-ledger-name-text">{invoice.invoiceNo}</span></div>
-          <div className="ol-ledger-mobile">{formatDate(invoice.invoiceDate)} · {STATUS_META[invoice.status] || "Draft"}</div>
+          <div className="ol-ledger-mobile">{formatDisplayDate(invoice.invoiceDate)} · {STATUS_META[invoice.status] || "Draft"}</div>
         </div>
       </div>
 

@@ -3,18 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaPlus, FaTrash, FaCalendarTimes, FaMapMarkerAlt } from "react-icons/fa";
 import { marketplaceVendorService } from "../../services/marketplaceVendorService";
 import { useToast } from "../../context/ToastContext";
+import { formatDisplayDate } from "../../../utils/dateFormat";
 import "./marketplace.css";
-
-const fmtDate = (d) => {
-  if (!d) return "—";
-  try {
-    return new Date(`${d}T00:00:00`).toLocaleDateString("en-IN", {
-      weekday: "short", day: "numeric", month: "short", year: "numeric",
-    });
-  } catch {
-    return d;
-  }
-};
 
 const todayStr = () => {
   const now = new Date();
@@ -84,7 +74,7 @@ const StoreHolidaysScreen = () => {
   };
 
   const removeHoliday = async (h) => {
-    if (!window.confirm(`Remove holiday on ${fmtDate(h.holidayDate)}?`)) return;
+    if (!window.confirm(`Remove holiday on ${formatDisplayDate(h.holidayDate, "—")}?`)) return;
     const res = await marketplaceVendorService.deleteHoliday(h.id);
     if (res.success) { showToast("Holiday removed", "info"); setHolidays((p) => p.filter((x) => x.id !== h.id)); }
     else showToast(res.message || "Could not remove", "error");
@@ -194,7 +184,7 @@ const StoreHolidaysScreen = () => {
                         <FaCalendarTimes size={14} />
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13.5, fontWeight: 700 }}>{fmtDate(h.holidayDate)}</div>
+                        <div style={{ fontSize: 13.5, fontWeight: 700 }}>{formatDisplayDate(h.holidayDate, "—")}</div>
                         <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>{h.note || (past ? "Past holiday" : "Store closed")}</div>
                       </div>
                       <button type="button" onClick={() => removeHoliday(h)} aria-label="Remove holiday"

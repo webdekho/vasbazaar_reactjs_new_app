@@ -4,6 +4,7 @@ import { FaArrowLeft, FaCheckCircle, FaSyncAlt, FaQrcode } from "react-icons/fa"
 import { QRCodeSVG } from "qrcode.react";
 import { rybboService } from "../../services/rybboService";
 import DataState from "../../components/DataState";
+import { formatDisplayDate, formatDisplayTime, formatDisplayDateTime } from "../../../utils/dateFormat";
 
 // Auto-refresh the signed QR token before it expires so a screenshot kept open
 // for hours still presents a valid token at the gate.
@@ -75,7 +76,7 @@ const TicketDetailsScreen = () => {
               <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)", marginBottom: 14 }}>
                 {ticket.venue}{ticket.city ? `, ${ticket.city}` : ""}
                 <br />
-                {ticket.showtime?.date} · {ticket.showtime?.time}
+                {formatDisplayDate(ticket.showtime?.date, "")} · {formatDisplayTime(ticket.showtime?.time, "")}
               </div>
 
               <div style={{ display: "flex", justifyContent: "center", padding: 18, background: "#fff", borderRadius: 12 }}>
@@ -115,7 +116,7 @@ const TicketDetailsScreen = () => {
                   {ticket.checkIns.map((c) => (
                     <div key={c.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--cm-muted, #6B7280)", marginBottom: 4 }}>
                       <span>{c.ticketName || "Ticket"}</span>
-                      <span>{new Date(c.scannedAt).toLocaleString()}</span>
+                      <span>{formatDisplayDateTime(c.scannedAt, "")}</span>
                     </div>
                   ))}
                 </div>

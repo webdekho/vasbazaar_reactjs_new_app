@@ -13,6 +13,7 @@ import {
 } from "../services/mandateService";
 import { playSuccessSound } from "../services/audioService";
 import { normalizeCcf } from "../utils/billReceiptPdf";
+import { formatDisplayDateTime } from "../../utils/dateFormat";
 
 const ScratchCashbackModal = ({ open, cashbackAmount, onClose, onRevealed }) => {
   const canvasRef = useRef(null);
@@ -594,7 +595,7 @@ const SuccessScreen = () => {
   const isEmptyState = !location.state || Object.keys(location.state).length === 0;
   const isService = Boolean(data.type || data.operatorId || data.serviceId) || isEmptyState;
   const paymentType = String(data.paymentType || "web").toUpperCase();
-  const dateTime = new Date().toLocaleString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  const dateTime = formatDisplayDateTime(new Date());
   const cashback = data.statusPayload?.cashback || data.statusPayload?.cashbackAmount || data.cashbackValue || 0;
   const discount = Number(data.discountValue || 0);
   const offerType = data.offerType || null;

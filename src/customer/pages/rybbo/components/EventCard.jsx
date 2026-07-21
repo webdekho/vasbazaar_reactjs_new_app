@@ -1,21 +1,12 @@
 import { useState } from "react";
 import { FaStar, FaMapMarkerAlt, FaRegImage } from "react-icons/fa";
-
-const formatEventDate = (value) => {
-  if (!value) return "";
-  const [datePart] = String(value).split("T");
-  const parts = datePart.split("-");
-  if (parts.length !== 3) return value;
-  const [year, month, day] = parts;
-  const monthName = new Date(Number(year), Number(month) - 1, 1).toLocaleString("en-US", { month: "long" });
-  return `${day}-${monthName}-${year}`;
-};
+import { formatDisplayDate } from "../../../../utils/dateFormat";
 
 const EventCard = ({ event, onClick, layout = "vertical" }) => {
   const isHorizontal = layout === "horizontal";
   const [imgFailed, setImgFailed] = useState(false);
   const hasImage = !!event.poster && !imgFailed;
-  const displayDate = formatEventDate(event.date);
+  const displayDate = formatDisplayDate(event.date, "");
   return (
     <button
       type="button"

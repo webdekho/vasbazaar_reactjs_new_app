@@ -12,13 +12,9 @@ import {
   getInvoicePdfFileName,
   getInvoiceShareText,
 } from "../../utils/invoicePdf";
+import { formatDisplayDate } from "../../../utils/dateFormat";
 
 const formatINR = (n) => `₹${Math.round(Number(n || 0)).toLocaleString("en-IN")}`;
-const formatDate = (iso) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-};
 
 const STATUS_META = {
   DRAFT: { label: "Draft", cls: "is-draft" },
@@ -181,7 +177,7 @@ const InvoiceListScreen = () => {
                     {!customerId && inv.customerName ? (
                       <div className="ol-inv-sub"><b>{inv.customerName}</b></div>
                     ) : null}
-                    <div className="ol-inv-sub">{formatDate(inv.invoiceDate)}{inv.dueDate ? ` · Due ${formatDate(inv.dueDate)}` : ""}</div>
+                    <div className="ol-inv-sub">{formatDisplayDate(inv.invoiceDate)}{inv.dueDate ? ` · Due ${formatDisplayDate(inv.dueDate)}` : ""}</div>
                   </div>
                   <div className="ol-inv-card-right">
                     <div className="ol-inv-total">{formatINR(inv.total)}</div>

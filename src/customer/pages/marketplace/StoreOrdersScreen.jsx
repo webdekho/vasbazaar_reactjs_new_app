@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaStore, FaFileExcel, FaMotorcycle, FaCamera, FaUndoAlt, FaChartLine, FaBolt, FaSnowflake } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
 import { marketplaceLogisticsAiService } from "../../services/marketplaceLogisticsAiService";
+import { formatDisplayDateTime } from "../../../utils/dateFormat";
 import "./marketplace.css";
 
 // DELIVERY-order statuses during which a rider can be (re)assigned.
@@ -33,13 +34,6 @@ const STATUS_TONE = {
   DELIVERED: { bg: "rgba(16, 185, 129, 0.12)", color: "#10b981" },
   REJECTED: { bg: "rgba(239, 68, 68, 0.12)", color: "#ef4444" },
   CANCELLED: { bg: "rgba(148, 163, 184, 0.18)", color: "#64748b" },
-};
-
-const formatDate = (s) => {
-  if (!s) return "";
-  try {
-    return new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-  } catch { return ""; }
 };
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -162,7 +156,7 @@ const StoreOrdersScreen = () => {
       Number(o.tax || o.gst || 0).toFixed(2),
       Number(o.discount || 0).toFixed(2),
       o.deliveryAddress || "",
-      o.placedAt || o.date || "",
+      formatDisplayDateTime(o.placedAt || o.date, ""),
       o.rejectionReason || "",
     ]);
     // BOM so Excel opens UTF-8 cleanly (₹ symbol etc.)
@@ -560,7 +554,7 @@ const StoreOrdersScreen = () => {
                       )}
                     </div>
                     <div style={{ fontWeight: 700, marginTop: 2 }}>{o.userId?.name || "Customer"}</div>
-                    <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>{o.contactMobile} · {formatDate(o.placedAt || o.date)}</div>
+                    <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>{o.contactMobile} · {formatDisplayDateTime(o.placedAt || o.date, "")}</div>
                   </div>
                   <strong>₹{Number(o.totalAmount || 0).toFixed(0)}</strong>
                 </div>

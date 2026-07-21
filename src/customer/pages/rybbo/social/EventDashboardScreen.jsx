@@ -9,6 +9,7 @@ import { pickContacts, isUserCancelledError } from "../../rebuddy/contacts";
 import DataState from "../../../components/DataState";
 import { useToast } from "../../../context/ToastContext";
 import "./celebration.css";
+import { formatDisplayDate, formatDisplayTime } from "../../../../utils/dateFormat";
 
 const ACCENT = "#7C3AED";
 const MAX_IMAGES = 3;
@@ -298,7 +299,7 @@ const EventDashboardScreen = () => {
 
   // Send a gentle RSVP reminder over WhatsApp (with the banner attached on the app).
   const sendReminder = async () => {
-    const text = `Gentle reminder: please confirm your presence for "${e.title}"${e.date ? ` on ${e.date}` : ""} so we can plan better.\n\nRSVP here: ${inviteUrl}`;
+    const text = `Gentle reminder: please confirm your presence for "${e.title}"${e.date ? ` on ${formatDisplayDate(e.date, "")}` : ""} so we can plan better.\n\nRSVP here: ${inviteUrl}`;
     await shareToWhatsApp(text, {
       attachBanner: true,
       dialogTitle: "Send reminder",
@@ -309,7 +310,7 @@ const EventDashboardScreen = () => {
   const sendGuestReminder = async (guest) => {
     const mobile = String(guest?.guestMobile || "").replace(/\D/g, "");
     const name = guest?.guestName && !/^Guest \d{4}$/.test(guest.guestName) ? `${guest.guestName}, ` : "";
-    const text = `${name}gentle reminder to RSVP for "${e.title}"${e.date ? ` on ${e.date}` : ""}.\n\nPlease confirm here: ${inviteUrl}`;
+    const text = `${name}gentle reminder to RSVP for "${e.title}"${e.date ? ` on ${formatDisplayDate(e.date, "")}` : ""}.\n\nPlease confirm here: ${inviteUrl}`;
     if (mobile.length >= 10) {
       window.open(`https://api.whatsapp.com/send?phone=91${mobile.slice(-10)}&text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
       return;
@@ -416,7 +417,7 @@ const EventDashboardScreen = () => {
   };
 
   const copyReminder = async () => {
-    const msg = `Gentle reminder: please confirm your presence for "${e.title}"${e.date ? ` on ${e.date}` : ""} so we can plan better. RSVP here: ${inviteUrl}`;
+    const msg = `Gentle reminder: please confirm your presence for "${e.title}"${e.date ? ` on ${formatDisplayDate(e.date, "")}` : ""} so we can plan better. RSVP here: ${inviteUrl}`;
     try { await navigator.clipboard.writeText(msg); showToast("Reminder message copied", "success"); }
     catch { showToast("Could not copy", "error"); }
   };
@@ -564,7 +565,7 @@ const EventDashboardScreen = () => {
 
             {/* When & where */}
             <div style={{ fontSize: 13, color: "var(--cm-muted, #6B7280)" }}>
-              <div>🗓️ {e.date}{e.time ? ` · ${e.time}` : ""}</div>
+              <div>🗓️ {formatDisplayDate(e.date, "")}{e.time ? ` · ${formatDisplayTime(e.time, "")}` : ""}</div>
               {e.venue && <div style={{ marginTop: 2 }}>📍 {e.venue}</div>}
               {e.foodPref && <div style={{ marginTop: 2, textTransform: "capitalize" }}>🍽️ {e.foodPref}</div>}
             </div>

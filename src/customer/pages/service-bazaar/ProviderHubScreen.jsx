@@ -5,6 +5,7 @@ import { serviceBazaarService } from "../../services/serviceBazaarService";
 import { queueService } from "../../services/queueService";
 import { useToast } from "../../context/ToastContext";
 import "./service-bazaar.css";
+import { formatDisplayDateTime } from "../../../utils/dateFormat";
 
 const STATUS_NOTE = {
   PENDING: "Under review by VasBazaar",
@@ -440,7 +441,7 @@ export default function ProviderHubScreen() {
                     <p className="sb-offering-title">{j.serviceOfferingId?.title || "Service"}</p>
                     <p className="sb-offering-desc">#{j.bookingNo} • ₹{Number(j.totalAmount || 0).toFixed(0)} • {paid ? "Paid" : "Payment pending"}</p>
                     {j.serviceAddress && <p className="sb-offering-desc">{j.serviceAddress}</p>}
-                    {j.scheduledAt && <p className="sb-offering-desc">{new Date(j.scheduledAt).toLocaleString()}</p>}
+                    {j.scheduledAt && <p className="sb-offering-desc">{formatDisplayDateTime(j.scheduledAt, "")}</p>}
                   </div>
                   <span className={`sb-status ${status}`}>{status.replace("_", " ")}</span>
                 </div>

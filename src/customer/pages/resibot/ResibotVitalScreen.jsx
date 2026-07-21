@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { resibotService } from "../../services/resibotService";
-import { RB, ResibotHeader, Spinner, Card, Field, TextInput, PrimaryButton, EmptyState, fmtDate } from "./resibotUi";
+import { RB, ResibotHeader, Spinner, Card, Field, TextInput, PrimaryButton, EmptyState } from "./resibotUi";
+import { formatDisplayDate, formatDisplayDateTime } from "../../../utils/dateFormat";
 
 const VITAL_META = {
   BP: { label: "Blood Pressure", unit: "mmHg", placeholder: "120/80", text: true },
@@ -74,7 +75,7 @@ const ResibotVitalScreen = () => {
             <Card key={h.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ fontSize: 15, fontWeight: 700 }}>{h.valueText} <span style={{ fontSize: 12, color: RB.muted, fontWeight: 400 }}>{h.unit}</span></span>
               <span style={{ fontSize: 12.5, color: RB.muted }}>
-                {h.recordedAt ? new Date(h.recordedAt).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : fmtDate(h.createdAt)}
+                {h.recordedAt ? formatDisplayDateTime(h.recordedAt, "") : formatDisplayDate(h.createdAt, "—")}
               </span>
             </Card>
           ))}

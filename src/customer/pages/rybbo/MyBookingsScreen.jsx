@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaTicketAlt } from "react-icons/fa";
 import { rybboService } from "../../services/rybboService";
 import DataState from "../../components/DataState";
+import { formatDisplayDate, formatDisplayTime } from "../../../utils/dateFormat";
 
 const MyBookingsScreen = () => {
   const navigate = useNavigate();
@@ -58,7 +59,7 @@ const MyBookingsScreen = () => {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{b.eventTitle}</div>
                       <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>{b.venue}, {b.city}</div>
-                      <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>{b.showtime?.date} · {b.showtime?.time}</div>
+                      <div style={{ fontSize: 12, color: "var(--cm-muted, #6B7280)" }}>{formatDisplayDate(b.showtime?.date, "")} · {formatDisplayTime(b.showtime?.time, "")}</div>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
                         <span style={{ fontSize: 11, color: statusColor, fontWeight: 600 }}>{b.status}</span>
                         <strong style={{ fontSize: 13 }}>₹{b.total}</strong>

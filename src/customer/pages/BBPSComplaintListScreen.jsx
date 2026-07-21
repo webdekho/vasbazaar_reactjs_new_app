@@ -14,6 +14,7 @@ import {
 import { FiInbox } from "react-icons/fi";
 import { bbpsComplaintService } from "../services/bbpsComplaintService";
 import { useToast } from "../context/ToastContext";
+import { formatDisplayDateTime } from "../../utils/dateFormat";
 
 const getStatusConfig = (status) => {
   const s = (status || "").toUpperCase();
@@ -22,22 +23,6 @@ const getStatusConfig = (status) => {
   if (s === "FAILED" || s === "REJECTED")
     return { label: "Failed", color: "#FF3B30", icon: <FaExclamationCircle /> };
   return { label: "Pending", color: "#FF9800", icon: <FaClock /> };
-};
-
-const formatDate = (dateStr) => {
-  if (!dateStr) return "";
-  try {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return dateStr;
-  }
 };
 
 const SkeletonCard = ({ delay }) => (
@@ -370,7 +355,7 @@ const BBPSComplaintListScreen = () => {
                   {item.createdAt && (
                     <div className="cl-date">
                       <FaClock style={{ marginRight: 6 }} />
-                      {formatDate(item.createdAt)}
+                      {formatDisplayDateTime(item.createdAt, "")}
                     </div>
                   )}
 
@@ -399,7 +384,7 @@ const BBPSComplaintListScreen = () => {
                         {item.updatedAt && (
                           <div className="bbps-detail-item">
                             <span className="bbps-detail-label">Last Updated</span>
-                            <span className="bbps-detail-value">{formatDate(item.updatedAt)}</span>
+                            <span className="bbps-detail-value">{formatDisplayDateTime(item.updatedAt, "")}</span>
                           </div>
                         )}
                       </div>

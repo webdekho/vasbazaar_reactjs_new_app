@@ -4,6 +4,7 @@ import { FiArrowDownLeft, FiArrowUpRight, FiGift, FiDollarSign, FiInbox } from "
 import { userService } from "../services/userService";
 import { walletService } from "../services/walletService";
 import BankDetailsTab from "../components/BankDetailsTab";
+import { formatDisplayDateAndTime, formatDisplayTime } from "../../utils/dateFormat";
 
 const getStatusConfig = (status) => {
   const s = (status || "").toLowerCase();
@@ -142,7 +143,7 @@ const WalletScreen = () => {
                 </button>
               </div>
 
-              {lastUpdated && <div className="wl-last-updated">Last updated: {lastUpdated.toLocaleTimeString()}</div>}
+              {lastUpdated && <div className="wl-last-updated">Last updated: {formatDisplayTime(lastUpdated, "")}</div>}
             </div>
           </div>
 
@@ -197,7 +198,7 @@ const WalletScreen = () => {
                           <div className="th-info">
                             <div className="th-info-name">{txn.operatorNo || txn.mobile || txn.operatorId?.operatorName || "Transaction"}</div>
                             <div className="th-info-desc">{txn.message || txn.description || txn.serviceType || "—"}</div>
-                            <div className="th-info-date">{txn.date} {txn.time}</div>
+                            <div className="th-info-date">{formatDisplayDateAndTime(txn.date, txn.time, "")}</div>
                           </div>
                           <div className="th-right">
                             <div className={`th-amount th-amount--${isCredit ? "credit" : "debit"}`}>

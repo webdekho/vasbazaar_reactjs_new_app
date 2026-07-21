@@ -4,6 +4,7 @@ import { FaArrowLeft, FaCalendarCheck, FaCheck, FaTimes, FaStore, FaClock, FaUse
 import { marketplaceWave4Service } from "../../services/marketplaceWave4Service";
 import { marketplaceService } from "../../services/marketplaceService";
 import { useToast } from "../../context/ToastContext";
+import { formatDisplayDateTime } from "../../../utils/dateFormat";
 import "./marketplace.css";
 
 const PURPOSES = [
@@ -21,13 +22,6 @@ const STATUS_COLOR = {
   CANCELLED: "#ef4444",
 };
 const purposeLabel = (p) => (PURPOSES.find((x) => x.key === p) || {}).label || p;
-const fmt = (s) => {
-  if (!s) return "—";
-  try {
-    const d = new Date(String(s).replace(" ", "T"));
-    return d.toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
-  } catch { return String(s); }
-};
 const pad2 = (n) => String(n).padStart(2, "0");
 const defaultSlot = () => {
   const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -131,7 +125,7 @@ const MarketplaceAppointmentsScreen = () => {
         <StatusPill status={a.status} />
       </div>
       <div style={{ fontSize: 12.5, color: "var(--cm-muted)", marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
-        <FaClock size={11} /> {fmt(a.slotAt)}
+        <FaClock size={11} /> {formatDisplayDateTime(a.slotAt, "—")}
       </div>
       {(a.storeName || a.itemName) && (
         <div style={{ fontSize: 12.5, color: "var(--cm-muted)", marginTop: 3, display: "flex", alignItems: "center", gap: 6 }}>

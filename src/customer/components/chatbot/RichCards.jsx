@@ -1,4 +1,5 @@
 import { FaWallet, FaGift, FaUsers, FaStar, FaCheck, FaTimes, FaTag, FaArrowUp, FaArrowDown } from "react-icons/fa";
+import { formatDisplayDate } from "../../../utils/dateFormat";
 
 // ── Balance Card ──
 export const BalanceCard = ({ data }) => (
@@ -28,7 +29,7 @@ export const TransactionsCard = ({ data }) => (
         </div>
         <div className="cb-txn-info">
           <div className="cb-txn-name">{t.operator}</div>
-          <div className="cb-txn-date">{t.date ? new Date(t.date).toLocaleDateString("en-IN") : "—"}</div>
+          <div className="cb-txn-date">{formatDisplayDate(t.date, "—")}</div>
         </div>
         <div className="cb-txn-right">
           <div className={`cb-txn-amount ${t.type === "credit" ? "cb-txn-amount--credit" : ""}`}>

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaCopy, FaCheckCircle, FaClock, FaTag, FaGift } from "react-icons/fa";
 import { FiInbox } from "react-icons/fi";
 import { walletService } from "../services/walletService";
+import { formatDisplayDate } from "../../utils/dateFormat";
 
 const SkeletonCard = ({ delay }) => (
   <div className="cp-card cp-skeleton" style={{ animationDelay: `${delay}ms` }}>
@@ -164,7 +165,7 @@ const CouponListScreen = () => {
                     {c.validity && (
                       <span className="cp-meta-item">
                         <FaClock />
-                        {isExp ? "Expired on" : "Valid until"} {new Date(c.validity).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                        {isExp ? "Expired on" : "Valid until"} {formatDisplayDate(c.validity, "")}
                       </span>
                     )}
                     {!isExp && daysLeft !== null && (

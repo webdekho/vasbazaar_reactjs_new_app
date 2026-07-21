@@ -4,6 +4,7 @@ import { FaArrowLeft, FaPlus, FaSearch, FaSyncAlt, FaUserCircle, FaInbox, FaBell
 import { outstandingService } from "../../services/outstandingService";
 import { useToast } from "../../context/ToastContext";
 import { buildCsv, downloadCsv } from "../../utils/exportCsv";
+import { formatDisplayDate, formatDisplayDateTime } from "../../../utils/dateFormat";
 import AddCustomerSheet from "./components/AddCustomerSheet";
 import RenewSubscriptionSheet from "./components/RenewSubscriptionSheet";
 import CustomerPickerSheet from "./components/CustomerPickerSheet";
@@ -32,7 +33,7 @@ const formatRelative = (iso) => {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   if (days < 30) return `${days}d ago`;
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  return formatDisplayDate(d, "");
 };
 
 const OutstandingListScreen = () => {
@@ -178,11 +179,11 @@ const OutstandingListScreen = () => {
           Math.round(bal),
           c.creditLimit != null ? Math.round(Number(c.creditLimit)) : "",
           c.creditUsagePct != null ? c.creditUsagePct : "",
-          c.dueDate ? String(c.dueDate).slice(0, 10) : "",
-          c.promiseToPayDate ? String(c.promiseToPayDate).slice(0, 10) : "",
+          c.dueDate ? formatDisplayDate(c.dueDate, "") : "",
+          c.promiseToPayDate ? formatDisplayDate(c.promiseToPayDate, "") : "",
           bal > 0 ? (c.ageingDays || 0) : "",
           c.isAppUser ? "Yes" : "No",
-          c.lastActivityAt ? new Date(c.lastActivityAt).toLocaleString("en-IN") : "",
+          c.lastActivityAt ? formatDisplayDateTime(c.lastActivityAt, "") : "",
         ];
       });
       const csv = buildCsv(headers, rows);

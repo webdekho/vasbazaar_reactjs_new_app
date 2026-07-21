@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaPrint, FaFileDownload, FaCheckCircle } from "react-icons/fa";
 import { useCustomerModern } from "../context/CustomerModernContext";
 import { generateBillReceiptPdfBlob, getBillReceiptFileName, normalizeCcf } from "../utils/billReceiptPdf";
+import { formatDisplayDate, formatDisplayDateTime } from "../../utils/dateFormat";
 
 const dash = (v) => (v === null || v === undefined || v === "" ? "—" : String(v));
 
@@ -38,9 +39,7 @@ const ReceiptScreen = () => {
   const approvedNumber = data.statusPayload?.field1 || data.statusPayload?.approvalRefNumber || txnId || "";
   const paymentMode = String(data.paymentType || "web").toUpperCase();
   const paymentChannel = data.paymentChannel || "VasBazaar";
-  const dateTime = data.dateTime || new Date().toLocaleString("en-IN", {
-    day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
-  });
+  const dateTime = data.dateTime || formatDisplayDateTime(new Date());
 
   const billDate = pick("billDate", "bill_date", "billdate");
   const billPeriod = pick("billPeriod", "bill_period", "billperiod");
@@ -55,10 +54,10 @@ const ReceiptScreen = () => {
     ["B-Connect Txn ID", dash(bConnectTxnId)],
     ["Customer Name", dash(customerName)],
     ["Mobile Number", dash(mobile)],
-    ["Bill Date", dash(billDate)],
+    ["Bill Date", dash(billDate && formatDisplayDate(billDate, ""))],
     ["Bill Period", dash(billPeriod)],
     ["Bill Number", dash(billNumber)],
-    ["Due Date", dash(dueDate)],
+    ["Due Date", dash(dueDate && formatDisplayDate(dueDate, ""))],
   ];
   const rightRows = [
     ["Biller Amount", money(amount)],

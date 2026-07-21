@@ -8,6 +8,7 @@ import { walletService } from "../services/walletService";
 import { rechargeService } from "../services/rechargeService";
 import { invalidate } from "../services/apiCache";
 import { customerStorage } from "../services/storageService";
+import { formatDisplayDate } from "../../utils/dateFormat";
 
 // Build a stable key per reminder (same mobile on same operator = same reminder).
 const dismissKeyFor = (item) => {
@@ -64,12 +65,6 @@ const statusConfig = {
 const maskNumber = (num) => {
   if (!num || num.length < 6) return num || "—";
   return num.slice(0, 4) + "xxxx" + num.slice(-2);
-};
-
-const formatDueDate = (dateStr) => {
-  if (!dateStr) return null;
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 };
 
 const getStatus = (item) => {
@@ -175,7 +170,7 @@ const DueCard = ({ item, index, onPay, onDelete, onMarkPaid, processing, deletin
             <div className="md-detail-item">
               <span className="md-detail-label">Due Date</span>
               <span className="md-detail-value md-detail-date">
-                <FaCalendarAlt /> {formatDueDate(item.fromDate)}
+                <FaCalendarAlt /> {formatDisplayDate(item.fromDate, "")}
               </span>
             </div>
           )}

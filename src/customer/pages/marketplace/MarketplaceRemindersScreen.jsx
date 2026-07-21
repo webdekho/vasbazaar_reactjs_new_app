@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaBell, FaPlus, FaTrash, FaPills, FaSyringe, FaTools, FaRegBell } from "react-icons/fa";
 import { marketplaceWave4Service } from "../../services/marketplaceWave4Service";
 import { useToast } from "../../context/ToastContext";
+import { formatDisplayDateTime } from "../../../utils/dateFormat";
 import "./marketplace.css";
 
 const TYPES = [
@@ -24,13 +25,6 @@ const typeMeta = (t) => TYPES.find((x) => x.key === t) || TYPES[4];
 const freqLabel = (f, n) => {
   if (f === "INTERVAL") return `Every ${n || "—"} days`;
   return (FREQS.find((x) => x.key === f) || {}).label || f;
-};
-const fmtDateTime = (s) => {
-  if (!s) return "—";
-  try {
-    const d = new Date(String(s).replace(" ", "T"));
-    return d.toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
-  } catch { return String(s); }
 };
 const pad2 = (n) => String(n).padStart(2, "0");
 const defaultNextAt = () => {
@@ -146,7 +140,7 @@ const MarketplaceRemindersScreen = () => {
                       {meta.label} · {freqLabel(r.frequency, r.intervalDays)}
                     </div>
                     <div style={{ fontSize: 12, color: meta.color, fontWeight: 700, marginTop: 4 }}>
-                      Next: {fmtDateTime(r.nextAt)}
+                      Next: {formatDisplayDateTime(r.nextAt, "—")}
                     </div>
                   </div>
                   <button

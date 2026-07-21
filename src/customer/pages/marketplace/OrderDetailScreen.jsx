@@ -29,6 +29,7 @@ import {
 } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
 import { marketplaceLogisticsAiService } from "../../services/marketplaceLogisticsAiService";
+import { formatDisplayDate, formatDisplayDateTime } from "../../../utils/dateFormat";
 import "./marketplace.css";
 
 const DELIVERY_STATUS_FLOW = ["PLACED", "ACCEPTED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED"];
@@ -56,21 +57,6 @@ const STATUS_ICON = {
 };
 
 const inr = (n) => `₹${Number(n || 0).toFixed(2)}`;
-
-const formatDateTime = (s) => {
-  if (!s) return "-";
-  try {
-    return new Date(s).toLocaleString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "-";
-  }
-};
 
 const pickItems = (order) =>
   order?.orderItems || order?.items || order?.lineItems || order?.products || [];
@@ -302,7 +288,7 @@ const OrderDetailScreen = () => {
       .grand{font-weight:bold;border-top:1px solid #111;margin-top:4px;padding-top:4px}
     </style></head><body>
       <h2>TAX INVOICE</h2>
-      <div class="muted">${inv.invoiceNo} · ${inv.invoiceDate ? new Date(inv.invoiceDate).toLocaleDateString("en-IN") : ""}</div>
+      <div class="muted">${inv.invoiceNo} · ${inv.invoiceDate ? formatDisplayDate(inv.invoiceDate, "") : ""}</div>
       <div style="margin-top:10px"><b>${inv.storeName || ""}</b><br/>${inv.storeAddress || ""}<br/>
       ${inv.storeGstNumber ? "GSTIN: " + inv.storeGstNumber : "GSTIN: Unregistered"}</div>
       <div style="margin-top:8px"><b>Billed to:</b> ${inv.customerName || ""} · ${inv.customerMobile || ""}<br/>
@@ -672,7 +658,7 @@ const OrderDetailScreen = () => {
             </div>
             <div style={{ textAlign: "right" }}>
               <div style={{ color: "var(--cm-muted)", fontSize: 11 }}>Date</div>
-              <div style={{ fontWeight: 700 }}>{formatDateTime(order.placedAt || order.date || order.createdAt)}</div>
+              <div style={{ fontWeight: 700 }}>{formatDisplayDateTime(order.placedAt || order.date || order.createdAt)}</div>
             </div>
           </div>
 
@@ -842,7 +828,7 @@ const OrderDetailScreen = () => {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 12, color: "var(--cm-muted)" }}>Arriving by</div>
               <div style={{ fontWeight: 800, fontSize: 15, color: "var(--cm-ink)" }}>
-                {formatDateTime(logistics.promisedBy)}
+                {formatDisplayDateTime(logistics.promisedBy)}
               </div>
             </div>
             {(logistics.hasColdChain || hasColdChain) && (
@@ -910,7 +896,7 @@ const OrderDetailScreen = () => {
                   Track rider live on the map
                   {logistics.location.at && (
                     <span style={{ display: "block", fontSize: 11, fontWeight: 500, color: "var(--cm-muted)" }}>
-                      Updated {formatDateTime(logistics.location.at)}
+                      Updated {formatDisplayDateTime(logistics.location.at)}
                     </span>
                   )}
                 </span>
@@ -1118,7 +1104,7 @@ const OrderDetailScreen = () => {
           {order.paidAt && (
             <div className="mkt-receipt-row">
               <span>Paid at</span>
-              <span>{formatDateTime(order.paidAt)}</span>
+              <span>{formatDisplayDateTime(order.paidAt)}</span>
             </div>
           )}
         </div>

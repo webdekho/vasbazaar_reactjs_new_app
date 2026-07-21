@@ -2,14 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaStore } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
+import { formatDisplayDateTime } from "../../../utils/dateFormat";
 import "./marketplace.css";
 
 const inr = (n) => `₹${Number(n || 0).toFixed(0)}`;
-const fmtDate = (s) => {
-  if (!s) return "";
-  try { return new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); }
-  catch { return ""; }
-};
 
 /** Customer view of their own credit (khata) accounts across stores. */
 const MyKhataScreen = () => {
@@ -68,7 +64,7 @@ const MyKhataScreen = () => {
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: "var(--cm-ink)" }}>{k.store?.businessName || "Store"}</div>
-                    {k.lastActivityAt && <div style={{ fontSize: 11, color: "var(--cm-muted)" }}>Last: {fmtDate(k.lastActivityAt)}</div>}
+                    {k.lastActivityAt && <div style={{ fontSize: 11, color: "var(--cm-muted)" }}>Last: {formatDisplayDateTime(k.lastActivityAt, "")}</div>}
                   </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
@@ -129,7 +125,7 @@ const StatementModal = ({ khataId, storeName, onClose }) => {
                           {e.type === "DEBIT" ? "Purchase on credit" : "Payment"}
                         </div>
                         {e.note && <div style={{ fontSize: 11, color: "var(--cm-muted)" }}>{e.note}</div>}
-                        <div style={{ fontSize: 10, color: "var(--cm-muted)" }}>{fmtDate(e.createdAt)}</div>
+                        <div style={{ fontSize: 10, color: "var(--cm-muted)" }}>{formatDisplayDateTime(e.createdAt, "")}</div>
                       </div>
                       <div style={{ textAlign: "right" }}>
                         <div style={{ fontSize: 14, fontWeight: 700, color: e.type === "DEBIT" ? "#ef4444" : "#10b981" }}>

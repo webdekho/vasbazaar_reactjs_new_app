@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaStar } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
+import { formatDisplayDate } from "../../../utils/dateFormat";
 import "./marketplace.css";
 
 const RANGES = [
@@ -145,7 +146,7 @@ const StoreAnalyticsScreen = () => {
                     const rev = Number(p.revenue || 0);
                     const pct = maxRevenue > 0 ? Math.max(2, Math.round((rev / maxRevenue) * 100)) : 2;
                     return (
-                      <div key={p.date} title={`${p.date}: ${rupee(rev)} · ${p.orders || 0} orders`} style={{ flex: "1 0 8px", minWidth: 8, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%" }}>
+                      <div key={p.date} title={`${formatDisplayDate(p.date, "")}: ${rupee(rev)} · ${p.orders || 0} orders`} style={{ flex: "1 0 8px", minWidth: 8, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%" }}>
                         <div style={{ width: "100%", height: `${pct}%`, borderRadius: 4, background: "linear-gradient(180deg, #40E0D0, #007BFF)" }} />
                       </div>
                     );

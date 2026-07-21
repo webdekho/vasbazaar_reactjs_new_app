@@ -13,24 +13,12 @@ import {
 import { pickContacts, normalizeMobile, isValidMobile, isUserCancelledError } from "./contacts";
 import { rebuddyService } from "../../services/rebuddyService";
 import { server_api } from "../../../utils/constants";
+import { formatDisplayDateTime } from "../../../utils/dateFormat";
 
 const TABS = [
   { key: "expenses", label: "Expenses", icon: FaReceipt },
   { key: "settle", label: "Settle up", icon: FaHandshake },
 ];
-
-// Compact date+time for expense / settlement entries, e.g. "10 Jun 2026, 7:26 PM".
-const fmtWhen = (ms) => {
-  if (!ms) return "";
-  try {
-    return new Date(Number(ms)).toLocaleString("en-IN", {
-      day: "2-digit", month: "short", year: "numeric",
-      hour: "numeric", minute: "2-digit", hour12: true,
-    });
-  } catch {
-    return "";
-  }
-};
 
 const isPendingExpense = (expense) => expense?.status === "pending";
 const isApprovedExpense = (expense) => !isPendingExpense(expense);
@@ -853,7 +841,7 @@ const ExpensesPanel = ({
                   </div>
                   {e.createdAt ? (
                     <div style={{ fontSize: 11, color: "var(--cm-muted, #A0A0A0)", marginTop: 2 }}>
-                      {fmtWhen(e.createdAt)}
+                      {formatDisplayDateTime(e.createdAt ? Number(e.createdAt) : "", "")}
                     </div>
                   ) : null}
                 </div>
@@ -1111,7 +1099,7 @@ const SettlePanel = ({
                   // it in the note); everything else is a manual record.
                   const isVasbazaar = s.mode === "vasbazaar" || (s.note || "").toLowerCase().includes("vasbazaar");
                   const modeLabel = isVasbazaar ? "VasBazaar" : "Manual";
-                  const when = fmtWhen(s.confirmedAt || s.createdAt);
+                  const when = formatDisplayDateTime((s.confirmedAt || s.createdAt) ? Number(s.confirmedAt || s.createdAt) : "", "");
                   return (
                     <div style={{ fontSize: 11, color: "var(--cm-muted, #A0A0A0)", marginTop: 2 }}>
                       {modeLabel}

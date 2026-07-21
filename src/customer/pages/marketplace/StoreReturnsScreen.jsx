@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaUndoAlt, FaExchangeAlt, FaBoxOpen, FaMotorcycle, FaCheck, FaTimes } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
 import { marketplaceLogisticsAiService } from "../../services/marketplaceLogisticsAiService";
+import { formatDisplayDateTime } from "../../../utils/dateFormat";
 import "./marketplace.css";
 
 const STATUS_FILTER = ["All", "REQUESTED", "APPROVED", "PICKED_UP", "REFUNDED", "REPLACED", "REJECTED", "CLOSED"];
@@ -18,13 +19,6 @@ const STATUS_TONE = {
 };
 
 const inr = (n) => `₹${Number(n || 0).toFixed(2)}`;
-
-const formatDate = (s) => {
-  if (!s) return "";
-  try {
-    return new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-  } catch { return ""; }
-};
 
 const StoreReturnsScreen = () => {
   const navigate = useNavigate();
@@ -152,7 +146,7 @@ const StoreReturnsScreen = () => {
                       {r.type === "REPLACEMENT" ? "Replacement" : "Return"}
                     </div>
                     <div style={{ fontSize: 11, color: "var(--cm-muted)", marginTop: 2 }}>
-                      {buyer.name || "Customer"}{order.orderNo ? ` · ${order.orderNo}` : ""} · {formatDate(r.createdAt)}
+                      {buyer.name || "Customer"}{order.orderNo ? ` · ${order.orderNo}` : ""} · {formatDisplayDateTime(r.createdAt, "")}
                     </div>
                   </div>
                   <span style={{ fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 6, background: tone.bg, color: tone.color }}>

@@ -7,6 +7,7 @@ import {
 import { travelService } from "../services/travelService";
 import { useToast } from "../context/ToastContext";
 import { sanitizeBackendMessage } from "../utils/userMessages";
+import { formatDisplayDate } from "../../utils/dateFormat";
 
 const STATUS_COLORS = {
   CONFIRMED: { bg: "#dcfce7", color: "#16a34a", text: "Confirmed" },
@@ -154,7 +155,7 @@ const MyBookingsScreen = () => {
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, fontSize: 12 }}>
-                  <span style={{ color: "#888" }}><FaCalendarAlt size={10} /> {b.departureDate || "—"}</span>
+                  <span style={{ color: "#888" }}><FaCalendarAlt size={10} /> {formatDisplayDate(b.departureDate, "—")}</span>
                   <span style={{ fontWeight: 700, fontSize: 14 }}>₹{b.totalAmount ? parseFloat(b.totalAmount).toLocaleString("en-IN") : "—"}</span>
                 </div>
 
@@ -194,7 +195,7 @@ const MyBookingsScreen = () => {
               <div><strong>Airline:</strong> {detailModal.airline}</div>
               <div><strong>Flight:</strong> {detailModal.airlineCode}-{detailModal.flightNumber}</div>
               <div><strong>Route:</strong> {detailModal.sourceAirportCode} → {detailModal.destinationAirportCode}</div>
-              <div><strong>Date:</strong> {detailModal.departureDate}</div>
+              <div><strong>Date:</strong> {formatDisplayDate(detailModal.departureDate, "—")}</div>
               <div><strong>Class:</strong> {detailModal.cabinClass}</div>
               <div><strong>Duration:</strong> {detailModal.duration} min</div>
               <div><strong>Passengers:</strong> {detailModal.adultCount} Adult{detailModal.adultCount > 1 ? "s" : ""}{detailModal.childCount > 0 ? `, ${detailModal.childCount} Child` : ""}{detailModal.infantCount > 0 ? `, ${detailModal.infantCount} Infant` : ""}</div>

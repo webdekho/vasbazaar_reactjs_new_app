@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { FaArrowLeft, FaCalendarAlt, FaClock, FaMapMarkerAlt, FaStar, FaShare, FaRegImage, FaTicketAlt } from "react-icons/fa";
 import { rybboService } from "../../services/rybboService";
 import DataState from "../../components/DataState";
+import { formatDisplayDate, formatDisplayTime } from "../../../utils/dateFormat";
 
 const EventDetailScreen = () => {
   const { slug } = useParams();
@@ -93,7 +94,7 @@ const EventDetailScreen = () => {
           <div className="rbd-body">
             <div className="rbd-facts">
               <div className="rbd-fact"><span className="rbd-fact-ic"><FaMapMarkerAlt /></span>{event.venue}, {event.city}</div>
-              <div className="rbd-fact"><span className="rbd-fact-ic"><FaCalendarAlt /></span>{event.date} · {event.time}</div>
+              <div className="rbd-fact"><span className="rbd-fact-ic"><FaCalendarAlt /></span>{formatDisplayDate(event.date, "")} · {formatDisplayTime(event.time, "")}</div>
             </div>
 
             {event.description && (
@@ -120,8 +121,8 @@ const EventDetailScreen = () => {
                   return (
                     <button key={s.id} type="button" onClick={() => setSelectedShowtime(s)}
                       className={`rbd-show${active ? " is-active" : ""}`}>
-                      <span className="rbd-show-date">{s.date}</span>
-                      <span className="rbd-show-time">{s.time}</span>
+                      <span className="rbd-show-date">{formatDisplayDate(s.date, "")}</span>
+                      <span className="rbd-show-time">{formatDisplayTime(s.time, "")}</span>
                     </button>
                   );
                 })}

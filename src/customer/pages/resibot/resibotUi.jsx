@@ -86,13 +86,6 @@ export const TextArea = ({ className = "", ...props }) => (
 
 export const EmptyState = ({ children }) => <div className="rb-empty">{children}</div>;
 
-export const fmtDate = (d) => {
-  if (!d) return "—";
-  try {
-    return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-  } catch { return d; }
-};
-
 export const daysUntil = (d) => {
   if (!d) return null;
   const today = new Date(); today.setHours(0, 0, 0, 0);

@@ -2,13 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaStar, FaRegStar, FaReply } from "react-icons/fa";
 import { marketplaceService } from "../../services/marketplaceService";
+import { formatDisplayDate } from "../../../utils/dateFormat";
 import "./marketplace.css";
-
-const formatDate = (s) => {
-  if (!s) return "";
-  try { return new Date(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }); }
-  catch { return ""; }
-};
 
 const Stars = ({ rating, size = 13 }) => {
   const r = Math.round(Number(rating) || 0);
@@ -95,7 +90,7 @@ const ReviewCard = ({ review, onReplied }) => {
           <div style={{ fontSize: 14, fontWeight: 700, color: "var(--cm-ink)" }}>{review.customerName || "Customer"}</div>
           <div style={{ marginTop: 4 }}><Stars rating={review.rating} /></div>
         </div>
-        <div style={{ fontSize: 11, color: "var(--cm-muted)", whiteSpace: "nowrap" }}>{formatDate(review.createdAt)}</div>
+        <div style={{ fontSize: 11, color: "var(--cm-muted)", whiteSpace: "nowrap" }}>{formatDisplayDate(review.createdAt, "")}</div>
       </div>
 
       {review.comment && (
@@ -114,7 +109,7 @@ const ReviewCard = ({ review, onReplied }) => {
         <div style={{ marginTop: 12, padding: 12, borderRadius: 10, background: "var(--cm-bg-secondary)", border: "1px solid var(--cm-line)" }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "#007BFF", display: "flex", alignItems: "center", gap: 6 }}>
             <FaReply size={10} /> Your reply
-            {review.merchantReplyAt && <span style={{ color: "var(--cm-muted)", fontWeight: 500 }}>· {formatDate(review.merchantReplyAt)}</span>}
+            {review.merchantReplyAt && <span style={{ color: "var(--cm-muted)", fontWeight: 500 }}>· {formatDisplayDate(review.merchantReplyAt, "")}</span>}
           </div>
           <div style={{ fontSize: 13, color: "var(--cm-ink)", marginTop: 6, lineHeight: 1.45 }}>{review.merchantReply}</div>
         </div>

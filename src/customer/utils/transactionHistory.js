@@ -1,3 +1,5 @@
+import { formatDisplayDate } from "../../utils/dateFormat";
+
 const isPresent = (value) => {
   if (value === null || value === undefined) return false;
   if (typeof value === "string") return value.trim() !== "";
@@ -23,19 +25,6 @@ const toTitleCase = (value) =>
     .replace(/\s+/g, " ")
     .trim()
     .replace(/\b\w/g, (char) => char.toUpperCase());
-
-const formatDisplayDate = (value) => {
-  if (!isPresent(value)) return "—";
-
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-
-  return date.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-};
 
 const inferPaymentMode = (item = {}) => {
   const txnMode = Number(item.txnMode);
@@ -201,7 +190,7 @@ export const normalizeTransaction = (item = {}) => {
     offerMethodLabel: offerMethod === "none" ? "None" : toTitleCase(offerMethod),
     couponName: firstPresent(item.couponId?.couponName, item.couponName, item.offerName) || "—",
     couponCode: firstPresent(item.couponCode, item.couponId?.couponCode) || "—",
-    couponValidity: formatDisplayDate(firstPresent(item.couponValidity, item.couponId?.validity, item.validity)),
+    couponValidity: formatDisplayDate(firstPresent(item.couponValidity, item.couponId?.validity, item.validity), "—"),
   };
 };
 

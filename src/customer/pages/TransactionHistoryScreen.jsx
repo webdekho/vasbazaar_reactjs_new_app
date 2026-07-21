@@ -5,6 +5,7 @@ import { FiArrowUpRight, FiArrowDownLeft, FiClock, FiCheckCircle, FiXCircle, FiI
 import { walletService } from "../services/walletService";
 import { transactionService } from "../services/transactionService";
 import { formatCurrency, matchesTransactionSearch, normalizeTransaction } from "../utils/transactionHistory";
+import { formatDisplayDateAndTime, formatDisplayDateTime } from "../../utils/dateFormat";
 
 const statusConfig = {
   success: { color: "#00C853", label: "Success", icon: <FiCheckCircle size={11} /> },
@@ -16,29 +17,10 @@ const statusConfig = {
   refund: { color: "#A855F7", label: "Refunded", icon: <FiCheckCircle size={11} /> },
 };
 
-// Format a refund timestamp the same way the admin panel does: Spring serializes
-// LocalDateTime as an array [y, mo, d, h, mi, ...]; also tolerate ISO strings.
-// Returns "" when there is no usable value so the badge simply omits the time.
-const fmtRefundAt = (val) => {
-  if (!val) return "";
-  try {
-    if (Array.isArray(val)) {
-      const [y, mo, d, h = 0, mi = 0] = val;
-      const p = (n) => String(n).padStart(2, "0");
-      return `${p(d)}-${p(mo)}-${y} ${p(h)}:${p(mi)}`;
-    }
-    const dt = new Date(val);
-    if (!Number.isNaN(dt.getTime())) {
-      return dt.toLocaleString("en-IN", {
-        day: "2-digit", month: "2-digit", year: "numeric",
-        hour: "2-digit", minute: "2-digit", hour12: false,
-      });
-    }
-    return String(val);
-  } catch {
-    return String(val);
-  }
-};
+// Refund timestamps arrive as Spring LocalDateTime arrays or ISO strings; the
+// shared helper handles both. Returns "" when there is no usable value so the
+// badge simply omits the time.
+const fmtRefundAt = (val) => formatDisplayDateTime(val, "");
 
 const getStatusKey = (status) => {
   const s = (status || "").toLowerCase();
@@ -415,7 +397,7 @@ const TransactionHistoryScreen = () => {
                   <div className="th-info">
                     <div className="th-info-name">{txn.mobile || item.customerName || "Transaction"}</div>
                     <div className="th-info-desc">{item.message || item.description || item.discription || txn.service || "—"}</div>
-                    <div className="th-info-date">{item.date} {item.time}</div>
+                    <div className="th-info-date">{formatDisplayDateAndTime(item.date, item.time, "")}</div>
                     {!isMobileView && (
                       <div className="th-meta-grid th-meta-grid--compact">
                         {metaContent}

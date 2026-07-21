@@ -7,6 +7,7 @@ import { marketplaceLogisticsAiService } from "../../services/marketplaceLogisti
 import { useToast } from "../../context/ToastContext";
 import { parseVariants, variantDimensions } from "./variantUtils";
 import BarcodeScannerModal from "../../components/BarcodeScannerModal";
+import { formatDisplayDateTime } from "../../../utils/dateFormat";
 import "./marketplace.css";
 
 // Mirrors CustStoreService.MAX_STORES_PER_USER. The server is the authority;
@@ -2159,13 +2160,6 @@ const ORDER_STATUS_TONE = {
   CANCELLED: { bg: "rgba(148, 163, 184, 0.18)", color: "#64748b" },
 };
 
-const formatOrderTime = (s) => {
-  if (!s) return "";
-  try {
-    return new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-  } catch { return ""; }
-};
-
 const ORDER_STATUS_FILTERS = [
   { key: "PLACED", label: "Pending" },
   { key: "ACCEPTED", label: "Accepted" },
@@ -2329,7 +2323,7 @@ const RecentOrdersSection = ({ orders, onSeeAll }) => {
                   </span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "var(--cm-muted)" }}>
-                  <span>{formatOrderTime(o.placedAt || o.createdDate)}</span>
+                  <span>{formatDisplayDateTime(o.placedAt || o.createdDate, "")}</span>
                   <span style={{ fontWeight: 700, color: "var(--cm-ink)" }}>
                     ₹{Number(o.totalAmount || 0).toFixed(0)}
                   </span>

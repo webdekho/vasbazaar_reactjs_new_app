@@ -20,24 +20,11 @@ import { BUILD_TIME } from "../../generated/buildId";
 import ProfileAvatar from "../components/ProfileAvatar";
 import ProfilePhotoCropper from "../components/ProfilePhotoCropper";
 import ProfilePhotoPreview from "../components/ProfilePhotoPreview";
+import { formatDisplayDateTime } from "../../utils/dateFormat";
 
 // Last deployed time — stamped into the bundle at build by scripts/stamp-version.js.
 // Rendered in IST so the footer matches what users expect.
-const formatDeployedAt = (iso) => {
-  try {
-    return new Date(iso).toLocaleString("en-IN", {
-      timeZone: "Asia/Kolkata",
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
-  } catch {
-    return "";
-  }
-};
+const formatDeployedAt = (iso) => formatDisplayDateTime(iso, "");
 
 const ProfileScreen = () => {
   const { userData, logout, setAuthSession } = useCustomerModern();

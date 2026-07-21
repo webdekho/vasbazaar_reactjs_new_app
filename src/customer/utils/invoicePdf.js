@@ -5,6 +5,7 @@ import {
   VASBAZAAR_LOGO_WIDTH,
   VASBAZAAR_LOGO_HEIGHT,
 } from "./vasbazaarLogo";
+import { formatDisplayDate } from "../../utils/dateFormat";
 
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
@@ -57,11 +58,6 @@ export const amountToWords = (value) => {
 const qtyText = (value) => {
   const n = Number(value || 0);
   return Number.isInteger(n) ? String(n) : n.toFixed(2);
-};
-const formatDate = (iso) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 };
 const escapePdfText = (value = "") =>
   String(value).replace(/[^\x20-\x7E]/g, " ").replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
@@ -213,8 +209,8 @@ export const generateInvoicePdfBlob = async ({ invoice, ownerName, ownerMobile }
   text(status, pillX + pillW / 2, 9, { y: cardTop - 20, align: "center", bold: true, color: stColor });
 
   // dates row inside card bottom
-  const dateLine = `Invoice date: ${formatDate(invoice?.invoiceDate)}`
-    + (invoice?.dueDate ? `     Due date: ${formatDate(invoice.dueDate)}` : "");
+  const dateLine = `Invoice date: ${formatDisplayDate(invoice?.invoiceDate, "")}`
+    + (invoice?.dueDate ? `     Due date: ${formatDisplayDate(invoice.dueDate, "")}` : "");
   text(dateLine, MARGIN + 14, 9, { y: cardTop - 76, color: C.slate });
   y = cardTop - cardH - 22;
 

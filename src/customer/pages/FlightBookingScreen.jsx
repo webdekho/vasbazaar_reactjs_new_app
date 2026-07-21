@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { formatDisplayTime } from "../../utils/dateFormat";
 import {
   FaArrowLeft, FaUser,
   FaEnvelope, FaPassport, FaBuilding, FaChevronDown, FaChevronUp
@@ -36,12 +37,6 @@ const FlightBookingScreen = () => {
     if (paxType === "1") return `Adult ${index + 1}`;
     if (paxType === "2") return `Child ${index + 1}`;
     return `Infant ${index + 1}`;
-  };
-
-  const formatTime = (dateStr) => {
-    if (!dateStr) return "--:--";
-    const d = new Date(dateStr);
-    return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
   };
 
   const formatDuration = (mins) => {
@@ -249,7 +244,7 @@ const FlightBookingScreen = () => {
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 16, fontWeight: 600 }}>{formatTime(flight.departure)}</div>
+            <div style={{ fontSize: 16, fontWeight: 600 }}>{formatDisplayTime(flight.departure, "--:--")}</div>
             <div style={{ fontSize: 11, opacity: 0.7 }}>{flight.sourceAirportCode}</div>
           </div>
           <div style={{ textAlign: "center", flex: 1 }}>
@@ -258,7 +253,7 @@ const FlightBookingScreen = () => {
             <div style={{ fontSize: 10, opacity: 0.7 }}>{flight.stops === "0" || flight.stops === 0 ? "Non-stop" : `${flight.stops} stop(s)`}</div>
           </div>
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 16, fontWeight: 600 }}>{formatTime(flight.arrival)}</div>
+            <div style={{ fontSize: 16, fontWeight: 600 }}>{formatDisplayTime(flight.arrival, "--:--")}</div>
             <div style={{ fontSize: 11, opacity: 0.7 }}>{flight.destinationAirportCode}</div>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { formatDisplayTime } from "../../utils/dateFormat";
 import { FaArrowLeft, FaPlaneDeparture, FaClock, FaSuitcase,
   FaFilter, FaTimes,
   FaInfoCircle, FaCheckCircle } from "react-icons/fa";
@@ -52,13 +53,6 @@ const FlightResultsScreen = () => {
 
     return result;
   }, [flights, filters, sortBy]);
-
-  // Format time from ISO string
-  const formatTime = (dateStr) => {
-    if (!dateStr) return "--:--";
-    const d = new Date(dateStr);
-    return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
-  };
 
   // Format duration from minutes
   const formatDuration = (mins) => {
@@ -215,7 +209,7 @@ const FlightResultsScreen = () => {
 
             <div className="tv-flight-route">
               <div className="tv-route-point">
-                <div className="tv-route-time">{formatTime(fl.departure)}</div>
+                <div className="tv-route-time">{formatDisplayTime(fl.departure, "--:--")}</div>
                 <div className="tv-route-code">{fl.sourceAirportCode}</div>
               </div>
               <div className="tv-route-line">
@@ -224,7 +218,7 @@ const FlightResultsScreen = () => {
                 <div className="tv-route-stops">{fl.stops === "0" || fl.stops === 0 ? "Non-stop" : `${fl.stops} stop(s)`}</div>
               </div>
               <div className="tv-route-point">
-                <div className="tv-route-time">{formatTime(fl.arrival)}</div>
+                <div className="tv-route-time">{formatDisplayTime(fl.arrival, "--:--")}</div>
                 <div className="tv-route-code">{fl.destinationAirportCode}</div>
               </div>
             </div>

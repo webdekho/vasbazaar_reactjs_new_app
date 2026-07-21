@@ -11,6 +11,7 @@ import {
 } from "react-icons/fa";
 import { savedVehicleService } from "../services/savedVehicleService";
 import { sanitizeBackendMessage } from "../utils/userMessages";
+import { formatDisplayDate } from "../../utils/dateFormat";
 
 const STATUS_STYLES = {
   success: { icon: FaCheckCircle, color: "#22c55e", label: "Success" },
@@ -19,20 +20,6 @@ const STATUS_STYLES = {
   failure: { icon: FaTimesCircle, color: "#ef4444", label: "Failed" },
   pending: { icon: FaClock, color: "#f59e0b", label: "Pending" },
   processing: { icon: FaClock, color: "#3b82f6", label: "Processing" },
-};
-
-const formatDate = (dateStr) => {
-  if (!dateStr) return "";
-  try {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("en-IN", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-  } catch {
-    return dateStr;
-  }
 };
 
 const formatAmount = (amount) => {
@@ -176,7 +163,7 @@ export default function VehicleHistorySheet({ isOpen, vehicle, onClose }) {
                           {formatAmount(txn.amount || txn.txnAmt)}
                         </div>
                         <div className="cm-history-date">
-                          {formatDate(txn.date || txn.createdDate || txn.txnDate)}
+                          {formatDisplayDate(txn.date || txn.createdDate || txn.txnDate, "")}
                         </div>
                         {txn.refId && (
                           <div className="cm-history-ref">Ref: {txn.refId}</div>

@@ -13,6 +13,7 @@ import { useToast } from "../../context/ToastContext";
 import { shareStore } from "./shareStore";
 import { shareProduct } from "../../utils/shareProduct";
 import { parseVariants, variantDimensions, dimensionValues, findVariantByOptions, minVariantPrice } from "./variantUtils";
+import { formatDisplayDate } from "../../../utils/dateFormat";
 import "./marketplace.css";
 
 // Client-side sort options for a store's item grid (applied to the already-
@@ -123,11 +124,6 @@ const nearExpiryInfo = (item, store) => {
     out.discountedPrice = out.effectivePrice;
   }
   return out;
-};
-
-const fmtExpiry = (d) => {
-  try { return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }); }
-  catch { return ""; }
 };
 
 const StoreDetailScreen = () => {
@@ -818,7 +814,7 @@ const StoreDetailScreen = () => {
                       )}
                       {nexp && nexp.hasExpiry && !nexp.expired && (
                         <span style={{ fontSize: 10, fontWeight: 600, color: "var(--cm-muted)", background: "var(--cm-card)", border: "1px solid var(--cm-line)", borderRadius: 999, padding: "1px 7px" }}>
-                          Best before {fmtExpiry(nexp.expiryDate)}
+                          Best before {formatDisplayDate(nexp.expiryDate, "")}
                         </span>
                       )}
                     </div>
@@ -970,7 +966,7 @@ const StoreDetailScreen = () => {
                     </div>
                     {rv.createdAt && (
                       <span style={{ fontSize: 10, color: "var(--cm-muted)" }}>
-                        {new Date(rv.createdAt).toLocaleDateString()}
+                        {formatDisplayDate(rv.createdAt, "")}
                       </span>
                     )}
                   </div>
@@ -1465,7 +1461,7 @@ const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, on
             )}
             {nexp && nexp.hasExpiry && !nexp.expired && (
               <span style={{ fontSize: 11, fontWeight: 600, color: "var(--cm-muted)", background: "var(--cm-card)", border: "1px solid var(--cm-line)", borderRadius: 999, padding: "3px 10px" }}>
-                Best before {fmtExpiry(nexp.expiryDate)}
+                Best before {formatDisplayDate(nexp.expiryDate, "")}
                 {nexp.daysLeft != null ? ` · ${nexp.daysLeft}d left` : ""}
               </span>
             )}
@@ -1789,7 +1785,7 @@ const VariantPickerSheet = ({ store, item, allItems = [], onOpenItem, closed, on
                     <span style={{ fontSize: 12, fontWeight: 700, color: "var(--cm-ink)" }}>{rv.customerName || "Customer"}</span>
                     {rv.createdAt && (
                       <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--cm-muted)" }}>
-                        {new Date(rv.createdAt).toLocaleDateString()}
+                        {formatDisplayDate(rv.createdAt, "")}
                       </span>
                     )}
                   </div>

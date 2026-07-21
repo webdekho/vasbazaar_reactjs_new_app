@@ -3,20 +3,10 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { FaTimesCircle, FaClock, FaWallet, FaSyncAlt, FaCopy, FaUniversity, FaPhoneAlt } from "react-icons/fa";
 import { rechargeService } from "../services/rechargeService";
 import { CARE_NUMBER_TEL, CARE_NUMBER_DISPLAY } from "../../utils/constants";
+import { formatDisplayDateTime } from "../../utils/dateFormat";
 
 const MAX_POLL_ATTEMPTS = 5;
 const POLL_INTERVAL_MS = 60000;
-
-const formatDateTime = () => {
-  const d = new Date();
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mi = String(d.getMinutes()).padStart(2, "0");
-  const ss = String(d.getSeconds()).padStart(2, "0");
-  return `${dd}/${mm}/${yyyy}, ${hh}:${mi}:${ss}`;
-};
 
 const FailureScreen = () => {
   const navigate = useNavigate();
@@ -35,7 +25,7 @@ const FailureScreen = () => {
   const tickTimerRef = useRef(null);
   const inFlightRef = useRef(false);
   const isMountedRef = useRef(true);
-  const dateTime = useRef(formatDateTime()).current;
+  const dateTime = useRef(formatDisplayDateTime(new Date())).current;
 
   const isPending = currentStatus === "pending";
   const isWalletPay = state.payType === "wallet";

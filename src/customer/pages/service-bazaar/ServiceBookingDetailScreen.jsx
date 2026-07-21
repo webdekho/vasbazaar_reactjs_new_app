@@ -5,6 +5,7 @@ import { serviceBazaarService } from "../../services/serviceBazaarService";
 import { serviceChatService } from "../../services/serviceChatService";
 import { useToast } from "../../context/ToastContext";
 import "./service-bazaar.css";
+import { formatDisplayDateTime } from "../../../utils/dateFormat";
 
 // Lifecycle order used to drive the tracking timeline.
 const FLOW = ["PENDING", "CONFIRMED", "IN_PROGRESS", "COMPLETED"];
@@ -169,7 +170,7 @@ export default function ServiceBookingDetailScreen() {
         <h3>Service</h3>
         <p className="sb-offering-title">{b.serviceOfferingId?.title || "Service"}</p>
         <p className="sb-card-meta">{provider.businessName || provider.providerName}</p>
-        {b.scheduledAt && <p className="sb-card-meta">Scheduled: {new Date(b.scheduledAt).toLocaleString()}</p>}
+        {b.scheduledAt && <p className="sb-card-meta">Scheduled: {formatDisplayDateTime(b.scheduledAt, "")}</p>}
         {b.serviceAddress && <p className="sb-card-meta">Address: {b.serviceAddress}</p>}
         {b.customerNotes && <p className="sb-card-meta">Notes: {b.customerNotes}</p>}
       </div>
