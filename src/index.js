@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { Capacitor } from '@capacitor/core';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
@@ -58,7 +59,19 @@ try {
 // re-stamps sw.js CACHE_VERSION on every restart, which makes an already-installed
 // worker fire spurious "New version available" prompts on localhost. So in dev we
 // actively UNREGISTER any existing worker instead of registering a new one.
-if ('serviceWorker' in navigator) {
+// On iOS/Android the whole bundle already ships inside the app, so the worker
+// buys nothing and costs a lot: its cache lives in the app's DATA container,
+// which survives reinstalls of the app binary. A native rebuild would replace
+// the bundled files while the worker kept serving the previous build's shell —
+// which is exactly why marketplace UI fixes appeared to "not apply" on iOS for
+// several releases. So on native we tear the worker down and wipe its caches.
+if ('serviceWorker' in navigator && Capacitor.isNativePlatform()) {
+  navigator.serviceWorker.getRegistrations()
+    .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+    .then(() => (window.caches ? caches.keys() : []))
+    .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+    .catch(() => {});
+} else if ('serviceWorker' in navigator) {
   if (process.env.NODE_ENV === 'production') {
     window.addEventListener('load', () => {
       // Register at root to ensure proper scope for all routes
