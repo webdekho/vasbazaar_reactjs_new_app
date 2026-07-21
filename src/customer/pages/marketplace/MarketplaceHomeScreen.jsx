@@ -774,8 +774,9 @@ const MarketplaceHomeScreen = () => {
             aria-label={hasMyStore ? "My store" : "Become a seller"}
             title={hasMyStore ? "My Store" : "Sell on Marketplace"}
           >
-            {hasMyStore ? <FaStore size={14} /> : <FaPlus size={14} />}
-            <span>{hasMyStore ? "My Store" : "Sell"}</span>
+            {/* Icon-only: the "My Store" / "Sell" label used to overflow the
+                right edge on phones. aria-label/title carry the meaning. */}
+            {hasMyStore ? <FaStore size={15} /> : <FaPlus size={15} />}
           </button>
         </div>
 

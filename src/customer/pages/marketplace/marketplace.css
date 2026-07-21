@@ -3574,3 +3574,14 @@
   color: #E5E9F0;
   box-shadow: none;
 }
+
+/* ---- Hero CTA is now icon-only (round gradient disc) ------- */
+.mkt-v2 .mkt-hero-action--cta {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  gap: 0;
+  border-radius: 50%;
+  justify-content: center;
+  flex: 0 0 auto;
+}
