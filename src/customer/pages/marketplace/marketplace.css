@@ -3437,3 +3437,140 @@
   font-size: 14px;
   font-weight: 800;
 }
+
+/* ============================================================
+   ✦ v3.2 — hero header layout fix + true dark-mode palette.
+   Two problems this block solves:
+   1. The topline packed back-button + greeting + location chip +
+      5 action buttons into ONE flex row, so on a phone the back
+      button collapsed to a sliver and the "My Store" CTA hung off
+      the right edge. Actions now live on their own row.
+   2. Dark mode read as a washed-out lilac panel: the aurora sheen,
+      the two 60px blobs and the strong radial tints all stacked on
+      top of the dark base. Dark now gets a deep navy glass hero and
+      properly dark chips/search.
+   Dark rules are keyed on BOTH `.theme-dark` (wrapper class) and
+   `:root[data-theme="dark"]` (always set by ThemeContext), so they
+   match no matter which shell the screen renders inside.
+   ============================================================ */
+
+/* ---- Hero topline: back + greeting + location -------------- */
+.mkt-v2 .mkt-hero-topline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.mkt-v2 .mkt-hero-back {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+}
+.mkt-v2 .mkt-hero-eyebrow--inline {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.mkt-v2 .mkt-loc-chip {
+  flex: 0 1 auto;
+  max-width: 46vw;
+}
+
+/* ---- Hero action row — own line, CTA pinned right ---------- */
+.mkt-v2 .mkt-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  min-width: 0;
+}
+.mkt-v2 .mkt-hero-actions .mkt-hero-action--cta {
+  margin-left: auto;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+@media (min-width: 420px) {
+  .mkt-v2 .mkt-hero-actions { gap: 10px; }
+}
+
+/* ---- Dark mode: deep navy glass hero ----------------------- */
+.theme-dark .mkt-v2 .mkt-hero,
+:root[data-theme="dark"] .mkt-v2 .mkt-hero {
+  border-color: rgba(148, 163, 184, 0.16);
+  background:
+    radial-gradient(130% 110% at 100% -10%, rgba(0, 123, 255, 0.20), transparent 58%),
+    radial-gradient(120% 120% at -10% 0%, rgba(99, 102, 241, 0.16), transparent 58%),
+    linear-gradient(180deg, #141A28 0%, #0E1219 100%);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
+}
+/* the aurora sheen + blobs are what washed the panel out — keep a hint only */
+.theme-dark .mkt-v2 .mkt-hero::before,
+:root[data-theme="dark"] .mkt-v2 .mkt-hero::before { opacity: 0.22; filter: blur(60px); }
+.theme-dark .mkt-v2 .mkt-hero-blob--1,
+:root[data-theme="dark"] .mkt-v2 .mkt-hero-blob--1 { opacity: 0.16; }
+.theme-dark .mkt-v2 .mkt-hero-blob--2,
+:root[data-theme="dark"] .mkt-v2 .mkt-hero-blob--2 { opacity: 0.14; }
+
+.theme-dark .mkt-v2 .mkt-hero-back,
+:root[data-theme="dark"] .mkt-v2 .mkt-hero-back {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(148, 163, 184, 0.22);
+  color: #E5E9F0;
+}
+.theme-dark .mkt-v2 .mkt-hero-eyebrow--inline,
+:root[data-theme="dark"] .mkt-v2 .mkt-hero-eyebrow--inline { color: #94A3B8; }
+.theme-dark .mkt-v2 .mkt-loc-chip,
+:root[data-theme="dark"] .mkt-v2 .mkt-loc-chip {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(148, 163, 184, 0.22);
+  color: #E5E9F0;
+  box-shadow: none;
+}
+
+/* search bar */
+.theme-dark .mkt-v2 .mkt-hero-search,
+:root[data-theme="dark"] .mkt-v2 .mkt-hero-search {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(148, 163, 184, 0.18);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  color: #40E0D0;
+}
+.theme-dark .mkt-v2 .mkt-hero-search-input,
+:root[data-theme="dark"] .mkt-v2 .mkt-hero-search-input { color: #E5E9F0; }
+.theme-dark .mkt-v2 .mkt-hero-search-input::placeholder,
+:root[data-theme="dark"] .mkt-v2 .mkt-hero-search-input::placeholder { color: #7C879B; }
+.theme-dark .mkt-v2 .mkt-hero-scan,
+:root[data-theme="dark"] .mkt-v2 .mkt-hero-scan {
+  background: rgba(64, 224, 208, 0.12);
+  color: #40E0D0;
+}
+.theme-dark .mkt-v2 .mkt-hero-scan::before,
+:root[data-theme="dark"] .mkt-v2 .mkt-hero-scan::before { background: rgba(148, 163, 184, 0.25); }
+
+/* icon actions — flat tinted discs, no white inner highlight */
+.theme-dark .mkt-v2 .mkt-hero-action--icon,
+:root[data-theme="dark"] .mkt-v2 .mkt-hero-action--icon {
+  background: rgba(var(--tint), 0.16);
+  border-color: rgba(var(--tint), 0.34);
+  box-shadow: none;
+}
+.theme-dark .mkt-v2 .mkt-hero-action--cta,
+:root[data-theme="dark"] .mkt-v2 .mkt-hero-action--cta {
+  box-shadow: 0 8px 20px rgba(0, 123, 255, 0.32);
+}
+
+/* ---- Dark mode: filter + category chips -------------------- */
+.theme-dark .mkt-v2 .mkt-quick-chip,
+.theme-dark .mkt-v2 .mkt-cat-chip,
+:root[data-theme="dark"] .mkt-v2 .mkt-quick-chip,
+:root[data-theme="dark"] .mkt-v2 .mkt-cat-chip {
+  background: rgba(255, 255, 255, 0.06); /* fallback where color-mix is unsupported */
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--chip) 20%, transparent) 0%,
+    rgba(255, 255, 255, 0.04) 100%);
+  border-color: rgba(148, 163, 184, 0.24);
+  border-color: color-mix(in srgb, var(--chip) 38%, transparent);
+  color: #E5E9F0;
+  box-shadow: none;
+}

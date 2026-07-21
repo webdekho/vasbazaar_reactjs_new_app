@@ -13,7 +13,7 @@
  *       can safely serve the cached shell first and refresh it in the background)
  *   - static assets -> stale-while-revalidate
  */
-const CACHE_VERSION = "v1784181326815";
+const CACHE_VERSION = "v1784633282610";
 const CACHE_NAME = `vasbazaar-${CACHE_VERSION}`;
 // Cache both root and start_url for PWA
 const STATIC_ASSETS = [

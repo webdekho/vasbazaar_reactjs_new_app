@@ -726,6 +726,11 @@ const MarketplaceHomeScreen = () => {
             <span className="mkt-loc-chip-label">{locationLabel}</span>
             <span aria-hidden="true">▾</span>
           </button>
+        </div>
+
+        {/* Action row — kept on its own line so the "My Store" CTA can never
+            push the back button / location chip off the right edge on phones. */}
+        <div className="mkt-hero-actions">
           <button
             type="button"
             onClick={() => navigate("/customer/app/marketplace/my-saved")}
@@ -765,7 +770,7 @@ const MarketplaceHomeScreen = () => {
           <button
             type="button"
             onClick={onPlusClick}
-            className="mkt-hero-action"
+            className="mkt-hero-action mkt-hero-action--cta"
             aria-label={hasMyStore ? "My store" : "Become a seller"}
             title={hasMyStore ? "My Store" : "Sell on Marketplace"}
           >
