@@ -246,7 +246,8 @@ export const generateInvoicePdfBlob = async ({ invoice, ownerName, ownerMobile }
   const boxX = PAGE_WIDTH - MARGIN - boxW;
   const labelX = boxX + 12;
   const valX = PAGE_WIDTH - MARGIN - 12;
-  text("Subtotal", labelX, 10, { y, color: C.slate });
+  const gstInclusive = Boolean(invoice?.gstInclusive) && Number(invoice?.taxPercent || 0) > 0;
+  text(gstInclusive ? "Taxable value" : "Subtotal", labelX, 10, { y, color: C.slate });
   text(money(invoice?.subtotal), valX, 10, { y, align: "right", color: C.ink });
   y -= 16;
   const subAmt = Number(invoice?.subtotal || 0);
@@ -263,6 +264,10 @@ export const generateInvoicePdfBlob = async ({ invoice, ownerName, ownerMobile }
   text("TOTAL", labelX, 11, { y: y - 8, bold: true, color: C.ink });
   text(money(invoice?.total), valX, 14, { y: y - 9, align: "right", bold: true, color: C.teal });
   y -= 40;
+  if (gstInclusive) {
+    text("Item rates are inclusive of GST.", valX, 8, { y: y + 8, align: "right", color: C.muted });
+    y -= 6;
+  }
 
   // ---------- Amount in words ----------
   if (y < BOTTOM_LIMIT + 24) newPage();

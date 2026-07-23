@@ -29,6 +29,9 @@ const CreateInvoiceScreen = () => {
     CGST: { on: false, pct: "9" },
     IGST: { on: false, pct: "18" },
   });
+  // false = tax added on top of the rates (exclusive, default);
+  // true  = rates already include the tax (inclusive, backed out of the subtotal).
+  const [gstInclusive, setGstInclusive] = useState(false);
   const [b2b, setB2b] = useState(false);
   const [gstNumber, setGstNumber] = useState("");
   const [notes, setNotes] = useState("");
@@ -119,6 +122,7 @@ const CreateInvoiceScreen = () => {
         CGST: { on: Number(inv.cgstPercent) > 0, pct: String(Number(inv.cgstPercent) || 9) },
         IGST: { on: Number(inv.igstPercent) > 0, pct: String(Number(inv.igstPercent) || 18) },
       });
+      setGstInclusive(Boolean(inv.gstInclusive));
       setB2b(Boolean(inv.b2b));
       setGstNumber(inv.gstNumber || "");
       setNotes(inv.notes || "");
@@ -168,8 +172,12 @@ const CreateInvoiceScreen = () => {
 
   const GST_TYPES = ["SGST", "CGST", "IGST"];
   const lineAmount = (it) => Number(it.quantity || 0) * Number(it.rate || 0);
-  const subtotal = items.reduce((sum, it) => sum + lineAmount(it), 0);
+  const grossSubtotal = items.reduce((sum, it) => sum + lineAmount(it), 0);
   const compPct = (k) => (gst[k].on ? Number(gst[k].pct || 0) : 0);
+  const totalPct = GST_TYPES.reduce((s, k) => s + compPct(k), 0);
+  // Inclusive: the entered rates already contain the tax, so back it out to get
+  // the taxable base. Exclusive: the entered amounts ARE the taxable base.
+  const subtotal = gstInclusive && totalPct > 0 ? (grossSubtotal * 100) / (100 + totalPct) : grossSubtotal;
   const compAmount = (k) => Math.round(subtotal * compPct(k)) / 100;
   const taxAmount = GST_TYPES.reduce((s, k) => s + compAmount(k), 0);
   const total = subtotal + taxAmount;
@@ -211,6 +219,7 @@ const CreateInvoiceScreen = () => {
       sgstPercent: compPct("SGST"),
       cgstPercent: compPct("CGST"),
       igstPercent: compPct("IGST"),
+      gstInclusive,
       b2b,
       gstNumber: b2b ? gstNumber.trim().toUpperCase() : null,
       notes: notes.trim() || null,
@@ -525,6 +534,27 @@ const CreateInvoiceScreen = () => {
 
         <div className="ol-inv-opt">
           <div className="ol-gst-title">GST / Tax</div>
+          <div className="ol-seg" style={{ marginBottom: 4 }}>
+            <button
+              type="button"
+              className={`ol-seg-btn ${!gstInclusive ? "is-active" : ""}`}
+              onClick={() => setGstInclusive(false)}
+            >
+              Exclusive (add tax on top)
+            </button>
+            <button
+              type="button"
+              className={`ol-seg-btn ${gstInclusive ? "is-active" : ""}`}
+              onClick={() => setGstInclusive(true)}
+            >
+              Inclusive (rates include tax)
+            </button>
+          </div>
+          <div className="ol-b2c-hint" style={{ marginBottom: 8 }}>
+            {gstInclusive
+              ? "Item rates already include GST — the tax is backed out and the total stays the same as the entered amount."
+              : "GST is added on top of the item rates."}
+          </div>
           {GST_TYPES.map((key) => (
             <div className="ol-gst-block" key={key}>
               <label className="ol-toggle-row">
@@ -559,7 +589,7 @@ const CreateInvoiceScreen = () => {
         </label>
 
         <div className="ol-inv-totals">
-          <div><span>Subtotal</span><b>{formatINR(subtotal)}</b></div>
+          <div><span>{gstInclusive && totalPct > 0 ? "Taxable value" : "Subtotal"}</span><b>{formatINR(subtotal)}</b></div>
           {GST_TYPES.filter((k) => gst[k].on && compAmount(k) > 0).map((k) => (
             <div key={k}><span>{k} ({compPct(k)}%)</span><b>{formatINR(compAmount(k))}</b></div>
           ))}

@@ -155,11 +155,14 @@ const InvoiceViewScreen = () => {
         </div>
 
         <div className="ol-inv-totals">
-          <div><span>Subtotal</span><b>{formatINR(invoice.subtotal)}</b></div>
+          <div><span>{invoice.gstInclusive && Number(invoice.taxPercent) > 0 ? "Taxable value" : "Subtotal"}</span><b>{formatINR(invoice.subtotal)}</b></div>
           {Number(invoice.sgstPercent) > 0 && <div><span>SGST ({Number(invoice.sgstPercent)}%)</span><b>{formatINR(Number(invoice.subtotal) * Number(invoice.sgstPercent) / 100)}</b></div>}
           {Number(invoice.cgstPercent) > 0 && <div><span>CGST ({Number(invoice.cgstPercent)}%)</span><b>{formatINR(Number(invoice.subtotal) * Number(invoice.cgstPercent) / 100)}</b></div>}
           {Number(invoice.igstPercent) > 0 && <div><span>IGST ({Number(invoice.igstPercent)}%)</span><b>{formatINR(Number(invoice.subtotal) * Number(invoice.igstPercent) / 100)}</b></div>}
           <div className="ol-inv-total-line"><span>Total</span><b>{formatINR(invoice.total)}</b></div>
+          {invoice.gstInclusive && Number(invoice.taxPercent) > 0 && (
+            <div className="ol-b2c-hint" style={{ marginTop: 4 }}>Item rates are inclusive of GST.</div>
+          )}
         </div>
 
         <div className="ol-inv-opt">
