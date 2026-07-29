@@ -41,7 +41,13 @@ const authenticateWithBiometric = async () => {
           name: "user@vasbazaar",
           displayName: "VasBazaar User",
         },
-        pubKeyCredParams: [{ alg: -7, type: "public-key" }],
+        // ES256 (-7) and RS256 (-257) are both required by the WebAuthn spec —
+        // omitting RS256 makes registration fail on authenticators that only
+        // support it (and Chrome logs a console warning).
+        pubKeyCredParams: [
+          { alg: -7, type: "public-key" },
+          { alg: -257, type: "public-key" },
+        ],
         authenticatorSelection: {
           authenticatorAttachment: "platform",
           userVerification: "required",

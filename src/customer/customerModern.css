@@ -8350,6 +8350,19 @@
 .cm-bank-add-btn:active { transform: scale(0.97); }
 .cm-bank-add-btn svg { font-size: 0.65rem; }
 
+/* Result of the last add/update — the backend saves unverified accounts as
+   "pending" with a 201, so this is the only place that outcome is visible. */
+.cm-bank-notice { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; line-height: 1.45; border: 1px solid transparent; }
+.cm-bank-notice svg { flex-shrink: 0; margin-top: 2px; font-size: 0.85rem; }
+.cm-bank-notice span { flex: 1; }
+.cm-bank-notice button { flex-shrink: 0; padding: 0; border: none; background: transparent; color: inherit; opacity: 0.6; cursor: pointer; font-size: 0.75rem; line-height: 1; }
+.cm-bank-notice button:hover { opacity: 1; }
+/* Dark is the default here, matching the rest of this stylesheet; .theme-light overrides. */
+.cm-bank-notice--success { background: rgba(0, 200, 83, 0.10); border-color: rgba(0, 200, 83, 0.30); color: #6EE7A8; }
+.cm-bank-notice--warn { background: rgba(255, 152, 0, 0.10); border-color: rgba(255, 152, 0, 0.32); color: #FFB74D; }
+.theme-light .cm-bank-notice--success { background: #ECFDF3; border-color: #A7F3D0; color: #2E7D32; }
+.theme-light .cm-bank-notice--warn { background: #FFF8E1; border-color: #FFE082; color: #B45309; }
+
 .cm-bank-filters { display: flex; gap: 8px; }
 .cm-bank-filter-chip { padding: 8px 16px; border-radius: 10px; border: 1px solid var(--cm-line); background: transparent; color: var(--cm-muted); font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: all 0.2s; }
 .cm-bank-filter-chip.is-active { background: var(--cm-ink); color: var(--cm-bg); border-color: var(--cm-ink); }
@@ -8384,13 +8397,46 @@
 .theme-light .cm-bank-filter-chip.is-active { background: #1A1A2E; color: #fff; border-color: #1A1A2E; }
 
 /* Modals */
-.cm-modal-overlay { position: fixed; inset: 0; z-index: 100; background: rgba(0, 0, 0, 0.7); display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); animation: cm-fadeIn 0.2s ease; }
-.cm-modal-content { width: min(90%, 440px); background: var(--cm-card, #1A1A1A); border-radius: 24px; padding: 24px; border: 1px solid var(--cm-line, #2A2A2A); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5); animation: cm-modal-in 0.3s ease; }
-.cm-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+/* Overlay sits above the app header (z 9999) and bottom nav so a modal is never
+   clipped by the chrome. Padding + safe-area keeps it clear of notch/home bar. */
+.cm-modal-overlay {
+  position: fixed; inset: 0; z-index: 10050;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex; align-items: center; justify-content: center;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  overscroll-behavior: contain;
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  animation: cm-fadeIn 0.2s ease;
+}
+/* Column layout: header/footer stay pinned, only the body scrolls. Without the
+   max-height a tall form (Add Bank on a short viewport) overflowed the screen
+   with no way to reach the submit button. */
+.cm-modal-content {
+  width: min(100%, 440px);
+  max-height: 100%;
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--cm-card, #1A1A1A);
+  border-radius: 20px;
+  border: 1px solid var(--cm-line, #2A2A2A);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  animation: cm-modal-in 0.3s ease;
+}
+.cm-modal-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex: 0 0 auto; padding: 20px 20px 14px; }
 .cm-modal-header h4 { margin: 0; font-size: 1.05rem; font-weight: 800; color: var(--cm-ink); }
-.cm-modal-close { width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--cm-line); background: rgba(255,255,255,0.04); color: var(--cm-muted); display: grid; place-items: center; cursor: pointer; font-size: 0.75rem; }
-.cm-modal-body { display: flex; flex-direction: column; gap: 14px; }
-.cm-modal-footer { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.cm-modal-close { width: 32px; height: 32px; flex-shrink: 0; border-radius: 10px; border: 1px solid var(--cm-line); background: rgba(255,255,255,0.04); color: var(--cm-muted); display: grid; place-items: center; cursor: pointer; font-size: 0.75rem; transition: background 0.2s, color 0.2s; }
+.cm-modal-close:hover { background: rgba(255,255,255,0.09); color: var(--cm-ink); }
+.cm-modal-body { display: flex; flex-direction: column; gap: 14px; flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 4px 20px 8px; }
+.cm-modal-footer { display: flex; flex-direction: column; gap: 8px; flex: 0 0 auto; padding: 14px 20px 20px; }
+/* Header-only or footer-only modals must not lose their top/bottom breathing room. */
+.cm-modal-content > .cm-modal-body:first-child { padding-top: 20px; }
+.cm-modal-content > .cm-modal-body:last-child { padding-bottom: 20px; }
+.theme-light .cm-modal-close { background: #F3F4F6; border-color: #E5E7EB; }
+.theme-light .cm-modal-close:hover { background: #E5E7EB; color: #111827; }
+/* Roomier viewports: side-by-side actions, primary on the right. */
+@media (min-width: 480px) and (min-height: 520px) {
+  .cm-modal-footer:not(.cm-modal-footer--stack) { flex-direction: row-reverse; align-items: stretch; }
+  .cm-modal-footer:not(.cm-modal-footer--stack) > * { flex: 1 1 0; justify-content: center; }
+}
 .cm-button-ghost {
   padding: 12px;
   border: 1px solid var(--cm-line, #2A2A2A);
@@ -22842,6 +22888,34 @@
 .ol-chip-remind:hover  { box-shadow: 0 5px 16px rgba(234, 106, 46, 0.36) !important; }
 .ol-chip-renew:hover   { box-shadow: 0 5px 16px rgba(109, 40, 217, 0.36) !important; }
 .ol-chip-newcust:hover { box-shadow: 0 5px 16px rgba(20, 184, 166, 0.38) !important; }
+
+/* ===== Dark theme: the ReBill action chips hard-code a white surface + dark
+   (#1a1a2e) label, which vanished on the black dark-mode page. Give them a dark
+   tinted surface with a light label and a brightened accent icon, keeping the
+   coloured glow. Specificity (0,3,0) beats `.ol-hdr-actions-row > .ol-chip`. ===== */
+:root[data-theme="dark"] .ol-hdr-actions-row > .ol-chip,
+:root[data-theme="dark"] .ol-chip {
+  background: #161C2B;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #E8ECF4 !important;
+}
+:root[data-theme="dark"] .ol-chip-newcust  { background: rgba(20, 184, 166, 0.16); border-color: rgba(45, 212, 191, 0.38); }
+:root[data-theme="dark"] .ol-chip-newcust svg  { color: #2dd4bf; }
+:root[data-theme="dark"] .ol-chip-create   { background: rgba(37, 99, 235, 0.18);  border-color: rgba(96, 165, 250, 0.40); }
+:root[data-theme="dark"] .ol-chip-create svg   { color: #60a5fa; }
+:root[data-theme="dark"] .ol-chip-export   { background: rgba(22, 163, 74, 0.18);  border-color: rgba(74, 222, 128, 0.38); }
+:root[data-theme="dark"] .ol-chip-export svg   { color: #4ade80; }
+:root[data-theme="dark"] .ol-chip-invoices { background: rgba(14, 165, 233, 0.18); border-color: rgba(56, 189, 248, 0.40); }
+:root[data-theme="dark"] .ol-chip-invoices svg { color: #38bdf8; }
+:root[data-theme="dark"] .ol-chip-sms      { background: rgba(124, 58, 237, 0.20); border-color: rgba(167, 139, 250, 0.42); }
+:root[data-theme="dark"] .ol-chip-sms svg      { color: #a78bfa; }
+:root[data-theme="dark"] .ol-chip-remind   { background: rgba(234, 106, 46, 0.20); border-color: rgba(251, 146, 60, 0.42); }
+:root[data-theme="dark"] .ol-chip-remind svg   { color: #fb923c; }
+:root[data-theme="dark"] .ol-chip-renew    { background: rgba(109, 40, 217, 0.22); border-color: rgba(167, 139, 250, 0.42); }
+:root[data-theme="dark"] .ol-chip-renew svg    { color: #a78bfa; }
+:root[data-theme="dark"] .ol-chip-add      { background: rgba(220, 38, 38, 0.18);  border-color: rgba(248, 113, 113, 0.40); }
+:root[data-theme="dark"] .ol-chip-add svg      { color: #f87171; }
+
 .ol-hdr-create {
   background: linear-gradient(135deg, #40E0D0 0%, #1e63ff 100%) !important;
   color: #fff !important;

@@ -13,7 +13,7 @@
  *       can safely serve the cached shell first and refresh it in the background)
  *   - static assets -> stale-while-revalidate
  */
-const CACHE_VERSION = "v1784832837767";
+const CACHE_VERSION = "v1785243900517";
 const CACHE_NAME = `vasbazaar-${CACHE_VERSION}`;
 // Cache both root and start_url for PWA
 const STATIC_ASSETS = [
@@ -70,6 +70,12 @@ self.addEventListener("message", (event) => {
   }
 });
 
+// A last-resort Response. Every respondWith() branch must resolve to a Response
+// object — resolving with undefined makes the browser reject the FetchEvent
+// ("Failed to convert value to 'Response'") and the request fails hard.
+const offlineResponse = () =>
+  new Response("", { status: 503, statusText: "Offline" });
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
@@ -83,8 +89,19 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.includes(".hot-update.") || url.pathname.includes("sockjs-node")) return;
 
   // Always fetch version.json fresh — this is what drives PWA update detection.
+  // version.json is never cached, so an offline fetch has nothing to fall back
+  // to: respondWith MUST still get a Response, or the browser throws
+  // "Failed to convert value to 'Response'" on every poll.
   if (url.pathname.endsWith("/version.json")) {
-    event.respondWith(fetch(req, { cache: "no-store" }).catch(() => caches.match(req)));
+    event.respondWith(
+      (async () => {
+        try {
+          return await fetch(req, { cache: "no-store" });
+        } catch (e) {
+          return (await caches.match(req)) || offlineResponse();
+        }
+      })()
+    );
     return;
   }
 
@@ -101,7 +118,10 @@ self.addEventListener("fetch", (event) => {
           const fresh = await fetch(req);
           if (fresh && fresh.ok) {
             const clone = fresh.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+            caches
+              .open(CACHE_NAME)
+              .then((cache) => cache.put(req, clone))
+              .catch(() => {});
             return fresh;
           }
           // Non-OK (deep link the host doesn't recognise): fall back to shell.
@@ -109,10 +129,15 @@ self.addEventListener("fetch", (event) => {
           // Offline — fall through to the cached shell below.
         }
 
-        const cached =
-          (await caches.match(req)) ||
-          (await caches.match("/index.html")) ||
-          (await caches.match("/"));
+        let cached;
+        try {
+          cached =
+            (await caches.match(req)) ||
+            (await caches.match("/index.html")) ||
+            (await caches.match("/"));
+        } catch (e) {
+          cached = null;
+        }
         if (cached) return cached;
 
         // Nothing cached and offline: minimal offline page.
@@ -128,18 +153,30 @@ self.addEventListener("fetch", (event) => {
   // Static assets: stale-while-revalidate from the same origin.
   if (url.origin === self.location.origin) {
     event.respondWith(
-      caches.match(req).then((cached) => {
+      (async () => {
+        let cached = null;
+        try {
+          cached = (await caches.match(req)) || null;
+        } catch (e) {
+          cached = null;
+        }
+
         const network = fetch(req)
           .then((res) => {
             if (res && res.ok) {
               const clone = res.clone();
-              caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+              caches
+                .open(CACHE_NAME)
+                .then((cache) => cache.put(req, clone))
+                .catch(() => {});
             }
             return res;
           })
-          .catch(() => cached);
+          // Offline with nothing cached: still hand back a Response.
+          .catch(() => cached || offlineResponse());
+
         return cached || network;
-      })
+      })()
     );
   }
 });

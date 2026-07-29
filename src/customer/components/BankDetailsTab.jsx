@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { FaPlus, FaCreditCard, FaArrowRight, FaPen, FaTimes, FaCheck, FaSpinner, FaExclamationCircle, FaUniversity } from "react-icons/fa";
 import { walletService } from "../services/walletService";
+import { userService } from "../services/userService";
 import { sanitizeBackendMessage } from "../utils/userMessages";
 
 const maskAccount = (num) => (num ? `****${num.slice(-4)}` : "");
@@ -21,11 +22,19 @@ const REJECT_REASONS = {
   other: "Verification failed",
 };
 
+// Backend rejects anything below this (Helper.processWalletDeductionForFundTransfer).
+const MIN_TRANSFER_AMOUNT = 100;
+
+const formatAmount = (value) =>
+  `₹${Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 export default function BankDetailsTab() {
   const [banks, setBanks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("active");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState(null);
+  const [balance, setBalance] = useState(null);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
@@ -35,7 +44,6 @@ export default function BankDetailsTab() {
   const [form, setForm] = useState({ accountNumber: "", ifscCode: "", bankName: "" });
   const [formErrors, setFormErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
-  const [verifyFailed, setVerifyFailed] = useState(false);
 
   const [transferData, setTransferData] = useState({ amount: "", transferMode: "IMPS" });
   const [transferErrors, setTransferErrors] = useState({});
@@ -57,6 +65,38 @@ export default function BankDetailsTab() {
 
   useEffect(() => { fetchBanks(); }, [fetchBanks]);
 
+  // Wallet balance is needed to pre-empt the backend's "Insufficient wallet
+  // balance" rejection. Served from the cached profile, so this is cheap.
+  const refreshBalance = useCallback(async (force = false) => {
+    // The profile (and therefore the balance) is cached for 2 min — after a
+    // transfer that cache is stale by definition, so drop it first.
+    if (force) userService.invalidateProfile();
+    const res = await walletService.getWalletBalance();
+    if (res.success) setBalance(Number(res.data?.balance ?? 0));
+  }, []);
+
+  useEffect(() => { refreshBalance(); }, [refreshBalance]);
+
+  const modalOpen = showAddModal || showTransferModal;
+
+  // While a modal is up, lock the page behind it and let Escape dismiss it —
+  // otherwise the list scrolls under the overlay and there is no keyboard exit.
+  useEffect(() => {
+    if (!modalOpen) return undefined;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (e) => {
+      if (e.key !== "Escape") return;
+      if (showAddModal) { if (!submitting) closeAddModal(); }
+      else if (!transferring) setShowTransferModal(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [modalOpen, showAddModal, submitting, transferring]);
+
   const validateForm = () => {
     const errs = {};
     if (!form.accountNumber.trim()) errs.accountNumber = "Account number is required";
@@ -68,28 +108,41 @@ export default function BankDetailsTab() {
     return Object.keys(errs).length === 0;
   };
 
-  const handleSubmitBank = async (skipVerification = false) => {
+  const handleSubmitBank = async () => {
     if (!validateForm()) return;
     setSubmitting(true);
-    setVerifyFailed(false);
-    const payload = skipVerification
-      ? { ...form, skipVerification: true }
-      : { ...form };
     const res = editingBank
-      ? await walletService.updateBankDetails({ id: editingBank.id, ...payload })
-      : await walletService.addBankDetails(payload);
+      ? await walletService.updateBankDetails({ id: editingBank.id, ...form })
+      : await walletService.addBankDetails(form);
     setSubmitting(false);
-    if (res.success) {
-      closeAddModal();
+
+    if (!res.success) {
+      setFormErrors({ submit: sanitizeBackendMessage(res.message, "Failed to save bank account") });
+      return;
+    }
+
+    // The backend always answers 201/200 here — even when penny-drop
+    // verification did NOT pass. The account then lands in `pending` instead of
+    // `active`, and the reason ("name mismatch", "could not be completed") is
+    // returned as the response *data*, not the message. Without surfacing it the
+    // user is bounced back to an Active tab that still looks empty, as if the
+    // save silently failed.
+    const outcome = typeof res.data === "string" ? res.data : "";
+    const verified = outcome.toLowerCase().includes("verified successfully");
+
+    closeAddModal();
+    setNotice({
+      type: verified ? "success" : "warn",
+      text: outcome || (verified ? "Bank account verified successfully" : "Bank account saved, pending approval"),
+    });
+
+    // Land the user on the tab the account actually went to.
+    if (verified) {
+      if (statusFilter === "active") fetchBanks(); else setStatusFilter("active");
+    } else if (statusFilter === "pending") {
       fetchBanks();
     } else {
-      const msg = sanitizeBackendMessage(res.message, "Failed to save bank account");
-      const rawMsg = (res.message || "").toLowerCase();
-      const isVerifyError = rawMsg.includes("verification failed") || rawMsg.includes("verify");
-      if (isVerifyError && !skipVerification) {
-        setVerifyFailed(true);
-      }
-      setFormErrors({ submit: msg });
+      setStatusFilter("pending");
     }
   };
 
@@ -105,7 +158,6 @@ export default function BankDetailsTab() {
     setEditingBank(null);
     setForm({ accountNumber: "", ifscCode: "", bankName: "" });
     setFormErrors({});
-    setVerifyFailed(false);
   };
 
   const openTransfer = (bank) => {
@@ -114,12 +166,20 @@ export default function BankDetailsTab() {
     setTransferErrors({});
     setTransferResult(null);
     setShowTransferModal(true);
+    refreshBalance();
   };
 
   const handleTransfer = async () => {
     const errs = {};
-    if (!transferData.amount.trim() || isNaN(parseFloat(transferData.amount)) || parseFloat(transferData.amount) <= 0) {
+    const amount = parseFloat(transferData.amount);
+    // Mirror the backend's own limits so the user is told before a round trip
+    // that debits nothing but still fails.
+    if (!transferData.amount.trim() || isNaN(amount) || amount <= 0) {
       errs.amount = "Enter a valid amount";
+    } else if (amount < MIN_TRANSFER_AMOUNT) {
+      errs.amount = `Minimum transfer amount is ${formatAmount(MIN_TRANSFER_AMOUNT)}`;
+    } else if (balance !== null && amount > balance) {
+      errs.amount = `Insufficient wallet balance (available ${formatAmount(balance)})`;
     }
     setTransferErrors(errs);
     if (Object.keys(errs).length > 0) return;
@@ -132,6 +192,7 @@ export default function BankDetailsTab() {
     setTransferring(false);
     if (res.success) {
       setTransferResult({ status: "success", reqId: res.data?.reqId, apiRefId: res.data?.apiRefId });
+      refreshBalance(true);
     } else {
       setTransferResult({ status: "error", message: sanitizeBackendMessage(res.message, "Transfer failed") });
     }
@@ -146,6 +207,16 @@ export default function BankDetailsTab() {
           <FaPlus /> Add Bank
         </button>
       </div>
+
+      {/* Outcome of the last add/update — a saved-but-unverified account lands in
+          Pending, which is otherwise invisible from the Active tab. */}
+      {notice && (
+        <div className={`cm-bank-notice cm-bank-notice--${notice.type}`} role="status">
+          {notice.type === "success" ? <FaCheck /> : <FaExclamationCircle />}
+          <span>{notice.text}</span>
+          <button type="button" aria-label="Dismiss" onClick={() => setNotice(null)}><FaTimes /></button>
+        </div>
+      )}
 
       {/* Status filter */}
       <div className="cm-bank-filters">
@@ -214,11 +285,11 @@ export default function BankDetailsTab() {
 
       {/* Add/Edit Modal */}
       {showAddModal && (
-        <div className="cm-modal-overlay" onClick={closeAddModal}>
-          <div className="cm-modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="cm-modal-overlay" onClick={submitting ? undefined : closeAddModal}>
+          <div className="cm-modal-content" role="dialog" aria-modal="true" aria-labelledby="cm-bank-modal-title" onClick={(e) => e.stopPropagation()}>
             <div className="cm-modal-header">
-              <h4>{editingBank ? "Edit Bank Account" : "Add Bank Account"}</h4>
-              <button type="button" className="cm-modal-close" onClick={closeAddModal}><FaTimes /></button>
+              <h4 id="cm-bank-modal-title">{editingBank ? "Edit Bank Account" : "Add Bank Account"}</h4>
+              <button type="button" className="cm-modal-close" aria-label="Close" onClick={closeAddModal} disabled={submitting}><FaTimes /></button>
             </div>
             <div className="cm-modal-body">
               <div className="cm-form-group">
@@ -231,46 +302,34 @@ export default function BankDetailsTab() {
               <div className="cm-form-group">
                 <label>Account Number *</label>
                 <input type="text" placeholder="Enter account number" value={form.accountNumber}
-                  onChange={(e) => setForm({ ...form, accountNumber: e.target.value })} disabled={submitting}
-                  inputMode="numeric" className={formErrors.accountNumber ? "cm-input-error" : ""} />
+                  onChange={(e) => setForm({ ...form, accountNumber: e.target.value.replace(/\D/g, "").slice(0, 18) })} disabled={submitting}
+                  inputMode="numeric" autoComplete="off" maxLength={18}
+                  className={formErrors.accountNumber ? "cm-input-error" : ""} />
                 {formErrors.accountNumber && <span className="cm-form-error">{formErrors.accountNumber}</span>}
               </div>
               <div className="cm-form-group">
                 <label>IFSC Code *</label>
-                <input type="text" placeholder="E.G., SBIN0001234" value={form.ifscCode} maxLength={11}
+                {/* No text-transform here: it would uppercase the placeholder too ("E.G., SBIN…").
+                    The onChange already upper-cases what the user types. */}
+                <input type="text" placeholder="e.g., SBIN0001234" value={form.ifscCode} maxLength={11}
                   onChange={(e) => setForm({ ...form, ifscCode: e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 11) })} disabled={submitting}
-                  style={{ textTransform: "uppercase" }} className={formErrors.ifscCode ? "cm-input-error" : ""} />
-                <span className="cm-form-hint">Format: AAAA0NNNNNN (e.g., SBIN0001234)</span>
-                {formErrors.ifscCode && <span className="cm-form-error">{formErrors.ifscCode}</span>}
+                  autoComplete="off" autoCapitalize="characters" spellCheck={false}
+                  className={formErrors.ifscCode ? "cm-input-error" : ""} />
+                {formErrors.ifscCode
+                  ? <span className="cm-form-error">{formErrors.ifscCode}</span>
+                  : <span className="cm-form-hint">11 characters — 4 letters, then 0, then 6 more</span>}
               </div>
               {formErrors.submit && <p className="cm-form-error" style={{ marginTop: 8 }}>{formErrors.submit}</p>}
-              {verifyFailed && (
-                <div style={{ marginTop: 10, padding: "10px 12px", background: "#FFF8E1", borderRadius: 10, border: "1px solid #FFE082" }}>
-                  <p style={{ margin: 0, fontSize: 12, color: "#F57F17", fontWeight: 600 }}>
-                    Bank verification could not be completed. You can still add this account — it will need admin approval before transfers.
-                  </p>
-                </div>
-              )}
+              <p className="cm-form-hint" style={{ marginTop: 4 }}>
+                We verify the account against your registered name. If it does not match, the account is
+                saved for admin approval and cannot receive transfers until approved.
+              </p>
             </div>
             <div className="cm-modal-footer">
-              {verifyFailed ? (
-                <>
-                  <button type="button" className="cm-button" onClick={() => handleSubmitBank(true)} disabled={submitting}
-                    style={{ background: "#FF9800", color: "#fff" }}>
-                    {submitting ? <FaSpinner className="cm-spin" /> : <FaCheck />}
-                    Add Anyway (Pending Approval)
-                  </button>
-                  <button type="button" className="cm-button" onClick={() => handleSubmitBank(false)} disabled={submitting}
-                    style={{ background: "transparent", border: "1px solid var(--cm-line, #ddd)", color: "var(--cm-text, #333)" }}>
-                    Retry Verification
-                  </button>
-                </>
-              ) : (
-                <button type="button" className="cm-button" onClick={() => handleSubmitBank(false)} disabled={submitting}>
-                  {submitting ? <FaSpinner className="cm-spin" /> : <FaCheck />}
-                  {editingBank ? "Update Account" : "Add Account"}
-                </button>
-              )}
+              <button type="button" className="cm-button" onClick={handleSubmitBank} disabled={submitting}>
+                {submitting ? <FaSpinner className="cm-spin" /> : <FaCheck />}
+                {editingBank ? "Update Account" : "Add Account"}
+              </button>
               <button type="button" className="cm-button-ghost" onClick={closeAddModal} disabled={submitting}>Cancel</button>
             </div>
           </div>
@@ -279,10 +338,10 @@ export default function BankDetailsTab() {
 
       {/* Transfer Modal */}
       {showTransferModal && (
-        <div className="cm-modal-overlay" onClick={() => setShowTransferModal(false)}>
-          <div className="cm-modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="cm-modal-overlay" onClick={transferring ? undefined : () => setShowTransferModal(false)}>
+          <div className="cm-modal-content" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             {transferResult?.status === "success" ? (
-              <div style={{ padding: 24, textAlign: "center" }}>
+              <div style={{ padding: 24, textAlign: "center", overflowY: "auto" }}>
                 <FaCheck style={{ fontSize: 48, color: "#4CAF50", marginBottom: 12 }} />
                 <h4 style={{ margin: "0 0 4px", fontSize: 18 }}>Transfer Successful!</h4>
                 <p style={{ color: "var(--cm-muted, #666)", fontSize: 13, margin: "0 0 16px" }}>Your transfer has been processed</p>
@@ -295,7 +354,7 @@ export default function BankDetailsTab() {
                 <button type="button" className="cm-button" onClick={() => setShowTransferModal(false)}>Close</button>
               </div>
             ) : transferResult?.status === "error" ? (
-              <div style={{ padding: 24, textAlign: "center" }}>
+              <div style={{ padding: 24, textAlign: "center", overflowY: "auto" }}>
                 <FaExclamationCircle style={{ fontSize: 48, color: "#F44336", marginBottom: 12 }} />
                 <h4 style={{ margin: "0 0 4px", fontSize: 18, color: "#F44336" }}>Transfer Failed</h4>
                 <p style={{ color: "var(--cm-muted, #666)", fontSize: 13, margin: "0 0 16px" }}>{transferResult.message}</p>
@@ -306,7 +365,7 @@ export default function BankDetailsTab() {
               <>
                 <div className="cm-modal-header">
                   <h4>Fund Transfer</h4>
-                  <button type="button" className="cm-modal-close" onClick={() => setShowTransferModal(false)}><FaTimes /></button>
+                  <button type="button" className="cm-modal-close" aria-label="Close" onClick={() => setShowTransferModal(false)} disabled={transferring}><FaTimes /></button>
                 </div>
                 <div className="cm-modal-body">
                   <div className="cm-bank-select-card">
@@ -319,11 +378,16 @@ export default function BankDetailsTab() {
                   </div>
                   <div className="cm-form-group">
                     <label>Amount (₹) *</label>
-                    <input type="text" placeholder="Enter amount" value={transferData.amount}
-                      onChange={(e) => setTransferData({ ...transferData, amount: e.target.value })}
+                    <input type="text" placeholder={`Minimum ${MIN_TRANSFER_AMOUNT}`} value={transferData.amount}
+                      onChange={(e) => setTransferData({ ...transferData, amount: e.target.value.replace(/[^\d.]/g, "") })}
                       disabled={transferring} inputMode="decimal"
                       className={transferErrors.amount ? "cm-input-error" : ""} />
-                    {transferErrors.amount && <span className="cm-form-error">{transferErrors.amount}</span>}
+                    {transferErrors.amount
+                      ? <span className="cm-form-error">{transferErrors.amount}</span>
+                      : <span className="cm-form-hint">
+                          Minimum {formatAmount(MIN_TRANSFER_AMOUNT)}
+                          {balance !== null && ` · Wallet balance ${formatAmount(balance)}`}
+                        </span>}
                   </div>
                   <div className="cm-form-group">
                     <label>Transfer Mode</label>
