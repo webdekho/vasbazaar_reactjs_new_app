@@ -2,7 +2,17 @@
 # VasBazaar iOS release — build web, sync Capacitor, archive, export, upload to App Store Connect.
 #
 # Usage:
-#   ./scripts/ios-release.sh [--version 1.3.9] [--build 10] [--skip-web] [--no-upload]
+#   ./scripts/ios-release.sh [--bump patch|minor|major|x.y.z] [--version 1.3.9] [--build 10]
+#                            [--skip-web] [--no-upload] [--force]
+#
+# Prefer --bump: it advances the version in ALL four version files at once
+# (appVersion.js, public/version.json, project.pbxproj, android/build.gradle)
+# via scripts/bump-version.js. --version/--build stay for one-off overrides.
+#
+# The script records every successful upload in .uploaded-ios.json and refuses
+# to archive a version+build pair already uploaded (App Store Connect rejects
+# those with error 90062 / 90186). Override with --force only if you know the
+# earlier upload never reached Apple.
 #
 # Credentials (App Store Connect API key) are read from ~/.appstoreconnect/vasbazaar.env:
 #   ASC_KEY_ID=XXXXXXXXXX
@@ -20,17 +30,23 @@ EXPORT_OPTS="$IOS_DIR/ExportOptions.plist"
 BUILD_DIR="$APP_ROOT/build-ios"
 ARCHIVE="$BUILD_DIR/App.xcarchive"
 
+UPLOAD_LOG="$APP_ROOT/.uploaded-ios.json"
+
 NEW_VERSION=""
 NEW_BUILD=""
+BUMP=""
 SKIP_WEB=0
 DO_UPLOAD=1
+FORCE=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --bump)      BUMP="$2";        shift 2 ;;
     --version)   NEW_VERSION="$2"; shift 2 ;;
     --build)     NEW_BUILD="$2";   shift 2 ;;
     --skip-web)  SKIP_WEB=1;       shift ;;
     --no-upload) DO_UPLOAD=0;      shift ;;
+    --force)     FORCE=1;          shift ;;
     *) echo "Unknown arg: $1" >&2; exit 2 ;;
   esac
 done
@@ -42,6 +58,11 @@ echo "==> Project root: $APP_ROOT"
 cur_version() { grep -m1 -E '^\s*MARKETING_VERSION = ' "$PBXPROJ" | sed -E 's/.*= (.*);/\1/'; }
 cur_build()   { grep -m1 -E '^\s*CURRENT_PROJECT_VERSION = ' "$PBXPROJ" | sed -E 's/.*= (.*);/\1/'; }
 
+if [[ -n "$BUMP" ]]; then
+  echo "==> npm run bump $BUMP (syncs all four version files)"
+  ( cd "$APP_ROOT" && node scripts/bump-version.js "$BUMP" )
+fi
+
 if [[ -n "$NEW_VERSION" ]]; then
   /usr/bin/sed -i '' -E "s/MARKETING_VERSION = .*;/MARKETING_VERSION = ${NEW_VERSION};/g" "$PBXPROJ"
 fi
@@ -52,6 +73,19 @@ fi
 VERSION="$(cur_version)"
 BUILD="$(cur_build)"
 echo "==> Version $VERSION ($BUILD)"
+
+# refuse to rebuild something Apple has already accepted — that upload always
+# fails with 90062 (version not higher) or 90186 (train closed), after a full
+# archive has been burnt.
+if [[ -f "$UPLOAD_LOG" && "$FORCE" -eq 0 ]]; then
+  if grep -q "\"${VERSION} (${BUILD})\"" "$UPLOAD_LOG"; then
+    echo "ERROR: $VERSION ($BUILD) was already uploaded (see $UPLOAD_LOG)." >&2
+    echo "       App Store Connect will reject it. Run:" >&2
+    echo "         ./scripts/ios-release.sh --bump patch     # or minor / major" >&2
+    echo "       Use --force only if that earlier upload never reached Apple." >&2
+    exit 1
+  fi
+fi
 
 # keep the JS-side version markers in sync with the native one
 if [[ -n "$NEW_VERSION" ]]; then
@@ -129,4 +163,15 @@ echo "==> Uploading $VERSION ($BUILD) to App Store Connect"
 xcrun altool --upload-app -f "$IPA" -t ios \
   --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
 
+# record it so a repeat run of the same version+build is blocked up front
+node -e '
+  const fs = require("fs");
+  const p = process.argv[1], tag = process.argv[2];
+  let log = [];
+  try { log = JSON.parse(fs.readFileSync(p, "utf8")); } catch {}
+  if (!log.includes(tag)) log.push(tag);
+  fs.writeFileSync(p, JSON.stringify(log, null, 2) + "\n");
+' "$UPLOAD_LOG" "$VERSION ($BUILD)"
+
 echo "==> Uploaded $VERSION ($BUILD). Processing takes ~5-15 min before it shows in TestFlight."
+echo "==> Recorded in $UPLOAD_LOG — next release: ./scripts/ios-release.sh --bump patch"

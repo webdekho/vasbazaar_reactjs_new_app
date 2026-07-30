@@ -1,0 +1,133 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>VasBazaar — App Encryption Declaration</title>
+<style>
+  @page { margin: 20mm; }
+  body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #111; }
+  h1 { font-size: 17pt; margin: 0 0 2pt; }
+  h2 { font-size: 12pt; margin: 18pt 0 6pt; border-bottom: 1px solid #ccc; padding-bottom: 3pt; }
+  .sub { color: #555; font-size: 10pt; margin: 0 0 14pt; }
+  table { border-collapse: collapse; width: 100%; margin: 6pt 0; }
+  th, td { border: 1px solid #bbb; padding: 5pt 7pt; text-align: left; vertical-align: top; font-size: 10pt; }
+  th { background: #f2f2f2; width: 32%; }
+  ul { margin: 6pt 0; padding-left: 18pt; }
+  li { margin-bottom: 4pt; }
+  code { font-family: "SF Mono", Menlo, monospace; font-size: 9.5pt; background: #f4f4f4; padding: 1pt 3pt; }
+  .sign { margin-top: 24pt; }
+  .sign td, .sign th { border: none; padding: 4pt 0; }
+  .line { border-bottom: 1px solid #333; display: inline-block; min-width: 250px; }
+</style>
+</head>
+<body>
+
+<h1>App Encryption Declaration</h1>
+<p class="sub">VasBazaar — iOS application (bundle identifier <code>com.vasbazaar.app</code>)</p>
+
+<table>
+  <tr><th>Application name</th><td>VasBazaar</td></tr>
+  <tr><th>Bundle identifier</th><td>com.vasbazaar.app</td></tr>
+  <tr><th>Platform</th><td>iOS (Capacitor / WKWebView hybrid application)</td></tr>
+  <tr><th>Purpose of the app</th><td>Consumer fintech application for prepaid mobile and DTH recharges, utility bill payments (BBPS), wallet transactions and related financial services in India.</td></tr>
+  <tr><th>Declaration date</th><td>30 July 2026</td></tr>
+</table>
+
+<h2>1. Purpose of encryption in the app</h2>
+<p>
+Encryption is used solely to protect the confidentiality and integrity of the user's own data.
+It is a supporting security feature of a financial services application and is not the primary
+function of the app. Specifically, encryption protects:
+</p>
+<ul>
+  <li>authentication credentials and session tokens exchanged with the VasBazaar backend;</li>
+  <li>recharge and bill-payment request payloads (customer identifier, operator, amount);</li>
+  <li>e-mandate / auto-pay setup requests;</li>
+  <li>all API traffic between the app and the VasBazaar servers.</li>
+</ul>
+<p>
+The app does not provide encryption as a service to the user, does not encrypt third-party data,
+and offers no key-management, secure-messaging or file-encryption features.
+</p>
+
+<h2>2. Encryption used</h2>
+
+<p><strong>2.1 Transport security.</strong> All network communication with the VasBazaar backend uses
+HTTPS/TLS as provided by iOS (App Transport Security, <code>URLSession</code> / <code>WKWebView</code>).
+No custom TLS stack is bundled.</p>
+
+<p><strong>2.2 Application-layer payload encryption.</strong> Sensitive request payloads are additionally
+encrypted before transmission using a standard hybrid RSA + AES envelope scheme:</p>
+
+<table>
+  <tr><th>Payload cipher</th><td>AES-256 in CBC mode (256-bit key, 128-bit random IV, freshly generated per request)</td></tr>
+  <tr><th>Key transport</th><td>RSA-OAEP with SHA-256 (MGF1-SHA-256). The RSA public key is issued by the VasBazaar backend and fetched over HTTPS; the app never holds a private key.</td></tr>
+  <tr><th>Random number source</th><td><code>crypto.getRandomValues()</code> (Web Crypto, backed by the operating system CSPRNG)</td></tr>
+  <tr><th>Wire format</th><td>Base64 triplet: <code>RSA(AES key) : IV : AES(payload)</code></td></tr>
+</table>
+
+<p><strong>2.3 Implementations used.</strong> Two interchangeable implementations of the same standard
+algorithms are present:</p>
+<ul>
+  <li><strong>Web Crypto API</strong> (<code>window.crypto.subtle</code>) — the primary path, provided by the
+      operating system / WebKit;</li>
+  <li><strong>node-forge</strong> (open-source JavaScript library, BSD/GPL dual licence) — a fallback used
+      only when the page is not running in a secure context and the Web Crypto API is therefore
+      unavailable. It implements the same AES-CBC and RSA-OAEP algorithms in JavaScript.</li>
+</ul>
+<p>
+Because the node-forge library is bundled with the app, the app implements standard encryption
+algorithms <em>in addition to</em> the encryption available in Apple's operating system. This is the
+reason the second option was selected in the App Store Connect encryption questionnaire.
+</p>
+
+<h2>3. Standards conformance</h2>
+<p>All algorithms used are published, internationally recognised standards. None are proprietary,
+and none have been modified:</p>
+<ul>
+  <li><strong>AES</strong> — FIPS PUB 197 (NIST); CBC mode per NIST SP 800-38A</li>
+  <li><strong>RSA-OAEP</strong> — PKCS #1 v2.2 / RFC 8017 (IETF)</li>
+  <li><strong>SHA-256</strong> — FIPS PUB 180-4 (NIST)</li>
+  <li><strong>TLS</strong> — RFC 8446 / RFC 5246 (IETF), as implemented by iOS</li>
+</ul>
+<p>
+The app contains no proprietary or non-standard cryptography, no cryptanalytic functionality,
+and no ability for the user to supply or modify cryptographic algorithms.
+</p>
+
+<h2>4. Export compliance</h2>
+<p>
+The app is a mass-market consumer application distributed exclusively through the Apple App Store.
+Cryptography is limited to protecting the user's own data in transit and is ancillary to the app's
+primary function of processing recharges and bill payments.
+</p>
+<p>
+On that basis the app is considered to fall under the mass-market provisions of Category 5,
+Part 2 of the U.S. Export Administration Regulations (ECCN 5D992.c). No CCATS classification or
+Encryption Registration Number has therefore been obtained. Consistent with this, the key
+<code>ITSAppUsesNonExemptEncryption</code> is set to <code>false</code> in the application's
+<code>Info.plist</code>.
+</p>
+
+<h2>5. Distribution in France</h2>
+<p>
+The app is intended for use in India only and is not made available for distribution in France.
+No French encryption declaration has therefore been filed with ANSSI.
+</p>
+
+<h2>6. Statement</h2>
+<p>
+I confirm that the information provided above is accurate and complete to the best of my knowledge,
+and that the app uses only the standard, published encryption algorithms described in this document.
+</p>
+
+<table class="sign">
+  <tr><td style="width:22%">Name</td><td><span class="line">&nbsp;</span></td></tr>
+  <tr><td>Title</td><td><span class="line">&nbsp;</span></td></tr>
+  <tr><td>Company</td><td><span class="line">&nbsp;</span></td></tr>
+  <tr><td>Signature</td><td><span class="line">&nbsp;</span></td></tr>
+  <tr><td>Date</td><td><span class="line">&nbsp;</span></td></tr>
+</table>
+
+</body>
+</html>

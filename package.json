@@ -37,9 +37,11 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "prestart": "node scripts/stamp-version.js",
+    "prestart": "node scripts/check-version-sync.js && node scripts/stamp-version.js",
     "start": "react-scripts start",
-    "prebuild": "node scripts/stamp-version.js",
+    "prebuild": "node scripts/check-version-sync.js && node scripts/stamp-version.js",
+    "bump": "node scripts/bump-version.js",
+    "version:check": "node scripts/check-version-sync.js",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
