@@ -50,11 +50,21 @@ export const walletService = {
   getBankDetails: (pageNumber = 0, pageSize = 10, status = "active") =>
     authGet("/api/customer/bank_details/myBankDetails", { pageNumber, pageSize, status }),
 
+  // Verifies with the payout vendor without saving, so the account holder's real
+  // name can be shown before the account is added. Backend caches the result for
+  // 10 min, so the follow-up add costs no extra vendor call.
+  validateBankAccount: (accountNumber, ifscCode) =>
+    authPost("/api/customer/bank_details/validate", { accountNumber, ifscCode }),
+
   addBankDetails: (payload) =>
     authPost("/api/customer/bank_details/add", payload),
 
   updateBankDetails: (payload) =>
     authPut("/api/customer/bank_details/update", payload),
+
+  // Backend verifies the row belongs to the token user before deleting.
+  deleteBankDetails: (id) =>
+    authDelete(`/api/customer/bank_details/${id}`),
 
   fundTransfer: (payload) =>
     authPost("/api/customer/wallet_transaction/fund-transfer", payload),

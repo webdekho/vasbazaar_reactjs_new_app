@@ -90,9 +90,14 @@ const WalletScreen = () => {
   const handleLoadMore = () => { if (loadingMore || !hasMore) return; const next = page + 1; setPage(next); fetchData(next, true); };
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return transactions;
+    // Zero-value rows carry no information for the customer (e.g. an
+    // "App installation bonus." row written while the bonus amount was set
+    // to 0). New ones are no longer created backend-side; this also hides
+    // the ones already sitting in history.
+    const nonZero = transactions.filter((t) => Number(t.txnAmt || t.amount || 0) !== 0);
+    if (!search.trim()) return nonZero;
     const q = search.trim().toLowerCase();
-    return transactions.filter((t) =>
+    return nonZero.filter((t) =>
       (t.txnId || "").toLowerCase().includes(q) || (t.operatorNo || t.mobile || "").includes(q) || (t.message || t.description || "").toLowerCase().includes(q)
     );
   }, [transactions, search]);
@@ -181,16 +186,22 @@ const WalletScreen = () => {
                 <div key={month}>
                   <div className="wl-month-label">{month}</div>
                   {items.map((txn, i) => {
+                    // txnId is NOT unique in wallet_transaction — a transfer and its
+                    // mirror/cashback row share one, which made React see two children
+                    // with the same key (and collapse/expand them together). The row
+                    // id is the primary key; fall back to month+index only when it is
+                    // absent, so the identity is still unique across groups.
+                    const rowKey = txn.id != null ? `txn-${txn.id}` : `${month}-${txn.txnId || "txn"}-${i}`;
                     const st = getStatusConfig(txn.status);
-                    const isExpanded = expanded === (txn.txnId || txn.id || i);
+                    const isExpanded = expanded === rowKey;
                     const isCredit = txn.txnMode === 0
                       || txn.serviceType === "rebuddy_settlement"
                       || (txn.message || "").toLowerCase().includes("credit");
                     return (
-                      <div key={txn.txnId || txn.id || i}
+                      <div key={rowKey}
                         className={`th-card th-card--collapsible${isExpanded ? " is-expanded" : ""}`}
                         style={{ cursor: "pointer" }}
-                        onClick={() => setExpanded(isExpanded ? null : (txn.txnId || txn.id || i))}>
+                        onClick={() => setExpanded(isExpanded ? null : rowKey)}>
                         <div className="th-card-row">
                           <div className={`th-dir-icon th-dir-icon--${isCredit ? "credit" : "debit"}`}>
                             {isCredit ? <FiArrowDownLeft /> : <FiArrowUpRight />}

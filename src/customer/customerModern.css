@@ -8342,13 +8342,26 @@
 .theme-light .rw-filter-btn { border-color: #E5E7EB; }
 .theme-light .rw-filter-btn.is-active { border-color: #007BFF; color: #007BFF; background: rgba(0, 123, 255, 0.06); }
 
-/* Bank Tab */
-.cm-bank-tab { display: flex; flex-direction: column; gap: 14px; }
-.cm-bank-header { display: flex; justify-content: space-between; align-items: center; }
-.cm-bank-title { font-size: 1rem; font-weight: 800; color: var(--cm-ink); margin: 0; }
-.cm-bank-add-btn { display: flex; align-items: center; gap: 6px; padding: 8px 16px; border: none; border-radius: 10px; background: linear-gradient(135deg, #40E0D0, #007BFF); color: #fff; font-size: 0.75rem; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(64, 224, 208, 0.2); transition: transform 0.15s; }
+/* Bank Tab
+   Status colour is driven by one token per card (`--bank-status`), set by the
+   .cm-bank-card--<status> modifier, so the avatar ring, badge and hover border
+   all shift together without a second set of theme overrides. */
+.cm-bank-tab { display: flex; flex-direction: column; gap: 16px; }
+.cm-bank-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.cm-bank-headline { display: grid; gap: 2px; min-width: 0; }
+.cm-bank-title { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; color: var(--cm-ink); margin: 0; }
+.cm-bank-subtitle { margin: 0; font-size: 0.74rem; font-weight: 600; color: var(--cm-muted); text-transform: capitalize; }
+.cm-bank-add-btn {
+  display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0;
+  padding: 10px 18px; border: none; border-radius: 999px;
+  background: linear-gradient(135deg, var(--cm-accent, #40E0D0), var(--cm-accent-end, #007BFF));
+  color: #fff; font-size: 0.78rem; font-weight: 700; cursor: pointer;
+  box-shadow: 0 6px 18px -6px rgba(0, 123, 255, 0.55);
+  transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+.cm-bank-add-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 24px -8px rgba(0, 123, 255, 0.65); filter: saturate(1.08); }
 .cm-bank-add-btn:active { transform: scale(0.97); }
-.cm-bank-add-btn svg { font-size: 0.65rem; }
+.cm-bank-add-btn svg { font-size: 0.7rem; }
 
 /* Result of the last add/update — the backend saves unverified accounts as
    "pending" with a 201, so this is the only place that outcome is visible. */
@@ -8360,41 +8373,176 @@
 /* Dark is the default here, matching the rest of this stylesheet; .theme-light overrides. */
 .cm-bank-notice--success { background: rgba(0, 200, 83, 0.10); border-color: rgba(0, 200, 83, 0.30); color: #6EE7A8; }
 .cm-bank-notice--warn { background: rgba(255, 152, 0, 0.10); border-color: rgba(255, 152, 0, 0.32); color: #FFB74D; }
+/* Destructive outcome (account removed) — green would read as "account added". */
+.cm-bank-notice--danger { background: rgba(239, 68, 68, 0.10); border-color: rgba(239, 68, 68, 0.32); color: #FCA5A5; }
 .theme-light .cm-bank-notice--success { background: #ECFDF3; border-color: #A7F3D0; color: #2E7D32; }
 .theme-light .cm-bank-notice--warn { background: #FFF8E1; border-color: #FFE082; color: #B45309; }
+.theme-light .cm-bank-notice--danger { background: #FEF2F2; border-color: #FECACA; color: #B91C1C; }
 
-.cm-bank-filters { display: flex; gap: 8px; }
-.cm-bank-filter-chip { padding: 8px 16px; border-radius: 10px; border: 1px solid var(--cm-line); background: transparent; color: var(--cm-muted); font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: all 0.2s; }
-.cm-bank-filter-chip.is-active { background: var(--cm-ink); color: var(--cm-bg); border-color: var(--cm-ink); }
+/* Segmented control rather than three loose chips — the selected tab is the only
+   filled surface, so the current status reads at a glance. */
+.cm-bank-filters {
+  display: flex; gap: 4px; padding: 4px;
+  border-radius: 999px; border: 1px solid var(--cm-line);
+  background: color-mix(in srgb, var(--cm-ink) 4%, transparent);
+}
+.cm-bank-filter-chip {
+  flex: 1 1 0; padding: 9px 12px; border-radius: 999px; border: none;
+  background: transparent; color: var(--cm-muted);
+  font-size: 0.76rem; font-weight: 700; cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+.cm-bank-filter-chip:hover:not(.is-active) { color: var(--cm-ink); background: color-mix(in srgb, var(--cm-ink) 6%, transparent); }
+.cm-bank-filter-chip.is-active { background: var(--cm-ink); color: var(--cm-bg); box-shadow: 0 4px 12px -4px rgba(0, 0, 0, 0.4); }
 
-.cm-bank-list { display: flex; flex-direction: column; gap: 10px; }
-.cm-bank-card { padding: 16px; background: var(--cm-card); border-radius: 16px; border: 1px solid var(--cm-line); display: flex; flex-direction: column; gap: 10px; transition: transform 0.15s; }
-.cm-bank-card:hover { transform: translateY(-1px); }
+.cm-bank-list { display: flex; flex-direction: column; gap: 12px; }
+.cm-bank-card {
+  --bank-status: var(--cm-accent, #40E0D0);
+  position: relative; overflow: hidden;
+  padding: 16px 16px 16px 20px;
+  background: var(--cm-card);
+  border-radius: 18px; border: 1px solid var(--cm-line);
+  display: flex; flex-direction: column; gap: 12px;
+  transition: transform 0.18s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+/* Status rail down the leading edge. */
+.cm-bank-card::before {
+  content: ""; position: absolute; inset: 0 auto 0 0; width: 4px;
+  background: var(--bank-status);
+}
+.cm-bank-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--bank-status) 45%, var(--cm-line));
+  box-shadow: 0 14px 30px -18px rgba(0, 0, 0, 0.55);
+}
+.cm-bank-card--active { --bank-status: #22C55E; }
+.cm-bank-card--pending { --bank-status: #F59E0B; }
+.cm-bank-card--rejected { --bank-status: #EF4444; }
 
-.cm-bank-card-header { display: flex; justify-content: space-between; align-items: center; }
-.cm-bank-card-info { display: flex; align-items: center; gap: 10px; }
+.cm-bank-card-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.cm-bank-card-info { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.cm-bank-card-id { min-width: 0; }
+.cm-bank-avatar {
+  width: 42px; height: 42px; flex-shrink: 0;
+  display: grid; place-items: center;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bank-status) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bank-status) 32%, transparent);
+  color: var(--bank-status);
+  font-size: 0.82rem; font-weight: 800; letter-spacing: 0.02em;
+}
 .cm-bank-card-icon { font-size: 1.1rem; color: var(--cm-accent); }
-.cm-bank-card-name { font-size: 0.88rem; font-weight: 700; color: var(--cm-ink); }
-.cm-bank-card-number { font-size: 0.72rem; color: var(--cm-muted); font-family: 'SF Mono', monospace; }
-.cm-bank-status-badge { padding: 4px 10px; border-radius: 8px; font-size: 0.62rem; font-weight: 700; display: inline-flex; }
-.cm-bank-card-details { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: rgba(255,255,255,0.03); border-radius: 10px; border: 1px solid rgba(255,255,255,0.05); }
-.cm-bank-detail-row { display: flex; justify-content: space-between; font-size: 0.75rem; }
-.cm-bank-detail-row span { color: var(--cm-muted); }
-.cm-bank-detail-row strong { color: var(--cm-ink); font-weight: 700; }
-.cm-bank-reject strong { color: #FF3B30; }
+.cm-bank-card-name { font-size: 0.92rem; font-weight: 700; color: var(--cm-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-bank-card-number { font-size: 0.76rem; color: var(--cm-muted); font-family: 'SF Mono', ui-monospace, monospace; letter-spacing: 0.04em; }
+.cm-bank-status-badge {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  padding: 5px 11px; border-radius: 999px;
+  font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  background: color-mix(in srgb, var(--bank-status) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bank-status) 30%, transparent);
+  color: var(--bank-status);
+}
+.cm-bank-status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.cm-bank-card--active .cm-bank-status-dot { box-shadow: 0 0 0 3px color-mix(in srgb, var(--bank-status) 22%, transparent); }
+.cm-bank-card-details {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 12px 14px; border-radius: 14px;
+  background: color-mix(in srgb, var(--cm-ink) 4%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cm-ink) 7%, transparent);
+}
+.cm-bank-detail-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 0.76rem; }
+.cm-bank-detail-row span { color: var(--cm-muted); font-weight: 600; white-space: nowrap; }
+.cm-bank-detail-row strong { color: var(--cm-ink); font-weight: 700; text-align: right; word-break: break-word; }
+.cm-bank-reject strong { color: #EF4444; }
 .cm-bank-card-actions { display: flex; gap: 8px; }
-.cm-bank-transfer-btn { display: flex; align-items: center; gap: 6px; padding: 10px 18px; border: none; border-radius: 10px; background: linear-gradient(135deg, #00C853, #009624); color: #fff; font-size: 0.78rem; font-weight: 700; cursor: pointer; transition: transform 0.15s; }
+.cm-bank-transfer-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 11px 20px; border: none; border-radius: 12px;
+  background: linear-gradient(135deg, #22C55E, #12924B);
+  color: #fff; font-size: 0.8rem; font-weight: 700; cursor: pointer;
+  box-shadow: 0 6px 18px -8px rgba(34, 197, 94, 0.7);
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+.cm-bank-transfer-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 22px -10px rgba(34, 197, 94, 0.8); }
 .cm-bank-transfer-btn:active { transform: scale(0.97); }
-.cm-bank-edit-btn { display: flex; align-items: center; gap: 6px; padding: 10px 18px; border: 1px solid var(--cm-accent); border-radius: 10px; background: color-mix(in srgb, var(--cm-accent) 8%, transparent); color: var(--cm-accent); font-size: 0.78rem; font-weight: 700; cursor: pointer; }
-.cm-bank-select-card { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--cm-line); margin-bottom: 12px; }
+.cm-bank-edit-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 11px 20px; border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--bank-status) 45%, transparent);
+  background: color-mix(in srgb, var(--bank-status) 10%, transparent);
+  color: var(--bank-status); font-size: 0.8rem; font-weight: 700; cursor: pointer;
+  transition: background 0.2s ease;
+}
+.cm-bank-edit-btn:hover { background: color-mix(in srgb, var(--bank-status) 18%, transparent); }
+/* Destructive action stays quiet until hovered — it sits next to the primary one. */
+.cm-bank-delete-btn {
+  display: inline-flex; align-items: center; gap: 7px; margin-left: auto;
+  padding: 11px 18px; border-radius: 12px;
+  border: 1px solid var(--cm-line); background: transparent;
+  color: var(--cm-muted); font-size: 0.8rem; font-weight: 700; cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+.cm-bank-delete-btn:hover {
+  color: #EF4444;
+  border-color: rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.08);
+}
+.cm-button--danger { background: linear-gradient(135deg, #F87171, #DC2626); box-shadow: 0 6px 18px -8px rgba(220, 38, 38, 0.7); }
+.cm-bank-select-card {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px; border-radius: 16px;
+  background: color-mix(in srgb, var(--cm-accent) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cm-accent) 25%, transparent);
+  margin-bottom: 4px;
+}
+/* Why-we-verify footnote inside the add/edit dialog. */
+.cm-bank-verify-note {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px; border-radius: 14px;
+  background: color-mix(in srgb, var(--cm-accent) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cm-accent) 22%, transparent);
+  font-size: 0.72rem; font-weight: 500; line-height: 1.5; color: var(--cm-muted);
+}
+.cm-bank-verify-note svg { flex-shrink: 0; margin-top: 2px; font-size: 0.85rem; color: var(--cm-accent); }
+
+/* Result of the pre-save vendor check. One token per outcome so the icon, border
+   and name colour move together: matched / mismatched / vendor unreachable. */
+.cm-bank-verify-result {
+  --verify-tone: var(--cm-muted);
+  padding: 14px; border-radius: 16px;
+  background: color-mix(in srgb, var(--verify-tone) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--verify-tone) 32%, transparent);
+  animation: cm-fadeIn 0.25s ease;
+}
+.cm-bank-verify-result--match { --verify-tone: #22C55E; }
+.cm-bank-verify-result--mismatch { --verify-tone: #F59E0B; }
+.cm-bank-verify-result--unknown { --verify-tone: #EF4444; }
+.cm-bank-verify-result-head {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.66rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--verify-tone);
+}
+.cm-bank-verify-name {
+  margin: 8px 0 0; font-size: 1rem; font-weight: 800; letter-spacing: -0.01em;
+  color: var(--cm-ink); word-break: break-word;
+}
+.cm-bank-verify-msg { margin: 6px 0 0; font-size: 0.72rem; font-weight: 500; line-height: 1.5; color: var(--cm-muted); }
+.cm-bank-verify-detail {
+  margin: 8px 0 0; padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--verify-tone) 22%, transparent);
+  font-size: 0.7rem; font-weight: 600; line-height: 1.45; color: var(--verify-tone);
+  word-break: break-word;
+}
 .cm-transfer-modes { display: flex; gap: 8px; }
 .cm-transfer-mode { flex: 1; padding: 10px; border: 1px solid var(--cm-line); border-radius: 10px; background: transparent; color: var(--cm-muted); font-size: 0.82rem; font-weight: 700; cursor: pointer; text-align: center; transition: all 0.2s; }
 .cm-transfer-mode.is-active { border-color: var(--cm-accent); background: color-mix(in srgb, var(--cm-accent) 10%, transparent); color: var(--cm-accent); }
 
 /* Light mode bank */
-.theme-light .cm-bank-card { background: #fff; border-color: #E5E7EB; }
-.theme-light .cm-bank-card-details { background: #F9FAFB; border-color: #E5E7EB; }
-.theme-light .cm-bank-filter-chip.is-active { background: #1A1A2E; color: #fff; border-color: #1A1A2E; }
+.theme-light .cm-bank-card { background: #fff; border-color: #E5E7EB; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04); }
+.theme-light .cm-bank-card:hover { box-shadow: 0 14px 30px -18px rgba(16, 24, 40, 0.35); }
+.theme-light .cm-bank-card-details { background: #F9FAFB; border-color: #EEF0F3; }
+.theme-light .cm-bank-filters { background: #F3F4F6; border-color: #E5E7EB; }
+.theme-light .cm-bank-filter-chip.is-active { background: #1A1A2E; color: #fff; }
 
 /* Modals */
 /* Overlay sits above the app header (z 9999) and bottom nav so a modal is never
@@ -8421,21 +8569,95 @@
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
   animation: cm-modal-in 0.3s ease;
 }
-.cm-modal-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex: 0 0 auto; padding: 20px 20px 14px; }
+.cm-modal-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex: 0 0 auto; padding: 20px 20px 14px; border-bottom: 1px solid var(--cm-line, #2A2A2A); }
 .cm-modal-header h4 { margin: 0; font-size: 1.05rem; font-weight: 800; color: var(--cm-ink); }
+.cm-modal-heading { display: grid; gap: 3px; min-width: 0; }
+.cm-modal-heading h4 { font-size: 1.12rem; letter-spacing: -0.02em; }
+.cm-modal-subtitle { margin: 0; font-size: 0.73rem; font-weight: 500; color: var(--cm-muted); }
 .cm-modal-close { width: 32px; height: 32px; flex-shrink: 0; border-radius: 10px; border: 1px solid var(--cm-line); background: rgba(255,255,255,0.04); color: var(--cm-muted); display: grid; place-items: center; cursor: pointer; font-size: 0.75rem; transition: background 0.2s, color 0.2s; }
 .cm-modal-close:hover { background: rgba(255,255,255,0.09); color: var(--cm-ink); }
-.cm-modal-body { display: flex; flex-direction: column; gap: 14px; flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 4px 20px 8px; }
-.cm-modal-footer { display: flex; flex-direction: column; gap: 8px; flex: 0 0 auto; padding: 14px 20px 20px; }
-/* Header-only or footer-only modals must not lose their top/bottom breathing room. */
+.cm-modal-body { display: flex; flex-direction: column; gap: 14px; flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 16px 20px; scrollbar-width: thin; scrollbar-color: var(--cm-line, #2A2A2A) transparent; }
+/* The default scrollbar is wide enough to collide with the 20px corner radius and
+   reads as a stray grey bar over the dialog. */
+.cm-modal-body::-webkit-scrollbar { width: 6px; }
+.cm-modal-body::-webkit-scrollbar-track { background: transparent; }
+.cm-modal-body::-webkit-scrollbar-thumb { background: var(--cm-line, #2A2A2A); border-radius: 3px; }
+/* Footer is pinned over a scrolling body — without this rule a half-scrolled input
+   ends flush against the buttons and looks like the two overlap. */
+.cm-modal-footer { display: flex; flex-direction: column; gap: 8px; flex: 0 0 auto; padding: 14px 20px 20px; border-top: 1px solid var(--cm-line, #2A2A2A); background: var(--cm-card, #1A1A1A); }
+/* Header-only or footer-only modals must not lose their top/bottom breathing room,
+   and a body with no sibling above/below must not draw an orphan divider. */
 .cm-modal-content > .cm-modal-body:first-child { padding-top: 20px; }
 .cm-modal-content > .cm-modal-body:last-child { padding-bottom: 20px; }
+.cm-modal-content > .cm-modal-header:only-child { border-bottom: none; }
+.cm-modal-content > .cm-modal-footer:only-child { border-top: none; }
+.theme-light .cm-modal-header { border-bottom-color: #E5E7EB; }
+.theme-light .cm-modal-footer { border-top-color: #E5E7EB; background: #fff; }
+.theme-light .cm-modal-body { scrollbar-color: #D1D5DB transparent; }
+.theme-light .cm-modal-body::-webkit-scrollbar-thumb { background: #D1D5DB; }
 .theme-light .cm-modal-close { background: #F3F4F6; border-color: #E5E7EB; }
 .theme-light .cm-modal-close:hover { background: #E5E7EB; color: #111827; }
+/* Footer buttons: `.cm-button` is a plain block elsewhere in the app, so an icon +
+   label rendered inside it jams together ("✓Add Account"). Scoped to the footer so
+   the global button is untouched. */
+.cm-modal-footer .cm-button,
+.cm-modal-footer .cm-button-ghost {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 46px; line-height: 1.2; white-space: nowrap;
+}
 /* Roomier viewports: side-by-side actions, primary on the right. */
 @media (min-width: 480px) and (min-height: 520px) {
   .cm-modal-footer:not(.cm-modal-footer--stack) { flex-direction: row-reverse; align-items: stretch; }
   .cm-modal-footer:not(.cm-modal-footer--stack) > * { flex: 1 1 0; justify-content: center; }
+}
+/* Dialogs opted into the modern shell (`--bank`): softer radius, a hairline accent
+   at the top edge, and a slightly wider column so labelled fields breathe. */
+.cm-modal-content--bank {
+  width: min(100%, 480px);
+  border-radius: 24px;
+  box-shadow: 0 32px 80px -24px rgba(0, 0, 0, 0.6);
+}
+.cm-modal-content--bank::before {
+  content: ""; display: block; flex: 0 0 auto; height: 3px;
+  background: linear-gradient(90deg, var(--cm-accent, #40E0D0), var(--cm-accent-end, #007BFF));
+}
+.cm-modal-content--bank .cm-modal-body { gap: 16px; }
+/* Success/failure panes: a body with no header, so it keeps its own top padding. */
+.cm-modal-result { display: block; text-align: center; padding: 28px 24px 24px; }
+.cm-modal-result .cm-button,
+.cm-modal-result .cm-button-ghost { display: block; width: 100%; }
+.cm-modal-result .cm-button-ghost { margin-top: 8px; }
+/* Mobile: the dialog becomes a bottom sheet — thumb-reachable actions and no
+   floating box on a 360px-wide screen. Opt-in so other modals are unaffected. */
+@media (max-width: 560px) {
+  .cm-modal-overlay--sheet { align-items: flex-end; padding: 0; }
+  .cm-modal-overlay--sheet .cm-modal-content {
+    width: 100%; max-width: none;
+    max-height: min(92vh, 100%);
+    border-radius: 26px 26px 0 0;
+    border-bottom: none;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    animation: cm-sheet-in 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  /* Grab handle, so the sheet reads as a sheet. */
+  .cm-modal-overlay--sheet .cm-modal-header::before {
+    content: ""; position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    width: 38px; height: 4px; border-radius: 999px;
+    background: var(--cm-line, #2A2A2A);
+  }
+  .cm-modal-overlay--sheet .cm-modal-header { position: relative; padding-top: 24px; }
+}
+@keyframes cm-sheet-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
+/* Short viewports (landscape phone, zoomed desktop): the chrome ate most of the
+   dialog and left a ~1.5-field scroll window. Tighten it so the form gets the space. */
+@media (max-height: 560px) {
+  .cm-modal-header { padding: 14px 16px 10px; }
+  .cm-modal-body { padding: 12px 16px; gap: 10px; }
+  .cm-modal-footer { padding: 10px 16px 14px; }
+  .cm-modal-footer .cm-button,
+  .cm-modal-footer .cm-button-ghost { min-height: 40px; padding: 10px 14px; }
+  .cm-form-group input,
+  .cm-form-group select { padding: 9px 12px; }
 }
 .cm-button-ghost {
   padding: 12px;
@@ -8458,6 +8680,8 @@
 @keyframes cm-modal-in { from { opacity: 0; transform: scale(0.95) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 .cm-form-group { display: grid; gap: 6px; }
 .cm-form-group label { font-size: 0.7rem; font-weight: 700; color: var(--cm-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+/* Required marker — red, so a mandatory field is scannable without reading labels. */
+.cm-req { color: #EF4444; font-weight: 800; }
 .cm-form-group input,
 .cm-form-group select { padding: 12px 14px; border: 1px solid var(--cm-line); border-radius: 12px; background: rgba(255,255,255,0.04); color: var(--cm-ink); font-size: 0.9rem; outline: none; box-sizing: border-box; font-family: inherit; transition: border-color 0.2s; }
 .cm-form-group input:focus,
