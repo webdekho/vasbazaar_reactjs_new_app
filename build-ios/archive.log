@@ -1,0 +1,4 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -workspace /Users/chetanpatil/Developer/webdekho_projects/vasbazaar/customer_app_react_js_capacitor/ios/App/App.xcworkspace -scheme App -configuration Release -destination generic/platform=iOS -archivePath /Users/chetanpatil/Developer/webdekho_projects/vasbazaar/customer_app_react_js_capacitor/build-ios/App.xcarchive -allowProvisioningUpdates clean archive
+
+Resolve Package Graph

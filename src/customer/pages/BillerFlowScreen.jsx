@@ -891,7 +891,7 @@ const DTHPlansView = ({ biller, mobile, operators, onSelectPlan, onBack, onChang
       {/* Operator info card */}
       <div className="bf-dth-operator-card">
         <div className="bf-dth-operator-left">
-          {opLogo ? <img src={opLogo} alt="" className="bf-dth-operator-logo" /> : <div className="bf-dth-operator-avatar">{opName[0]}</div>}
+          <img src={opLogo || FAVICON_SRC} alt="" className="bf-dth-operator-logo" onError={handleBillerLogoError} />
           <div>
             <div className="bf-dth-operator-name">Customer &middot; {mobile}</div>
             <div className="bf-dth-operator-sub">{opName}</div>

@@ -89,13 +89,7 @@ const OperatorChangeSheet = ({ open, operators, currentOpCode, onSelect, onClose
               const isActive = op.opCode === currentOpCode || op.operatorCode === currentOpCode;
               return (
                 <button key={op.id} type="button" className={`cm-sheet-item${isActive ? " is-active" : ""}`} onClick={() => onSelect(op)}>
-                  {op.logo ? (
-                    <img src={op.logo} alt="" className="cm-operator-logo" onError={handleLogoError} />
-                  ) : (
-                    <div className="cm-contact-avatar" style={{ width: 36, height: 36, fontSize: 14 }}>
-                      {(op.operatorName || op.name || "O")[0].toUpperCase()}
-                    </div>
-                  )}
+                  <img src={op.logo || FALLBACK_LOGO} alt="" className="cm-operator-logo" onError={handleLogoError} />
                   <div className="cm-contact-info">
                     <div className="cm-contact-name">{op.operatorName || op.name}</div>
                   </div>
@@ -268,7 +262,7 @@ const RechargePlansView = ({ contactName, mobile, operatorData: initialOperatorD
       {/* Operator info card */}
       <div className="cm-operator-card">
         <div className="cm-operator-info">
-          {opLogo ? <img src={opLogo} alt="" className="cm-operator-logo" onError={handleLogoError} /> : <div className="cm-contact-avatar cm-contact-avatar--my">{(opName[0] || "O").toUpperCase()}</div>}
+          <img src={opLogo || FALLBACK_LOGO} alt="" className="cm-operator-logo" onError={handleLogoError} />
           <div>
             <div className="cm-contact-name">{contactName && !/^\+?\d[\d\s-]{6,}$/.test(contactName.trim()) ? `${contactName} · ${mobile}` : mobile.replace(/(\d{5})(\d{5})/, "$1 $2")}</div>
             <div className="cm-contact-number">{opName} - {circleName}</div>
@@ -429,11 +423,7 @@ const MobileNumberSheet = ({ open, operator, isPostpaid, navigate, serviceData, 
           {/* Operator info */}
           <div className="cm-operator-card" style={{ marginBottom: 16 }}>
             <div className="cm-operator-info">
-              {operator.logo ? (
-                <img src={operator.logo} alt="" className="cm-operator-logo" onError={handleLogoError} />
-              ) : (
-                <div className="cm-operator-list-avatar">{opName[0].toUpperCase()}</div>
-              )}
+              <img src={operator.logo || FALLBACK_LOGO} alt="" className="cm-operator-logo" onError={handleLogoError} />
               <div>
                 <div className="cm-contact-name">{opName}</div>
                 {step !== "mobile" && <div className="cm-contact-number">{mobile}</div>}
@@ -709,6 +699,26 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
     }
   };
 
+  /* ── Search input ──
+     A number search is capped at the 10 digits an Indian mobile number actually has,
+     so the box can never hold an 11+ digit number. A pasted +91 / 0 prefixed number is
+     unwrapped to its 10 digits; an extra typed digit is dropped rather than shifting the
+     number left. Name searches (anything containing a letter) are left untouched. */
+  const handleSearchChange = (e) => {
+    const raw = e.target.value;
+    if (/[a-zA-Z]/.test(raw)) { setSearch(raw); return; }
+
+    const digits = raw.replace(/\D/g, "");
+    if (digits.length <= 10) { setSearch(raw); return; } // within limit — keep "+", spaces as typed
+
+    if (digits.length >= 12 && digits.startsWith("91")) { setSearch(digits.slice(2, 12)); return; }
+    if (digits.length === 11 && digits.startsWith("0")) { setSearch(digits.slice(1)); return; }
+    setSearch(digits.slice(0, 10));
+  };
+
+  const searchDigits = search.replace(/\D/g, "");
+  const showLengthHint = !!searchDigits && !/[a-zA-Z]/.test(search) && !isValidMobile(searchDigits);
+
   /* ── Search / filter ── */
   const allContacts = useMemo(() => {
     const list = [];
@@ -762,11 +772,14 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
       {/* Search bar */}
       <div className="cm-contact-search cm-contact-search--bar">
         <FaSearch className="cm-contact-search-icon" />
-        <input className="cm-contact-search-input" placeholder="Search by name or number" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <input className="cm-contact-search-input" placeholder="Search by name or number" value={search} onChange={handleSearchChange} />
         <button type="button" className="pp-contact-btn" style={{ width: 40, height: 40, borderRadius: 12 }} onClick={handleImportContacts} title="Import contacts">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
         </button>
       </div>
+      {showLengthHint && (
+        <div className="cm-contact-search-hint">Enter a valid 10-digit mobile number</div>
+      )}
       <input ref={fileInputRef} type="file" accept=".vcf,.csv" style={{ display: "none" }} onChange={handleFileImport} />
 
       {/* My Number card */}
@@ -795,7 +808,7 @@ const PrepaidFlow = ({ serviceData, operators, navigate }) => {
             const valid = isValidMobile(num);
             const initial = (c.name || "?")[0].toUpperCase();
             return (
-              <button key={c.id} type="button" className={`cm-cl-item${!valid && !c.isNew ? " cm-cl-item--disabled" : ""}`} onClick={() => valid && handleSelectContact(c)} disabled={!valid && !c.isNew}>
+              <button key={c.id} type="button" className={`cm-cl-item${!valid ? " cm-cl-item--disabled" : ""}`} onClick={() => valid && handleSelectContact(c)} disabled={!valid}>
                 <div className="cm-contact-avatar" style={c.isNew ? { background: "linear-gradient(135deg, #00C853, #40E0D0)" } : undefined}>{c.isNew ? "+" : initial}</div>
                 <div className="cm-contact-info">
                   <div className="cm-contact-name">{c.name}</div>
@@ -1039,11 +1052,7 @@ const PostpaidFlow = ({ serviceData, operators, navigate }) => {
               const name = op.operatorName || op.name || "?";
               return (
                 <button key={op.id} type="button" className="pp-op-item" style={{ animationDelay: `${i * 0.03}s` }} onClick={() => handleSelectOperator(op)}>
-                  {op.logo ? (
-                    <img src={op.logo} alt="" className="cm-operator-logo" onError={handleLogoError} />
-                  ) : (
-                    <div className="cm-operator-list-avatar">{name[0].toUpperCase()}</div>
-                  )}
+                  <img src={op.logo || FALLBACK_LOGO} alt="" className="cm-operator-logo" onError={handleLogoError} />
                   <div className="cm-contact-info">
                     <div className="cm-contact-name">{name}</div>
                     <div className="cm-contact-number">Bharat Connect</div>
@@ -1061,7 +1070,7 @@ const PostpaidFlow = ({ serviceData, operators, navigate }) => {
         <div className="pp-step-content pp-animate">
           {/* Operator info */}
           <div className="pp-op-bar">
-            {selectedOp?.logo ? <img src={selectedOp.logo} alt="" className="cm-operator-logo" onError={handleLogoError} /> : <div className="cm-operator-list-avatar">{(opName[0] || "O").toUpperCase()}</div>}
+            <img src={selectedOp?.logo || FALLBACK_LOGO} alt="" className="cm-operator-logo" onError={handleLogoError} />
             <div>
               <div className="cm-contact-name">{opName}</div>
               <div className="cm-contact-number">{mobile}</div>

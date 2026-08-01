@@ -10528,6 +10528,14 @@
 
 .cm-contact-search-input::placeholder { color: #6B6B6B; }
 
+/* Shown while a number search is shorter than / not a valid 10-digit mobile */
+.cm-contact-search-hint {
+  margin: 6px 20px 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #FF6B6B;
+}
+
 .cm-contact-pick-btn {
   width: 36px;
   height: 36px;
@@ -11086,6 +11094,7 @@
 .theme-light .cm-contact-search-icon { color: #9CA3AF; }
 .theme-light .cm-contact-search-input { color: #1A1A2E; }
 .theme-light .cm-contact-search-input::placeholder { color: #9CA3AF; }
+.theme-light .cm-contact-search-hint { color: #DC2626; }
 
 /* Plan tabs */
 .theme-light .cm-plan-tab {
