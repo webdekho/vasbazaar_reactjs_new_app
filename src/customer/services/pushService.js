@@ -7,13 +7,24 @@ let pendingNavigateHandler = null;
 
 const TOKEN_STORAGE_KEY = "fcmPushToken";
 
+/**
+ * Resolve the Capacitor PushNotifications plugin.
+ *
+ * The plugin object is wrapped in `{ plugin }` on purpose. A Capacitor plugin proxy
+ * answers *every* property lookup with a callable, so `plugin.then` looks truthy —
+ * returning it straight out of an async function makes the runtime treat it as a
+ * thenable and call the native method `then()`, which fails with
+ * `"PushNotifications.then()" is not implemented on android`. That rejection escapes
+ * the try/catch (a returned thenable resolves after the block) and killed the whole
+ * init — so `register()` never ran and push was dead on Android/iOS.
+ */
 const safeImportPlugin = async () => {
   try {
     const mod = await import("@capacitor/push-notifications");
-    return mod?.PushNotifications || null;
+    return { plugin: mod?.PushNotifications || null };
   } catch (err) {
     // Plugin not installed yet — keep silent so web/dev builds don't break.
-    return null;
+    return { plugin: null };
   }
 };
 
@@ -69,12 +80,12 @@ export const initPushNotifications = async ({ onNavigate } = {}) => {
   if (!Capacitor.isNativePlatform()) return { ok: false, reason: "not-native" };
   if (initialised) return { ok: true, token: cachedToken };
 
-  const PushNotifications = await safeImportPlugin();
-  if (!PushNotifications) {
-    return { ok: false, reason: "plugin-missing" };
-  }
-
   try {
+    const { plugin: PushNotifications } = await safeImportPlugin();
+    if (!PushNotifications) {
+      return { ok: false, reason: "plugin-missing" };
+    }
+
     let perm = await PushNotifications.checkPermissions();
     if (perm.receive !== "granted") {
       perm = await PushNotifications.requestPermissions();
